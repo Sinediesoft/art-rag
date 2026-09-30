@@ -7,7 +7,8 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # 固定版本：ubuntu-latest 自 2026-10-19 起改指向 Ubuntu 26，apt 套件名稱可能不同
+    runs-on: ubuntu-24.04
     env:
       EMBED_MODE: mock
       LLM_MODE: mock
