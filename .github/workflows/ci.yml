@@ -12,9 +12,10 @@ jobs:
       EMBED_MODE: mock
       LLM_MODE: mock
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      # setup-uv 自 v8 起只發布不可變的完整版本號，沒有 @v10 這種大版本標籤
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
