@@ -1,0 +1,105 @@
+# 模型、向量索引與 prompt 的唯一設定來源（共用層 §三，負責：C）
+# 程式只從這裡讀；換 embedding 模型 = 全量重建索引並重跑評估，先在週會宣告。
+
+embeddings:
+  image:                      # 以圖搜圖、以文搜圖（影像–文字共同空間）
+    name: OFA-Sys/chinese-clip-vit-base-patch16
+    revision: 36e679e65c2a2fead755ae21162091293ad37834
+    dim: 512
+    distance: cosine
+    normalize: true
+    dtype: float32            # 一律 fp32，確保不同機器結果一致
+  text:                       # 知識段落檢索
+    name: BAAI/bge-m3
+    revision: 5617a9f61b028005a4858fdac845db406aefb181
+    dim: 1024
+    distance: cosine
+    normalize: true
+    dtype: float32
+    max_length: 512
+
+chunking:                     # 改了就要重建索引
+  min_chars: 300
+  max_chars: 500
+  overlap_chars: 50
+
+retrieval:
+  # 以圖搜圖兩階段：Chinese-CLIP 粗篩 → ORB 幾何驗證（見 docs/adr/002）
+  # 兩個條件都要過才算「辨識成功」，否則一律回覆「知識庫中沒有這幅畫」；數值由 eval 校正
+  image_threshold: 0.70       # 第一階段 CLIP 相似度下限
+  verify_top_n: 3             # 對 CLIP 前 N 名做幾何驗證
+  verify_min_inliers: 20      # RANSAC inlier 數下限（同一幅畫實測 ≥ 57，不同畫作 ≤ 7）
+  top_k_search: 5
+  # 問答檢索段落規則：相似度門檻＋最多 top_k_chunks 段，不硬湊滿
+  # 保留條件：score ≥ min_chunk_score 且 score ≥ 第一名 × relative_chunk_ratio；
+  # 已指定畫作時至少保留該畫作最相關的 1 段。數值由 eval 校正（實測第一名多在 0.38–0.78）
+  top_k_chunks: 5
+  min_chunk_score: 0.30
+  relative_chunk_ratio: 0.6
+  preprocess_long_edge: 1024
+
+# 工廠圖紙的以圖搜圖：圖紙在 CLIP 眼中都很像（白底黑線，相似度 0.7–0.98），主要靠後兩關：
+# ORB 幾何驗證（知識庫圖紙只取三視圖區的特徵點、排除退化 homography）＋拉正後的線條重合度。
+# 數值由 eval/drawing_photos 校正：同圖紙重合度 ≥ 0.60、不同圖紙（inlier ≥ 25 者）≤ 0.48
+drawing_retrieval:
+  image_threshold: 0.60
+  verify_top_n: 8             # 圖紙數量少，前 8 名都驗
+  verify_min_inliers: 25
+  verify_min_overlap: 0.55
+  top_k_search: 5
+
+# 已指定畫作時只取該畫作的段落；問題含下列字詞（比較、背景類）才從全庫補足
+global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作品, 同時代, 背景, 影響]
+
+prompt:
+  version: answer_v1          # 對應 shared/prompts/answer_v1.md
+  drawing_version: drawing_v1 # 工廠圖紙問答，對應 shared/prompts/drawing_v1.md
+
+# 工廠圖紙 → 3D：Ortho2CAD（arXiv 2607.08891，Qwen3-VL-8B 微調）輸出 CadQuery 程式碼
+cad:
+  # 與論文推論腳本相同的指令；baseline_suffix 是論文給未微調模型（對照組）加的一句
+  prompt: "Generate the CADQuery code needed to create the CAD for the provided image. Just the code, no other words."
+  baseline_suffix: " Assign the final solid to the variable 'solid' in the last line of code. Do not export or visualize the solid."
+  max_pixels: 50176           # 訓練時的 max_pixels（800×800 圖紙 → 224×224）；改了會和訓練分布不同
+  max_tokens: 4096
+  temperature: 0
+  exec_timeout_s: 60          # 產生的程式碼在沙箱中的執行上限
+
+generation:
+  temperature: 0              # 評估時固定 0
+  max_tokens: 800
+
+# 生成端：各策略共用檢索與 prompt，只換這裡的 provider。
+# 連線位址與金鑰不寫在這裡，放 .env（HYBRID_* / HYBRID_FALLBACK_* / API_* / LORA_*）。
+# 雲端（api_nokb／api_kb）只當對照組：ALLOW_CLOUD=false 時停用，也永遠不當備援。
+strategies:
+  hybrid:
+    label: 混合式（本地 VLM）
+    default_model: qwen3-vl:4b-instruct   # 5070 Ti 主機改 qwen3-vl:8b-instruct
+    cost_per_1k_input_twd: 0
+    cost_per_1k_output_twd: 0
+  hybrid_fallback:
+    label: 本地備援模型
+    default_model: qwen3-vl:4b-instruct   # 主力為 8B 時的降級模型；也可指向 Mac 備用機
+    cost_per_1k_input_twd: 0
+    cost_per_1k_output_twd: 0
+  api_nokb:
+    label: 雲端 API・無檢索（A1 對照組）
+    default_model: gemini-2.5-flash
+    cost_per_1k_input_twd: 0.0096        # 以 US$0.30 / 1M 輸入、US$2.50 / 1M 輸出、匯率 32 估算
+    cost_per_1k_output_twd: 0.08
+  api_kb:
+    label: 雲端 API＋檢索（A2 對照組）
+    default_model: gemini-2.5-flash
+    cost_per_1k_input_twd: 0.0096
+    cost_per_1k_output_twd: 0.08
+  ortho2cad:
+    label: Ortho2CAD（本地，三視圖→CadQuery）
+    default_model: ortho2cad              # llama-server --alias；Q4_K_M 約 5 GB＋mmproj 1.2 GB
+    cost_per_1k_input_twd: 0
+    cost_per_1k_output_twd: 0
+  lora:
+    label: 本地 LoRA（選做）
+    default_model: qwen3-vl-art-lora:4b
+    cost_per_1k_input_twd: 0
+    cost_per_1k_output_twd: 0

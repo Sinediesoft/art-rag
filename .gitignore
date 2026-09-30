@@ -1,0 +1,12 @@
+.env
+data/
+models/
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+compose.override.yml

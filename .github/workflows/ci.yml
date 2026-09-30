@@ -1,0 +1,37 @@
+# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型）、openapi 與前端型別同步
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      EMBED_MODE: mock
+      LLM_MODE: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # CadQuery 會載入 VTK，無頭 Ubuntu 需要 OpenGL 函式庫；圖紙字型用 DejaVu
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1 fonts-dejavu-core
+      - run: cd backend && uv sync
+      - run: cd frontend && npm ci
+      - name: 知識庫檢查
+        run: make check-kb
+      - name: lint 與型別
+        run: make lint
+      - name: 單元測試（mock 模型，不呼叫真模型或付費 API）
+        run: make test
+      - name: openapi.json 與程式碼一致、前端型別未過期
+        run: |
+          cd backend && uv run python -m app.export_openapi --check
+          cd ../frontend && npm run gen:api && git diff --exit-code src/api/schema.d.ts
+      - name: 前端建置
+        run: make build

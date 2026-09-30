@@ -1,0 +1,47 @@
+{
+  "id": "aic-27992",
+  "source_id": "1926.224",
+  "title": { "zh": "大碗島的星期天下午", "en": "A Sunday on La Grande Jatte — 1884" },
+  "artist": { "zh": "喬治．秀拉", "en": "Georges Seurat" },
+  "date_text": "1884–1886 年（點描外框 1888–1889 年加上）",
+  "medium": "油彩、畫布",
+  "dimensions": "207.5 × 308.1 公分",
+  "collection": "芝加哥藝術博物館（Art Institute of Chicago）",
+  "image": {
+    "path": "kb/images/aic-27992.jpg",
+    "license": "CC0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Georges_Seurat_-_A_Sunday_on_La_Grande_Jatte_--_1884_-_Google_Art_Project.jpg"
+  },
+  "source_url": "https://www.artic.edu/artworks/27992",
+  "descriptions": [
+    {
+      "lang": "zh",
+      "topic": "畫面",
+      "text": "這幅畫描繪巴黎西北郊塞納河上的大碗島（La Grande Jatte），一個夏日星期天午後，市民在河岸草地上休憩的景象。畫中有撐著陽傘散步的仕女、戴高帽的紳士、坐在草地上的人、垂釣的女子、奔跑的小女孩與狗，河面上還有帆船與划槳的小船。右側一對男女特別醒目，女子手裡牽著一隻猴子。",
+      "source_url": "https://www.artic.edu/artworks/27992",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "技法",
+      "text": "秀拉用「點描法」（Pointillism）作畫：他不在調色盤上混色，而是把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合。這個方法建立在當時的光學與色彩理論上，也被稱為「分色主義」（Divisionism），是新印象派的代表技法。",
+      "source_url": "https://www.artic.edu/artworks/27992",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "創作與展出",
+      "text": "秀拉花了大約兩年完成這幅畫，期間多次到大碗島現場寫生，留下大量油畫草稿與素描。畫中人物姿態僵直，多呈側面或正面，構圖安排嚴謹，帶有一種靜止、像雕像般的氣氛。1886 年，這幅畫在第八屆、也是最後一屆印象派畫展首次展出，引起熱烈討論。",
+      "source_url": "https://www.artic.edu/artworks/27992",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "外框與收藏",
+      "text": "1888 至 1889 年間，秀拉重新修改畫面，並在畫布四周加上一圈同樣以點描法畫成的彩色邊框。1920 年代，芝加哥收藏家巴特雷（Frederic Clay Bartlett）購得此畫，並以「海倫．伯奇．巴特雷紀念收藏」的名義捐贈給芝加哥藝術博物館。",
+      "source_url": "https://www.artic.edu/artworks/27992",
+      "license": "CC0"
+    }
+  ],
+  "style_tags": ["新印象派", "點描法", "油畫", "人物群像", "巴黎"]
+}

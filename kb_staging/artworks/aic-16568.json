@@ -1,0 +1,47 @@
+{
+  "id": "aic-16568",
+  "source_id": "1933.1157",
+  "title": { "zh": "睡蓮", "en": "Water Lilies" },
+  "artist": { "zh": "克勞德．莫內", "en": "Claude Monet" },
+  "date_text": "1906 年",
+  "medium": "油彩、畫布",
+  "dimensions": "89.9 × 94.1 公分",
+  "collection": "芝加哥藝術博物館（Art Institute of Chicago）",
+  "image": {
+    "path": "kb/images/aic-16568.jpg",
+    "license": "CC0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Water_Lilies_-_1906,_Ryerson.jpg"
+  },
+  "source_url": "https://www.artic.edu/artworks/16568",
+  "descriptions": [
+    {
+      "lang": "zh",
+      "topic": "畫面",
+      "text": "這幅畫接近正方形，視角直接俯看水面，看不到地平線或岸邊。浮在水面的睡蓮葉與粉紅、白色的花朵散布在畫中，水面同時倒映著天空的雲彩與光線，實景與倒影交融在一起。",
+      "source_url": "https://www.artic.edu/artworks/16568",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "創作背景",
+      "text": "1883 年莫內搬到巴黎西北方的吉維尼（Giverny），後來在住家旁引水開闢了一座種滿睡蓮的池塘，並建了一座日本式拱橋。從 1890 年代末直到 1926 年去世，他以這座水上花園為主題，畫了大約 250 幅〈睡蓮〉系列作品。",
+      "source_url": "https://www.artic.edu/artworks/16568",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "風格",
+      "text": "莫內是法國印象派的代表人物，「印象派」一詞就來自他的作品〈印象．日出〉。在睡蓮系列中，他反覆描繪不同時間與天氣下水面光線的變化，筆觸越來越自由，畫面越來越接近抽象，對 20 世紀的抽象表現主義影響深遠。",
+      "source_url": "https://www.artic.edu/artworks/16568",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "收藏",
+      "text": "這幅 1906 年的〈睡蓮〉屬於芝加哥藝術博物館的馬丁．萊爾森夫婦收藏（Mr. and Mrs. Martin A. Ryerson Collection）。",
+      "source_url": "https://www.artic.edu/artworks/16568",
+      "license": "CC0"
+    }
+  ],
+  "style_tags": ["印象派", "油畫", "睡蓮", "吉維尼", "水面倒影"]
+}

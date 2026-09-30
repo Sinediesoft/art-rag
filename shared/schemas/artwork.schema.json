@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://art-rag.local/schemas/artwork.schema.json",
+  "title": "Artwork",
+  "description": "知識庫中一幅畫一個 JSON 檔（kb/artworks/<id>.json）。共用層 §二，負責：D。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "artist", "date_text", "collection", "image", "source_url", "descriptions"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "<來源代碼>-<編號>，只用小寫 ASCII；檔名、資料庫主鍵、前端路由都用它",
+      "pattern": "^[a-z]+-[a-z0-9]+$"
+    },
+    "source_id": { "type": "string", "description": "來源機構的原始編號（可含中文）" },
+    "title": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh"],
+      "properties": { "zh": { "type": "string", "minLength": 1 }, "en": { "type": "string" } }
+    },
+    "artist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh"],
+      "properties": { "zh": { "type": "string", "minLength": 1 }, "en": { "type": "string" } }
+    },
+    "date_text": { "type": "string", "minLength": 1 },
+    "medium": { "type": "string" },
+    "dimensions": { "type": "string" },
+    "collection": { "type": "string", "minLength": 1 },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "license"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^kb/images/[a-z]+-[a-z0-9]+\\.(jpg|png|webp)$" },
+        "license": { "$ref": "#/$defs/license" },
+        "attribution": { "type": "string", "description": "CC BY 4.0 必填的標示文字" },
+        "source_url": { "type": "string", "format": "uri", "description": "圖檔實際下載頁" }
+      }
+    },
+    "source_url": { "type": "string", "format": "uri" },
+    "descriptions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lang", "text", "source_url", "license"],
+        "properties": {
+          "lang": { "type": "string", "enum": ["zh", "en"] },
+          "topic": { "type": "string", "description": "段落主題，例如：構圖、技法、創作背景" },
+          "text": { "type": "string", "minLength": 20 },
+          "source_url": { "type": "string", "format": "uri" },
+          "license": { "$ref": "#/$defs/license" },
+          "attribution": { "type": "string" }
+        }
+      }
+    },
+    "style_tags": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "license": {
+      "type": "string",
+      "enum": ["CC0", "公有領域", "CC BY 4.0"],
+      "description": "授權白名單；其他或不明者不收"
+    }
+  }
+}

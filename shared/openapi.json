@@ -1,0 +1,2446 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "畫語 ArtRAG API",
+    "description": "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D）。SSE 事件見 shared/sse_events.md。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/images": {
+      "post": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Upload Image",
+        "operationId": "upload_image_api_v1_images_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_image_api_v1_images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUploadResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Image",
+        "operationId": "get_image_api_v1_images__image_id__get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/search/image": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Image",
+        "operationId": "search_image_api_v1_search_image_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/text": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Text",
+        "operationId": "search_text_api_v1_search_text_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TextSearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/artworks": {
+      "get": {
+        "tags": [
+          "artworks"
+        ],
+        "summary": "List Artworks",
+        "operationId": "list_artworks_api_v1_artworks_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtworkListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/artworks/{artwork_id}": {
+      "get": {
+        "tags": [
+          "artworks"
+        ],
+        "summary": "Get Artwork",
+        "operationId": "get_artwork_api_v1_artworks__artwork_id__get",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtworkDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/artworks/{artwork_id}/image": {
+      "get": {
+        "tags": [
+          "artworks"
+        ],
+        "summary": "Get Artwork Image",
+        "operationId": "get_artwork_image_api_v1_artworks__artwork_id__image_get",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "full",
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/chat": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Chat",
+        "operationId": "chat_api_v1_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：sources／token／done／error",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parts": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "List Parts",
+        "operationId": "list_parts_api_v1_parts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/parts/{part_id}": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Get Part",
+        "operationId": "get_part_api_v1_parts__part_id__get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/parts/{part_id}/drawing": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Get Part Drawing",
+        "operationId": "get_part_drawing_api_v1_parts__part_id__drawing_get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "full",
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/parts/{part_id}/model.{ext}": {
+      "get": {
+        "tags": [
+          "parts"
+        ],
+        "summary": "Get Part Model",
+        "description": "知識庫零件的標準 3D 模型（由 kb/cad/<id>.py 產生）：stl 給前端 3D 檢視、step 給 CAD 軟體。",
+        "operationId": "get_part_model_api_v1_parts__part_id__model__ext__get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          },
+          {
+            "name": "ext",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ext"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/search/drawing": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Drawing",
+        "operationId": "search_drawing_api_v1_search_drawing_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DrawingSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DrawingSearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/parts": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Parts",
+        "operationId": "search_parts_api_v1_search_parts_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartTextSearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/cad/reconstruct": {
+      "post": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Reconstruct",
+        "description": "工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。",
+        "operationId": "reconstruct_api_v1_cad_reconstruct_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconstructRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：meta／token／result／done／error（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Get Cad Job",
+        "description": "已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。",
+        "operationId": "get_cad_job_api_v1_cad_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadJobSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/parts/{part_id}/reconstructions": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "List Part Reconstructions",
+        "operationId": "list_part_reconstructions_api_v1_parts__part_id__reconstructions_get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadJobListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}/{name}": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Get Cad File",
+        "operationId": "get_cad_file_api_v1_cad_jobs__job_id___name__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/feedback": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Feedback",
+        "operationId": "feedback_api_v1_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eval/runs": {
+      "get": {
+        "tags": [
+          "eval"
+        ],
+        "summary": "Eval Runs",
+        "operationId": "eval_runs_api_v1_eval_runs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalRunsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eval/cad-runs": {
+      "get": {
+        "tags": [
+          "eval"
+        ],
+        "summary": "Cad Eval Runs",
+        "description": "工廠圖紙評估（make eval-cad）：圖紙辨識與 Ortho2CAD 3D 重建。",
+        "operationId": "cad_eval_runs_api_v1_eval_cad_runs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadEvalRunsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/outage": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Simulate Outage",
+        "description": "展示用：模擬主推論伺服器斷線，本地備援模型不受影響（DEMO_CONTROLS=false 時停用）。",
+        "operationId": "simulate_outage_api_v1_admin_outage_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArtworkDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "title": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Title"
+          },
+          "artist": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Artist"
+          },
+          "date_text": {
+            "type": "string",
+            "title": "Date Text"
+          },
+          "medium": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medium"
+          },
+          "dimensions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions"
+          },
+          "collection": {
+            "type": "string",
+            "title": "Collection"
+          },
+          "image": {
+            "$ref": "#/components/schemas/ArtworkImage"
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url"
+          },
+          "descriptions": {
+            "items": {
+              "$ref": "#/components/schemas/Description"
+            },
+            "type": "array",
+            "title": "Descriptions"
+          },
+          "style_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Style Tags",
+            "default": []
+          },
+          "image_url": {
+            "type": "string",
+            "title": "Image Url"
+          },
+          "thumb_url": {
+            "type": "string",
+            "title": "Thumb Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "artist",
+          "date_text",
+          "collection",
+          "image",
+          "source_url",
+          "descriptions",
+          "image_url",
+          "thumb_url"
+        ],
+        "title": "ArtworkDetail"
+      },
+      "ArtworkImage": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "license"
+        ],
+        "title": "ArtworkImage"
+      },
+      "ArtworkListResponse": {
+        "properties": {
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArtworkSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kb_version",
+          "items"
+        ],
+        "title": "ArtworkListResponse"
+      },
+      "ArtworkSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title_zh": {
+            "type": "string",
+            "title": "Title Zh"
+          },
+          "title_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title En"
+          },
+          "artist_zh": {
+            "type": "string",
+            "title": "Artist Zh"
+          },
+          "artist_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artist En"
+          },
+          "date_text": {
+            "type": "string",
+            "title": "Date Text"
+          },
+          "collection": {
+            "type": "string",
+            "title": "Collection"
+          },
+          "image_url": {
+            "type": "string",
+            "title": "Image Url"
+          },
+          "thumb_url": {
+            "type": "string",
+            "title": "Thumb Url"
+          },
+          "style_tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Style Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title_zh",
+          "artist_zh",
+          "date_text",
+          "collection",
+          "image_url",
+          "thumb_url"
+        ],
+        "title": "ArtworkSummary"
+      },
+      "Body_upload_image_api_v1_images_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_image_api_v1_images_post"
+      },
+      "CadEvalRunsResponse": {
+        "properties": {
+          "runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "CadEvalRunsResponse"
+      },
+      "CadJobListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CadJobRow"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CadJobListResponse"
+      },
+      "CadJobRow": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "iou": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iou"
+          },
+          "iou_bbox": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iou Bbox"
+          },
+          "total_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "created_at",
+          "strategy",
+          "model",
+          "ok"
+        ],
+        "title": "CadJobRow"
+      },
+      "CadJobSummary": {
+        "properties": {
+          "meta": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Meta"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          },
+          "done": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta",
+          "result",
+          "done"
+        ],
+        "title": "CadJobSummary"
+      },
+      "ChatRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "artwork_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artwork Id"
+          },
+          "part_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part Id",
+            "description": "工廠圖紙問答；與 artwork_id 擇一"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "hybrid",
+              "api_nokb",
+              "api_kb",
+              "lora",
+              "mock"
+            ],
+            "title": "Strategy",
+            "default": "hybrid"
+          },
+          "use_retrieval": {
+            "type": "boolean",
+            "title": "Use Retrieval",
+            "default": true
+          },
+          "allow_fallback": {
+            "type": "boolean",
+            "title": "Allow Fallback",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "ChatRequest"
+      },
+      "Description": {
+        "properties": {
+          "lang": {
+            "type": "string",
+            "title": "Lang"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lang",
+          "text",
+          "source_url",
+          "license"
+        ],
+        "title": "Description"
+      },
+      "DrawingSearchHit": {
+        "properties": {
+          "part": {
+            "$ref": "#/components/schemas/PartSummary"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Chinese-CLIP 餘弦相似度"
+          },
+          "inliers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inliers",
+            "description": "ORB 幾何驗證的 inlier 數；未驗證為 null"
+          },
+          "overlap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlap",
+            "description": "拉正後的線條重合度（0–1）；未驗證為 null"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part",
+          "score",
+          "inliers",
+          "overlap",
+          "verified"
+        ],
+        "title": "DrawingSearchHit"
+      },
+      "DrawingSearchRequest": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id"
+        ],
+        "title": "DrawingSearchRequest"
+      },
+      "DrawingSearchResponse": {
+        "properties": {
+          "query_image_id": {
+            "type": "string",
+            "title": "Query Image Id"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "min_inliers": {
+            "type": "integer",
+            "title": "Min Inliers"
+          },
+          "min_overlap": {
+            "type": "number",
+            "title": "Min Overlap"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "best_part_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Part Id"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DrawingSearchHit"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_image_id",
+          "threshold",
+          "min_inliers",
+          "min_overlap",
+          "matched",
+          "best_part_id",
+          "latency_ms",
+          "results"
+        ],
+        "title": "DrawingSearchResponse"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse"
+      },
+      "EvalRun": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Summary"
+          },
+          "by_strategy": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "By Strategy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "created_at",
+          "kb_version",
+          "prompt_version",
+          "summary",
+          "by_strategy"
+        ],
+        "title": "EvalRun"
+      },
+      "EvalRunsResponse": {
+        "properties": {
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/EvalRun"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "EvalRunsResponse"
+      },
+      "FeedbackRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "rating": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "request_id",
+          "rating"
+        ],
+        "title": "FeedbackRequest"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status"
+          },
+          "db": {
+            "type": "boolean",
+            "title": "Db"
+          },
+          "index_consistent": {
+            "type": "boolean",
+            "title": "Index Consistent"
+          },
+          "index_problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Index Problems"
+          },
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Manifest"
+          },
+          "strategies": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StrategyStatus"
+            },
+            "type": "object",
+            "title": "Strategies"
+          },
+          "llm_mode": {
+            "type": "string",
+            "title": "Llm Mode"
+          },
+          "embed_mode": {
+            "type": "string",
+            "title": "Embed Mode"
+          },
+          "allow_cloud": {
+            "type": "boolean",
+            "title": "Allow Cloud"
+          },
+          "outage_simulated": {
+            "type": "boolean",
+            "title": "Outage Simulated"
+          },
+          "demo_controls": {
+            "type": "boolean",
+            "title": "Demo Controls"
+          },
+          "recent_chats": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Chats"
+          },
+          "recent_cad": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Cad",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "db",
+          "index_consistent",
+          "index_problems",
+          "kb_version",
+          "manifest",
+          "strategies",
+          "llm_mode",
+          "embed_mode",
+          "allow_cloud",
+          "outage_simulated",
+          "demo_controls",
+          "recent_chats"
+        ],
+        "title": "HealthResponse"
+      },
+      "ImageSearchHit": {
+        "properties": {
+          "artwork": {
+            "$ref": "#/components/schemas/ArtworkSummary"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Chinese-CLIP 餘弦相似度"
+          },
+          "inliers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inliers",
+            "description": "ORB 幾何驗證的 inlier 數；未驗證為 null"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artwork",
+          "score",
+          "inliers",
+          "verified"
+        ],
+        "title": "ImageSearchHit"
+      },
+      "ImageSearchRequest": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id"
+        ],
+        "title": "ImageSearchRequest"
+      },
+      "ImageSearchResponse": {
+        "properties": {
+          "query_image_id": {
+            "type": "string",
+            "title": "Query Image Id"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "min_inliers": {
+            "type": "integer",
+            "title": "Min Inliers"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "best_artwork_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Artwork Id"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ImageSearchHit"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_image_id",
+          "threshold",
+          "min_inliers",
+          "matched",
+          "best_artwork_id",
+          "latency_ms",
+          "results"
+        ],
+        "title": "ImageSearchResponse"
+      },
+      "ImageUploadResponse": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id",
+          "width",
+          "height"
+        ],
+        "title": "ImageUploadResponse"
+      },
+      "OkResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "OkResponse"
+      },
+      "OutageRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "OutageRequest"
+      },
+      "PartDescription": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "text",
+          "source"
+        ],
+        "title": "PartDescription"
+      },
+      "PartDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "drawing_no": {
+            "type": "string",
+            "title": "Drawing No"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "name": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "material": {
+            "type": "string",
+            "title": "Material"
+          },
+          "density_g_cm3": {
+            "type": "number",
+            "title": "Density G Cm3"
+          },
+          "surface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surface"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "confidentiality": {
+            "type": "string",
+            "enum": [
+              "公開",
+              "內部",
+              "機密"
+            ],
+            "title": "Confidentiality"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/PartGeometry"
+          },
+          "descriptions": {
+            "items": {
+              "$ref": "#/components/schemas/PartDescription"
+            },
+            "type": "array",
+            "title": "Descriptions"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "drawing_url": {
+            "type": "string",
+            "title": "Drawing Url"
+          },
+          "thumb_url": {
+            "type": "string",
+            "title": "Thumb Url"
+          },
+          "model_url": {
+            "type": "string",
+            "title": "Model Url"
+          },
+          "step_url": {
+            "type": "string",
+            "title": "Step Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "part_no",
+          "drawing_no",
+          "revision",
+          "name",
+          "category",
+          "material",
+          "density_g_cm3",
+          "company",
+          "owner",
+          "confidentiality",
+          "geometry",
+          "descriptions",
+          "drawing_url",
+          "thumb_url",
+          "model_url",
+          "step_url"
+        ],
+        "title": "PartDetail"
+      },
+      "PartGeometry": {
+        "properties": {
+          "width": {
+            "type": "number",
+            "title": "Width",
+            "description": "X 方向外形尺寸（mm）"
+          },
+          "depth": {
+            "type": "number",
+            "title": "Depth",
+            "description": "Y 方向外形尺寸（mm）"
+          },
+          "height": {
+            "type": "number",
+            "title": "Height",
+            "description": "Z 方向外形尺寸（mm）"
+          },
+          "volume_mm3": {
+            "type": "number",
+            "title": "Volume Mm3"
+          },
+          "weight_kg": {
+            "type": "number",
+            "title": "Weight Kg",
+            "description": "標準模型體積 × 材料密度"
+          },
+          "faces": {
+            "type": "integer",
+            "title": "Faces"
+          }
+        },
+        "type": "object",
+        "required": [
+          "width",
+          "depth",
+          "height",
+          "volume_mm3",
+          "weight_kg",
+          "faces"
+        ],
+        "title": "PartGeometry"
+      },
+      "PartListResponse": {
+        "properties": {
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PartSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kb_version",
+          "items"
+        ],
+        "title": "PartListResponse"
+      },
+      "PartSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "drawing_no": {
+            "type": "string",
+            "title": "Drawing No"
+          },
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "name_zh": {
+            "type": "string",
+            "title": "Name Zh"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "material": {
+            "type": "string",
+            "title": "Material"
+          },
+          "confidentiality": {
+            "type": "string",
+            "enum": [
+              "公開",
+              "內部",
+              "機密"
+            ],
+            "title": "Confidentiality"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/PartGeometry"
+          },
+          "drawing_url": {
+            "type": "string",
+            "title": "Drawing Url"
+          },
+          "thumb_url": {
+            "type": "string",
+            "title": "Thumb Url"
+          },
+          "model_url": {
+            "type": "string",
+            "title": "Model Url",
+            "description": "標準 3D 模型（STL）"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "part_no",
+          "drawing_no",
+          "revision",
+          "name_zh",
+          "category",
+          "material",
+          "confidentiality",
+          "geometry",
+          "drawing_url",
+          "thumb_url",
+          "model_url"
+        ],
+        "title": "PartSummary"
+      },
+      "PartTextSearchHit": {
+        "properties": {
+          "part": {
+            "$ref": "#/components/schemas/PartSummary"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part",
+          "score",
+          "topic",
+          "snippet"
+        ],
+        "title": "PartTextSearchHit"
+      },
+      "PartTextSearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/PartTextSearchHit"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "latency_ms",
+          "results"
+        ],
+        "title": "PartTextSearchResponse"
+      },
+      "ReconstructRequest": {
+        "properties": {
+          "part_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part Id",
+            "description": "知識庫圖紙"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id",
+            "description": "上傳的圖紙照片；與 part_id 同時給代表照片已辨識為該圖紙"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "ortho2cad",
+              "hybrid"
+            ],
+            "title": "Strategy",
+            "description": "ortho2cad＝主模型；hybrid＝未微調的 Qwen3-VL（對照組）",
+            "default": "ortho2cad"
+          }
+        },
+        "type": "object",
+        "title": "ReconstructRequest"
+      },
+      "StrategyStatus": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "model",
+          "available",
+          "detail"
+        ],
+        "title": "StrategyStatus"
+      },
+      "TextSearchHit": {
+        "properties": {
+          "artwork": {
+            "$ref": "#/components/schemas/ArtworkSummary"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "image_score": {
+            "type": "number",
+            "title": "Image Score"
+          },
+          "text_score": {
+            "type": "number",
+            "title": "Text Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "artwork",
+          "score",
+          "image_score",
+          "text_score"
+        ],
+        "title": "TextSearchHit"
+      },
+      "TextSearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TextSearchHit"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "latency_ms",
+          "results"
+        ],
+        "title": "TextSearchResponse"
+      }
+    }
+  }
+}

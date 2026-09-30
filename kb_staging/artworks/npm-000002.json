@@ -1,0 +1,46 @@
+{
+  "id": "npm-000002",
+  "title": { "zh": "早春圖", "en": "Early Spring" },
+  "artist": { "zh": "郭熙", "en": "Guo Xi" },
+  "date_text": "北宋熙寧五年（1072 年）",
+  "medium": "軸，絹本，水墨淺設色",
+  "dimensions": "158.3 × 108.1 公分",
+  "collection": "國立故宮博物院",
+  "image": {
+    "path": "kb/images/npm-000002.jpg",
+    "license": "公有領域",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Guo_Xi_-_Early_Spring_(large).jpg"
+  },
+  "source_url": "https://theme.npm.edu.tw/opendata/",
+  "descriptions": [
+    {
+      "lang": "zh",
+      "topic": "畫面",
+      "text": "〈早春圖〉描繪冬去春來、冰雪初融時的山景。主山位於畫面中軸，山勢呈 S 形蜿蜒而上，雲霧在山間流動，讓山體若隱若現。山谷裡有溪流、瀑布與樓閣，近景水岸邊有人物與小舟，處處透露早春萬物甦醒的氣息。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "技法",
+      "text": "郭熙用濃淡變化的墨色與捲曲的筆法描繪山石，山體輪廓像翻捲的雲朵，後世稱為「捲雲皴」；樹枝末端向下彎曲、形如蟹爪，稱為「蟹爪樹」。他以墨色深淺營造空氣與雲霧，讓畫面帶有溼潤、朦朧的春日感。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "款識",
+      "text": "畫面左側有郭熙自題的款「早春。壬子年郭熙畫」，壬子年就是宋神宗熙寧五年（1072 年），因此這是少數有明確紀年的北宋山水畫。畫幅上方另有清高宗乾隆皇帝的題詩。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "三遠法",
+      "text": "郭熙是宋神宗時期的宮廷畫家，他的山水畫理論由兒子郭思整理成《林泉高致》。書中提出「三遠」：從山下仰望山頂是「高遠」，從山前窺看山後是「深遠」，從近山眺望遠山是「平遠」。〈早春圖〉在同一個畫面中結合了這三種視角。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    }
+  ],
+  "style_tags": ["山水", "北宋", "水墨", "捲雲皴", "三遠法"]
+}

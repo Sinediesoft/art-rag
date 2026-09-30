@@ -1,0 +1,20 @@
+{"id": "q-npm1-01", "split": "dev", "artwork_id": "npm-000001", "question": "畫家的簽名藏在哪裡？", "keywords": [["樹叢", "枝葉", "樹"], ["右下"]], "topics": ["落款與發現"]}
+{"id": "q-npm1-02", "split": "dev", "artwork_id": "npm-000001", "question": "是誰、在哪一年發現了作者的簽名？", "keywords": [["李霖燦"], ["1958"]], "topics": ["落款與發現"]}
+{"id": "q-npm1-03", "split": "test", "artwork_id": "npm-000001", "question": "山石用了什麼皴法？", "keywords": [["雨點皴"]], "topics": ["技法"]}
+{"id": "q-npm1-04", "split": "test", "artwork_id": "npm-000001", "question": "畫面近景有什麼人或動物？", "keywords": [["騾"]], "topics": ["構圖"]}
+{"id": "q-npm1-05", "split": "test", "artwork_id": "npm-000001", "question": "這幅畫常和哪些作品並稱？", "keywords": [["早春圖"], ["萬壑松風圖"]], "topics": ["地位"]}
+{"id": "q-met-01", "split": "dev", "artwork_id": "met-436535", "question": "這幅畫是在哪裡畫的？", "keywords": [["聖雷米", "療養院"]], "topics": ["創作背景"]}
+{"id": "q-met-02", "split": "dev", "artwork_id": "met-436535", "question": "梵谷怎麼形容絲柏？", "keywords": [["方尖碑"]], "topics": ["技法與絲柏"]}
+{"id": "q-met-03", "split": "test", "artwork_id": "met-436535", "question": "這幅畫有其他版本嗎？收藏在哪裡？", "keywords": [["倫敦", "國家美術館"]], "topics": ["其他版本"]}
+{"id": "q-met-04", "split": "test", "artwork_id": "met-436535", "question": "大都會博物館是哪一年取得這幅畫的？", "keywords": [["1993"]], "topics": ["收藏"]}
+{"id": "q-met-05", "split": "test", "artwork_id": "met-436535", "question": "遠方的山叫什麼名字？", "keywords": [["阿爾皮耶", "Alpilles"]], "topics": ["畫面"]}
+{"id": "q-aic-01", "split": "dev", "artwork_id": "aic-27992", "question": "秀拉用的是什麼技法？", "keywords": [["點描"]], "topics": ["技法"]}
+{"id": "q-aic-02", "split": "dev", "artwork_id": "aic-27992", "question": "右邊的女子牽著什麼動物？", "keywords": [["猴"]], "topics": ["畫面"]}
+{"id": "q-aic-03", "split": "test", "artwork_id": "aic-27992", "question": "這幅畫第一次在哪個展覽展出？", "keywords": [["第八屆", "印象派畫展"]], "topics": ["創作與展出"]}
+{"id": "q-aic-04", "split": "test", "artwork_id": "aic-27992", "question": "畫布四周的邊框是什麼時候加的？", "keywords": [["1888", "1889"]], "topics": ["外框與收藏"]}
+{"id": "q-aic-05", "split": "test", "artwork_id": "aic-27992", "question": "畫的是哪條河上的島？", "keywords": [["塞納河"]], "topics": ["畫面"]}
+{"id": "q-npm2-01", "split": "dev", "artwork_id": "npm-000002", "question": "這幅畫是哪一年畫的？", "keywords": [["1072", "熙寧五年", "壬子"]], "topics": ["款識"]}
+{"id": "q-npm2-02", "split": "test", "artwork_id": "npm-000002", "question": "什麼是三遠？", "keywords": [["高遠"], ["深遠"], ["平遠"]], "topics": ["三遠法"]}
+{"id": "q-aic2-01", "split": "dev", "artwork_id": "aic-16568", "question": "莫內在哪裡畫睡蓮？", "keywords": [["吉維尼", "Giverny"]], "topics": ["創作背景"]}
+{"id": "q-aic2-02", "split": "test", "artwork_id": "aic-16568", "question": "睡蓮系列大約有幾幅？", "keywords": [["250"]], "topics": ["創作背景"]}
+{"id": "q-refuse-01", "split": "test", "artwork_id": "aic-27992", "question": "這幅畫當年賣了多少錢？", "keywords": [["沒有"]], "topics": [], "expect_refusal": true, "type": "no_answer"}

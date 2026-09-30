@@ -1,0 +1,33 @@
+question_id,split,strategy,model,kb_version,prompt_version,answer_ok,citation_ok,first_token_ms,total_ms,cost_twd,error,answer
+q-npm1-01,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3160,4821,0.0,,畫家簽名藏在畫面右下方、騾隊後方的樹叢枝葉間 [1]。   這幅畫原本沒有顯眼簽名，直到1958年才被發現 [1]。   簽名是「范寬」二字，為隱藏款 [1]。
+q-npm1-02,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3696,4364,0.0,,故宮研究人員李霖燦在 1958 年發現了「范寬」二字款 [1]。
+q-npm1-03,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4023,4851,0.0,,山石使用的是「雨點皴」，以密集、短促的筆觸層層點染，表現岩石堅硬粗糙的質感 [1]。
+q-npm1-04,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3865,5399,0.0,,近景右下方山路上，有一支馱著貨物的騾隊正在趕路 [1]。   人與牲口在山勢襯托下顯得極為渺小 [1]。   畫中動物是騾子，載著貨物 [1]。
+q-npm1-05,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3948,4884,0.0,,〈谿山行旅圖〉常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑 [1]。
+q-met-01,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3788,4996,0.0,,這幅畫是在法國南部聖雷米療養院周圍的田野現場完成的 [3]。梵谷在1889年7月初創作，當時他正住在聖保羅療養院附近 [3]。
+q-met-02,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3709,4516,0.0,,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美，並說還沒有人用他看到的方式畫過絲柏 [1]。
+q-met-03,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4304,5999,0.0,,這幅畫有其他版本，其中一幅尺寸相近的藏於倫敦國家美術館，另一幅較小的畫給了母親與妹妹 [1]。   目前您看到的這幅，由大都會藝術博物館收藏，於1993年以安納伯格基金會捐款購得 [2]。
+q-met-04,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3454,4151,0.0,,大都會藝術博物館於1993年以安納伯格基金會的捐款購得這幅畫 [1]。
+q-met-05,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3779,4253,0.0,,遠方的山是阿爾皮耶山丘（Alpilles）[1]。
+q-aic-01,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4128,7025,0.0,,秀拉用的是「點描法」，他把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。   這技法也稱為「分色主義」，是新印象派的代表風格 [1]。   畫中人物姿態僵直，像雕像般靜止，呈現嚴謹的構圖 [2]。   畫面右側那對男女與猴子，是畫中特別醒目的角色 [5]。
+q-aic-02,dev,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4020,4340,0.0,,右側的女子牽著一隻猴子 [1]。
+q-aic-03,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4096,4764,0.0,,這幅畫在1886年第八屆印象派畫展首次展出，當時引起熱烈討論 [1]。
+q-aic-04,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4213,4937,0.0,,畫布四周的邊框是在1888至1889年間由秀拉重新修改加上去的 [1]。
+q-aic-05,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,3877,4179,0.0,,畫的是塞納河上的大碗島 [1]。
+q-refuse-01,test,hybrid,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,True,4062,4255,0.0,,知識庫中沒有這方面的資料。
+q-npm1-01,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3291,4478,0.0,,〈谿山行旅圖〉無畫家簽名，范寬以「無款」著稱。   畫中巨峰、溪流、古木皆為其「氣勢磅礡」之代表。   [0]
+q-npm1-02,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3485,4385,0.0,,〈谿山行旅圖〉原畫上無作者簽名，此畫被認為是范寬所作，但其署名是後世新增。   [0]
+q-npm1-03,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,False,3364,4260,0.0,,〈谿山行旅圖〉的山石採用「雨點皴」與「峽谷皴」，強調山體的厚重與雄偉。[0]
+q-npm1-04,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3252,3715,0.0,,近景有山石、樹木與溪流，無人或動物。[0]
+q-npm1-05,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3225,3930,0.0,,〈谿山行旅圖〉常與〈富春山居圖〉並稱，皆為中國山水畫經典。[0]
+q-met-01,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,False,3224,4411,0.0,,這幅畫是梵谷在法國南方的「黃色麥田」創作，畫於1889年。   他當時住在聖雷米精神病院附近，以當地風景為靈感。   [0]
+q-met-02,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3438,4343,0.0,,梵谷曾形容絲柏為「沉默的守護者」，高聳挺拔，像一位靜謐的哨兵守護著麥田。[0]
+q-met-03,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3375,6590,0.0,,梵谷的〈有絲柏的麥田〉確有其他版本，最著名的是1889年創作的這幅，現藏於大都會藝術博物館 [0]。   此外，梵谷也畫過數幅相似主題的作品，如《麥田與絲柏》（1889）與《麥田與絲柏》（1890），收藏於其他機構如奧賽美術館與私人收藏 [0]。   畫作風格獨特，以旋轉筆觸與強烈色彩表現自然景觀，是梵谷最具代表性的作品之一 [0]。
+q-met-04,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3537,4846,0.0,,大都會博物館於1906年取得〈有絲柏的麥田〉。   這幅畫是梵谷生前後由其妹妹薇拉·梵谷（Vera van Gogh）贈與博物館的。   [0]
+q-met-05,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3506,4189,0.0,,畫中遠方的山並無具名，梵谷以印象派筆觸表現其輪廓與色調[0]。
+q-aic-01,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,False,3460,4051,0.0,,秀拉使用「點描」技法，以細小色點構成整幅畫面。   [0]
+q-aic-02,dev,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3524,3834,0.0,,右邊女子牽著一隻小狗。[0]
+q-aic-03,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,4069,4903,0.0,,這幅畫首次於1886年在「巴黎美術館」（Musée d'Orsay）展出。   [0]
+q-aic-04,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,False,4674,5197,0.0,,畫布四周的邊框是在1888–1889年加上。[0]
+q-aic-05,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,True,False,3823,4098,0.0,,畫的是塞納河上的島。[0]
+q-refuse-01,test,hybrid_norag,qwen3-vl:4b-instruct,2026.09.1,answer_v1,False,False,3744,4551,0.0,,這幅畫在1986年以1200萬美元售出，是當時最貴的點描派作品之一[0]。

@@ -1,0 +1,14 @@
+# 全組共用的 ruff 設定（pre-commit 與 CI 跑同一套）
+line-length = 100
+target-version = "py312"
+extend-exclude = ["models", "data"]  # 下載的模型、轉檔工具與執行期資料（含模型產生的程式碼）
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["B008"]  # FastAPI 的 File()/Query() 預設值寫法
+
+[lint.isort]
+known-first-party = ["app"]
+
+[lint.per-file-ignores]
+"pipelines/*.py" = ["E402"]  # 先把 backend 加進 sys.path 才能 import app

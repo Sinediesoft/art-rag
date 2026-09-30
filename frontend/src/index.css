@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* 色彩、字級、間距的設計 token（共用層 §八） */
+@theme {
+  --color-paper: #f6f1e7;
+  --color-paper-deep: #ede5d6;
+  --color-card: #fffdf8;
+  --color-ink: #1f1b16;
+  --color-ink-soft: #5b5248;
+  --color-ink-faint: #8a7f72;
+  --color-line: #e2d8c6;
+  --color-seal: #b3261e;
+  --color-seal-deep: #8f1d17;
+  --color-seal-soft: #f7e4df;
+  --color-jade: #2f6b57;
+  --color-jade-soft: #e1efe8;
+  --color-amber: #9a5b0b;
+  --color-amber-soft: #fbeed6;
+  /* 工廠圖紙區：藍圖色 */
+  --color-steel: #2b5d8a;
+  --color-steel-deep: #1d4266;
+  --color-steel-soft: #e2ecf5;
+  --color-code: #16202b;
+  --font-serif: "Noto Serif TC", "Songti TC", serif;
+  --font-sans: "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+.caret::after {
+  content: "▍";
+  margin-left: 1px;
+  color: var(--color-seal);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 圖紙區的藍圖格線底紋 */
+.blueprint {
+  background-color: var(--color-steel-soft);
+  background-image:
+    linear-gradient(rgba(43, 93, 138, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 93, 138, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.pixelated {
+  image-rendering: pixelated;
+}

@@ -1,0 +1,175 @@
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { api, ApiError } from "../api/client";
+import { useImageSearch, useTextSearch } from "../api/hooks";
+import { ArtworkCard } from "../components/common/ArtworkCard";
+import { ErrorMessage, Loading } from "../components/common/Feedback";
+import { NotInKbNotice, VerifiedBadge } from "../components/common/StatusNotices";
+
+export function SearchPage() {
+  const [params] = useSearchParams();
+  const imageId = params.get("image");
+  const q = params.get("q");
+  return imageId ? <ImageResults imageId={imageId} /> : <TextResults q={q ?? ""} />;
+}
+
+function ImageResults({ imageId }: { imageId: string }) {
+  const { data, isLoading, error } = useImageSearch(imageId);
+  const best = data?.matched ? data.results[0] : null;
+  const others = data ? data.results.filter((r) => r !== best) : [];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <img
+          src={api.uploadedImageUrl(imageId)}
+          alt="你上傳的照片"
+          className="h-20 w-20 rounded-lg border border-line object-cover shadow-sm"
+        />
+        <div>
+          <p className="text-xs text-ink-faint">以圖搜圖</p>
+          <h1 className="font-serif text-2xl font-bold">辨識結果</h1>
+          {data && (
+            <p className="text-xs text-ink-faint">
+              Chinese-CLIP 粗篩 → ORB 幾何驗證 · {data.latency_ms} ms
+            </p>
+          )}
+        </div>
+      </div>
+
+      {isLoading && <Loading label="辨識中：計算影像向量並比對特徵點…" />}
+      {error && (
+        <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />
+      )}
+
+      {best && (
+        <section className="grid gap-4 rounded-2xl border border-jade/30 bg-jade-soft/40 p-4 sm:grid-cols-[240px_1fr]">
+          <ArtworkCard artwork={best.artwork} to={`/artworks/${best.artwork.id}`} />
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <VerifiedBadge ok>辨識成功</VerifiedBadge>
+              <VerifiedBadge ok>相似度 {best.score.toFixed(3)}</VerifiedBadge>
+              <VerifiedBadge ok>幾何驗證 {best.inliers} 個對應點</VerifiedBadge>
+            </div>
+            <h2 className="font-serif text-2xl font-black">〈{best.artwork.title_zh}〉</h2>
+            <p className="text-ink-soft">
+              {best.artwork.artist_zh}（{best.artwork.artist_en}）· {best.artwork.date_text}
+            </p>
+            <div className="mt-auto flex flex-wrap gap-2">
+              <Link
+                to={`/artworks/${best.artwork.id}/chat?image=${imageId}`}
+                className="rounded-xl bg-seal px-4 py-2.5 font-bold text-white transition hover:bg-seal-deep"
+              >
+                問問這幅畫
+              </Link>
+              <Link
+                to={`/artworks/${best.artwork.id}`}
+                className="rounded-xl border border-ink/15 bg-card px-4 py-2.5 font-bold transition hover:border-ink/40"
+              >
+                畫作介紹
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {data && !data.matched && (
+        <NotInKbNotice
+          detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
+        />
+      )}
+
+      {others.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-bold text-ink-soft">
+            {data?.matched ? "其他候選" : "最接近的畫作（未通過驗證，僅供參考）"}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {others.map((r) => (
+              <ArtworkCard
+                key={r.artwork.id}
+                artwork={r.artwork}
+                to={`/artworks/${r.artwork.id}`}
+                dim
+                footer={
+                  <p className="text-xs text-ink-faint">
+                    相似度 {r.score.toFixed(3)} · 對應點 {r.inliers ?? "—"}
+                  </p>
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function TextResults({ q }: { q: string }) {
+  const navigate = useNavigate();
+  const [input, setInput] = useState(q);
+  const { data, isLoading, error } = useTextSearch(q || null);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (input.trim()) navigate(`/search?q=${encodeURIComponent(input.trim())}`);
+  };
+  return (
+    <div className="flex flex-col gap-5">
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          className="min-w-0 flex-1 rounded-xl border border-line bg-card px-4 py-3 outline-none focus:border-seal"
+          placeholder="用文字描述畫面"
+        />
+        <button className="shrink-0 rounded-xl bg-ink px-4 py-3 font-bold text-paper">搜尋</button>
+      </form>
+      <div>
+        <p className="text-xs text-ink-faint">以文搜圖</p>
+        <h1 className="font-serif text-2xl font-bold">「{q}」</h1>
+        {data && (
+          <p className="text-xs text-ink-faint">
+            Chinese-CLIP（文字→畫面）＋ bge-m3（文字→知識段落）以 RRF 融合排序 · {data.latency_ms} ms
+          </p>
+        )}
+      </div>
+      {isLoading && <Loading label="搜尋中…" />}
+      {error && (
+        <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />
+      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {data?.results.map((r, i) => (
+          <ArtworkCard
+            key={r.artwork.id}
+            artwork={r.artwork}
+            to={`/artworks/${r.artwork.id}`}
+            badge={
+              i === 0 ? (
+                <span className="rounded-full bg-seal px-2 py-0.5 text-xs font-bold text-white">最相符</span>
+              ) : undefined
+            }
+            footer={
+              <div className="flex flex-col gap-1">
+                <ScoreBar label="畫面" value={r.image_score} max={0.5} />
+                <ScoreBar label="文字" value={r.text_score} max={1} />
+              </div>
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
+  const pct = Math.max(4, Math.min(100, (value / max) * 100));
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-ink-faint">
+      <span className="w-6 shrink-0">{label}</span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper-deep">
+        <span className="block h-full rounded-full bg-seal/70" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="w-9 shrink-0 text-right tabular-nums">{value.toFixed(2)}</span>
+    </div>
+  );
+}

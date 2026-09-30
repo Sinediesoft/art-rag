@@ -1,0 +1,53 @@
+{
+  "id": "npm-000001",
+  "title": { "zh": "谿山行旅圖", "en": "Travelers among Mountains and Streams" },
+  "artist": { "zh": "范寬", "en": "Fan Kuan" },
+  "date_text": "北宋（約 11 世紀初）",
+  "medium": "軸，絹本，水墨淺設色",
+  "dimensions": "206.3 × 103.3 公分",
+  "collection": "國立故宮博物院",
+  "image": {
+    "path": "kb/images/npm-000001.jpg",
+    "license": "公有領域",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Fan_Kuan_-_Travelers_Among_Mountains_and_Streams_-_Google_Art_Project.jpg"
+  },
+  "source_url": "https://theme.npm.edu.tw/opendata/",
+  "descriptions": [
+    {
+      "lang": "zh",
+      "topic": "構圖",
+      "text": "畫面上方約三分之二被一座巨大的主峰占據，山體正面直立、厚重，給人崇高而壓迫的感受，這種構圖常被稱為「巨碑式山水」。主峰右側有一道細長的瀑布垂直落下，山腳雲霧瀰漫，把遠方的主峰與近景的巨石、樹林分隔開來。近景右下方的山路上，有一支馱著貨物的騾隊正在趕路，人與牲口在山勢襯托下顯得極為渺小，更凸顯自然的宏偉。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "技法",
+      "text": "范寬以密集、短促的筆觸層層點染山石，表現岩石堅硬粗糙的質感，這種筆法後世稱為「雨點皴」。山頂長著成片的灌木叢，以濃墨點出；樹木枝幹則用勁挺的線條勾勒。整幅畫以水墨為主，只略施淡彩，畫在絹上。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "落款與發現",
+      "text": "這幅畫長期找不到作者的簽名。直到 1958 年，故宮研究人員李霖燦在畫面右下方、騾隊後方的樹叢枝葉間，發現了隱藏的「范寬」二字款，才確認作者。畫幅上方另有明代書畫家董其昌所題「北宋范中立谿山行旅圖」。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "畫家",
+      "text": "范寬，名中正，字中立，華原（今陝西耀州一帶）人，活躍於北宋初期，約 10 世紀末至 11 世紀初。他早年學習李成、荊浩的畫法，後來體悟到向前人學習不如向自然學習，於是長年隱居終南山、太華山一帶觀察山川。他與李成、關仝並稱為北宋初期山水畫三大家。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    },
+    {
+      "lang": "zh",
+      "topic": "地位",
+      "text": "〈谿山行旅圖〉被視為北宋山水畫的代表作，也是國立故宮博物院最受矚目的重要典藏之一，常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑。因為屬於限展的重要古物，原件只在特定期間展出。",
+      "source_url": "https://theme.npm.edu.tw/opendata/",
+      "license": "CC0"
+    }
+  ],
+  "style_tags": ["山水", "北宋", "水墨", "巨碑式構圖", "雨點皴"]
+}

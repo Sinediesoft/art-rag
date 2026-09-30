@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://art-rag.local/schemas/part.schema.json",
+  "title": "Part",
+  "description": "工廠機械加工圖知識庫：一個零件一個 JSON 檔（kb/parts/<id>.json），配一支標準 CadQuery 模型（kb/cad/<id>.py）與一張圖紙（kb/drawings/<id>.png，由 make drawings 產生）。共用層 §二，負責：D。示範資料為虛構工廠。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "part_no", "drawing_no", "revision", "name", "category", "material", "density_g_cm3", "company", "owner", "confidentiality", "cad", "drawing", "descriptions"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "<來源代碼>-<編號>，只用小寫 ASCII；檔名、前端路由都用它",
+      "pattern": "^[a-z]+-[a-z0-9]+$"
+    },
+    "part_no": { "type": "string", "minLength": 1, "description": "料號" },
+    "drawing_no": { "type": "string", "minLength": 1, "description": "圖號" },
+    "revision": { "type": "string", "minLength": 1, "description": "版次" },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zh"],
+      "properties": { "zh": { "type": "string", "minLength": 1 }, "en": { "type": "string" } }
+    },
+    "category": { "type": "string", "minLength": 1 },
+    "material": { "type": "string", "minLength": 1 },
+    "density_g_cm3": { "type": "number", "exclusiveMinimum": 0, "description": "材料密度，用標準模型體積估算重量" },
+    "surface": { "type": "string", "description": "表面處理" },
+    "company": { "type": "string", "minLength": 1 },
+    "owner": { "type": "string", "minLength": 1, "description": "負責單位" },
+    "confidentiality": {
+      "type": "string",
+      "enum": ["公開", "內部", "機密"],
+      "description": "機密等級；「機密」的圖紙不得送往任何雲端 API（包含對照組）"
+    },
+    "cad": { "type": "string", "pattern": "^kb/cad/[a-z]+-[a-z0-9]+\\.py$", "description": "標準 CadQuery 模型，最後把實體指定給變數 solid" },
+    "drawing": { "type": "string", "pattern": "^kb/drawings/[a-z]+-[a-z0-9]+\\.png$" },
+    "descriptions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "text", "source"],
+        "properties": {
+          "topic": { "type": "string", "description": "段落主題，例如：加工製程、公差與檢驗" },
+          "text": { "type": "string", "minLength": 20 },
+          "source": { "type": "string", "minLength": 1, "description": "內部文件名稱與版次（沒有網址）" }
+        }
+      }
+    },
+    "tags": { "type": "array", "items": { "type": "string" } }
+  }
+}
