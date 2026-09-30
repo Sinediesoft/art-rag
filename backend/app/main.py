@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="畫語 ArtRAG API",
+    title="地端隱私多模態 RAG 專題 API",
     version="0.1.0",
     description=(
         "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D）。"

@@ -20,12 +20,12 @@ export function Layout() {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-seal font-serif text-lg font-black text-white shadow-sm">
+          <Link to="/" className="flex min-w-0 items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-seal font-serif text-lg font-black text-white shadow-sm">
               畫
             </span>
-            <span className="font-serif text-xl font-black tracking-wide">
-              畫語 <span className="text-sm font-bold text-ink-faint">ArtRAG</span>
+            <span className="truncate font-serif text-base font-black sm:text-lg sm:tracking-wide md:text-xl">
+              地端隱私多模態 RAG 專題
             </span>
           </Link>
           <nav className="ml-auto hidden gap-1 sm:flex">
@@ -47,7 +47,7 @@ export function Layout() {
           {degraded && (
             <Link
               to="/admin"
-              className="ml-auto rounded-full bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber sm:ml-2"
+              className="ml-auto shrink-0 rounded-full bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber sm:ml-2"
             >
               {health.outage_simulated ? "推論伺服器離線" : "部分服務異常"}
             </Link>
