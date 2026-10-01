@@ -4,6 +4,7 @@ import type { components } from "./schema";
 export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
 export type ArtworkDetail = Schemas["ArtworkDetail"];
+export type ColorAnalysis = Schemas["ColorAnalysis"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
 export type HealthResponse = Schemas["HealthResponse"];
@@ -101,6 +102,10 @@ export const api = {
     request<TextSearchResponse>(`/search/text?q=${encodeURIComponent(q)}`),
   listArtworks: () => request<Schemas["ArtworkListResponse"]>("/artworks"),
   getArtwork: (id: string) => request<ArtworkDetail>(`/artworks/${encodeURIComponent(id)}`),
+  /** 色彩分析（docs/adr/010）：知識庫畫作讀索引算好的結果，上傳照片即時計算 */
+  artworkColors: (id: string) => request<ColorAnalysis>(`/artworks/${encodeURIComponent(id)}/colors`),
+  photoColors: (imageId: string) =>
+    request<ColorAnalysis>(`/images/${encodeURIComponent(imageId)}/colors`),
   health: () => request<HealthResponse>("/health"),
   evalRuns: () => request<EvalRunsResponse>("/eval/runs"),
   feedback: (body: Schemas["FeedbackRequest"]) => request<Schemas["OkResponse"]>("/feedback", json(body)),

@@ -6,6 +6,23 @@ export const useArtworks = () => useQuery({ queryKey: ["artworks"], queryFn: api
 export const useArtwork = (id: string | undefined) =>
   useQuery({ queryKey: ["artwork", id], queryFn: () => api.getArtwork(id!), enabled: !!id });
 
+/** 色彩分析結果固定（同一張圖每次算出來都一樣），不必重抓 */
+export const useArtworkColors = (id: string | undefined) =>
+  useQuery({
+    queryKey: ["artwork-colors", id],
+    queryFn: () => api.artworkColors(id!),
+    enabled: !!id,
+    staleTime: Infinity,
+  });
+
+export const usePhotoColors = (imageId: string | null) =>
+  useQuery({
+    queryKey: ["photo-colors", imageId],
+    queryFn: () => api.photoColors(imageId!),
+    enabled: !!imageId,
+    staleTime: Infinity,
+  });
+
 export const useImageSearch = (imageId: string | null) =>
   useQuery({
     queryKey: ["search-image", imageId],
