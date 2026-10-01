@@ -151,12 +151,25 @@ function ColorMap({ src, palette, selected }: { src: string; palette: number[][]
   }, [bitmap, selected, palette]);
 
   if (failed) return <p className="text-xs text-ink-faint">色塊分布圖載入失敗</p>;
+  // 圖還沒載好時先留一塊空間（canvas 沒設尺寸會是 300×150，載好後卡片高度會跳一下）；
+  // 還不知道直幅或橫幅，高度取橫幅（約 300 px）與直幅（512 px）之間，且不超過 70vh
+  if (!bitmap)
+    return (
+      <div
+        role="status"
+        className="flex h-[min(24rem,70vh)] items-center justify-center rounded-lg border border-line bg-paper-deep text-xs text-ink-faint"
+      >
+        載入色塊分布圖…
+      </div>
+    );
+  // 保持長寬比、不超過卡片寬度、最高 70vh（同畫作頁左邊的原圖）；
+  // w-auto／h-auto 讓 canvas 以自己的像素尺寸（長邊 512）顯示，不會被卡片寬度放大成又糊又高的圖
   return (
     <canvas
       ref={canvas}
       role="img"
       aria-label="色塊分布圖：每個像素塗成所屬的主色"
-      className="block h-auto w-full rounded-lg border border-line bg-paper-deep"
+      className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded-lg border border-line bg-paper-deep"
     />
   );
 }
