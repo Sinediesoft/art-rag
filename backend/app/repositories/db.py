@@ -1,6 +1,6 @@
 """PostgreSQL + pgvector 連線池（.env 的 DATABASE_URL 有值才用；留空＝檔案索引＋SQLite）。
 
-資料庫跑在 Docker（deploy/docker-compose.yml），見 docs/adr/006。SQL 只寫在 repositories/。
+資料庫跑在 Docker（deploy/docker-compose.yml），見 docs/adr/009。SQL 只寫在 repositories/。
 """
 
 import threading

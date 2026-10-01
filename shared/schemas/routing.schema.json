@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://art-rag.local/schemas/routing.schema.json",
+  "title": "Routing",
+  "description": "製程途程：一張圖紙一個 JSON 檔（kb/production/routings/<part_id>.json），工序與 kb/parts/<part_id>.json「加工製程」段落的工序 10、20… 一一對應。自製工序指定機型與工時（準備＋每件加工），委外工序（熱處理、表面處理）只填天數、不佔機台。共用層 §二，負責：D。工時為示範估計值。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["part_id", "operations"],
+  "properties": {
+    "part_id": { "type": "string", "pattern": "^[a-z]+-[a-z0-9]+$", "description": "圖紙 ID，與檔名相同" },
+    "source": { "type": "string", "description": "工序與工時的出處" },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op_seq", "name", "kind", "machine_type", "setup_min", "run_min_per_pc"],
+            "properties": {
+              "op_seq": { "type": "integer", "minimum": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "kind": { "const": "自製" },
+              "machine_type": { "type": "string", "minLength": 1 },
+              "setup_min": { "type": "number", "minimum": 0, "description": "換線準備時間（分鐘）；同一台機台連續做同一道工序時省略" },
+              "run_min_per_pc": { "type": "number", "exclusiveMinimum": 0, "description": "每件加工時間（分鐘）" }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["op_seq", "name", "kind", "outsource_days"],
+            "properties": {
+              "op_seq": { "type": "integer", "minimum": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "kind": { "const": "委外" },
+              "outsource_days": { "type": "integer", "minimum": 1, "description": "委外加工天數（工作天）" }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

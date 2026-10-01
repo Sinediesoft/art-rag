@@ -1,0 +1,176 @@
+{
+  "part_id": "mfg-006",
+  "unit": "件",
+  "std_cost_twd": 1850,
+  "safety_stock": 16,
+  "reorder_qty": 40,
+  "lead_time_days": 28,
+  "make_or_buy": "鑄件外購＋自製加工",
+  "stock": [
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-06-1",
+      "lot_no": "L2608-17",
+      "status": "可用",
+      "qty": 22,
+      "received_on": "2026-09-11",
+      "note": "成對標示出貨（中心高差 ≤ 0.03 mm）"
+    },
+    {
+      "warehouse_id": "WH-Q",
+      "bin": "Q-03",
+      "lot_no": "L2609-13",
+      "status": "待檢",
+      "qty": 8,
+      "received_on": "2026-09-29",
+      "note": "搪孔尺寸抽驗中"
+    },
+    {
+      "warehouse_id": "WH-N",
+      "bin": "N-06",
+      "lot_no": "L2608-17",
+      "status": "不良",
+      "qty": 2,
+      "received_on": "2026-09-11",
+      "note": "軸承孔內壁砂孔，判定報廢"
+    }
+  ],
+  "moves": [
+    {
+      "moved_on": "2026-08-01",
+      "warehouse_id": "WH-A",
+      "move_type": "期初",
+      "qty": 24,
+      "ref_no": "OB-2608",
+      "note": "八月期初庫存"
+    },
+    {
+      "moved_on": "2026-09-03",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -20,
+      "ref_no": "SO-2608-011",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-10",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 40,
+      "ref_no": "WO-2608-17",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-09-11",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -38,
+      "ref_no": "WO-2608-17",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-09-11",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 38,
+      "ref_no": "WO-2608-17",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-09-11",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -2,
+      "ref_no": "WO-2608-17",
+      "note": "檢驗不合格"
+    },
+    {
+      "moved_on": "2026-09-11",
+      "warehouse_id": "WH-N",
+      "move_type": "調撥入",
+      "qty": 2,
+      "ref_no": "WO-2608-17",
+      "note": "軸承孔內壁砂孔"
+    },
+    {
+      "moved_on": "2026-09-18",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -20,
+      "ref_no": "SO-2609-001",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-29",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 8,
+      "ref_no": "WO-2609-13",
+      "note": "完工入庫，待品檢"
+    }
+  ],
+  "work_orders": [
+    {
+      "wo_no": "WO-2608-17",
+      "qty_planned": 40,
+      "qty_done": 40,
+      "status": "已完工",
+      "line": "VMC-01",
+      "start_on": "2026-08-14",
+      "due_on": "2026-09-10",
+      "note": null
+    },
+    {
+      "wo_no": "WO-2609-13",
+      "qty_planned": 40,
+      "qty_done": 8,
+      "status": "生產中",
+      "line": "VMC-01",
+      "start_on": "2026-09-21",
+      "due_on": "2026-10-19",
+      "note": null
+    }
+  ],
+  "sales_orders": [
+    {
+      "so_no": "SO-2608-011",
+      "line_no": 2,
+      "customer": "晨峰自動化",
+      "qty": 20,
+      "qty_shipped": 20,
+      "order_on": "2026-08-12",
+      "due_on": "2026-09-10",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2609-001",
+      "line_no": 1,
+      "customer": "岳承精機",
+      "qty": 20,
+      "qty_shipped": 20,
+      "order_on": "2026-09-01",
+      "due_on": "2026-09-19",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2609-003",
+      "line_no": 3,
+      "customer": "晨峰自動化",
+      "qty": 24,
+      "qty_shipped": 0,
+      "order_on": "2026-09-03",
+      "due_on": "2026-10-06",
+      "status": "待出貨"
+    },
+    {
+      "so_no": "SO-2609-021",
+      "line_no": 2,
+      "customer": "岳承精機",
+      "qty": 6,
+      "qty_shipped": 0,
+      "order_on": "2026-09-25",
+      "due_on": "2026-10-20",
+      "status": "待出貨"
+    }
+  ]
+}

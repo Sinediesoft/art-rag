@@ -1,0 +1,54 @@
+{
+  "part_id": "mfg-006",
+  "source": "kb/parts/mfg-006.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "鑄件去毛邊、噴砂",
+      "kind": "自製",
+      "machine_type": "鉗工",
+      "setup_min": 15,
+      "run_min_per_pc": 3
+    },
+    {
+      "op_seq": 20,
+      "name": "銑底面作為基準面",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 30,
+      "run_min_per_pc": 6
+    },
+    {
+      "op_seq": 30,
+      "name": "搪軸承孔 Ø35H7、兩側倒角",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 40,
+      "run_min_per_pc": 9
+    },
+    {
+      "op_seq": 40,
+      "name": "鑽 2-Ø11 安裝孔",
+      "kind": "自製",
+      "machine_type": "鑽孔攻牙",
+      "setup_min": 15,
+      "run_min_per_pc": 2
+    },
+    {
+      "op_seq": 50,
+      "name": "鑽 Ø6 注油孔、攻 M6",
+      "kind": "自製",
+      "machine_type": "鑽孔攻牙",
+      "setup_min": 15,
+      "run_min_per_pc": 2.5
+    },
+    {
+      "op_seq": 60,
+      "name": "非加工面塗漆",
+      "kind": "自製",
+      "machine_type": "鉗工",
+      "setup_min": 15,
+      "run_min_per_pc": 4
+    }
+  ]
+}

@@ -31,6 +31,7 @@ from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
+from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
 from app.services.search_service import identify_drawing, load_upload, part_summary, rectify_to_part
 
@@ -105,6 +106,22 @@ def purge_jobs(ttl_days: int) -> int:
 
 
 async def reconstruct_stream(
+    request_id: str,
+    part_id: str | None = None,
+    image_id: str | None = None,
+    strategy: str = "ortho2cad",
+) -> AsyncIterator[str]:
+    """3D 重建用到 Ortho2CAD（對照組改用 Qwen3-VL）；照片要先辨識（Chinese-CLIP），
+    未收錄圖紙要請 Qwen3-VL 讀尺寸。記憶體吃緊時先釋放其他模型。"""
+    models = {"ortho2cad" if strategy == "ortho2cad" else "qwen"}
+    if image_id:
+        models |= {"clip", "qwen"}
+    events = _reconstruct_stream(request_id, part_id, image_id, strategy)
+    async for e in memory_guard.stream("reconstruct", models, events):
+        yield e
+
+
+async def _reconstruct_stream(
     request_id: str,
     part_id: str | None = None,
     image_id: str | None = None,

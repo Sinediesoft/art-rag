@@ -4,19 +4,23 @@
 - 知識段落：bge-m3（1024 維，dense，CLS pooling）
 一律 fp32、L2 正規化；模型名稱與 revision 只從 shared/models.yaml 讀。
 EMBED_MODE=mock 時改用雜湊產生的固定向量，給 CI 與沒有模型的電腦用。
+記憶體吃緊時 release() 可以卸載模型（services/memory_guard.py），下次用到時自動重新載入。
 """
 
+import gc
 import hashlib
 import os
 import threading
-from functools import lru_cache
+from collections.abc import Callable
 
 import numpy as np
 from PIL import Image
 
 from app.core.config import get_models_config, get_settings
 
-_lock = threading.Lock()
+_lock = threading.Lock()  # 推論鎖：同一時間只跑一個 embedding，卸載時也等它跑完
+_load_lock = threading.Lock()
+_models: dict[str, tuple] = {}
 
 
 def _normalize(v: np.ndarray) -> np.ndarray:
@@ -42,8 +46,41 @@ def _hf_offline() -> None:
         os.environ["HF_HUB_OFFLINE"] = "1"
 
 
-@lru_cache
+def _cached(name: str, loader: Callable[[], tuple]) -> tuple:
+    m = _models.get(name)
+    if m is None:
+        with _load_lock:
+            m = _models.get(name)
+            if m is None:
+                m = _models[name] = loader()
+    return m
+
+
+def is_loaded(name: str) -> bool:
+    """name：clip（Chinese-CLIP）或 bge（bge-m3）。"""
+    return name in _models
+
+
+def release(name: str) -> bool:
+    """卸載模型、還記憶體給作業系統；正在算的 embedding 會先算完。回傳是否真的有卸載。"""
+    with _lock:
+        m = _models.pop(name, None)
+    if m is None:
+        return False
+    del m
+    gc.collect()
+    return True
+
+
 def _clip():
+    return _cached("clip", _load_clip)
+
+
+def _bge():
+    return _cached("bge", _load_bge)
+
+
+def _load_clip():
     _hf_offline()
     import torch
     from transformers import ChineseCLIPModel, ChineseCLIPProcessor
@@ -54,8 +91,7 @@ def _clip():
     return model.eval().to(get_settings().embed_device), proc
 
 
-@lru_cache
-def _bge():
+def _load_bge():
     _hf_offline()
     import torch
     from transformers import AutoModel, AutoTokenizer

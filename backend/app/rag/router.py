@@ -1,5 +1,5 @@
 """領域路由（MMed-RAG 的 domain identification）：照片先判斷是畫作（art）還是工廠圖紙（mfg），
-再交給該領域的辨識流程。見 docs/adr/004-domain-router.md。
+再交給該領域的辨識流程。見 docs/adr/007-domain-router.md。
 
 原型法：每個領域的原型＝知識庫圖片 Chinese-CLIP 向量的平均（直接取索引裡的 image_vecs），
 margin＝照片與圖紙原型的相似度 − 與畫作原型的相似度。不用訓練；新增畫作或圖紙、重建索引後自動更新。

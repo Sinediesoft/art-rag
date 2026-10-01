@@ -16,6 +16,28 @@ export type RouteInfo = Schemas["RouteInfo"];
 export type PartTextSearchResponse = Schemas["PartTextSearchResponse"];
 export type ReconstructRequest = Schemas["ReconstructRequest"];
 export type CadStrategy = NonNullable<ReconstructRequest["strategy"]>;
+export type InventorySchema = Schemas["InventorySchemaResponse"];
+export type InventoryOverviewRow = Schemas["InventoryOverviewRow"];
+export type PartInventory = Schemas["PartInventory"];
+export type InventoryAskRequest = Pick<Schemas["InventoryAskRequest"], "question"> &
+  Partial<Omit<Schemas["InventoryAskRequest"], "question">>;
+// 生產排程（Timefold）與記憶體管理
+export type ProductionOverview = Schemas["ProductionOverview"];
+export type PartPlan = Schemas["PartPlan"];
+export type WorkOrderCreate = Pick<Schemas["WorkOrderCreate"], "part_id" | "qty" | "due_on"> &
+  Partial<Omit<Schemas["WorkOrderCreate"], "part_id" | "qty" | "due_on">>;
+export type WorkOrderCreated = Schemas["WorkOrderCreated"];
+export type ScheduleWorkOrder = Schemas["ScheduleWorkOrder"];
+export type PlannedWorkOrder = Schemas["PlannedWorkOrder"];
+export type ScheduledOp = Schemas["ScheduledOp"];
+export type ScheduleKpis = Schemas["ScheduleKpis"];
+export type ConstraintScore = Schemas["ConstraintScore"];
+export type AxisDay = Schemas["AxisDay"];
+export type ScheduleRunDetail = Schemas["ScheduleRunDetail"];
+export type SchedulerEngine = Schemas["SchedulerEngine"];
+export type ScheduleSolveRequest = Partial<Schemas["ScheduleSolveRequest"]>;
+export type MemoryStatus = Schemas["MemoryStatus"];
+export type MemoryEvent = Schemas["MemoryEvent"];
 type ChatDefaults = "strategy" | "use_retrieval" | "allow_fallback";
 /** 有預設值的欄位在請求時可省略 */
 export type ChatRequest = Omit<Schemas["ChatRequest"], ChatDefaults> &
@@ -93,4 +115,20 @@ export const api = {
   partReconstructions: (id: string) =>
     request<Schemas["CadJobListResponse"]>(`/parts/${encodeURIComponent(id)}/reconstructions`),
   cadEvalRuns: () => request<Schemas["CadEvalRunsResponse"]>("/eval/cad-runs"),
+  // 工廠庫存（Text-to-SQL）
+  inventorySchema: () => request<InventorySchema>("/inventory/schema"),
+  inventoryOverview: () => request<Schemas["InventoryOverviewResponse"]>("/inventory/overview"),
+  partInventory: (id: string) => request<PartInventory>(`/inventory/parts/${encodeURIComponent(id)}`),
+  sqlEvalRuns: () => request<Schemas["SqlEvalRunsResponse"]>("/eval/sql-runs"),
+  // 生產排程（Timefold）
+  productionOverview: () => request<ProductionOverview>("/production/overview"),
+  partPlan: (id: string) => request<PartPlan>(`/production/parts/${encodeURIComponent(id)}`),
+  createWorkOrder: (body: WorkOrderCreate) => request<WorkOrderCreated>("/production/work-orders", json(body)),
+  cancelWorkOrder: (woNo: string) =>
+    request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" }),
+  stopSchedule: () => request<Schemas["OkResponse"]>("/schedule/stop", { method: "POST" }),
+  resetProduction: () => request<Schemas["OkResponse"]>("/admin/production/reset", { method: "POST" }),
+  // 記憶體管理
+  memory: () => request<MemoryStatus>("/memory"),
+  releaseMemory: () => request<Schemas["MemoryReleaseResponse"]>("/admin/memory/release", { method: "POST" }),
 };

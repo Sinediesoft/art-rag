@@ -1,6 +1,21 @@
-// SSE 解析：全專案只有這一份實作（共用層 §八）。問答（POST /chat）與 3D 重建（POST /cad/reconstruct）共用。
+// SSE 解析：全專案只有這一份實作（共用層 §八）。問答（POST /chat）、3D 重建（POST /cad/reconstruct）、
+// 庫存 Text-to-SQL（POST /inventory/ask）與生產排程（POST /schedule/solve）共用。
 // 瀏覽器內建 EventSource 只支援 GET，所以用 fetch 讀取串流。事件格式見 shared/sse_events.md。
-import { API_BASE, type ChatRequest, type PartSummary, type ReconstructRequest } from "./client";
+import {
+  API_BASE,
+  type AxisDay,
+  type ChatRequest,
+  type ConstraintScore,
+  type InventoryAskRequest,
+  type MemoryEvent,
+  type PartSummary,
+  type PlannedWorkOrder,
+  type ReconstructRequest,
+  type ScheduledOp,
+  type ScheduleKpis,
+  type ScheduleSolveRequest,
+  type ScheduleWorkOrder,
+} from "./client";
 
 export interface SourceItem {
   ref: number;
@@ -198,6 +213,172 @@ export function streamReconstruct(body: ReconstructRequest, h: CadHandlers, sign
       token: (d) => h.onToken?.(d.text),
       executing: () => h.onExecuting?.(),
       result: h.onResult,
+      done: h.onDone,
+      error: h.onError,
+    },
+    signal,
+  );
+}
+
+// ---- 工廠庫存 Text-to-SQL（POST /inventory/ask）
+export interface SqlAttemptEvent {
+  attempt: number;
+  sql: string;
+  ok: boolean;
+  /** 靜態檢查或執行失敗的訊息；會回饋給模型修正 */
+  error: string | null;
+}
+
+export interface SqlResultEvent {
+  columns: string[];
+  rows: (string | number | null)[][];
+  row_count: number;
+  truncated: boolean;
+  exec_ms: number;
+}
+
+export interface SqlDoneEvent {
+  request_id: string;
+  strategy_requested: string;
+  strategy_used: string;
+  model: string;
+  fallback: boolean;
+  fallback_reason: string | null;
+  prompt_version: string;
+  answer_prompt_version: string;
+  attempts: number;
+  latency_ms: { first_token: number | null; sql: number; exec: number; answer: number; total: number };
+  tokens: { input: number; output: number };
+  egress: { images: number; chunks: number; bytes: number };
+}
+
+export interface SqlHandlers {
+  onMeta?: (e: { request_id: string; as_of: string; prompt_version: string }) => void;
+  onAttempt?: (e: { n: number; previous_error: string | null }) => void;
+  onSqlToken?: (text: string) => void;
+  onSql?: (e: SqlAttemptEvent) => void;
+  onResult?: (e: SqlResultEvent) => void;
+  onToken?: (text: string) => void;
+  onDone?: (e: SqlDoneEvent) => void;
+  onError?: (e: ErrorEvent) => void;
+}
+
+export function streamInventoryAsk(body: InventoryAskRequest, h: SqlHandlers, signal?: AbortSignal) {
+  return streamSSE(
+    "/inventory/ask",
+    body,
+    {
+      meta: h.onMeta,
+      attempt: h.onAttempt,
+      sql_token: (d) => h.onSqlToken?.(d.text),
+      sql: h.onSql,
+      result: h.onResult,
+      token: (d) => h.onToken?.(d.text),
+      done: h.onDone,
+      error: h.onError,
+    },
+    signal,
+  );
+}
+
+// ---- 生產排程（POST /schedule/solve）
+export interface ScheduleMetaEvent {
+  request_id: string;
+  engine: "timefold" | "greedy";
+  engine_label: string;
+  engine_version: string | null;
+  /** Timefold 連不上而改用簡易排程的原因；null＝照指定的引擎 */
+  fallback_reason: string | null;
+  seconds: number;
+  /** 連續這麼多秒沒找到更好的解就提前結束 */
+  unimproved_seconds: number;
+  problem: {
+    plan_start: string;
+    day_minutes: number;
+    n_work_orders: number;
+    n_operations: number;
+    n_machines: number;
+    n_pinned: number;
+    total_work_min: number;
+    skipped: { wo_no: string; part_id: string; reason: string }[];
+  };
+  work_orders: ScheduleWorkOrder[];
+  machines: { machine_id: string; name: string; machine_type: string; site: string }[];
+  axis: AxisDay[];
+}
+
+export interface ScoreFields {
+  score: string;
+  hard: number;
+  medium: number;
+  soft: number;
+  structural?: number;
+  feasible: boolean;
+}
+
+export interface ScheduleProgressEvent extends ScoreFields {
+  elapsed_ms: number;
+  /** 建構初始解／局部搜尋最佳化／交期優先派工 */
+  phase: string;
+  initial_score: string | null;
+  improvements: number;
+  operations: ScheduledOp[];
+  kpis: ScheduleKpis;
+}
+
+export interface ScheduleSolutionEvent extends ScoreFields {
+  run_id: string;
+  engine: string;
+  status: "done" | "stopped";
+  initial_score: string | null;
+  /** 後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null */
+  score_check: boolean | null;
+  analysis: ConstraintScore[];
+  operations: ScheduledOp[];
+  work_orders: PlannedWorkOrder[];
+  kpis: ScheduleKpis;
+  axis: AxisDay[];
+}
+
+export interface ScheduleDoneEvent {
+  request_id: string;
+  run_id: string;
+  engine: string;
+  status: string;
+  score: string;
+  initial_score: string | null;
+  improvements: number;
+  latency_ms: { build: number; solve: number; total: number };
+  egress: { images: number; chunks: number; bytes: number };
+  /** 這次排程期間記憶體管理釋放了哪些模型 */
+  memory: MemoryEvent | null;
+}
+
+/** 沒有更好的解時每秒一次的心跳 */
+export interface ScheduleTickEvent {
+  elapsed_ms: number;
+  phase: string;
+  improvements: number;
+}
+
+export interface ScheduleHandlers {
+  onMeta?: (e: ScheduleMetaEvent) => void;
+  onProgress?: (e: ScheduleProgressEvent) => void;
+  onTick?: (e: ScheduleTickEvent) => void;
+  onSolution?: (e: ScheduleSolutionEvent) => void;
+  onDone?: (e: ScheduleDoneEvent) => void;
+  onError?: (e: ErrorEvent) => void;
+}
+
+export function streamScheduleSolve(body: ScheduleSolveRequest, h: ScheduleHandlers, signal?: AbortSignal) {
+  return streamSSE(
+    "/schedule/solve",
+    body,
+    {
+      meta: h.onMeta,
+      progress: h.onProgress,
+      tick: h.onTick,
+      solution: h.onSolution,
       done: h.onDone,
       error: h.onError,
     },

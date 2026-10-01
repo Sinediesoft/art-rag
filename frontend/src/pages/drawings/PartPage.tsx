@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router-dom";
 import { assetUrl, type ApiError } from "../../api/client";
 import { usePart, usePartReconstructions } from "../../api/hooks";
 import { ErrorMessage, Loading } from "../../components/common/Feedback";
+import { PartInventoryCard } from "../../components/inventory/PartInventoryCard";
 import { ModelViewer } from "../../components/LazyModelViewer";
+import { PartProductionCard } from "../../components/schedule/PartProductionCard";
 import { ConfidentialityBadge } from "../../components/parts/PartBadges";
 import { formatTaipei, seconds } from "../../lib/format";
 
@@ -130,6 +132,10 @@ export function PartPage() {
             </ul>
           </div>
         )}
+
+        <PartInventoryCard partId={p.id} name={p.name.zh} />
+
+        <PartProductionCard partId={p.id} />
 
         <dl className="grid grid-cols-[5.5em_1fr] gap-x-3 gap-y-1.5 rounded-xl border border-line bg-card p-4 text-sm">
           {meta

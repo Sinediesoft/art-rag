@@ -14,8 +14,16 @@ def mock_env(tmp_path_factory):
     data = tmp_path_factory.mktemp("data")
     # DATABASE_URL 清空：.env 指向開發用資料庫時，下面的 build_index
     # 會把 mock 向量寫進去蓋掉真的索引。PostgreSQL 版另外用 TEST_DATABASE_URL 測（test_postgres.py）
+    # 排程用簡易排程（不連 Timefold 服務）；記憶體管理關掉，避免測試時卸載開發者本機的模型
     os.environ.update(
-        {"EMBED_MODE": "mock", "LLM_MODE": "mock", "DATA_DIR": str(data), "DATABASE_URL": ""}
+        {
+            "EMBED_MODE": "mock",
+            "LLM_MODE": "mock",
+            "DATA_DIR": str(data),
+            "DATABASE_URL": "",
+            "SCHEDULER_MODE": "mock",
+            "MEMORY_GUARD": "false",
+        }
     )
     from app.core import config
 

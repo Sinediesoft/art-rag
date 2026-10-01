@@ -339,6 +339,280 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inventory/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inventory Schema
+         * @description 庫存資料庫的資料表與欄位說明（與給模型看的 schema 同一份來源）。
+         */
+        get: operations["inventory_schema_api_v1_inventory_schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inventory Overview */
+        get: operations["inventory_overview_api_v1_inventory_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/parts/{part_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Part Inventory
+         * @description 單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。
+         */
+        get: operations["part_inventory_api_v1_inventory_parts__part_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inventory Ask
+         * @description Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。
+         */
+        post: operations["inventory_ask_api_v1_inventory_ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Production Overview
+         * @description 排程頁：機台、行事曆、待排工單、排程服務狀態與目前排程。
+         */
+        get: operations["production_overview_api_v1_production_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/parts/{part_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Part Plan
+         * @description 圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。
+         */
+        get: operations["part_plan_api_v1_production_parts__part_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/work-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Work Order
+         * @description 從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
+         */
+        post: operations["create_work_order_api_v1_production_work_orders_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/work-orders/{wo_no}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Work Order
+         * @description 取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。
+         */
+        delete: operations["cancel_work_order_api_v1_production_work_orders__wo_no__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/solve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Solve Schedule
+         * @description 把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
+         */
+        post: operations["solve_schedule_api_v1_schedule_solve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Schedule
+         * @description 提前結束目前的求解，採用目前最佳解。
+         */
+        post: operations["stop_schedule_api_v1_schedule_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Schedule Run */
+        get: operations["schedule_run_api_v1_schedule_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/production/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Production
+         * @description 展示還原：清掉圖紙頁開立的工單與所有排程結果（DEMO_CONTROLS=false 時停用）。
+         */
+        post: operations["reset_production_api_v1_admin_production_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Memory Status
+         * @description 系統記憶體使用率、各模型是否載入／使用中、最近的釋放紀錄。
+         */
+        get: operations["memory_status_api_v1_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/memory/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release Memory
+         * @description 展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。
+         */
+        post: operations["release_memory_api_v1_admin_memory_release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/feedback": {
         parameters: {
             query?: never;
@@ -385,6 +659,26 @@ export interface paths {
          * @description 工廠圖紙評估（make eval-cad）：圖紙辨識與 Ortho2CAD 3D 重建。
          */
         get: operations["cad_eval_runs_api_v1_eval_cad_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eval/sql-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sql Eval Runs
+         * @description 工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+         */
+        get: operations["sql_eval_runs_api_v1_eval_sql_runs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -527,6 +821,19 @@ export interface components {
              */
             style_tags: string[];
         };
+        /** AxisDay */
+        AxisDay: {
+            /** Date */
+            date: string;
+            /** Weekday */
+            weekday: string;
+            /** Start Min */
+            start_min: number;
+            /** Holidays Before */
+            holidays_before: {
+                [key: string]: unknown;
+            }[];
+        };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
             /** File */
@@ -612,6 +919,22 @@ export interface components {
              * @description 檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）
              */
             rearrange?: boolean | null;
+        };
+        /** ConstraintScore */
+        ConstraintScore: {
+            /** Constraint */
+            constraint: string;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "hard" | "medium" | "soft";
+            /** Score */
+            score: number;
+            /** Matches */
+            matches: number;
+            /** Description */
+            description: string;
         };
         /** Description */
         Description: {
@@ -768,6 +1091,23 @@ export interface components {
             recent_cad: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Inventory
+             * @description 庫存資料庫：資料日期、各表筆數、資料問題
+             * @default {}
+             */
+            inventory: {
+                [key: string]: unknown;
+            };
+            /**
+             * Recent Sql
+             * @default []
+             */
+            recent_sql: {
+                [key: string]: unknown;
+            }[];
+            scheduler?: components["schemas"]["SchedulerEngine"] | null;
+            memory?: components["schemas"]["MemoryStatus"] | null;
         };
         /** ImageSearchHit */
         ImageSearchHit: {
@@ -818,6 +1158,240 @@ export interface components {
             /** Height */
             height: number;
         };
+        /** InventoryAskRequest */
+        InventoryAskRequest: {
+            /** Question */
+            question: string;
+            /**
+             * Strategy
+             * @description hybrid＝本地 Qwen3-VL；雲端策略一律回 CLOUD_CONFIDENTIAL_FORBIDDEN
+             * @default hybrid
+             * @enum {string}
+             */
+            strategy: "hybrid" | "api_nokb" | "api_kb" | "lora" | "mock";
+            /**
+             * Allow Fallback
+             * @default true
+             */
+            allow_fallback: boolean;
+        };
+        /** InventoryColumn */
+        InventoryColumn: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Description */
+            description: string;
+        };
+        /** InventoryOverviewResponse */
+        InventoryOverviewResponse: {
+            /** As Of */
+            as_of: string;
+            /** Company */
+            company: string;
+            /** Items */
+            items: components["schemas"]["InventoryOverviewRow"][];
+        };
+        /** InventoryOverviewRow */
+        InventoryOverviewRow: {
+            /** Part Id */
+            part_id: string;
+            /** Part No */
+            part_no: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+            /** Std Cost Twd */
+            std_cost_twd?: number | null;
+            /**
+             * Available
+             * @description 可用
+             */
+            available: number;
+            /**
+             * Reserved
+             * @description 保留給訂單
+             */
+            reserved: number;
+            /**
+             * Inspecting
+             * @description 待檢
+             */
+            inspecting: number;
+            /**
+             * Defective
+             * @description 不良
+             */
+            defective: number;
+            /**
+             * On Hand
+             * @description 合計（所有狀態）
+             */
+            on_hand: number;
+            /** Safety Stock */
+            safety_stock?: number | null;
+            /**
+             * Open Demand
+             * @description 未出貨訂單的需求量
+             */
+            open_demand: number;
+            /**
+             * In Production
+             * @description 未完工工單的剩餘數量
+             */
+            in_production: number;
+        };
+        /** InventorySchemaResponse */
+        InventorySchemaResponse: {
+            /**
+             * As Of
+             * @description 資料日期（Text-to-SQL 把它當成「今天」）
+             */
+            as_of: string;
+            /** Company */
+            company: string;
+            /** Tables */
+            tables: components["schemas"]["InventoryTable"][];
+            /** Prompt Version */
+            prompt_version: string;
+            /**
+             * Examples
+             * @description few-shot 範例的問題（prompt 內的範例）
+             */
+            examples: string[];
+        };
+        /** InventoryTable */
+        InventoryTable: {
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "table" | "view";
+            /**
+             * Rows
+             * @description 資料筆數；檢視表為 null
+             */
+            rows: number | null;
+            /** Columns */
+            columns: components["schemas"]["InventoryColumn"][];
+        };
+        /** MachineInfo */
+        MachineInfo: {
+            /** Machine Id */
+            machine_id: string;
+            /** Name */
+            name: string;
+            /** Machine Type */
+            machine_type: string;
+            /** Site */
+            site: string;
+        };
+        /** MemoryEvent */
+        MemoryEvent: {
+            /** At */
+            at: string;
+            /**
+             * Trigger
+             * @description 進入「…」流程／背景監控／手動
+             */
+            trigger: string;
+            /** Flow */
+            flow: string | null;
+            /** Flow Label */
+            flow_label: string;
+            /** Threshold */
+            threshold: number;
+            /** Percent Before */
+            percent_before: number;
+            /** Percent After */
+            percent_after: number;
+            /** Released */
+            released: components["schemas"]["MemoryReleased"][];
+            /** Failed */
+            failed: components["schemas"]["MemoryReleased"][];
+            /**
+             * Kept
+             * @description 目前流程或其他請求正在用、所以保留的模型
+             */
+            kept: string[];
+        };
+        /** MemoryModel */
+        MemoryModel: {
+            /**
+             * Key
+             * @description clip／bge／qwen／ortho2cad／timefold
+             */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * Where
+             * @description 後端行程／Ollama／llama-server／JVM
+             */
+            where: string;
+            /** Approx Mb */
+            approx_mb: number;
+            /**
+             * Loaded
+             * @description 是否載入中；null＝連不上或不在本機
+             */
+            loaded: boolean | null;
+            /**
+             * In Use
+             * @description 有請求正在使用（不會被釋放）
+             */
+            in_use: boolean;
+            /** Needed By Current Flow */
+            needed_by_current_flow: boolean;
+        };
+        /** MemoryReleaseResponse */
+        MemoryReleaseResponse: {
+            event: components["schemas"]["MemoryEvent"] | null;
+            status: components["schemas"]["MemoryStatus"];
+        };
+        /** MemoryReleased */
+        MemoryReleased: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Detail */
+            detail: string;
+            /** Approx Mb */
+            approx_mb?: number | null;
+        };
+        /** MemoryStatus */
+        MemoryStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Percent
+             * @description 系統記憶體使用率（%）
+             */
+            percent: number;
+            /** Threshold */
+            threshold: number;
+            /** Total Mb */
+            total_mb: number;
+            /** Available Mb */
+            available_mb: number;
+            /** Current Flow */
+            current_flow: string | null;
+            /** Current Flow Label */
+            current_flow_label: string | null;
+            /** Flow At */
+            flow_at: string | null;
+            /** Models */
+            models: components["schemas"]["MemoryModel"][];
+            /** Events */
+            events: components["schemas"]["MemoryEvent"][];
+        };
         /** OkResponse */
         OkResponse: {
             /**
@@ -825,6 +1399,42 @@ export interface components {
              * @default true
              */
             ok: boolean;
+        };
+        /** OpenSalesOrder */
+        OpenSalesOrder: {
+            /** So No */
+            so_no: string;
+            /** Line No */
+            line_no: number;
+            /** Customer */
+            customer: string;
+            /** Qty */
+            qty: number;
+            /** Qty Shipped */
+            qty_shipped: number;
+            /** Due On */
+            due_on: string;
+            /** Status */
+            status: string;
+        };
+        /** OpenWorkOrder */
+        OpenWorkOrder: {
+            /** Wo No */
+            wo_no: string;
+            /** Qty Planned */
+            qty_planned: number;
+            /** Qty Done */
+            qty_done: number;
+            /** Status */
+            status: string;
+            /** Line */
+            line: string;
+            /** Start On */
+            start_on: string;
+            /** Due On */
+            due_on: string;
+            /** Note */
+            note?: string | null;
         };
         /** OutageRequest */
         OutageRequest: {
@@ -915,12 +1525,156 @@ export interface components {
             /** Faces */
             faces: number;
         };
+        /** PartInventory */
+        PartInventory: {
+            /** Part Id */
+            part_id: string;
+            /** Part No */
+            part_no: string;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+            /** Std Cost Twd */
+            std_cost_twd?: number | null;
+            /**
+             * Available
+             * @description 可用
+             */
+            available: number;
+            /**
+             * Reserved
+             * @description 保留給訂單
+             */
+            reserved: number;
+            /**
+             * Inspecting
+             * @description 待檢
+             */
+            inspecting: number;
+            /**
+             * Defective
+             * @description 不良
+             */
+            defective: number;
+            /**
+             * On Hand
+             * @description 合計（所有狀態）
+             */
+            on_hand: number;
+            /** Safety Stock */
+            safety_stock?: number | null;
+            /**
+             * Open Demand
+             * @description 未出貨訂單的需求量
+             */
+            open_demand: number;
+            /**
+             * In Production
+             * @description 未完工工單的剩餘數量
+             */
+            in_production: number;
+            /** Reorder Qty */
+            reorder_qty?: number | null;
+            /** Lead Time Days */
+            lead_time_days?: number | null;
+            /** Make Or Buy */
+            make_or_buy?: string | null;
+            /** As Of */
+            as_of: string;
+            /** Locations */
+            locations: components["schemas"]["StockLocation"][];
+            /**
+             * Work Orders
+             * @description 未完工的工單
+             */
+            work_orders: components["schemas"]["OpenWorkOrder"][];
+            /**
+             * Sales Orders
+             * @description 未出完貨的訂單
+             */
+            sales_orders: components["schemas"]["OpenSalesOrder"][];
+            /**
+             * Recent Moves
+             * @description 最近 8 筆異動
+             */
+            recent_moves: components["schemas"]["StockMove"][];
+        };
         /** PartListResponse */
         PartListResponse: {
             /** Kb Version */
             kb_version: string;
             /** Items */
             items: components["schemas"]["PartSummary"][];
+        };
+        /** PartPlan */
+        PartPlan: {
+            /** Part Id */
+            part_id: string;
+            /** Part Name */
+            part_name: string;
+            /** Plan Start */
+            plan_start: string;
+            /** Has Routing */
+            has_routing: boolean;
+            /** Routing */
+            routing: components["schemas"]["RoutingOp"][];
+            suggestion: components["schemas"]["WorkOrderSuggestion"];
+            /** Work Orders */
+            work_orders: components["schemas"]["PartPlanWorkOrder"][];
+            /**
+             * Skipped
+             * @description 不排程的工單（委外處理中）
+             */
+            skipped: components["schemas"]["SkippedWorkOrder"][];
+            /** Schedule Run Id */
+            schedule_run_id: string | null;
+        };
+        /** PartPlanWorkOrder */
+        PartPlanWorkOrder: {
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Part No */
+            part_no: string;
+            /** Part Name */
+            part_name: string;
+            /**
+             * Qty
+             * @description 要排程的數量（生產中的工單為剩餘數量）
+             */
+            qty: number;
+            /** Priority */
+            priority: string;
+            /** Weight */
+            weight: number;
+            /** Status */
+            status: string;
+            /**
+             * Source
+             * @description 既有工單／系統開立
+             */
+            source: string;
+            /** Release On */
+            release_on: string;
+            /** Due On */
+            due_on: string;
+            /** Release Min */
+            release_min: number;
+            /** Due Min */
+            due_min: number;
+            /** Note */
+            note?: string | null;
+            /** N Ops */
+            n_ops: number;
+            /**
+             * Work Min
+             * @description 自製工序的準備＋加工分鐘合計
+             */
+            work_min: number;
+            /** @description 目前排程中的完工時間；尚未排程為 null */
+            plan: components["schemas"]["PlannedWorkOrder"] | null;
         };
         /** PartSummary */
         PartSummary: {
@@ -980,6 +1734,94 @@ export interface components {
             /** Results */
             results: components["schemas"]["PartTextSearchHit"][];
         };
+        /** PlannedWorkOrder */
+        PlannedWorkOrder: {
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Part Name */
+            part_name: string;
+            /** Qty */
+            qty: number;
+            /** Priority */
+            priority: string;
+            /** Source */
+            source: string;
+            /** Status */
+            status: string;
+            /** Due On */
+            due_on: string;
+            /** Due Min */
+            due_min: number;
+            /** Release Min */
+            release_min: number;
+            /** Start Min */
+            start_min: number | null;
+            /** End Min */
+            end_min: number | null;
+            /** Start At */
+            start_at: string | null;
+            /**
+             * End At
+             * @description 完工時間（含委外）
+             */
+            end_at: string | null;
+            /**
+             * Late Min
+             * @description 延遲的工作分鐘；0＝準時
+             */
+            late_min: number | null;
+            /** On Time */
+            on_time: boolean | null;
+        };
+        /** ProductionCalendar */
+        ProductionCalendar: {
+            /** Shifts */
+            shifts: string[][];
+            /** Workdays */
+            workdays: number[];
+            /** Holidays */
+            holidays: {
+                [key: string]: unknown;
+            }[];
+            /** Day Minutes */
+            day_minutes: number;
+        };
+        /** ProductionOverview */
+        ProductionOverview: {
+            /** Plan Start */
+            plan_start: string;
+            calendar: components["schemas"]["ProductionCalendar"];
+            /** Priority Weights */
+            priority_weights: {
+                [key: string]: number;
+            };
+            /** Machine Types */
+            machine_types: {
+                [key: string]: unknown;
+            }[];
+            /** Machines */
+            machines: components["schemas"]["MachineInfo"][];
+            /** Work Orders */
+            work_orders: components["schemas"]["ScheduleWorkOrder"][];
+            /** Skipped */
+            skipped: components["schemas"]["SkippedWorkOrder"][];
+            /** Problem */
+            problem: {
+                [key: string]: unknown;
+            };
+            engine: components["schemas"]["SchedulerEngine"];
+            current: components["schemas"]["ScheduleRunDetail"] | null;
+            /** Runs */
+            runs: components["schemas"]["ScheduleRunRow"][];
+            /** Solving */
+            solving: boolean;
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+        };
         /** ReconstructRequest */
         ReconstructRequest: {
             /**
@@ -1037,6 +1879,337 @@ export interface components {
              */
             uncertain: boolean;
         };
+        /** RoutingOp */
+        RoutingOp: {
+            /** Op Seq */
+            op_seq: number;
+            /** Name */
+            name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "自製" | "委外";
+            /** Machine Type */
+            machine_type?: string | null;
+            /** Setup Min */
+            setup_min?: number | null;
+            /** Run Min Per Pc */
+            run_min_per_pc?: number | null;
+            /** Outsource Days */
+            outsource_days?: number | null;
+            /**
+             * Machines
+             * @description 這個機型的機台
+             * @default []
+             */
+            machines: string[];
+        };
+        /** ScheduleKpis */
+        ScheduleKpis: {
+            /** N Work Orders */
+            n_work_orders: number;
+            /** N Late */
+            n_late: number;
+            /** On Time Rate */
+            on_time_rate: number | null;
+            /** Total Late Min */
+            total_late_min: number;
+            /** Total Setup Min */
+            total_setup_min: number;
+            /** N Setups */
+            n_setups: number;
+            /** Makespan Min */
+            makespan_min: number;
+            /** Finish At */
+            finish_at: string | null;
+            /**
+             * Utilization
+             * @description 各機台忙碌時間 ÷ 最後一道自製工序完成時間
+             */
+            utilization: {
+                [key: string]: number;
+            };
+        };
+        /** ScheduleRunDetail */
+        ScheduleRunDetail: {
+            /** Run Id */
+            run_id: string;
+            /** Created At */
+            created_at: string;
+            /** Engine */
+            engine: string;
+            /** Engine Version */
+            engine_version: string | null;
+            /** Status */
+            status: string;
+            /** Seconds Limit */
+            seconds_limit: number | null;
+            /** Solve Ms */
+            solve_ms: number | null;
+            /** Score */
+            score: string | null;
+            /** Hard */
+            hard: number | null;
+            /** Medium */
+            medium: number | null;
+            /** Soft */
+            soft: number | null;
+            /** Initial Score */
+            initial_score: string | null;
+            /** Improvements */
+            improvements: number | null;
+            /** N Work Orders */
+            n_work_orders: number | null;
+            /** N Operations */
+            n_operations: number | null;
+            kpis: components["schemas"]["ScheduleKpis"];
+            /**
+             * Score Check
+             * @description 後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null
+             */
+            score_check?: boolean | null;
+            /** Request Id */
+            request_id: string | null;
+            /** Engine Label */
+            engine_label: string;
+            /** Note */
+            note: string | null;
+            /** Analysis */
+            analysis: components["schemas"]["ConstraintScore"][];
+            /** Work Orders */
+            work_orders: components["schemas"]["PlannedWorkOrder"][];
+            /** Operations */
+            operations: components["schemas"]["ScheduledOp"][];
+            /** Axis */
+            axis: components["schemas"]["AxisDay"][];
+            /**
+             * Missing
+             * @description 目前有、但這次排程沒有的工單（之後才開立）
+             */
+            missing: string[];
+            /**
+             * Removed
+             * @description 這次排程有、但已取消或完工的工單
+             */
+            removed: string[];
+        };
+        /** ScheduleRunRow */
+        ScheduleRunRow: {
+            /** Run Id */
+            run_id: string;
+            /** Created At */
+            created_at: string;
+            /** Engine */
+            engine: string;
+            /** Engine Version */
+            engine_version: string | null;
+            /** Status */
+            status: string;
+            /** Seconds Limit */
+            seconds_limit: number | null;
+            /** Solve Ms */
+            solve_ms: number | null;
+            /** Score */
+            score: string | null;
+            /** Hard */
+            hard: number | null;
+            /** Medium */
+            medium: number | null;
+            /** Soft */
+            soft: number | null;
+            /** Initial Score */
+            initial_score: string | null;
+            /** Improvements */
+            improvements: number | null;
+            /** N Work Orders */
+            n_work_orders: number | null;
+            /** N Operations */
+            n_operations: number | null;
+            kpis: components["schemas"]["ScheduleKpis"];
+            /**
+             * Score Check
+             * @description 後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null
+             */
+            score_check?: boolean | null;
+        };
+        /** ScheduleSolveRequest */
+        ScheduleSolveRequest: {
+            /**
+             * Seconds
+             * @description 求解秒數；預設 20
+             */
+            seconds?: number | null;
+            /**
+             * Engine
+             * @description greedy＝簡易排程（交期優先派工），用來和 Timefold 比較
+             * @default timefold
+             * @enum {string}
+             */
+            engine: "timefold" | "greedy";
+        };
+        /** ScheduleWorkOrder */
+        ScheduleWorkOrder: {
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Part No */
+            part_no: string;
+            /** Part Name */
+            part_name: string;
+            /**
+             * Qty
+             * @description 要排程的數量（生產中的工單為剩餘數量）
+             */
+            qty: number;
+            /** Priority */
+            priority: string;
+            /** Weight */
+            weight: number;
+            /** Status */
+            status: string;
+            /**
+             * Source
+             * @description 既有工單／系統開立
+             */
+            source: string;
+            /** Release On */
+            release_on: string;
+            /** Due On */
+            due_on: string;
+            /** Release Min */
+            release_min: number;
+            /** Due Min */
+            due_min: number;
+            /** Note */
+            note?: string | null;
+            /** N Ops */
+            n_ops: number;
+            /**
+             * Work Min
+             * @description 自製工序的準備＋加工分鐘合計
+             */
+            work_min: number;
+        };
+        /** ScheduledOp */
+        ScheduledOp: {
+            /** Op Id */
+            op_id: string;
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Op Seq */
+            op_seq: number;
+            /** Op Name */
+            op_name: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "自製" | "委外";
+            /**
+             * Machine Id
+             * @description 委外為 null
+             */
+            machine_id: string | null;
+            /**
+             * Start Min
+             * @description 工作分鐘（排程起點起算，只計上班時間）
+             */
+            start_min: number;
+            /** End Min */
+            end_min: number;
+            /** Setup Min */
+            setup_min: number;
+            /** Run Min */
+            run_min: number;
+            /** Start At */
+            start_at: string;
+            /** End At */
+            end_at: string;
+            /**
+             * Pinned
+             * @description 生產中、釘選在機台最前面的工序
+             */
+            pinned: boolean;
+        };
+        /** SchedulerEngine */
+        SchedulerEngine: {
+            /** Available */
+            available: boolean;
+            /**
+             * Engine
+             * @enum {string}
+             */
+            engine: "timefold" | "greedy";
+            /** Version */
+            version?: string | null;
+            /** Java */
+            java?: string | null;
+            /**
+             * Memory
+             * @description JVM heap（MB）
+             */
+            memory?: {
+                [key: string]: unknown;
+            } | null;
+            /** Active Jobs */
+            active_jobs?: number | null;
+            /** Detail */
+            detail: string;
+        };
+        /** SkippedWorkOrder */
+        SkippedWorkOrder: {
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Reason */
+            reason: string;
+        };
+        /** SqlEvalRunsResponse */
+        SqlEvalRunsResponse: {
+            /** Runs */
+            runs: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** StockLocation */
+        StockLocation: {
+            /** Warehouse Id */
+            warehouse_id: string;
+            /** Warehouse Name */
+            warehouse_name: string;
+            /** Bin */
+            bin: string;
+            /** Lot No */
+            lot_no: string;
+            /** Status */
+            status: string;
+            /** Qty */
+            qty: number;
+            /** Received On */
+            received_on: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** StockMove */
+        StockMove: {
+            /** Moved On */
+            moved_on: string;
+            /** Warehouse Id */
+            warehouse_id: string;
+            /** Move Type */
+            move_type: string;
+            /** Qty */
+            qty: number;
+            /** Ref No */
+            ref_no?: string | null;
+            /** Note */
+            note?: string | null;
+        };
         /** StrategyStatus */
         StrategyStatus: {
             /** Label */
@@ -1066,6 +2239,67 @@ export interface components {
             latency_ms: number;
             /** Results */
             results: components["schemas"]["TextSearchHit"][];
+        };
+        /** WorkOrderCreate */
+        WorkOrderCreate: {
+            /** Part Id */
+            part_id: string;
+            /** Qty */
+            qty: number;
+            /**
+             * Due On
+             * @description 交期（當天下班前完工算準時）
+             */
+            due_on: string;
+            /**
+             * Priority
+             * @default 一般
+             * @enum {string}
+             */
+            priority: "一般" | "急件";
+            /** Release On */
+            release_on?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /** WorkOrderCreated */
+        WorkOrderCreated: {
+            /** Wo No */
+            wo_no: string;
+            /** Part Id */
+            part_id: string;
+            /** Part Name */
+            part_name: string;
+            /** Qty */
+            qty: number;
+            /** Priority */
+            priority: string;
+            /** Release On */
+            release_on: string;
+            /** Due On */
+            due_on: string;
+            /** Note */
+            note: string | null;
+            /** Status */
+            status: string;
+            /** Created At */
+            created_at: string;
+            /** Source */
+            source: string;
+        };
+        /** WorkOrderSuggestion */
+        WorkOrderSuggestion: {
+            /** Qty */
+            qty: number;
+            /** Due On */
+            due_on: string;
+            /**
+             * Priority
+             * @enum {string}
+             */
+            priority: "一般" | "急件";
+            /** Reason */
+            reason: string;
         };
     };
     responses: never;
@@ -1671,6 +2905,432 @@ export interface operations {
             };
         };
     };
+    inventory_schema_api_v1_inventory_schema_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventorySchemaResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    inventory_overview_api_v1_inventory_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryOverviewResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    part_inventory_api_v1_inventory_parts__part_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                part_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartInventory"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    inventory_ask_api_v1_inventory_ask_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InventoryAskRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE：meta／attempt／sql_token／sql／result／token／done／error（見 shared/sse_events.md） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    production_overview_api_v1_production_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductionOverview"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    part_plan_api_v1_production_parts__part_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                part_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PartPlan"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_work_order_api_v1_production_work_orders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkOrderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrderCreated"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_work_order_api_v1_production_work_orders__wo_no__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wo_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    solve_schedule_api_v1_schedule_solve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleSolveRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE：meta／progress／solution／done／error（見 shared/sse_events.md） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stop_schedule_api_v1_schedule_stop_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    schedule_run_api_v1_schedule_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRunDetail"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_production_api_v1_admin_production_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    memory_status_api_v1_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryStatus"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    release_memory_api_v1_admin_memory_release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryReleaseResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     feedback_api_v1_feedback_post: {
         parameters: {
             query?: never;
@@ -1749,6 +3409,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CadEvalRunsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sql_eval_runs_api_v1_eval_sql_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SqlEvalRunsResponse"];
                 };
             };
             /** @description Client Error */

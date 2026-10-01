@@ -13,7 +13,7 @@
 沒指定 `artwork_id`／`part_id` 時，後端先用領域路由判斷是畫作還是工廠圖紙（`{"domain", "margin", "art_score",
 "mfg_score", "min_margin", "uncertain"}`，格式同 `/search/any` 的 `route`），判為圖紙就走下面的圖紙問答；沒經過路由時為 `null`。
 
-`sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/005；請求的 `rearrange`、
+`sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008；請求的 `rearrange`、
 `.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，預設關）時為
 `{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`，
 失敗時 `sources` 是原本的全部段落）；沒有篩選時為 `null`。`sources` 永遠只列真正放進 prompt 的段落，
@@ -35,6 +35,37 @@
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 
 `strategy`：`ortho2cad`（主模型）或 `hybrid`（未微調的 Qwen3-VL，對照組）。沒有任何備援或雲端路徑。
+
+## `POST /api/v1/inventory/ask`（工廠庫存 Text-to-SQL）
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `meta` | `{"request_id", "strategy", "prompt_version", "as_of"}` | 開始；`as_of` 是資料日期（模型把它當「今天」） |
+| `attempt` | `{"n", "previous_error"}` | 第 n 次產生 SQL；`n > 1` 代表上一條失敗、已把錯誤訊息回饋給模型修正 |
+| `sql_token` | `{"text"}` | 模型輸出的 SQL 片段（可能含 ```` ```sql ```` 標記，前端顯示時去掉；不做 OpenCC 轉換） |
+| `sql` | `{"attempt", "sql", "ok", "error"}` | 這次嘗試的 SQL 與檢查／執行結果；`ok` 為 false 時接著出現下一個 `attempt` 或 `error` |
+| `result` | `{"columns", "rows", "row_count", "truncated", "exec_ms"}` | 唯讀執行結果；最多 200 列，超過時 `truncated` 為 true |
+| `token` | `{"text"}` | 依查詢結果產生的回答（已經過 OpenCC）；0 筆時固定為「查無符合條件的資料。」 |
+| `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "answer_prompt_version", "attempts", "latency_ms": {"first_token", "sql", "exec", "answer", "total"}, "tokens", "egress"}` | 完成；`egress` 恆為 0 |
+| `error` | `{"code", "message", "request_id"}` | `SQL_REJECTED`（要求修改資料，直接拒絕）、`SQL_FAILED`（修正後仍失敗）、`STRATEGY_UNAVAILABLE`、`CLOUD_CONFIDENTIAL_FORBIDDEN`、`INVENTORY_UNAVAILABLE`；之後不再有其他事件 |
+
+`strategy` 同問答（預設 `hybrid`，備援鏈相同）；雲端策略一律回 `CLOUD_CONFIDENTIAL_FORBIDDEN`。
+
+## `POST /api/v1/schedule/solve`（生產排程，Timefold Solver）
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `meta` | `{"request_id", "engine", "engine_label", "engine_version", "fallback_reason", "seconds", "unimproved_seconds", "problem", "work_orders", "machines", "axis"}` | 開始；`engine` 為 `timefold` 或 `greedy`（簡易排程）。Timefold 排程服務連不上時自動改用 `greedy`，`fallback_reason` 說明原因；`problem` 是工單、工序、釘選數與排程起點 |
+| `progress` | `{"elapsed_ms", "phase", "score", "hard", "medium", "soft", "structural", "feasible", "initial_score", "improvements", "operations", "kpis"}` | 找到更好的解（最多每 0.45 秒一次）：`operations` 是目前最佳解的每道工序（機台、起訖的工作分鐘與實際時間、換線、是否釘選；委外工序 `machine_id` 為 `null`），前端即時重畫甘特圖；`phase` 為「建構初始解」「局部搜尋最佳化」或「交期優先派工」 |
+| `tick` | `{"elapsed_ms", "phase", "improvements"}` | 沒有更好的解時每秒一次的心跳（前端計時用） |
+| `solution` | `{"run_id", "engine", "status", "score", "hard", "medium", "soft", "initial_score", "score_check", "analysis", "operations", "work_orders", "kpis", "axis"}` | 最終結果，已寫入 `production.sqlite3` 並同步到工廠資料庫（`schedule_ops`、`v_wo_plan`）；`status` 為 `done` 或 `stopped`（提前結束）；`analysis` 是各限制條件的分數與次數（後端依同一套規則計算），`score_check` 表示總分與 Timefold 一致 |
+| `done` | `{"request_id", "run_id", "engine", "status", "score", "initial_score", "improvements", "latency_ms": {"build", "solve", "total"}, "egress", "memory"}` | 完成；`egress` 恆為 0；`memory` 是這次排程期間記憶體管理的釋放紀錄（沒有釋放為 `null`） |
+| `error` | `{"code", "message", "request_id"}` | `NO_WORK_ORDERS`、`SCHEDULE_BUSY`、`SCHEDULER_UNAVAILABLE`、`SCHEDULE_FAILED`、`SCHEDULE_DATA_INVALID`；之後不再有其他事件 |
+
+分數格式 `{hard}hard/{medium}medium/{soft}soft`（Timefold 的 HardMediumSoftScore），越接近 0 越好：
+硬＝機型不符／排程循環，中＝交期延遲（工作分鐘 × 急件權重），軟＝換線準備＋各工單完工時間。
+時間欄位：`*_min` 是工作分鐘（排程起點起算、只計上班時間），`*_at` 是台灣時間 `YYYY-MM-DD HH:MM`。
+使用者離開頁面（串流中斷）時後端會停止 Timefold 的求解；`POST /api/v1/schedule/stop` 提前結束並採用目前最佳解。
 
 ## 問答的 `strategy`
 

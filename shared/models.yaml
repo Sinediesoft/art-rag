@@ -48,14 +48,14 @@ drawing_retrieval:
   verify_min_overlap: 0.55
   top_k_search: 5
 
-# 領域路由（MMed-RAG 的領域辨識，見 docs/adr/004）：只給照片、沒指定領域時，先判斷是畫作還是工廠圖紙，
+# 領域路由（MMed-RAG 的領域辨識，見 docs/adr/007）：只給照片、沒指定領域時，先判斷是畫作還是工廠圖紙，
 # 再交給該領域的辨識流程。margin＝照片與「圖紙原型」的相似度 − 與「畫作原型」的相似度，
 # 原型＝知識庫圖片 CLIP 向量的平均（索引裡的 image_vecs，重建索引自動更新，不用訓練）。
 # 實測 95 張評估照片：畫作 margin ≤ −0.28、圖紙 ≥ +0.14；|margin| < min_margin 視為不確定，一律當圖紙（機密側）
 router:
   min_margin: 0.05
 
-# 檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/005）：依 retrieval 的規則取出候選段落後，
+# 檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）：依 retrieval 的規則取出候選段落後，
 # 再請本地生成端判斷哪幾段對回答有幫助，只留挑中的（至少 1 段）。只呼叫本地模型、不送雲端；
 # 逾時、連不上或輸出看不懂時退回原本的段落，不擋回答。
 # 預設關：現行規則的問答正確率已達目標，篩選的效果要等開關對照評估（make eval-rearrange）確認；
@@ -73,6 +73,26 @@ global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作
 prompt:
   version: answer_v1          # 對應 shared/prompts/answer_v1.md
   drawing_version: drawing_v1 # 工廠圖紙問答，對應 shared/prompts/drawing_v1.md
+  sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
+  sql_answer_version: sql_answer_v1  # 依查詢結果回答（sql_answer_v1.md）
+
+# 工廠庫存 Text-to-SQL：沿用 hybrid 生成端（本地 Qwen3-VL，失敗改走本地備援），不另外載入模型。
+# 庫存屬企業內部資料，雲端策略一律拒絕；SQL 只在唯讀連線＋白名單下執行（docs/adr/004）
+text2sql:
+  max_tokens: 400             # 產生 SQL 的上限
+  answer_max_tokens: 300      # 依結果回答的上限
+  temperature: 0
+  max_repairs: 2              # SQL 執行失敗時，把錯誤訊息回饋給模型修正的次數
+  max_rows: 200               # 回傳前端的列數上限（超過標示「只顯示前 N 筆」）
+  prompt_rows: 30             # 放進回答 prompt 的列數上限
+  exec_timeout_ms: 2000       # 單次查詢執行上限
+
+# 生產排程：Timefold Solver（scheduler/，Java 21）排工序到機台；不用任何 AI 模型（docs/adr/005）
+scheduling:
+  solve_seconds: 20           # 預設求解時間（前端可選 10／20／30 秒）
+  max_seconds: 60
+  unimproved_seconds: 8       # 連續這麼久沒找到更好的解就提前結束
+  poll_ms: 400                # 後端向排程服務取進度的間隔
 
 # 工廠圖紙 → 3D：Ortho2CAD（arXiv 2607.08891，Qwen3-VL-8B 微調）輸出 CadQuery 程式碼
 cad:

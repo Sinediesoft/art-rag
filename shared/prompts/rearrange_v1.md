@@ -1,4 +1,4 @@
-<!-- prompt 版本：rearrange_v1。檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/005）；畫作與工廠圖紙共用。 -->
+<!-- prompt 版本：rearrange_v1。檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）；畫作與工廠圖紙共用。 -->
 <!-- 以 ===SYSTEM=== 與 ===USER=== 分段；{{ }} 由 app/rag/rearrange.py 填入。 -->
 <!-- 輸出格式要固定（「1,3」或「無」）：程式只接受這兩種寫法，其他輸出一律當成看不懂、退回原本的段落。 -->
 ===SYSTEM===

@@ -1,0 +1,222 @@
+{
+  "part_id": "mfg-005",
+  "unit": "件",
+  "std_cost_twd": 38,
+  "safety_stock": 300,
+  "reorder_qty": 1000,
+  "lead_time_days": 7,
+  "make_or_buy": "自製（發黑處理委外）",
+  "stock": [
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-05-1",
+      "lot_no": "L2608-15",
+      "status": "可用",
+      "qty": 245,
+      "received_on": "2026-08-28",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-05-2",
+      "lot_no": "L2609-11",
+      "status": "可用",
+      "qty": 975,
+      "received_on": "2026-09-24",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-B",
+      "bin": "B-03-2",
+      "lot_no": "L2607-03",
+      "status": "可用",
+      "qty": 200,
+      "received_on": "2026-09-02",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-B",
+      "bin": "B-03-2",
+      "lot_no": "L2608-15",
+      "status": "可用",
+      "qty": 150,
+      "received_on": "2026-09-02",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-N",
+      "bin": "N-05",
+      "lot_no": "L2609-11",
+      "status": "不良",
+      "qty": 25,
+      "received_on": "2026-09-24",
+      "note": "絲攻斷在孔內，待報廢"
+    }
+  ],
+  "moves": [
+    {
+      "moved_on": "2026-08-01",
+      "warehouse_id": "WH-A",
+      "move_type": "期初",
+      "qty": 200,
+      "ref_no": "OB-2608",
+      "note": "八月期初庫存"
+    },
+    {
+      "moved_on": "2026-08-01",
+      "warehouse_id": "WH-N",
+      "move_type": "期初",
+      "qty": 40,
+      "ref_no": "OB-2608",
+      "note": "八月期初庫存"
+    },
+    {
+      "moved_on": "2026-08-12",
+      "warehouse_id": "WH-N",
+      "move_type": "報廢",
+      "qty": -40,
+      "ref_no": "SC-2608-02",
+      "note": "七月攻牙不良品報廢"
+    },
+    {
+      "moved_on": "2026-08-27",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 1000,
+      "ref_no": "WO-2608-15",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-08-28",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -1000,
+      "ref_no": "WO-2608-15",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-08-28",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 1000,
+      "ref_no": "WO-2608-15",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-09-02",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥出",
+      "qty": -350,
+      "ref_no": "TR-2609-01",
+      "note": "二廠治具備品"
+    },
+    {
+      "moved_on": "2026-09-02",
+      "warehouse_id": "WH-B",
+      "move_type": "調撥入",
+      "qty": 350,
+      "ref_no": "TR-2609-01",
+      "note": "二廠治具備品"
+    },
+    {
+      "moved_on": "2026-09-22",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -600,
+      "ref_no": "SO-2609-008",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-23",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 1000,
+      "ref_no": "WO-2609-11",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-09-24",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -975,
+      "ref_no": "WO-2609-11",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-09-24",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 975,
+      "ref_no": "WO-2609-11",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-09-24",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -25,
+      "ref_no": "WO-2609-11",
+      "note": "檢驗不合格"
+    },
+    {
+      "moved_on": "2026-09-24",
+      "warehouse_id": "WH-N",
+      "move_type": "調撥入",
+      "qty": 25,
+      "ref_no": "WO-2609-11",
+      "note": "絲攻斷在孔內"
+    },
+    {
+      "moved_on": "2026-09-30",
+      "warehouse_id": "WH-A",
+      "move_type": "盤點調整",
+      "qty": -5,
+      "ref_no": "IC-2609",
+      "note": "九月月底盤點：實盤少 5 件"
+    }
+  ],
+  "work_orders": [
+    {
+      "wo_no": "WO-2608-15",
+      "qty_planned": 1000,
+      "qty_done": 1000,
+      "status": "已完工",
+      "line": "銑床-03",
+      "start_on": "2026-08-18",
+      "due_on": "2026-08-27",
+      "note": null
+    },
+    {
+      "wo_no": "WO-2609-11",
+      "qty_planned": 1000,
+      "qty_done": 1000,
+      "status": "已完工",
+      "line": "銑床-03",
+      "start_on": "2026-09-14",
+      "due_on": "2026-09-23",
+      "note": null
+    }
+  ],
+  "sales_orders": [
+    {
+      "so_no": "SO-2609-008",
+      "line_no": 2,
+      "customer": "栩達設備",
+      "qty": 600,
+      "qty_shipped": 600,
+      "order_on": "2026-09-10",
+      "due_on": "2026-09-24",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2609-021",
+      "line_no": 1,
+      "customer": "岳承精機",
+      "qty": 500,
+      "qty_shipped": 0,
+      "order_on": "2026-09-25",
+      "due_on": "2026-10-15",
+      "status": "待出貨"
+    }
+  ]
+}

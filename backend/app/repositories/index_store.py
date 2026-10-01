@@ -1,6 +1,6 @@
 """向量索引存取層。
 
-兩種存放方式，介面相同，services 與 rag 不必知道是哪一種（docs/adr/006）：
+兩種存放方式，介面相同，services 與 rag 不必知道是哪一種（docs/adr/009）：
 - .env 設了 DATABASE_URL：PostgreSQL + pgvector（Docker），見 pg_index_store.py
 - 留空：data/index/ 下的檔案（numpy + JSON），給沒有 Docker 的電腦
 

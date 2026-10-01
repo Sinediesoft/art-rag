@@ -1,4 +1,4 @@
-"""PostgreSQL + pgvector 版的存取層：結果要與檔案版／SQLite 版一致（docs/adr/006）。
+"""PostgreSQL + pgvector 版的存取層：結果要與檔案版／SQLite 版一致（docs/adr/009）。
 
 設了 TEST_DATABASE_URL 才跑（CI 用 pgvector 容器）。那個資料庫要可以清空：
 測試會刪掉重建索引表、清空使用紀錄，不要指向開發用的 artrag 資料庫。
@@ -101,7 +101,7 @@ def test_logs_roundtrip(pool):
 
     repo = PgLogsRepo(pool)
     with pool.connection() as conn:
-        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, feedback")
+        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, feedback")
     assert repo.ping()
 
     repo.add_upload("img-new", "img-new.jpg")
@@ -134,6 +134,11 @@ def test_logs_roundtrip(pool):
     )
     assert repo.recent_cad_for_part("mfg-001")[0]["job_id"] == "job-1"
     assert repo.recent_cad(5)[0]["request_id"] == "req-2"
+    repo.add_sql_log(
+        {"request_id": "req-3", "created_at": repo.now(), "sql": "SELECT 1", "ok": 1, "attempts": 1}
+    )
+    (sql,) = repo.recent_sql(5)  # 庫存 Text-to-SQL 的紀錄（系統狀態頁）
+    assert sql["request_id"] == "req-3" and sql["sql"] == "SELECT 1"
     repo.add_feedback("req-1", "up", None)
 
 
@@ -155,16 +160,18 @@ def test_import_sqlite_is_idempotent(pool, tmp_path):
             "iou": 0.81,
         }
     )
+    old.add_sql_log({"request_id": "req-c", "created_at": old.now(), "sql": "SELECT 1", "ok": 1})
     old.add_feedback("req-a", "up", "答得好")
     old._conn.close()
 
     repo = PgLogsRepo(pool)
     with pool.connection() as conn:
-        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, feedback")
+        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, feedback")
     assert repo.import_sqlite(path) == {
         "uploads": (1, 1),
         "chat_logs": (1, 1),
         "cad_logs": (1, 1),
+        "sql_logs": (1, 1),
         "feedback": (1, 1),
     }
     # 再搬一次不會重複寫入（feedback 沒有主鍵，也要擋得住）

@@ -1,0 +1,10 @@
+{"run": "一般（剛閒置）", "wall_s": 45.1, "tokens": 1095, "decode_tok_s": 24.6, "prompt_ms": 625, "mem_before": {"free_pct": 72, "swap_used_mb": 2043.38, "llama_rss_mb": 2538, "ollama": []}}
+{"run": "一般", "wall_s": 46.0, "tokens": 1095, "decode_tok_s": 23.8, "prompt_ms": 42, "mem_before": {"free_pct": 38, "swap_used_mb": 2043.38, "llama_rss_mb": 2573, "ollama": []}}
+{"run": "grammar", "wall_s": 55.5, "tokens": 1284, "decode_tok_s": 23.1, "prompt_ms": 43, "mem_before": {"free_pct": 38, "swap_used_mb": 2043.38, "llama_rss_mb": 2574, "ollama": []}}
+{"run": "一般", "wall_s": 60.6, "tokens": 1095, "decode_tok_s": 18.1, "prompt_ms": 49, "mem_before": {"free_pct": 38, "swap_used_mb": 2035.38, "llama_rss_mb": 2600, "ollama": []}}
+{"run": "grammar", "wall_s": 70.2, "tokens": 1284, "decode_tok_s": 18.3, "prompt_ms": 57, "mem_before": {"free_pct": 38, "swap_used_mb": 2027.38, "llama_rss_mb": 2600, "ollama": []}}
+{"run": "Qwen3-VL 同時載入", "wall_s": 61.8, "tokens": 1095, "decode_tok_s": 17.7, "prompt_ms": 49, "mem_before": {"free_pct": 6, "swap_used_mb": 3186.5, "llama_rss_mb": 2530, "ollama": ["qwen3-vl:4b-instruct"]}}
+{"run": "經 demo 後端 :8000", "wall_s": 62.5, "tokens": 1095, "decode_tok_s": 18.7, "note": "backend 量的 generation（含首字前）", "mem_before": {"free_pct": 6, "swap_used_mb": 3104.38, "llama_rss_mb": 2545, "ollama": []}}
+{"run": "冷機・Qwen3-VL 載入閒置", "wall_s": 44.9, "tokens": 1095, "decode_tok_s": 24.4, "prompt_ms": 46, "mem_before": {"free_pct": 7, "swap_used_mb": 2840.25, "llama_rss_mb": 2532, "ollama": ["qwen3-vl:4b-instruct"]}}
+{"run": "冷機・一般", "wall_s": 44.9, "tokens": 1095, "decode_tok_s": 24.4, "prompt_ms": 43, "mem_before": {"free_pct": 7, "swap_used_mb": 2816.94, "llama_rss_mb": 2545, "ollama": []}}
+{"run": "demo 使用中（同時問答）", "wall_s": 66.6, "tokens": 1095, "decode_tok_s": 16.4, "prompt_ms": 51, "chat_s": 17.2, "chat_tokens": 300, "mem_before": {"free_pct": 6, "swap_used_mb": 2800.94, "llama_rss_mb": 2530, "ollama": ["qwen3-vl:4b-instruct"]}}

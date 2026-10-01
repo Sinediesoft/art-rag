@@ -1,4 +1,4 @@
-"""檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/005-rearrange.md）。
+"""檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008-rearrange.md）。
 
 依 retrieval 規則取出的候選段落，一次交給本地生成端判斷哪幾段對回答問題有幫助，只留挑中的，
 至少留 1 段（MIRA 也保底）。留下幾段由模型逐題決定，這就是「動態調整筆數」。

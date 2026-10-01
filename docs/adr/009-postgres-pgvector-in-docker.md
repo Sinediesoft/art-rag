@@ -1,4 +1,4 @@
-# ADR 006：資料庫改用 PostgreSQL 17 + pgvector，跑在 Docker；檔案模式保留給沒有 Docker 的電腦
+# ADR 009：資料庫改用 PostgreSQL 17 + pgvector，跑在 Docker；檔案模式保留給沒有 Docker 的電腦
 
 - 日期：2026-10-01
 - 狀態：採用（取代 ADR 001 的 demo 暫行做法；檔案模式保留）

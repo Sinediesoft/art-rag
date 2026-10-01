@@ -1,9 +1,12 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import type { MemoryStatus } from "./api/client";
 import { useHealth } from "./api/hooks";
 
 const NAV = [
   { to: "/", label: "尋畫", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.3-4.3" },
   { to: "/drawings", label: "工廠圖紙", icon: "M3 21V9l6-4v4l6-4v4l6-4v16zM7 17h2m4 0h2" },
+  { to: "/inventory", label: "庫存查詢", icon: "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9" },
+  { to: "/schedule", label: "生產排程", icon: "M3 5h18M3 19h18M5 9h7v3H5zM10 14h9v3h-9zM14 9h5v3h-5" },
   { to: "/compare", label: "策略比較", icon: "M4 5h7v14H4zM13 5h7v14h-7z" },
   { to: "/admin", label: "系統狀態", icon: "M4 19V9m6 10V5m6 14v-7m4 7H2" },
 ];
@@ -28,14 +31,14 @@ export function Layout() {
               地端隱私多模態 RAG 專題
             </span>
           </Link>
-          <nav className="ml-auto hidden gap-1 sm:flex">
+          <nav className="ml-auto hidden shrink-0 gap-0.5 sm:flex md:gap-1">
             {NAV.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 end={n.to === "/"}
                 className={({ isActive: a }) =>
-                  `rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  `whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium transition md:px-3 ${
                     isActive(n.to, pathname, a) ? "bg-ink text-paper" : "text-ink-soft hover:bg-paper-deep"
                   }`
                 }
@@ -52,6 +55,7 @@ export function Layout() {
               {health.outage_simulated ? "推論伺服器離線" : "部分服務異常"}
             </Link>
           )}
+          <MemoryChip memory={health?.memory} pushRight={!degraded} />
         </div>
       </header>
 
@@ -59,7 +63,7 @@ export function Layout() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map((n) => (
           <NavLink
             key={n.to}
@@ -79,5 +83,28 @@ export function Layout() {
         ))}
       </nav>
     </div>
+  );
+}
+
+/** 記憶體使用率；剛釋放過模型（1 分鐘內）就顯示釋放了幾個，點進系統狀態看明細 */
+function MemoryChip({ memory, pushRight }: { memory: MemoryStatus | null | undefined; pushRight: boolean }) {
+  if (!memory) return null;
+  const last = memory.events.find((e) => e.released.length > 0);
+  const recent = last && Date.now() - new Date(last.at).getTime() < 60_000;
+  const high = memory.percent >= memory.threshold;
+  return (
+    <Link
+      to="/admin#memory"
+      title={
+        recent && last
+          ? `${last.trigger}：已釋放 ${last.released.map((r) => r.label).join("、")}（${last.percent_before}% → ${last.percent_after}%）`
+          : `系統記憶體 ${memory.percent}%（超過 ${memory.threshold}% 會釋放目前流程用不到的模型）`
+      }
+      className={`${pushRight ? "ml-auto sm:ml-2" : "ml-1"} hidden shrink-0 rounded-full px-2 py-0.5 font-mono text-xs font-bold sm:inline-block ${
+        recent ? "bg-jade-soft text-jade" : high ? "bg-amber-soft text-amber" : "bg-paper-deep text-ink-faint"
+      }`}
+    >
+      {recent && last ? `釋放 ${last.released.length} 個模型 · ${last.percent_after}%` : `記憶體 ${Math.round(memory.percent)}%`}
+    </Link>
   );
 }

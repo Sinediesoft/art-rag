@@ -9,6 +9,8 @@ import { ArtworkPage } from "./pages/ArtworkPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ComparePage } from "./pages/ComparePage";
 import { HomePage } from "./pages/HomePage";
+import { InventoryPage } from "./pages/InventoryPage";
+import { SchedulePage } from "./pages/SchedulePage";
 import { SearchPage } from "./pages/SearchPage";
 import { DrawingSearchPage } from "./pages/drawings/DrawingSearchPage";
 import { DrawingsHomePage } from "./pages/drawings/DrawingsHomePage";
@@ -36,6 +38,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="drawings/:id/chat" element={<PartChatPage />} />
             <Route path="drawings/:id/reconstruct" element={<ReconstructPage />} />
             <Route path="reconstruct" element={<ReconstructPage />} />
+            <Route path="inventory" element={<InventoryPage />} />
+            <Route path="schedule" element={<SchedulePage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="admin" element={<AdminPage />} />
           </Route>

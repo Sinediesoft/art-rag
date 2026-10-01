@@ -1,5 +1,6 @@
 """路由與請求驗證：只處理輸入輸出，商業邏輯在 services/。所有路徑加 /api/v1 前綴。"""
 
+import asyncio
 import json
 import uuid
 from pathlib import Path
@@ -14,9 +15,18 @@ from app.core.errors import AppError
 from app.rag import providers
 from app.rag.kb import current_kb_hash
 from app.rag.preprocess import load_image, to_jpeg_bytes
+from app.rag.text2sql import load_examples, prompt_versions
 from app.repositories.index_store import get_store
+from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
-from app.services import cad_service, chat_service, search_service
+from app.services import (
+    cad_service,
+    chat_service,
+    memory_guard,
+    schedule_service,
+    search_service,
+    sql_service,
+)
 
 router = APIRouter(prefix="/api/v1", responses={"4XX": {"model": S.ErrorResponse}})
 
@@ -250,6 +260,156 @@ def get_cad_file(job_id: str, name: str):
     return FileResponse(path, media_type=media[name.rsplit(".", 1)[1]], filename=f"{job_id}-{name}")
 
 
+# ---------------------------------------------------------------- 工廠庫存（Text-to-SQL）
+@router.get("/inventory/schema", response_model=S.InventorySchemaResponse, tags=["inventory"])
+def inventory_schema():
+    """庫存資料庫的資料表與欄位說明（與給模型看的 schema 同一份來源）。"""
+    repo = get_inventory_repo()
+    repo.ensure_built()
+    version = prompt_versions()[0]
+    return {
+        **repo.schema_info(),
+        "prompt_version": version,
+        "examples": [e["question"] for e in load_examples(version)],
+    }
+
+
+@router.get("/inventory/overview", response_model=S.InventoryOverviewResponse, tags=["inventory"])
+def inventory_overview():
+    repo = get_inventory_repo()
+    items = repo.overview()
+    return {"as_of": repo.as_of, "company": repo.manifest.get("company", ""), "items": items}
+
+
+@router.get("/inventory/parts/{part_id}", response_model=S.PartInventory, tags=["inventory"])
+def part_inventory(part_id: str):
+    """單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。"""
+    data = get_inventory_repo().part_inventory(part_id)
+    if not data:
+        raise AppError("PART_NOT_FOUND", f"庫存資料庫中沒有圖紙 {part_id}", 404)
+    return data
+
+
+@router.post(
+    "/inventory/ask",
+    tags=["inventory"],
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE：meta／attempt／sql_token／sql／result／token／done／error"
+            "（見 shared/sse_events.md）",
+        }
+    },
+)
+async def inventory_ask(body: S.InventoryAskRequest, request: Request):
+    """Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。"""
+    stream = sql_service.ask_stream(
+        question=body.question,
+        request_id=request.state.request_id,
+        strategy=body.strategy,
+        allow_fallback=body.allow_fallback,
+    )
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------- 生產排程（Timefold）
+@router.get("/production/overview", response_model=S.ProductionOverview, tags=["production"])
+async def production_overview():
+    """排程頁：機台、行事曆、待排工單、排程服務狀態與目前排程。"""
+    return await schedule_service.overview()
+
+
+@router.get("/production/parts/{part_id}", response_model=S.PartPlan, tags=["production"])
+async def part_plan(part_id: str):
+    """圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。"""
+    return await schedule_service.part_plan(part_id)
+
+
+@router.post(
+    "/production/work-orders",
+    response_model=S.WorkOrderCreated,
+    status_code=201,
+    tags=["production"],
+)
+def create_work_order(body: S.WorkOrderCreate):
+    """從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。"""
+    return schedule_service.create_work_order(
+        body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note
+    )
+
+
+@router.delete("/production/work-orders/{wo_no}", response_model=S.OkResponse, tags=["production"])
+def cancel_work_order(wo_no: str):
+    """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。"""
+    schedule_service.cancel_work_order(wo_no)
+    return S.OkResponse()
+
+
+@router.post(
+    "/schedule/solve",
+    tags=["production"],
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE：meta／progress／solution／done／error（見 shared/sse_events.md）",
+        }
+    },
+)
+async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
+    """把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。"""
+    stream = schedule_service.solve_stream(
+        request_id=request.state.request_id, seconds=body.seconds, engine=body.engine
+    )
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/schedule/stop", response_model=S.OkResponse, tags=["production"])
+async def stop_schedule():
+    """提前結束目前的求解，採用目前最佳解。"""
+    return S.OkResponse(ok=await schedule_service.stop())
+
+
+@router.get("/schedule/runs/{run_id}", response_model=S.ScheduleRunDetail, tags=["production"])
+def schedule_run(run_id: str):
+    return schedule_service.run_detail(run_id)
+
+
+@router.post("/admin/production/reset", response_model=S.OkResponse, tags=["production"])
+def reset_production():
+    """展示還原：清掉圖紙頁開立的工單與所有排程結果（DEMO_CONTROLS=false 時停用）。"""
+    if not get_settings().demo_controls:
+        raise AppError("FORBIDDEN", "展示控制已停用", 403)
+    schedule_service.reset()
+    return S.OkResponse()
+
+
+# ---------------------------------------------------------------- 記憶體管理
+@router.get("/memory", response_model=S.MemoryStatus, tags=["system"])
+def memory_status():
+    """系統記憶體使用率、各模型是否載入／使用中、最近的釋放紀錄。"""
+    return memory_guard.guard.status()
+
+
+@router.post("/admin/memory/release", response_model=S.MemoryReleaseResponse, tags=["system"])
+def release_memory():
+    """展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。"""
+    if not get_settings().demo_controls:
+        raise AppError("FORBIDDEN", "展示控制已停用", 403)
+    g = memory_guard.guard
+    event = g.check("手動釋放", set(g.current_models), force=True)
+    return {"event": event, "status": g.status()}
+
+
 @router.post("/feedback", response_model=S.OkResponse, tags=["chat"])
 def feedback(body: S.FeedbackRequest):
     get_logs_repo().add_feedback(body.request_id, body.rating, body.note)
@@ -260,7 +420,8 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        if not p.name.endswith(("-cad.json", "-router.json")):  # 圖紙與領域路由評估另有格式
+        # 圖紙、領域路由、Text-to-SQL 與展示測試的評估另有格式
+        if not p.name.endswith(("-cad.json", "-router.json", "-sql.json", "-demo.json")):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
 
@@ -269,6 +430,13 @@ def eval_runs():
 def cad_eval_runs():
     """工廠圖紙評估（make eval-cad）：圖紙辨識與 Ortho2CAD 3D 重建。"""
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-cad.json"), reverse=True)
+    return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
+
+
+@router.get("/eval/sql-runs", response_model=S.SqlEvalRunsResponse, tags=["eval"])
+def sql_eval_runs():
+    """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。"""
+    paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-sql.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
 
 
@@ -338,6 +506,10 @@ async def health():
     # PostgreSQL 容器停了也要回得出狀態頁：ping 放到執行緒（最多等 5 秒，不卡住其他請求），
     # 失敗就不查最近紀錄
     db_ok = await run_in_threadpool(logs.ping)
+    inv = get_inventory_repo()
+    inv_ok = inv.ping()
+    scheduler = await schedule_service.engine_status()
+    memory = await asyncio.to_thread(memory_guard.guard.status)
     return S.HealthResponse(
         status="ok" if db_ok and not problems and hybrid_ok else "degraded",
         db=db_ok,
@@ -353,6 +525,15 @@ async def health():
         demo_controls=s.demo_controls,
         recent_chats=logs.recent_chats(10) if db_ok else [],
         recent_cad=logs.recent_cad(10) if db_ok else [],
+        inventory={
+            "ok": inv_ok,
+            "as_of": inv.as_of,
+            "tables": inv.manifest.get("tables", {}),
+            "problems": inv.problems,
+        },
+        recent_sql=logs.recent_sql(10) if db_ok else [],
+        scheduler=scheduler,
+        memory=memory,
     )
 
 

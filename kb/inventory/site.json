@@ -1,0 +1,31 @@
+{
+  "as_of": "2026-09-30",
+  "company": "示範精密機械（虛構）",
+  "note": "示範資料：工廠、客戶、單號與數量皆為虛構，只用來展示 Text-to-SQL。",
+  "warehouses": [
+    {
+      "warehouse_id": "WH-A",
+      "name": "一廠成品倉",
+      "kind": "成品",
+      "site": "一廠"
+    },
+    {
+      "warehouse_id": "WH-B",
+      "name": "二廠成品倉",
+      "kind": "成品",
+      "site": "二廠"
+    },
+    {
+      "warehouse_id": "WH-Q",
+      "name": "品檢待驗區",
+      "kind": "待檢",
+      "site": "一廠"
+    },
+    {
+      "warehouse_id": "WH-N",
+      "name": "不良品隔離區",
+      "kind": "隔離",
+      "site": "一廠"
+    }
+  ]
+}

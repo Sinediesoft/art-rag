@@ -1,7 +1,8 @@
 """FastAPI 進入點：uvicorn app.main:app --port 8000"""
 
+import asyncio
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -21,7 +22,9 @@ from app.core.logging import log, new_request_id, setup_logging
 from app.rag.embedders import warmup
 from app.repositories import db
 from app.repositories.index_store import IndexMismatch, get_store
+from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
+from app.services import memory_guard
 from app.services.cad_service import purge_jobs
 
 
@@ -39,14 +42,28 @@ async def lifespan(app: FastAPI):
     for path in get_logs_repo().purge_uploads(s.upload_ttl_days):
         (s.uploads_dir / path).unlink(missing_ok=True)
     purge_jobs(s.upload_ttl_days)
+    # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動
+    try:
+        get_inventory_repo().ensure_built()
+    except Exception as e:  # noqa: BLE001
+        log.error(f"庫存資料庫建立失敗：{e}")
     warmup()
     m = get_store().manifest
     where = f"PostgreSQL {db.describe(s.database_url)}" if s.database_url else "檔案索引＋SQLite"
     log.info(
         f"ArtRAG 就緒：{m['artwork_count']} 幅畫、{m.get('part_count', 0)} 張工廠圖紙，"
-        f"kb_version={m['kb_version']}，資料存放：{where}"
+        f"kb_version={m['kb_version']}；資料存放：{where}；"
+        f"工廠資料庫 {get_inventory_repo().manifest.get('tables', {})}；"
+        f"記憶體 {memory_guard.memory_percent():.0f}%"
+        f"（超過 {s.memory_high_pct:.0f}% 時釋放閒置模型）"
     )
+    # 記憶體管理的背景監控：超過門檻就釋放最近一次流程用不到的模型
+    watcher = asyncio.create_task(memory_guard.watch()) if s.memory_guard else None
     yield
+    if watcher:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
     db.close_pool()
 
 
@@ -54,7 +71,8 @@ app = FastAPI(
     title="地端隱私多模態 RAG 專題 API",
     version="0.1.0",
     description=(
-        "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D）。"
+        "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D、"
+        "庫存 Text-to-SQL、Timefold 生產排程）。"
         "SSE 事件見 shared/sse_events.md。"
     ),
     lifespan=lifespan,

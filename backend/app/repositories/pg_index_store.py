@@ -1,6 +1,6 @@
 """畫作、段落、向量與 manifest 存在 PostgreSQL + pgvector（.env 設了 DATABASE_URL 時用）。
 
-見 docs/adr/006。
+見 docs/adr/009。
 
 資料表照企劃書 §六：artworks／chunks、parts／part_chunks、index_manifest。
 每筆的完整內容存在 doc（JSONB）；企劃書列的主要欄位（標題、畫家、授權…）由 doc 自動產生，

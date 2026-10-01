@@ -16,23 +16,28 @@ def _converter():
 
 
 @lru_cache
-def _ambiguous_chars() -> frozenset[str]:
-    """本身也是合法繁體字的簡體字（如 范、后、里、干），這些字保留原樣。"""
+def _char_sets() -> tuple[frozenset[str], frozenset[str]]:
+    """(本身也是合法繁體字的簡體字, 簡體專用字)。前者如 范、后、里、干，保留原樣。"""
     import opencc
 
     path = Path(opencc.__file__).parent / "dictionary" / "STCharacters.txt"
-    keep = set()
+    keep, simplified = set(), set()
     for line in path.read_text(encoding="utf-8").splitlines():
         if "\t" not in line:
             continue
         src, targets = line.split("\t", 1)
-        if src in targets.split():
-            keep.add(src)
-    return frozenset(keep)
+        (keep if src in targets.split() else simplified).add(src)
+    return frozenset(keep), frozenset(simplified)
+
+
+def _ambiguous_chars() -> frozenset[str]:
+    return _char_sets()[0]
 
 
 def to_taiwan(text: str) -> str:
-    if not text:
+    # 沒有簡體專用字就原樣回傳：s2twp 的詞彙轉換會把繁體的「設備」改成「裝置」，
+    # 客戶名稱「栩達設備」這類專有名詞就被改掉了
+    if not text or not any(ch in _char_sets()[1] for ch in text):
         return text
     conv = _converter()
     converted = conv.convert(text)

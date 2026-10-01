@@ -29,6 +29,7 @@ from app.rag.router import route
 from app.rag.textproc import to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
+from app.services import memory_guard
 from app.services.search_service import identify, identify_drawing, load_upload
 
 # 備援只在本地之間：主推論伺服器 → 本地備援模型；雲端不在任何備援鏈上
@@ -78,6 +79,37 @@ def retrieve(question: str, artwork_id: str | None, part_id: str | None = None) 
 
 
 async def chat_stream(
+    question: str,
+    request_id: str,
+    strategy: str = "hybrid",
+    artwork_id: str | None = None,
+    image_id: str | None = None,
+    use_retrieval: bool = True,
+    allow_fallback: bool = True,
+    part_id: str | None = None,
+    rearrange: bool | None = None,
+) -> AsyncIterator[str]:
+    """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
+
+    記憶體吃緊時先釋放其他模型（services/memory_guard.py）。
+    """
+    models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
+    events = _chat_stream(
+        question,
+        request_id,
+        strategy,
+        artwork_id,
+        image_id,
+        use_retrieval,
+        allow_fallback,
+        part_id,
+        rearrange,
+    )
+    async for e in memory_guard.stream("chat", models, events):
+        yield e
+
+
+async def _chat_stream(
     question: str,
     request_id: str,
     strategy: str = "hybrid",

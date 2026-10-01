@@ -1,0 +1,20 @@
+{"id": "sql-01", "type": "lookup", "question": "階梯傳動軸現在可用的有幾件？", "gold_sql": "SELECT available FROM v_part_stock WHERE part_id = 'mfg-003'"}
+{"id": "sql-02", "type": "join", "question": "二廠成品倉放了哪些零件？各多少件？", "gold_sql": "SELECT p.name, SUM(s.qty) FROM stock s JOIN parts p ON p.part_id = s.part_id WHERE s.warehouse_id = 'WH-B' GROUP BY p.name"}
+{"id": "sql-03", "type": "filter", "question": "目前有哪些不良品？數量和原因是什麼？", "gold_sql": "SELECT p.name, s.qty, s.note FROM stock s JOIN parts p ON p.part_id = s.part_id WHERE s.status = '不良'"}
+{"id": "sql-04", "type": "filter", "question": "晨峰自動化還有哪些訂單沒出完貨？", "gold_sql": "SELECT DISTINCT so_no FROM sales_orders WHERE customer = '晨峰自動化' AND status != '已出貨'"}
+{"id": "sql-05", "type": "date", "question": "10 月 10 日以前到期、還沒出完貨的訂單有哪些？", "gold_sql": "SELECT DISTINCT so_no FROM sales_orders WHERE due_on <= '2026-10-10' AND status != '已出貨'"}
+{"id": "sql-06", "type": "join", "question": "哪些訂單的未出貨數量超過該零件目前的可用庫存？", "gold_sql": "SELECT DISTINCT o.so_no FROM sales_orders o JOIN v_part_stock v ON v.part_id = o.part_id WHERE o.status != '已出貨' AND o.qty - o.qty_shipped > v.available"}
+{"id": "sql-07", "type": "aggregate", "question": "各零件未出貨訂單的需求量加總是多少？", "gold_sql": "SELECT p.name, SUM(o.qty - o.qty_shipped) FROM sales_orders o JOIN parts p ON p.part_id = o.part_id WHERE o.status != '已出貨' GROUP BY p.name"}
+{"id": "sql-08", "type": "lookup", "question": "哪個零件的標準成本最高？", "gold_sql": "SELECT name FROM parts ORDER BY std_cost_twd DESC LIMIT 1"}
+{"id": "sql-09", "type": "filter", "question": "待檢的庫存有哪些？", "gold_sql": "SELECT p.name, s.qty FROM stock s JOIN parts p ON p.part_id = s.part_id WHERE s.status = '待檢'"}
+{"id": "sql-10", "type": "aggregate", "question": "機密等級為「機密」的零件，庫存總共有幾件？", "gold_sql": "SELECT SUM(s.qty) FROM stock s JOIN parts p ON p.part_id = s.part_id WHERE p.confidentiality = '機密'"}
+{"id": "sql-11", "type": "filter", "question": "T 型槽螺帽有哪些批號？各放在哪個儲位？", "gold_sql": "SELECT lot_no, bin FROM stock WHERE part_id = 'mfg-005'"}
+{"id": "sql-12", "type": "filter", "question": "九月底盤點調整了哪些零件？差多少？", "gold_sql": "SELECT p.name, m.qty FROM stock_moves m JOIN parts p ON p.part_id = m.part_id WHERE m.move_type = '盤點調整'"}
+{"id": "sql-13", "type": "aggregate", "question": "八、九月總共報廢了幾件？", "gold_sql": "SELECT -SUM(qty) FROM stock_moves WHERE move_type = '報廢' AND moved_on BETWEEN '2026-08-01' AND '2026-09-30'"}
+{"id": "sql-14", "type": "filter", "question": "VMC-01 這台機台有哪些還沒完工的工單？", "gold_sql": "SELECT wo_no FROM work_orders WHERE line = 'VMC-01' AND status != '已完工'"}
+{"id": "sql-15", "type": "aggregate", "question": "每個客戶的訂購數量總共是多少？", "gold_sql": "SELECT customer, SUM(qty) FROM sales_orders GROUP BY customer"}
+{"id": "sql-16", "type": "filter", "question": "步進馬達安裝板保留的庫存是保留給哪張訂單？", "gold_sql": "SELECT note FROM stock WHERE part_id = 'mfg-004' AND status = '保留'"}
+{"id": "sql-17", "type": "join", "question": "一廠各倉庫目前的庫存總數是多少？", "gold_sql": "SELECT w.name, SUM(s.qty) FROM stock s JOIN warehouses w ON w.warehouse_id = s.warehouse_id WHERE w.site = '一廠' GROUP BY w.name"}
+{"id": "sql-18", "type": "filter", "question": "哪些工單正在生產中或委外處理中？預計何時完工？", "gold_sql": "SELECT wo_no, due_on FROM work_orders WHERE status IN ('生產中', '委外處理中')"}
+{"id": "sql-19", "type": "aggregate", "question": "總庫存最多的前三個零件是哪些？", "gold_sql": "SELECT name, on_hand FROM v_part_stock ORDER BY on_hand DESC LIMIT 3"}
+{"id": "sql-20", "type": "join", "question": "立式軸承座的可用庫存扣掉所有未出貨訂單後還剩多少？", "gold_sql": "SELECT v.available - SUM(o.qty - o.qty_shipped) FROM v_part_stock v JOIN sales_orders o ON o.part_id = v.part_id WHERE v.part_id = 'mfg-006' AND o.status != '已出貨'"}

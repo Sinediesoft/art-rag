@@ -1,0 +1,88 @@
+{
+  "part_id": "mfg-007",
+  "unit": "件",
+  "std_cost_twd": 2400,
+  "safety_stock": 4,
+  "reorder_qty": 10,
+  "lead_time_days": 14,
+  "make_or_buy": "自製（鍍鎳委外）",
+  "stock": [
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-07-1",
+      "lot_no": "L2609-15",
+      "status": "可用",
+      "qty": 3,
+      "received_on": "2026-09-26",
+      "note": null
+    }
+  ],
+  "moves": [
+    {
+      "moved_on": "2026-09-25",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 5,
+      "ref_no": "WO-2609-15",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-09-26",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -5,
+      "ref_no": "WO-2609-15",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-09-26",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 5,
+      "ref_no": "WO-2609-15",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-09-29",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -2,
+      "ref_no": "SO-2609-030",
+      "note": null
+    }
+  ],
+  "work_orders": [
+    {
+      "wo_no": "WO-2609-15",
+      "qty_planned": 5,
+      "qty_done": 5,
+      "status": "已完工",
+      "line": "VMC-02",
+      "start_on": "2026-09-16",
+      "due_on": "2026-09-25",
+      "note": "試作批"
+    },
+    {
+      "wo_no": "WO-2610-03",
+      "qty_planned": 10,
+      "qty_done": 0,
+      "status": "已開立",
+      "line": "VMC-02",
+      "start_on": "2026-10-06",
+      "due_on": "2026-10-20",
+      "note": null
+    }
+  ],
+  "sales_orders": [
+    {
+      "so_no": "SO-2609-030",
+      "line_no": 1,
+      "customer": "晨峰自動化",
+      "qty": 2,
+      "qty_shipped": 2,
+      "order_on": "2026-09-22",
+      "due_on": "2026-09-30",
+      "status": "已出貨"
+    }
+  ]
+}

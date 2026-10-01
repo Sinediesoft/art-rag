@@ -1,5 +1,5 @@
 """建索引指令（make index）：kb/*.json → 驗證 → 向量化 → data/index/ + manifest
-→ .env 設了 DATABASE_URL 就再寫進 PostgreSQL + pgvector（docs/adr/006）。
+→ .env 設了 DATABASE_URL 就再寫進 PostgreSQL + pgvector（docs/adr/009）。
 
 畫作：kb/artworks → data/index/*；工廠圖紙：kb/parts → data/index/parts/*
 （另外執行標準 CadQuery 模型，存 STL／STEP 給前端 3D 檢視與 IoU 比對，

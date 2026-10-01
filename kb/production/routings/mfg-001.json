@@ -1,0 +1,44 @@
+{
+  "part_id": "mfg-001",
+  "source": "kb/parts/mfg-001.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "鋸床下料 85×55×65 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 15,
+      "run_min_per_pc": 1.5
+    },
+    {
+      "op_seq": 20,
+      "name": "第一次裝夾：面銑底面與外形、粗銑 L 型內角",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 45,
+      "run_min_per_pc": 6
+    },
+    {
+      "op_seq": 30,
+      "name": "翻面第二次裝夾：精銑內角與各面",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 30,
+      "run_min_per_pc": 5
+    },
+    {
+      "op_seq": 40,
+      "name": "鑽 4-Ø6.6 與 2-Ø8.5 通孔、去毛邊",
+      "kind": "自製",
+      "machine_type": "鑽孔攻牙",
+      "setup_min": 20,
+      "run_min_per_pc": 2.5
+    },
+    {
+      "op_seq": 50,
+      "name": "黑色陽極處理",
+      "kind": "委外",
+      "outsource_days": 4
+    }
+  ]
+}
