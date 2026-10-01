@@ -39,6 +39,27 @@ def metadata_text(a: dict) -> str:
     return text
 
 
+COLOR_SOURCE = "系統計算：色彩分析（數位圖檔）"
+
+
+def color_text(a: dict) -> str:
+    """建索引時算出的色彩分析（docs/adr/010），組成一段可檢索、可引用的文字。"""
+    c = a["colors"]
+    pal = "、".join(f"{p['name']}（{p['hex']}）{p['share'] * 100:.0f}%" for p in c["palette"])
+    t, li, ch = c["temperature"], c["lightness"], c["chroma"]
+    return (
+        f"依系統對〈{a['title']['zh']}〉數位圖檔的色彩分析"
+        f"（CIELAB 空間分成 {len(c['palette'])} 個主色）："
+        f"主色依占比為{pal}。"
+        f"暖色占 {t['warm'] * 100:.0f}%、冷色 {t['cool'] * 100:.0f}%、"
+        f"中性色（接近黑白灰）{t['neutral'] * 100:.0f}%。"
+        f"暗調 {li['dark'] * 100:.0f}%、中間調 {li['mid'] * 100:.0f}%、"
+        f"亮調 {li['light'] * 100:.0f}%，"
+        f"彩度中位數 {ch['median']:.0f}；整體而言{c['summary']}。"
+        "以上依數位圖檔計算，可能與原作現況及展場光線下看到的顏色不同。"
+    )
+
+
 def build_chunks(a: dict) -> list[dict]:
     chunks = [
         {
@@ -64,6 +85,20 @@ def build_chunks(a: dict) -> list[dict]:
                     "license": d["license"],
                 }
             )
+    if a.get("colors"):
+        # 系統計算的段落沒有網址出處：source_url 為 None，改用 source（同工廠圖紙段落）
+        chunks.append(
+            {
+                "chunk_id": f"{a['id']}#color",
+                "artwork_id": a["id"],
+                "lang": "zh",
+                "topic": "色彩分析",
+                "text": color_text(a),
+                "source_url": None,
+                "source": COLOR_SOURCE,
+                "license": "CC0",
+            }
+        )
     return chunks
 
 

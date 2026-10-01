@@ -129,6 +129,8 @@ class IndexStore:
             )
         if manifest.get("chunking") != cfg.chunking:
             problems.append("切塊規則與 models.yaml 不一致")
+        if manifest.get("color_analysis") != cfg.color_analysis.model_dump(mode="json"):
+            problems.append("色彩分析參數與 models.yaml 不一致")
         if manifest.get("kb_version") != kb_version():
             problems.append(
                 f"知識庫版本不一致：索引={manifest.get('kb_version')}，kb/VERSION={kb_version()}"

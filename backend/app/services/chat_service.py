@@ -56,7 +56,15 @@ def _source(i: int, h, store) -> dict:
         title = store.mfg.by_id[item["part_id"]]["name"]["zh"]
         return {**base, "part_id": item["part_id"], "title": title, "source_label": item["source"]}
     title = store.by_id[item["artwork_id"]]["title"]["zh"]
-    return {**base, "artwork_id": item["artwork_id"], "artwork_title": title, "title": title}
+    # 系統計算的段落（色彩分析）沒有網址，跟工廠圖紙段落一樣帶 source_label
+    label = {"source_label": item["source"]} if item.get("source") else {}
+    return {
+        **base,
+        "artwork_id": item["artwork_id"],
+        "artwork_title": title,
+        "title": title,
+        **label,
+    }
 
 
 def retrieve(question: str, artwork_id: str | None, part_id: str | None = None) -> list[dict]:
