@@ -18,3 +18,6 @@
 {"id": "q-aic2-01", "split": "dev", "artwork_id": "aic-16568", "question": "莫內在哪裡畫睡蓮？", "keywords": [["吉維尼", "Giverny"]], "topics": ["創作背景"]}
 {"id": "q-aic2-02", "split": "test", "artwork_id": "aic-16568", "question": "睡蓮系列大約有幾幅？", "keywords": [["250"]], "topics": ["創作背景"]}
 {"id": "q-refuse-01", "split": "test", "artwork_id": "aic-27992", "question": "這幅畫當年賣了多少錢？", "keywords": [["沒有"]], "topics": [], "expect_refusal": true, "type": "no_answer"}
+{"id": "q-npm1-06", "split": "test", "artwork_id": "npm-000001", "question": "這幅畫主要用了哪些顏色？", "keywords": [["褐"]], "topics": ["色彩分析"]}
+{"id": "q-aic-06", "split": "test", "artwork_id": "aic-27992", "question": "這幅畫整體偏暖還是偏冷？", "keywords": [["中性"]], "topics": ["色彩分析"]}
+{"id": "q-met-06", "split": "test", "artwork_id": "met-436535", "question": "這幅畫的顏色鮮豔嗎？", "keywords": [["中等彩度", "中等"]], "topics": ["色彩分析"]}
