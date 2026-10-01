@@ -326,7 +326,8 @@ export function ArtworkColors({ artworkId }: { artworkId: string }) {
         requestId={(error as ApiError)?.requestId}
       />
     );
-  return <ColorAnalysisCard data={data} title="色彩分析" />;
+  // key：換畫作就重掛載，點選與滑過的狀態不會帶到下一幅（色票數不同時 palette[selected] 會是 undefined）
+  return <ColorAnalysisCard key={artworkId} data={data} title="色彩分析" />;
 }
 
 export function PhotoColors({ imageId, matched }: { imageId: string; matched: boolean }) {
@@ -342,6 +343,7 @@ export function PhotoColors({ imageId, matched }: { imageId: string; matched: bo
     );
   return (
     <ColorAnalysisCard
+      key={imageId}
       data={data}
       title="色彩分析（依你的照片）"
       hint={

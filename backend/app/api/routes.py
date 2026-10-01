@@ -445,8 +445,10 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        # 圖紙、領域路由、Text-to-SQL 與展示測試的評估另有格式
-        if not p.name.endswith(("-cad.json", "-router.json", "-sql.json", "-demo.json")):
+        # 圖紙、領域路由、Text-to-SQL、色彩分析與展示測試的評估另有格式
+        if not p.name.endswith(
+            ("-cad.json", "-router.json", "-sql.json", "-color.json", "-demo.json")
+        ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
 

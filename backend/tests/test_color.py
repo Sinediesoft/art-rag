@@ -13,9 +13,11 @@ from app.analysis.color import (
     color_name,
     lab_to_srgb,
     srgb_to_lab,
+    summarize,
     temperature_masks,
 )
 from app.core.config import ColorAnalysisSpec
+from app.rag.chunking import color_text
 
 SPEC = ColorAnalysisSpec()
 
@@ -117,3 +119,84 @@ def test_analyze_is_deterministic():
     rng = np.random.default_rng(7)
     img = Image.fromarray(rng.integers(0, 256, (120, 160, 3), dtype=np.uint8))
     assert analyze(img, SPEC) == analyze(img, SPEC)
+
+
+def _summary(warm=0.4, cool=0.3, neutral=0.3, median=15.0, dark=0.2, mid=0.5, light=0.3) -> str:
+    temperature = {"warm": warm, "cool": cool, "neutral": neutral}
+    return summarize(
+        temperature, {"dark": dark, "mid": mid, "light": light}, {"median": median}, SPEC
+    )
+
+
+@pytest.mark.parametrize(
+    "warm,cool,neutral,want",
+    [
+        (0.3, 0.2, 0.5, "以中性色為主"),  # 中性色剛好 50%
+        (0.5, 0.0, 0.5, "以中性色為主"),  # 中性色過半時優先於偏暖
+        (0.5, 0.2, 0.3, "整體偏暖"),
+        (0.5, 0.25, 0.25, "整體偏暖"),  # 暖色剛好是冷色的 2 倍
+        (0.2, 0.5, 0.3, "整體偏冷"),
+        (0.25, 0.5, 0.25, "整體偏冷"),  # 冷色剛好是暖色的 2 倍
+        (0.4, 0.3, 0.3, "冷暖並陳"),
+    ],
+)
+def test_summarize_temperature_rules(warm, cool, neutral, want):
+    assert _summary(warm=warm, cool=cool, neutral=neutral).split("、")[0] == want
+
+
+@pytest.mark.parametrize(
+    "median,want",
+    [
+        (0, "低彩度"),
+        (9.99, "低彩度"),
+        (10, "中等彩度"),
+        (24.99, "中等彩度"),
+        (25, "高彩度"),
+        (60, "高彩度"),
+    ],
+)
+def test_summarize_chroma_bands(median, want):
+    assert _summary(median=median).split("、")[1] == want
+
+
+@pytest.mark.parametrize(
+    "dark,mid,light,want",
+    [
+        (0.6, 0.3, 0.1, "以暗調為主"),
+        (0.2, 0.5, 0.3, "以中間調為主"),
+        (0.1, 0.3, 0.6, "以亮調為主"),
+        (0.34, 0.33, 0.33, "以暗調為主"),  # 差距很小也取最大的那一段
+    ],
+)
+def test_summarize_tone_by_max_share(dark, mid, light, want):
+    assert _summary(dark=dark, mid=mid, light=light).split("、")[2] == want
+
+
+def test_summarize_full_sentence():
+    assert _summary(0.5, 0.2, 0.3, median=30, dark=0.1, mid=0.3, light=0.6) == (
+        "整體偏暖、高彩度、以亮調為主"
+    )
+
+
+@pytest.mark.parametrize(
+    "summary,want",
+    [
+        (
+            "整體偏暖、低彩度、以暗調為主",
+            "；整體偏暖、低彩度、以暗調為主。",
+        ),  # 已經以「整體」開頭，不重複
+        ("整體偏冷、中等彩度、以中間調為主", "；整體偏冷、中等彩度、以中間調為主。"),
+        ("以中性色為主、低彩度、以暗調為主", "；整體而言以中性色為主、低彩度、以暗調為主。"),
+        ("冷暖並陳、高彩度、以亮調為主", "；整體而言冷暖並陳、高彩度、以亮調為主。"),
+    ],
+)
+def test_color_text_does_not_repeat_overall(summary, want):
+    colors = {
+        "palette": [{"name": "紅", "hex": "#FF0000", "share": 0.7}],
+        "temperature": {"warm": 0.7, "cool": 0.1, "neutral": 0.2},
+        "lightness": {"dark": 0.2, "mid": 0.5, "light": 0.3},
+        "chroma": {"median": 12.0},
+        "summary": summary,
+    }
+    text = color_text({"title": {"zh": "測試畫"}, "colors": colors})
+    assert want in text and "整體而言整體" not in text

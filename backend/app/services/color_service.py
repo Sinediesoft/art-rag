@@ -1,5 +1,7 @@
 """色彩分析的流程編排（docs/adr/010）：知識庫畫作讀索引裡算好的結果，上傳的照片即時計算。"""
 
+import hashlib
+import json
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -26,8 +28,11 @@ def _artwork_or_404(artwork_id: str) -> dict:
 
 def artwork_colors(artwork_id: str) -> dict:
     a = _artwork_or_404(artwork_id)
-    # 網址帶知識庫 hash：重建索引後瀏覽器不會拿到快取的舊圖（同 part_summary）
-    v = get_store().manifest.get("kb_hash", "")[:8]
+    # 網址帶色彩內容的 hash：只改 color_analysis 參數重建索引時 kb_hash 不變，
+    # 帶 kb_hash 的話瀏覽器會拿一小時內快取的舊圖；色塊圖由這份分析決定，所以直接用它的內容
+    v = hashlib.sha1(
+        json.dumps(a["colors"], sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()[:8]
     return {
         **a["colors"],
         "source": "original",
@@ -39,7 +44,10 @@ def artwork_colors(artwork_id: str) -> dict:
 
 def artwork_colormap_path(artwork_id: str) -> Path:
     _artwork_or_404(artwork_id)
-    return get_store().dir / "colormaps" / f"{artwork_id}.png"
+    path = get_store().dir / "colormaps" / f"{artwork_id}.png"
+    if not path.exists():  # FileResponse 找不到檔案會丟 RuntimeError（變成 500），先擋成 404
+        raise AppError("ARTWORK_NOT_FOUND", f"找不到畫作 {artwork_id} 的色塊分布圖", 404)
+    return path
 
 
 @lru_cache(maxsize=32)

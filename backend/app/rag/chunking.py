@@ -47,6 +47,8 @@ def color_text(a: dict) -> str:
     c = a["colors"]
     pal = "、".join(f"{p['name']}（{p['hex']}）{p['share'] * 100:.0f}%" for p in c["palette"])
     t, li, ch = c["temperature"], c["lightness"], c["chroma"]
+    # 總結句可能已經以「整體」開頭（整體偏暖／偏冷），不重複
+    overall = c["summary"] if c["summary"].startswith("整體") else "整體而言" + c["summary"]
     return (
         f"依系統對〈{a['title']['zh']}〉數位圖檔的色彩分析"
         f"（CIELAB 空間分成 {len(c['palette'])} 個主色）："
@@ -55,7 +57,7 @@ def color_text(a: dict) -> str:
         f"中性色（接近黑白灰）{t['neutral'] * 100:.0f}%。"
         f"暗調 {li['dark'] * 100:.0f}%、中間調 {li['mid'] * 100:.0f}%、"
         f"亮調 {li['light'] * 100:.0f}%，"
-        f"彩度中位數 {ch['median']:.0f}；整體而言{c['summary']}。"
+        f"彩度中位數 {ch['median']:.0f}；{overall}。"
         "以上依數位圖檔計算，可能與原作現況及展場光線下看到的顏色不同。"
     )
 

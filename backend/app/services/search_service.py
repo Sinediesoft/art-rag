@@ -97,6 +97,9 @@ def search_text(q: str, top_k: int | None = None) -> dict:
     chunk_sims = store.chunk_vecs @ embed_text([q])[0]
     text_best: dict[str, float] = {}
     for c, s in zip(store.chunks, chunk_sims, strict=True):
+        # 色彩段落只給問答用：依色彩找畫不在範圍內（ADR 010），不讓它影響以文搜圖的排名
+        if c["chunk_id"].endswith("#color"):
+            continue
         text_best[c["artwork_id"]] = max(text_best.get(c["artwork_id"], -1.0), float(s))
 
     ids = [a["id"] for a in store.artworks]

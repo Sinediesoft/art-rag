@@ -122,7 +122,8 @@ async def run_cad(
 ) -> RunResult:
     """在子行程執行 CadQuery 程式碼，輸出 model.stl／.step、reproj.png、result.json 到 job_dir。
 
-    trusted=True 只給知識庫自己的標準模型（kb/cad/*.py）用，仍走同一個子行程與限制。
+    trusted=True 只給知識庫自己的標準模型（kb/cad/*.py）用，仍走同一個子行程。沒有 resource 模組的
+    平台（Windows）上，子行程沒有 CPU 時間與檔案大小限制，只剩這裡的逾時（timeout_s + 15 秒）。
     """
     if not trusted:
         if not LIMITS_AVAILABLE:

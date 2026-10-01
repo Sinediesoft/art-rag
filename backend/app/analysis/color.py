@@ -177,7 +177,9 @@ def _histogram(v: np.ndarray) -> list[float]:
 
 
 def summarize(temperature: dict, lightness: dict, chroma: dict, spec: ColorAnalysisSpec) -> str:
-    """數字套固定規則產生總結句；畫面與問答段落共用。彩度用中位數（分布右偏）。"""
+    """數字套固定規則產生總結句；畫面與問答段落共用。
+
+    彩度用中位數：5 幅中 4 幅右偏；中位數不受少數鮮豔像素影響。"""
     t = temperature
     if t["neutral"] >= 0.5:
         temp = "以中性色為主"
