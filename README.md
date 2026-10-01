@@ -239,6 +239,9 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 ⚠️ 這些只驗證架構能運作：資料只有 3 筆、評估題由開發者撰寫、實拍照是由數位原圖加工的**模擬照**
 （`eval/make_synthetic_photos.py`）。正式評估請 D 換成真實實拍照與兩人獨立評分。
 
+2026-10-01 起 `eval/qa.jsonl` 多了 3 題顏色題（已收錄的 3 幅畫從 16 題變成 19 題），所以上表（16 題）和之後
+`make eval` 的數字不能直接比較。
+
 ### 色彩分析（`make eval-color`）
 
 不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
@@ -251,7 +254,7 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 | 冷暖比例差（平均） | 21.9 個百分點；依拍法：blur 37.3、crop 5.2、dim 27.8、glare 16.4、tilt 22.7 |
 | 顏色題取到色彩段落 | 3/3 |
 | 其他題混進色彩段落／段落被擠掉 | 2/16 題；有段落被擠掉 2 題（被擠掉的段落都不屬於該題主題，與主題相關 0 題） |
-| 延遲 P50／P95 | 248／326 ms |
+| 延遲 P50／P95 | 248／326 ms（評估時 demo 後端也開著，P95 隨負載有出入：三次跑從 452 降到 326 ms，取收錄的那一次） |
 
 ### 領域路由（`make eval-router`）
 
@@ -358,7 +361,7 @@ art-rag/
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_color_eval.py、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、error_codes.md、sse_events.md
