@@ -122,7 +122,7 @@ class MockProvider(Provider):
     """不呼叫任何模型：從檢索結果抽句子組成答案，格式與真模型相同（每句附 [編號]）。"""
 
     async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
-        user = messages[-1]["content"][0]["text"]
+        user = next(p["text"] for p in messages[-1]["content"] if p["type"] == "text")
         refs = re.findall(r"^\[(\d+)\]（[^）]*）(.+)$", user, flags=re.M)
         if not refs:
             answer = "知識庫中沒有這方面的資料。"
