@@ -122,11 +122,10 @@ uv run python ..\pipelines\import_sqlite_logs.py
 5. **確認建好**：開「系統狀態」頁，「索引一致」要打勾，知識庫版本要和其他人相同（例如 `2026.09.6`）。
    模型版本鎖在 `shared/models.yaml`，embedding 一律用 CPU 算，所以各自建出來的內容相同。
 
-**直接在 Windows 執行（不在 WSL 裡）時**：`make index` 會在工廠圖紙的標準模型那步失敗
-（`backend/app/cad/runner.py` 的 `import resource`，Windows 沒有這個模組）。
-修好之前，改用部署包附的 `data/index/`（已建好的索引）寫進資料庫：
-`cd backend; uv run python ..\pipelines\build_index.py --db-only`。
-不要改用資料庫匯出檔：縮圖與 STL／STEP 不在資料庫裡，而且 `--db-only` 會先檢查知識庫與模型版本是否一致。
+**直接在 Windows 執行（不在 WSL 裡）時**：`make index` 可以照常重建（Windows 沒有 `resource` 模組，
+知識庫自己的標準模型改成不限制 CPU 與檔案大小執行）；但 **Ortho2CAD 3D 重建不能用**——限制不了子行程，
+模型產生的程式碼一律拒絕執行，請在 macOS、Linux 或 WSL 上重建。沒有 `make` 時：
+`cd backend; uv run python ..\pipelines\build_index.py`。
 
 **要把使用紀錄給別人**（例如問答紀錄給 D 做評估）：只匯出紀錄表，對方還原到另一個資料庫，不會蓋掉自己的紀錄。
 紀錄裡有使用者的問題與回答，請私下傳，不要貼在群組。
