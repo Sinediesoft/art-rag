@@ -1,0 +1,42 @@
+[
+  {
+    "question": "連接法蘭目前在各倉庫各有多少庫存？",
+    "sql": "SELECT w.name AS 倉庫, s.status AS 狀態, SUM(s.qty) AS 數量\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE p.name LIKE '%法蘭%'\nGROUP BY w.name, s.status\nORDER BY 數量 DESC;"
+  },
+  {
+    "question": "哪些零件的可用庫存低於安全庫存？",
+    "sql": "SELECT name AS 品名, available AS 可用庫存, safety_stock AS 安全庫存, safety_stock - available AS 差額\nFROM v_part_stock\nWHERE available < safety_stock\nORDER BY 差額 DESC;"
+  },
+  {
+    "question": "目前有哪些保留中的庫存？保留給誰？",
+    "sql": "SELECT p.name AS 品名, w.name AS 倉庫, s.lot_no AS 批號, s.qty AS 數量, s.note AS 備註\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE s.status = '保留'\nORDER BY s.qty DESC;"
+  },
+  {
+    "question": "還沒出完貨的訂單有哪些？",
+    "sql": "SELECT o.so_no AS 訂單號, o.line_no AS 項次, o.customer AS 客戶, p.name AS 品名, o.qty - o.qty_shipped AS 未出貨, o.due_on AS 交期\nFROM sales_orders o\nJOIN parts p ON p.part_id = o.part_id\nWHERE o.status != '已出貨'\nORDER BY o.due_on;"
+  },
+  {
+    "question": "九月每個零件各出貨了幾件？",
+    "sql": "SELECT p.name AS 品名, -SUM(m.qty) AS 出貨數量\nFROM stock_moves m\nJOIN parts p ON p.part_id = m.part_id\nWHERE m.move_type = '銷貨出庫' AND m.moved_on BETWEEN '2026-09-01' AND '2026-09-30'\nGROUP BY p.name\nORDER BY 出貨數量 DESC;"
+  },
+  {
+    "question": "還沒完工的工單各還差多少？",
+    "sql": "SELECT w.wo_no AS 工單號, p.name AS 品名, w.qty_planned - w.qty_done AS 未完工數量, w.status AS 狀態, w.due_on AS 預計完工日\nFROM work_orders w\nJOIN parts p ON p.part_id = w.part_id\nWHERE w.status != '已完工'\nORDER BY w.due_on;"
+  },
+  {
+    "question": "目前庫存依標準成本計算總價值多少？",
+    "sql": "SELECT SUM(s.qty * p.std_cost_twd) AS 庫存總價值_元\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id;"
+  },
+  {
+    "question": "BRK-1001 最近 5 筆庫存異動",
+    "sql": "SELECT m.moved_on AS 日期, w.name AS 倉庫, m.move_type AS 類型, m.qty AS 數量, m.ref_no AS 單號\nFROM stock_moves m\nJOIN parts p ON p.part_id = m.part_id\nJOIN warehouses w ON w.warehouse_id = m.warehouse_id\nWHERE p.part_no = 'BRK-1001'\nORDER BY m.move_id DESC\nLIMIT 5;"
+  },
+  {
+    "question": "哪些工單排程後會趕不上交期？",
+    "sql": "SELECT wo_no AS 工單號, name AS 品名, priority AS 優先, due_on AS 交期, planned_end AS 排程完工 FROM v_wo_plan WHERE on_time = '延遲' ORDER BY due_on;"
+  },
+  {
+    "question": "CNC 車床-01 的排程時間表",
+    "sql": "SELECT s.start_at AS 開始, s.end_at AS 結束, s.wo_no AS 工單號, p.name AS 品名, s.op_name AS 工序 FROM schedule_ops s JOIN work_orders w ON w.wo_no = s.wo_no JOIN parts p ON p.part_id = w.part_id WHERE s.machine_id = 'CNC 車床-01' ORDER BY s.start_at LIMIT 50;"
+  }
+]

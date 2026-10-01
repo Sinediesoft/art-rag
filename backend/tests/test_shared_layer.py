@@ -18,6 +18,7 @@ def test_kb_passes_schema():
 def test_opencc_keeps_ambiguous_traditional_chars():
     assert to_taiwan("范寬的谿山行旅圖") == "范寬的谿山行旅圖"
     assert to_taiwan("这幅画") == "這幅畫"
+    assert to_taiwan("栩達設備的訂單") == "栩達設備的訂單"  # 已是繁體就不做詞彙轉換
 
 
 def test_long_paragraph_is_split_with_overlap():

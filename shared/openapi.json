@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "地端隱私多模態 RAG 專題 API",
-    "description": "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D）。SSE 事件見 shared/sse_events.md。",
+    "description": "以多模態 RAG 打造的畫作導覽助理，以及工廠機械加工圖助理（Ortho2CAD 三視圖→3D、庫存 Text-to-SQL、Timefold 生產排程）。SSE 事件見 shared/sse_events.md。",
     "version": "0.1.0"
   },
   "paths": {
@@ -769,6 +769,518 @@
         }
       }
     },
+    "/api/v1/inventory/schema": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "Inventory Schema",
+        "description": "庫存資料庫的資料表與欄位說明（與給模型看的 schema 同一份來源）。",
+        "operationId": "inventory_schema_api_v1_inventory_schema_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventorySchemaResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/overview": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "Inventory Overview",
+        "operationId": "inventory_overview_api_v1_inventory_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryOverviewResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/parts/{part_id}": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "Part Inventory",
+        "description": "單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。",
+        "operationId": "part_inventory_api_v1_inventory_parts__part_id__get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartInventory"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/ask": {
+      "post": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "Inventory Ask",
+        "description": "Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。",
+        "operationId": "inventory_ask_api_v1_inventory_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InventoryAskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：meta／attempt／sql_token／sql／result／token／done／error（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/production/overview": {
+      "get": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Production Overview",
+        "description": "排程頁：機台、行事曆、待排工單、排程服務狀態與目前排程。",
+        "operationId": "production_overview_api_v1_production_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductionOverview"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/production/parts/{part_id}": {
+      "get": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Part Plan",
+        "description": "圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。",
+        "operationId": "part_plan_api_v1_production_parts__part_id__get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PartPlan"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/production/work-orders": {
+      "post": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Create Work Order",
+        "description": "從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。",
+        "operationId": "create_work_order_api_v1_production_work_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkOrderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrderCreated"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/production/work-orders/{wo_no}": {
+      "delete": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Cancel Work Order",
+        "description": "取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。",
+        "operationId": "cancel_work_order_api_v1_production_work_orders__wo_no__delete",
+        "parameters": [
+          {
+            "name": "wo_no",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Wo No"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/solve": {
+      "post": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Solve Schedule",
+        "description": "把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。",
+        "operationId": "solve_schedule_api_v1_schedule_solve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleSolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：meta／progress／solution／done／error（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/stop": {
+      "post": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Stop Schedule",
+        "description": "提前結束目前的求解，採用目前最佳解。",
+        "operationId": "stop_schedule_api_v1_schedule_stop_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Schedule Run",
+        "operationId": "schedule_run_api_v1_schedule_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunDetail"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/production/reset": {
+      "post": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Reset Production",
+        "description": "展示還原：清掉圖紙頁開立的工單與所有排程結果（DEMO_CONTROLS=false 時停用）。",
+        "operationId": "reset_production_api_v1_admin_production_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/memory": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Memory Status",
+        "description": "系統記憶體使用率、各模型是否載入／使用中、最近的釋放紀錄。",
+        "operationId": "memory_status_api_v1_memory_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryStatus"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/memory/release": {
+      "post": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Release Memory",
+        "description": "展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。",
+        "operationId": "release_memory_api_v1_admin_memory_release_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryReleaseResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/feedback": {
       "post": {
         "tags": [
@@ -856,6 +1368,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CadEvalRunsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/eval/sql-runs": {
+      "get": {
+        "tags": [
+          "eval"
+        ],
+        "summary": "Sql Eval Runs",
+        "description": "工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。",
+        "operationId": "sql_eval_runs_api_v1_eval_sql_runs_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqlEvalRunsResponse"
                 }
               }
             }
@@ -1190,6 +1734,38 @@
         ],
         "title": "ArtworkSummary"
       },
+      "AxisDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "weekday": {
+            "type": "string",
+            "title": "Weekday"
+          },
+          "start_min": {
+            "type": "integer",
+            "title": "Start Min"
+          },
+          "holidays_before": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Holidays Before"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "weekday",
+          "start_min",
+          "holidays_before"
+        ],
+        "title": "AxisDay"
+      },
       "Body_upload_image_api_v1_images_post": {
         "properties": {
           "file": {
@@ -1399,6 +1975,44 @@
           "question"
         ],
         "title": "ChatRequest"
+      },
+      "ConstraintScore": {
+        "properties": {
+          "constraint": {
+            "type": "string",
+            "title": "Constraint"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "hard",
+              "medium",
+              "soft"
+            ],
+            "title": "Level"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "matches": {
+            "type": "integer",
+            "title": "Matches"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "constraint",
+          "level",
+          "score",
+          "matches",
+          "description"
+        ],
+        "title": "ConstraintScore"
       },
       "Description": {
         "properties": {
@@ -1785,6 +2399,42 @@
             "type": "array",
             "title": "Recent Cad",
             "default": []
+          },
+          "inventory": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inventory",
+            "description": "庫存資料庫：資料日期、各表筆數、資料問題",
+            "default": {}
+          },
+          "recent_sql": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Sql",
+            "default": []
+          },
+          "scheduler": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchedulerEngine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1943,6 +2593,576 @@
         ],
         "title": "ImageUploadResponse"
       },
+      "InventoryAskRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Question"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "hybrid",
+              "api_nokb",
+              "api_kb",
+              "lora",
+              "mock"
+            ],
+            "title": "Strategy",
+            "description": "hybrid＝本地 Qwen3-VL；雲端策略一律回 CLOUD_CONFIDENTIAL_FORBIDDEN",
+            "default": "hybrid"
+          },
+          "allow_fallback": {
+            "type": "boolean",
+            "title": "Allow Fallback",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "InventoryAskRequest"
+      },
+      "InventoryColumn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "description"
+        ],
+        "title": "InventoryColumn"
+      },
+      "InventoryOverviewResponse": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryOverviewRow"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "company",
+          "items"
+        ],
+        "title": "InventoryOverviewResponse"
+      },
+      "InventoryOverviewRow": {
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "std_cost_twd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std Cost Twd"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available",
+            "description": "可用"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved",
+            "description": "保留給訂單"
+          },
+          "inspecting": {
+            "type": "integer",
+            "title": "Inspecting",
+            "description": "待檢"
+          },
+          "defective": {
+            "type": "integer",
+            "title": "Defective",
+            "description": "不良"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand",
+            "description": "合計（所有狀態）"
+          },
+          "safety_stock": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Stock"
+          },
+          "open_demand": {
+            "type": "integer",
+            "title": "Open Demand",
+            "description": "未出貨訂單的需求量"
+          },
+          "in_production": {
+            "type": "integer",
+            "title": "In Production",
+            "description": "未完工工單的剩餘數量"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part_id",
+          "part_no",
+          "name",
+          "available",
+          "reserved",
+          "inspecting",
+          "defective",
+          "on_hand",
+          "open_demand",
+          "in_production"
+        ],
+        "title": "InventoryOverviewRow"
+      },
+      "InventorySchemaResponse": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "title": "As Of",
+            "description": "資料日期（Text-to-SQL 把它當成「今天」）"
+          },
+          "company": {
+            "type": "string",
+            "title": "Company"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryTable"
+            },
+            "type": "array",
+            "title": "Tables"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Examples",
+            "description": "few-shot 範例的問題（prompt 內的範例）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "company",
+          "tables",
+          "prompt_version",
+          "examples"
+        ],
+        "title": "InventorySchemaResponse"
+      },
+      "InventoryTable": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "table",
+              "view"
+            ],
+            "title": "Kind"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows",
+            "description": "資料筆數；檢視表為 null"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryColumn"
+            },
+            "type": "array",
+            "title": "Columns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "kind",
+          "rows",
+          "columns"
+        ],
+        "title": "InventoryTable"
+      },
+      "MachineInfo": {
+        "properties": {
+          "machine_id": {
+            "type": "string",
+            "title": "Machine Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "machine_type": {
+            "type": "string",
+            "title": "Machine Type"
+          },
+          "site": {
+            "type": "string",
+            "title": "Site"
+          }
+        },
+        "type": "object",
+        "required": [
+          "machine_id",
+          "name",
+          "machine_type",
+          "site"
+        ],
+        "title": "MachineInfo"
+      },
+      "MemoryEvent": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "trigger": {
+            "type": "string",
+            "title": "Trigger",
+            "description": "進入「…」流程／背景監控／手動"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flow"
+          },
+          "flow_label": {
+            "type": "string",
+            "title": "Flow Label"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "percent_before": {
+            "type": "number",
+            "title": "Percent Before"
+          },
+          "percent_after": {
+            "type": "number",
+            "title": "Percent After"
+          },
+          "released": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryReleased"
+            },
+            "type": "array",
+            "title": "Released"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryReleased"
+            },
+            "type": "array",
+            "title": "Failed"
+          },
+          "kept": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Kept",
+            "description": "目前流程或其他請求正在用、所以保留的模型"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "trigger",
+          "flow",
+          "flow_label",
+          "threshold",
+          "percent_before",
+          "percent_after",
+          "released",
+          "failed",
+          "kept"
+        ],
+        "title": "MemoryEvent"
+      },
+      "MemoryModel": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key",
+            "description": "clip／bge／qwen／ortho2cad／timefold"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "where": {
+            "type": "string",
+            "title": "Where",
+            "description": "後端行程／Ollama／llama-server／JVM"
+          },
+          "approx_mb": {
+            "type": "integer",
+            "title": "Approx Mb"
+          },
+          "loaded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded",
+            "description": "是否載入中；null＝連不上或不在本機"
+          },
+          "in_use": {
+            "type": "boolean",
+            "title": "In Use",
+            "description": "有請求正在使用（不會被釋放）"
+          },
+          "needed_by_current_flow": {
+            "type": "boolean",
+            "title": "Needed By Current Flow"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "where",
+          "approx_mb",
+          "loaded",
+          "in_use",
+          "needed_by_current_flow"
+        ],
+        "title": "MemoryModel"
+      },
+      "MemoryReleaseResponse": {
+        "properties": {
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemoryStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "status"
+        ],
+        "title": "MemoryReleaseResponse"
+      },
+      "MemoryReleased": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "approx_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approx Mb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "detail"
+        ],
+        "title": "MemoryReleased"
+      },
+      "MemoryStatus": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent",
+            "description": "系統記憶體使用率（%）"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "total_mb": {
+            "type": "integer",
+            "title": "Total Mb"
+          },
+          "available_mb": {
+            "type": "integer",
+            "title": "Available Mb"
+          },
+          "current_flow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Flow"
+          },
+          "current_flow_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Flow Label"
+          },
+          "flow_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flow At"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryModel"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "percent",
+          "threshold",
+          "total_mb",
+          "available_mb",
+          "current_flow",
+          "current_flow_label",
+          "flow_at",
+          "models",
+          "events"
+        ],
+        "title": "MemoryStatus"
+      },
       "OkResponse": {
         "properties": {
           "ok": {
@@ -1953,6 +3173,103 @@
         },
         "type": "object",
         "title": "OkResponse"
+      },
+      "OpenSalesOrder": {
+        "properties": {
+          "so_no": {
+            "type": "string",
+            "title": "So No"
+          },
+          "line_no": {
+            "type": "integer",
+            "title": "Line No"
+          },
+          "customer": {
+            "type": "string",
+            "title": "Customer"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "qty_shipped": {
+            "type": "integer",
+            "title": "Qty Shipped"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "so_no",
+          "line_no",
+          "customer",
+          "qty",
+          "qty_shipped",
+          "due_on",
+          "status"
+        ],
+        "title": "OpenSalesOrder"
+      },
+      "OpenWorkOrder": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "qty_planned": {
+            "type": "integer",
+            "title": "Qty Planned"
+          },
+          "qty_done": {
+            "type": "integer",
+            "title": "Qty Done"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "start_on": {
+            "type": "string",
+            "title": "Start On"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "qty_planned",
+          "qty_done",
+          "status",
+          "line",
+          "start_on",
+          "due_on"
+        ],
+        "title": "OpenWorkOrder"
       },
       "OutageRequest": {
         "properties": {
@@ -2154,6 +3471,177 @@
         ],
         "title": "PartGeometry"
       },
+      "PartInventory": {
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "std_cost_twd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std Cost Twd"
+          },
+          "available": {
+            "type": "integer",
+            "title": "Available",
+            "description": "可用"
+          },
+          "reserved": {
+            "type": "integer",
+            "title": "Reserved",
+            "description": "保留給訂單"
+          },
+          "inspecting": {
+            "type": "integer",
+            "title": "Inspecting",
+            "description": "待檢"
+          },
+          "defective": {
+            "type": "integer",
+            "title": "Defective",
+            "description": "不良"
+          },
+          "on_hand": {
+            "type": "integer",
+            "title": "On Hand",
+            "description": "合計（所有狀態）"
+          },
+          "safety_stock": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Stock"
+          },
+          "open_demand": {
+            "type": "integer",
+            "title": "Open Demand",
+            "description": "未出貨訂單的需求量"
+          },
+          "in_production": {
+            "type": "integer",
+            "title": "In Production",
+            "description": "未完工工單的剩餘數量"
+          },
+          "reorder_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reorder Qty"
+          },
+          "lead_time_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Time Days"
+          },
+          "make_or_buy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Make Or Buy"
+          },
+          "as_of": {
+            "type": "string",
+            "title": "As Of"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/StockLocation"
+            },
+            "type": "array",
+            "title": "Locations"
+          },
+          "work_orders": {
+            "items": {
+              "$ref": "#/components/schemas/OpenWorkOrder"
+            },
+            "type": "array",
+            "title": "Work Orders",
+            "description": "未完工的工單"
+          },
+          "sales_orders": {
+            "items": {
+              "$ref": "#/components/schemas/OpenSalesOrder"
+            },
+            "type": "array",
+            "title": "Sales Orders",
+            "description": "未出完貨的訂單"
+          },
+          "recent_moves": {
+            "items": {
+              "$ref": "#/components/schemas/StockMove"
+            },
+            "type": "array",
+            "title": "Recent Moves",
+            "description": "最近 8 筆異動"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part_id",
+          "part_no",
+          "name",
+          "available",
+          "reserved",
+          "inspecting",
+          "defective",
+          "on_hand",
+          "open_demand",
+          "in_production",
+          "as_of",
+          "locations",
+          "work_orders",
+          "sales_orders",
+          "recent_moves"
+        ],
+        "title": "PartInventory"
+      },
       "PartListResponse": {
         "properties": {
           "kb_version": {
@@ -2174,6 +3662,184 @@
           "items"
         ],
         "title": "PartListResponse"
+      },
+      "PartPlan": {
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_name": {
+            "type": "string",
+            "title": "Part Name"
+          },
+          "plan_start": {
+            "type": "string",
+            "title": "Plan Start"
+          },
+          "has_routing": {
+            "type": "boolean",
+            "title": "Has Routing"
+          },
+          "routing": {
+            "items": {
+              "$ref": "#/components/schemas/RoutingOp"
+            },
+            "type": "array",
+            "title": "Routing"
+          },
+          "suggestion": {
+            "$ref": "#/components/schemas/WorkOrderSuggestion"
+          },
+          "work_orders": {
+            "items": {
+              "$ref": "#/components/schemas/PartPlanWorkOrder"
+            },
+            "type": "array",
+            "title": "Work Orders"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedWorkOrder"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "description": "不排程的工單（委外處理中）"
+          },
+          "schedule_run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part_id",
+          "part_name",
+          "plan_start",
+          "has_routing",
+          "routing",
+          "suggestion",
+          "work_orders",
+          "skipped",
+          "schedule_run_id"
+        ],
+        "title": "PartPlan"
+      },
+      "PartPlanWorkOrder": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "part_name": {
+            "type": "string",
+            "title": "Part Name"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty",
+            "description": "要排程的數量（生產中的工單為剩餘數量）"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "weight": {
+            "type": "integer",
+            "title": "Weight"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "既有工單／系統開立"
+          },
+          "release_on": {
+            "type": "string",
+            "title": "Release On"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "release_min": {
+            "type": "integer",
+            "title": "Release Min"
+          },
+          "due_min": {
+            "type": "integer",
+            "title": "Due Min"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "n_ops": {
+            "type": "integer",
+            "title": "N Ops"
+          },
+          "work_min": {
+            "type": "integer",
+            "title": "Work Min",
+            "description": "自製工序的準備＋加工分鐘合計"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlannedWorkOrder"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "目前排程中的完工時間；尚未排程為 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "part_id",
+          "part_no",
+          "part_name",
+          "qty",
+          "priority",
+          "weight",
+          "status",
+          "source",
+          "release_on",
+          "due_on",
+          "release_min",
+          "due_min",
+          "n_ops",
+          "work_min",
+          "plan"
+        ],
+        "title": "PartPlanWorkOrder"
       },
       "PartSummary": {
         "properties": {
@@ -2320,6 +3986,277 @@
         ],
         "title": "PartTextSearchResponse"
       },
+      "PlannedWorkOrder": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_name": {
+            "type": "string",
+            "title": "Part Name"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "due_min": {
+            "type": "integer",
+            "title": "Due Min"
+          },
+          "release_min": {
+            "type": "integer",
+            "title": "Release Min"
+          },
+          "start_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Min"
+          },
+          "end_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Min"
+          },
+          "start_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start At"
+          },
+          "end_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End At",
+            "description": "完工時間（含委外）"
+          },
+          "late_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Min",
+            "description": "延遲的工作分鐘；0＝準時"
+          },
+          "on_time": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "part_id",
+          "part_name",
+          "qty",
+          "priority",
+          "source",
+          "status",
+          "due_on",
+          "due_min",
+          "release_min",
+          "start_min",
+          "end_min",
+          "start_at",
+          "end_at",
+          "late_min",
+          "on_time"
+        ],
+        "title": "PlannedWorkOrder"
+      },
+      "ProductionCalendar": {
+        "properties": {
+          "shifts": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Shifts"
+          },
+          "workdays": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Workdays"
+          },
+          "holidays": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Holidays"
+          },
+          "day_minutes": {
+            "type": "integer",
+            "title": "Day Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shifts",
+          "workdays",
+          "holidays",
+          "day_minutes"
+        ],
+        "title": "ProductionCalendar"
+      },
+      "ProductionOverview": {
+        "properties": {
+          "plan_start": {
+            "type": "string",
+            "title": "Plan Start"
+          },
+          "calendar": {
+            "$ref": "#/components/schemas/ProductionCalendar"
+          },
+          "priority_weights": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Priority Weights"
+          },
+          "machine_types": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Machine Types"
+          },
+          "machines": {
+            "items": {
+              "$ref": "#/components/schemas/MachineInfo"
+            },
+            "type": "array",
+            "title": "Machines"
+          },
+          "work_orders": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleWorkOrder"
+            },
+            "type": "array",
+            "title": "Work Orders"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SkippedWorkOrder"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "problem": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Problem"
+          },
+          "engine": {
+            "$ref": "#/components/schemas/SchedulerEngine"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleRunDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRunRow"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "solving": {
+            "type": "boolean",
+            "title": "Solving"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan_start",
+          "calendar",
+          "priority_weights",
+          "machine_types",
+          "machines",
+          "work_orders",
+          "skipped",
+          "problem",
+          "engine",
+          "current",
+          "runs",
+          "solving",
+          "settings"
+        ],
+        "title": "ProductionOverview"
+      },
       "ReconstructRequest": {
         "properties": {
           "part_id": {
@@ -2359,6 +4296,1024 @@
         },
         "type": "object",
         "title": "ReconstructRequest"
+      },
+      "RoutingOp": {
+        "properties": {
+          "op_seq": {
+            "type": "integer",
+            "title": "Op Seq"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "自製",
+              "委外"
+            ],
+            "title": "Kind"
+          },
+          "machine_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Machine Type"
+          },
+          "setup_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setup Min"
+          },
+          "run_min_per_pc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Min Per Pc"
+          },
+          "outsource_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outsource Days"
+          },
+          "machines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Machines",
+            "description": "這個機型的機台",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "op_seq",
+          "name",
+          "kind"
+        ],
+        "title": "RoutingOp"
+      },
+      "ScheduleKpis": {
+        "properties": {
+          "n_work_orders": {
+            "type": "integer",
+            "title": "N Work Orders"
+          },
+          "n_late": {
+            "type": "integer",
+            "title": "N Late"
+          },
+          "on_time_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Time Rate"
+          },
+          "total_late_min": {
+            "type": "integer",
+            "title": "Total Late Min"
+          },
+          "total_setup_min": {
+            "type": "integer",
+            "title": "Total Setup Min"
+          },
+          "n_setups": {
+            "type": "integer",
+            "title": "N Setups"
+          },
+          "makespan_min": {
+            "type": "integer",
+            "title": "Makespan Min"
+          },
+          "finish_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finish At"
+          },
+          "utilization": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Utilization",
+            "description": "各機台忙碌時間 ÷ 最後一道自製工序完成時間"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_work_orders",
+          "n_late",
+          "on_time_rate",
+          "total_late_min",
+          "total_setup_min",
+          "n_setups",
+          "makespan_min",
+          "finish_at",
+          "utilization"
+        ],
+        "title": "ScheduleKpis"
+      },
+      "ScheduleRunDetail": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "seconds_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Limit"
+          },
+          "solve_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Ms"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "hard": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard"
+          },
+          "medium": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medium"
+          },
+          "soft": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft"
+          },
+          "initial_score": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Score"
+          },
+          "improvements": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvements"
+          },
+          "n_work_orders": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Work Orders"
+          },
+          "n_operations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Operations"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/ScheduleKpis"
+          },
+          "score_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Check",
+            "description": "後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "engine_label": {
+            "type": "string",
+            "title": "Engine Label"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "analysis": {
+            "items": {
+              "$ref": "#/components/schemas/ConstraintScore"
+            },
+            "type": "array",
+            "title": "Analysis"
+          },
+          "work_orders": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedWorkOrder"
+            },
+            "type": "array",
+            "title": "Work Orders"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduledOp"
+            },
+            "type": "array",
+            "title": "Operations"
+          },
+          "axis": {
+            "items": {
+              "$ref": "#/components/schemas/AxisDay"
+            },
+            "type": "array",
+            "title": "Axis"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing",
+            "description": "目前有、但這次排程沒有的工單（之後才開立）"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed",
+            "description": "這次排程有、但已取消或完工的工單"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "created_at",
+          "engine",
+          "engine_version",
+          "status",
+          "seconds_limit",
+          "solve_ms",
+          "score",
+          "hard",
+          "medium",
+          "soft",
+          "initial_score",
+          "improvements",
+          "n_work_orders",
+          "n_operations",
+          "kpis",
+          "request_id",
+          "engine_label",
+          "note",
+          "analysis",
+          "work_orders",
+          "operations",
+          "axis",
+          "missing",
+          "removed"
+        ],
+        "title": "ScheduleRunDetail"
+      },
+      "ScheduleRunRow": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "seconds_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Limit"
+          },
+          "solve_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Ms"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "hard": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard"
+          },
+          "medium": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Medium"
+          },
+          "soft": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Soft"
+          },
+          "initial_score": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Initial Score"
+          },
+          "improvements": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvements"
+          },
+          "n_work_orders": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Work Orders"
+          },
+          "n_operations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Operations"
+          },
+          "kpis": {
+            "$ref": "#/components/schemas/ScheduleKpis"
+          },
+          "score_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Check",
+            "description": "後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "created_at",
+          "engine",
+          "engine_version",
+          "status",
+          "seconds_limit",
+          "solve_ms",
+          "score",
+          "hard",
+          "medium",
+          "soft",
+          "initial_score",
+          "improvements",
+          "n_work_orders",
+          "n_operations",
+          "kpis"
+        ],
+        "title": "ScheduleRunRow"
+      },
+      "ScheduleSolveRequest": {
+        "properties": {
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60.0,
+                "minimum": 3.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds",
+            "description": "求解秒數；預設 20"
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "timefold",
+              "greedy"
+            ],
+            "title": "Engine",
+            "description": "greedy＝簡易排程（交期優先派工），用來和 Timefold 比較",
+            "default": "timefold"
+          }
+        },
+        "type": "object",
+        "title": "ScheduleSolveRequest"
+      },
+      "ScheduleWorkOrder": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_no": {
+            "type": "string",
+            "title": "Part No"
+          },
+          "part_name": {
+            "type": "string",
+            "title": "Part Name"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty",
+            "description": "要排程的數量（生產中的工單為剩餘數量）"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "weight": {
+            "type": "integer",
+            "title": "Weight"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "既有工單／系統開立"
+          },
+          "release_on": {
+            "type": "string",
+            "title": "Release On"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "release_min": {
+            "type": "integer",
+            "title": "Release Min"
+          },
+          "due_min": {
+            "type": "integer",
+            "title": "Due Min"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "n_ops": {
+            "type": "integer",
+            "title": "N Ops"
+          },
+          "work_min": {
+            "type": "integer",
+            "title": "Work Min",
+            "description": "自製工序的準備＋加工分鐘合計"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "part_id",
+          "part_no",
+          "part_name",
+          "qty",
+          "priority",
+          "weight",
+          "status",
+          "source",
+          "release_on",
+          "due_on",
+          "release_min",
+          "due_min",
+          "n_ops",
+          "work_min"
+        ],
+        "title": "ScheduleWorkOrder"
+      },
+      "ScheduledOp": {
+        "properties": {
+          "op_id": {
+            "type": "string",
+            "title": "Op Id"
+          },
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "op_seq": {
+            "type": "integer",
+            "title": "Op Seq"
+          },
+          "op_name": {
+            "type": "string",
+            "title": "Op Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "自製",
+              "委外"
+            ],
+            "title": "Kind"
+          },
+          "machine_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Machine Id",
+            "description": "委外為 null"
+          },
+          "start_min": {
+            "type": "integer",
+            "title": "Start Min",
+            "description": "工作分鐘（排程起點起算，只計上班時間）"
+          },
+          "end_min": {
+            "type": "integer",
+            "title": "End Min"
+          },
+          "setup_min": {
+            "type": "integer",
+            "title": "Setup Min"
+          },
+          "run_min": {
+            "type": "integer",
+            "title": "Run Min"
+          },
+          "start_at": {
+            "type": "string",
+            "title": "Start At"
+          },
+          "end_at": {
+            "type": "string",
+            "title": "End At"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned",
+            "description": "生產中、釘選在機台最前面的工序"
+          }
+        },
+        "type": "object",
+        "required": [
+          "op_id",
+          "wo_no",
+          "part_id",
+          "op_seq",
+          "op_name",
+          "kind",
+          "machine_id",
+          "start_min",
+          "end_min",
+          "setup_min",
+          "run_min",
+          "start_at",
+          "end_at",
+          "pinned"
+        ],
+        "title": "ScheduledOp"
+      },
+      "SchedulerEngine": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "timefold",
+              "greedy"
+            ],
+            "title": "Engine"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "java": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Java"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory",
+            "description": "JVM heap（MB）"
+          },
+          "active_jobs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Jobs"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "engine",
+          "detail"
+        ],
+        "title": "SchedulerEngine"
+      },
+      "SkippedWorkOrder": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "part_id",
+          "reason"
+        ],
+        "title": "SkippedWorkOrder"
+      },
+      "SqlEvalRunsResponse": {
+        "properties": {
+          "runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Runs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "title": "SqlEvalRunsResponse"
+      },
+      "StockLocation": {
+        "properties": {
+          "warehouse_id": {
+            "type": "string",
+            "title": "Warehouse Id"
+          },
+          "warehouse_name": {
+            "type": "string",
+            "title": "Warehouse Name"
+          },
+          "bin": {
+            "type": "string",
+            "title": "Bin"
+          },
+          "lot_no": {
+            "type": "string",
+            "title": "Lot No"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "received_on": {
+            "type": "string",
+            "title": "Received On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouse_id",
+          "warehouse_name",
+          "bin",
+          "lot_no",
+          "status",
+          "qty",
+          "received_on"
+        ],
+        "title": "StockLocation"
+      },
+      "StockMove": {
+        "properties": {
+          "moved_on": {
+            "type": "string",
+            "title": "Moved On"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "title": "Warehouse Id"
+          },
+          "move_type": {
+            "type": "string",
+            "title": "Move Type"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "ref_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref No"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "moved_on",
+          "warehouse_id",
+          "move_type",
+          "qty"
+        ],
+        "title": "StockMove"
       },
       "StrategyStatus": {
         "properties": {
@@ -2440,6 +5395,168 @@
           "results"
         ],
         "title": "TextSearchResponse"
+      },
+      "WorkOrderCreate": {
+        "properties": {
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "qty": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 1.0,
+            "title": "Qty"
+          },
+          "due_on": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Due On",
+            "description": "交期（當天下班前完工算準時）"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "一般",
+              "急件"
+            ],
+            "title": "Priority",
+            "default": "一般"
+          },
+          "release_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part_id",
+          "qty",
+          "due_on"
+        ],
+        "title": "WorkOrderCreate"
+      },
+      "WorkOrderCreated": {
+        "properties": {
+          "wo_no": {
+            "type": "string",
+            "title": "Wo No"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "part_name": {
+            "type": "string",
+            "title": "Part Name"
+          },
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "release_on": {
+            "type": "string",
+            "title": "Release On"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "wo_no",
+          "part_id",
+          "part_name",
+          "qty",
+          "priority",
+          "release_on",
+          "due_on",
+          "note",
+          "status",
+          "created_at",
+          "source"
+        ],
+        "title": "WorkOrderCreated"
+      },
+      "WorkOrderSuggestion": {
+        "properties": {
+          "qty": {
+            "type": "integer",
+            "title": "Qty"
+          },
+          "due_on": {
+            "type": "string",
+            "title": "Due On"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "一般",
+              "急件"
+            ],
+            "title": "Priority"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "qty",
+          "due_on",
+          "priority",
+          "reason"
+        ],
+        "title": "WorkOrderSuggestion"
       }
     }
   }

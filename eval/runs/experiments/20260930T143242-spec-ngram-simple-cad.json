@@ -1,0 +1,617 @@
+{
+  "run_id": "20260930T143242-18be",
+  "created_at": "2026-09-30T14:32:42.658021+00:00",
+  "kb_version": "2026.09.6",
+  "kind": "cad",
+  "health": {
+    "hybrid": "qwen3-vl:4b-instruct",
+    "hybrid_fallback": "qwen3-vl:4b-instruct",
+    "api_nokb": "gemini-2.5-flash",
+    "api_kb": "gemini-2.5-flash",
+    "ortho2cad": "ortho2cad",
+    "lora": "qwen3-vl-art-lora:4b"
+  },
+  "identification": {
+    "top1": 1.0,
+    "reject_rate": 1.0,
+    "n_known": 30,
+    "n_unknown": 30,
+    "rows": [
+      {
+        "photo": "known/mfg-001__blur.jpg",
+        "truth": "mfg-001",
+        "predicted": "mfg-001",
+        "ok": true,
+        "latency_ms": 1508
+      },
+      {
+        "photo": "known/mfg-001__crop.jpg",
+        "truth": "mfg-001",
+        "predicted": "mfg-001",
+        "ok": true,
+        "latency_ms": 145
+      },
+      {
+        "photo": "known/mfg-001__dim.jpg",
+        "truth": "mfg-001",
+        "predicted": "mfg-001",
+        "ok": true,
+        "latency_ms": 154
+      },
+      {
+        "photo": "known/mfg-001__glare.jpg",
+        "truth": "mfg-001",
+        "predicted": "mfg-001",
+        "ok": true,
+        "latency_ms": 154
+      },
+      {
+        "photo": "known/mfg-001__tilt.jpg",
+        "truth": "mfg-001",
+        "predicted": "mfg-001",
+        "ok": true,
+        "latency_ms": 154
+      },
+      {
+        "photo": "known/mfg-002__blur.jpg",
+        "truth": "mfg-002",
+        "predicted": "mfg-002",
+        "ok": true,
+        "latency_ms": 143
+      },
+      {
+        "photo": "known/mfg-002__crop.jpg",
+        "truth": "mfg-002",
+        "predicted": "mfg-002",
+        "ok": true,
+        "latency_ms": 155
+      },
+      {
+        "photo": "known/mfg-002__dim.jpg",
+        "truth": "mfg-002",
+        "predicted": "mfg-002",
+        "ok": true,
+        "latency_ms": 154
+      },
+      {
+        "photo": "known/mfg-002__glare.jpg",
+        "truth": "mfg-002",
+        "predicted": "mfg-002",
+        "ok": true,
+        "latency_ms": 155
+      },
+      {
+        "photo": "known/mfg-002__tilt.jpg",
+        "truth": "mfg-002",
+        "predicted": "mfg-002",
+        "ok": true,
+        "latency_ms": 156
+      },
+      {
+        "photo": "known/mfg-003__blur.jpg",
+        "truth": "mfg-003",
+        "predicted": "mfg-003",
+        "ok": true,
+        "latency_ms": 122
+      },
+      {
+        "photo": "known/mfg-003__crop.jpg",
+        "truth": "mfg-003",
+        "predicted": "mfg-003",
+        "ok": true,
+        "latency_ms": 92
+      },
+      {
+        "photo": "known/mfg-003__dim.jpg",
+        "truth": "mfg-003",
+        "predicted": "mfg-003",
+        "ok": true,
+        "latency_ms": 129
+      },
+      {
+        "photo": "known/mfg-003__glare.jpg",
+        "truth": "mfg-003",
+        "predicted": "mfg-003",
+        "ok": true,
+        "latency_ms": 137
+      },
+      {
+        "photo": "known/mfg-003__tilt.jpg",
+        "truth": "mfg-003",
+        "predicted": "mfg-003",
+        "ok": true,
+        "latency_ms": 162
+      },
+      {
+        "photo": "known/mfg-004__blur.jpg",
+        "truth": "mfg-004",
+        "predicted": "mfg-004",
+        "ok": true,
+        "latency_ms": 113
+      },
+      {
+        "photo": "known/mfg-004__crop.jpg",
+        "truth": "mfg-004",
+        "predicted": "mfg-004",
+        "ok": true,
+        "latency_ms": 87
+      },
+      {
+        "photo": "known/mfg-004__dim.jpg",
+        "truth": "mfg-004",
+        "predicted": "mfg-004",
+        "ok": true,
+        "latency_ms": 136
+      },
+      {
+        "photo": "known/mfg-004__glare.jpg",
+        "truth": "mfg-004",
+        "predicted": "mfg-004",
+        "ok": true,
+        "latency_ms": 140
+      },
+      {
+        "photo": "known/mfg-004__tilt.jpg",
+        "truth": "mfg-004",
+        "predicted": "mfg-004",
+        "ok": true,
+        "latency_ms": 121
+      },
+      {
+        "photo": "known/mfg-005__blur.jpg",
+        "truth": "mfg-005",
+        "predicted": "mfg-005",
+        "ok": true,
+        "latency_ms": 136
+      },
+      {
+        "photo": "known/mfg-005__crop.jpg",
+        "truth": "mfg-005",
+        "predicted": "mfg-005",
+        "ok": true,
+        "latency_ms": 95
+      },
+      {
+        "photo": "known/mfg-005__dim.jpg",
+        "truth": "mfg-005",
+        "predicted": "mfg-005",
+        "ok": true,
+        "latency_ms": 196
+      },
+      {
+        "photo": "known/mfg-005__glare.jpg",
+        "truth": "mfg-005",
+        "predicted": "mfg-005",
+        "ok": true,
+        "latency_ms": 142
+      },
+      {
+        "photo": "known/mfg-005__tilt.jpg",
+        "truth": "mfg-005",
+        "predicted": "mfg-005",
+        "ok": true,
+        "latency_ms": 140
+      },
+      {
+        "photo": "known/mfg-006__blur.jpg",
+        "truth": "mfg-006",
+        "predicted": "mfg-006",
+        "ok": true,
+        "latency_ms": 144
+      },
+      {
+        "photo": "known/mfg-006__crop.jpg",
+        "truth": "mfg-006",
+        "predicted": "mfg-006",
+        "ok": true,
+        "latency_ms": 133
+      },
+      {
+        "photo": "known/mfg-006__dim.jpg",
+        "truth": "mfg-006",
+        "predicted": "mfg-006",
+        "ok": true,
+        "latency_ms": 156
+      },
+      {
+        "photo": "known/mfg-006__glare.jpg",
+        "truth": "mfg-006",
+        "predicted": "mfg-006",
+        "ok": true,
+        "latency_ms": 153
+      },
+      {
+        "photo": "known/mfg-006__tilt.jpg",
+        "truth": "mfg-006",
+        "predicted": "mfg-006",
+        "ok": true,
+        "latency_ms": 152
+      },
+      {
+        "photo": "known/mfg-007__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 113
+      },
+      {
+        "photo": "known/mfg-007__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 137
+      },
+      {
+        "photo": "known/mfg-007__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 144
+      },
+      {
+        "photo": "known/mfg-007__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 155
+      },
+      {
+        "photo": "known/mfg-007__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 152
+      },
+      {
+        "photo": "unknown/unknown-01__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 116
+      },
+      {
+        "photo": "unknown/unknown-01__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 84
+      },
+      {
+        "photo": "unknown/unknown-01__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 150
+      },
+      {
+        "photo": "unknown/unknown-01__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 148
+      },
+      {
+        "photo": "unknown/unknown-01__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 123
+      },
+      {
+        "photo": "unknown/unknown-02__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 123
+      },
+      {
+        "photo": "unknown/unknown-02__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 83
+      },
+      {
+        "photo": "unknown/unknown-02__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 154
+      },
+      {
+        "photo": "unknown/unknown-02__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 131
+      },
+      {
+        "photo": "unknown/unknown-02__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 159
+      },
+      {
+        "photo": "unknown/unknown-03__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 134
+      },
+      {
+        "photo": "unknown/unknown-03__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 133
+      },
+      {
+        "photo": "unknown/unknown-03__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 162
+      },
+      {
+        "photo": "unknown/unknown-03__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 150
+      },
+      {
+        "photo": "unknown/unknown-03__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 153
+      },
+      {
+        "photo": "unknown/unknown-04__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 158
+      },
+      {
+        "photo": "unknown/unknown-04__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 127
+      },
+      {
+        "photo": "unknown/unknown-04__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 160
+      },
+      {
+        "photo": "unknown/unknown-04__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 158
+      },
+      {
+        "photo": "unknown/unknown-04__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 167
+      },
+      {
+        "photo": "unknown/unknown-05__blur.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 152
+      },
+      {
+        "photo": "unknown/unknown-05__crop.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 157
+      },
+      {
+        "photo": "unknown/unknown-05__dim.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 161
+      },
+      {
+        "photo": "unknown/unknown-05__glare.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 155
+      },
+      {
+        "photo": "unknown/unknown-05__tilt.jpg",
+        "truth": null,
+        "predicted": null,
+        "ok": true,
+        "latency_ms": 156
+      }
+    ]
+  },
+  "reconstruction": {
+    "ortho2cad": {
+      "valid_rate": 0.6666666666666666,
+      "mean_iou": 0.4227332959042853,
+      "mean_iou_bbox": 0.4851173488673053,
+      "median_total_ms": 68894.5,
+      "rows": [
+        {
+          "part_id": "mfg-001",
+          "name": "L 型固定支架",
+          "ok": false,
+          "error": "安全檢查未通過：語法錯誤（第 88 行）：'(' was never closed",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_cf6e7024c9b34b2a",
+          "first_token_ms": 513,
+          "total_ms": 94305,
+          "output_tokens": 4096
+        },
+        {
+          "part_id": "mfg-002",
+          "name": "連接法蘭",
+          "ok": true,
+          "error": null,
+          "iou": 0.8139865844815083,
+          "iou_bbox": 0.8212859594569336,
+          "max_dim_error": 0.12935975488464765,
+          "job_id": "cad_a657299735124de9",
+          "first_token_ms": 520,
+          "total_ms": 30635,
+          "output_tokens": 709
+        },
+        {
+          "part_id": "mfg-003",
+          "name": "階梯傳動軸",
+          "ok": true,
+          "error": null,
+          "iou": 0.29252880983892315,
+          "iou_bbox": 0.33316751256249766,
+          "max_dim_error": 0.223907501351943,
+          "job_id": "cad_a0cbd9b5438f4081",
+          "first_token_ms": 456,
+          "total_ms": 45343,
+          "output_tokens": 1095
+        },
+        {
+          "part_id": "mfg-004",
+          "name": "步進馬達安裝板",
+          "ok": true,
+          "error": null,
+          "iou": 0.7322772600059778,
+          "iou_bbox": 0.8695896571107363,
+          "max_dim_error": 0.11919638626528112,
+          "job_id": "cad_708c24b091c040a8",
+          "first_token_ms": 527,
+          "total_ms": 107464,
+          "output_tokens": 2223
+        },
+        {
+          "part_id": "mfg-005",
+          "name": "T 型槽螺帽",
+          "ok": false,
+          "error": "程式碼執行錯誤（第 14 行）：Standard_Failure: BRep_API: command not done",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_fc8b23e7d43d41ea",
+          "first_token_ms": 484,
+          "total_ms": 59652,
+          "output_tokens": 2139
+        },
+        {
+          "part_id": "mfg-006",
+          "name": "立式軸承座",
+          "ok": true,
+          "error": null,
+          "iou": 0.6976071210993028,
+          "iou_bbox": 0.8866609640736641,
+          "max_dim_error": 0.24879904982540513,
+          "job_id": "cad_668b6caf024f4ea1",
+          "first_token_ms": 565,
+          "total_ms": 78137,
+          "output_tokens": 1773
+        }
+      ]
+    },
+    "hybrid": {
+      "valid_rate": 0.16666666666666666,
+      "mean_iou": 0.06795694948680024,
+      "mean_iou_bbox": 0.07870665637273001,
+      "median_total_ms": 17345.0,
+      "rows": [
+        {
+          "part_id": "mfg-001",
+          "name": "L 型固定支架",
+          "ok": false,
+          "error": "安全檢查未通過：語法錯誤（第 190 行）：'(' was never closed",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_bbfe509c4d184b10",
+          "first_token_ms": 6577,
+          "total_ms": 116919,
+          "output_tokens": 3009
+        },
+        {
+          "part_id": "mfg-002",
+          "name": "連接法蘭",
+          "ok": false,
+          "error": "程式碼執行錯誤（第 4 行）：AttributeError: module 'cadquery' has no attribute 'Worker'",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_7c6b055772d14ce2",
+          "first_token_ms": 4199,
+          "total_ms": 12747,
+          "output_tokens": 126
+        },
+        {
+          "part_id": "mfg-003",
+          "name": "階梯傳動軸",
+          "ok": false,
+          "error": "程式碼執行錯誤（第 9 行）：ValueError: No pending wires present",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_d99d0ffeb7e8498d",
+          "first_token_ms": 3721,
+          "total_ms": 11044,
+          "output_tokens": 83
+        },
+        {
+          "part_id": "mfg-004",
+          "name": "步進馬達安裝板",
+          "ok": false,
+          "error": "程式碼執行錯誤：SyntaxError: keyword argument repeated: centered (generated.py, line 253)",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_667ad68aac7242f9",
+          "first_token_ms": 4020,
+          "total_ms": 120401,
+          "output_tokens": 3009
+        },
+        {
+          "part_id": "mfg-005",
+          "name": "T 型槽螺帽",
+          "ok": false,
+          "error": "程式碼執行錯誤（第 9 行）：TypeError: 'float' object is not subscriptable",
+          "iou": 0.0,
+          "iou_bbox": 0.0,
+          "max_dim_error": null,
+          "job_id": "cad_5f80c83c19b14d1d",
+          "first_token_ms": 3351,
+          "total_ms": 20791,
+          "output_tokens": 420
+        },
+        {
+          "part_id": "mfg-006",
+          "name": "立式軸承座",
+          "ok": true,
+          "error": null,
+          "iou": 0.4077416969208014,
+          "iou_bbox": 0.4722399382363801,
+          "max_dim_error": 0.0,
+          "job_id": "cad_dfaaf4cd6f95467b",
+          "first_token_ms": 3341,
+          "total_ms": 13899,
+          "output_tokens": 216
+        }
+      ]
+    }
+  },
+  "elapsed_s": 722
+}

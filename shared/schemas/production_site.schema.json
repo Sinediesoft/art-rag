@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://art-rag.local/schemas/production_site.schema.json",
+  "title": "ProductionSite",
+  "description": "生產排程的工廠設定（kb/production/site.json）：排程起始日、工作行事曆、急件權重、機型與機台清單。機台代碼與 kb/inventory 工單的 line 欄位相同（例如 'VMC-01'）。共用層 §二，負責：D。示範資料為虛構工廠。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_start", "calendar", "priority_weights", "machine_types", "machines"],
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "hhmm": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" }
+  },
+  "properties": {
+    "plan_start": { "$ref": "#/$defs/date", "description": "排程從這天的第一個班次開始（資料日期的下一個工作日）" },
+    "note": { "type": "string" },
+    "calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workdays", "shifts"],
+      "properties": {
+        "workdays": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "上班日，ISO 星期（1＝星期一）"
+        },
+        "shifts": {
+          "type": "array",
+          "minItems": 1,
+          "description": "每天的上班時段，依時間排序、不可重疊，例如 [[\"08:00\",\"12:00\"],[\"13:00\",\"17:00\"]]",
+          "items": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/hhmm" }, { "$ref": "#/$defs/hhmm" }], "minItems": 2, "maxItems": 2 }
+        },
+        "holidays": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["date", "name"],
+            "properties": { "date": { "$ref": "#/$defs/date" }, "name": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "priority_weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["一般", "急件"],
+      "properties": {
+        "一般": { "type": "integer", "minimum": 1 },
+        "急件": { "type": "integer", "minimum": 1 }
+      },
+      "description": "交期延遲的懲罰倍數：急件延遲 1 分鐘＝一般工單延遲 N 分鐘"
+    },
+    "machine_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "description"],
+        "properties": { "type": { "type": "string", "minLength": 1 }, "description": { "type": "string" } }
+      }
+    },
+    "machines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["machine_id", "name", "machine_type", "site"],
+        "properties": {
+          "machine_id": { "type": "string", "minLength": 1, "description": "機台代碼，例如 'VMC-01'" },
+          "name": { "type": "string", "minLength": 1 },
+          "machine_type": { "type": "string", "minLength": 1, "description": "必須是 machine_types 之一" },
+          "site": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -1,14 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
-import { useCadEvalRuns, useEvalRuns, useHealth } from "../api/hooks";
+import { api, type HealthResponse } from "../api/client";
+import { useCadEvalRuns, useEvalRuns, useHealth, useSqlEvalRuns } from "../api/hooks";
 import { Loading } from "../components/common/Feedback";
 import { formatTaipei, seconds, STRATEGY_LABEL } from "../lib/format";
 
-function Card({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
+function Card({
+  title,
+  children,
+  className = "",
+  id,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+  id?: string;
+}) {
   return (
-    <section className={`rounded-2xl border border-line bg-card p-4 shadow-sm ${className}`}>
+    <section id={id} className={`scroll-mt-20 rounded-2xl border border-line bg-card p-4 shadow-sm ${className}`}>
       <h2 className="mb-3 font-serif text-lg font-bold">{title}</h2>
       {children}
     </section>
@@ -25,6 +35,7 @@ export function AdminPage() {
   const { data: h, isLoading } = useHealth();
   const evals = useEvalRuns();
   const cadEvals = useCadEvalRuns();
+  const sqlEvals = useSqlEvalRuns();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
 
@@ -122,6 +133,10 @@ export function AdminPage() {
           </div>
         </Card>
       )}
+
+      <MemoryCard h={h} />
+
+      <SchedulerCard h={h} />
 
       <Card title="評估結果">
         {evals.data?.runs.length ? (
@@ -266,6 +281,93 @@ export function AdminPage() {
         )}
       </Card>
 
+      <Card title="工廠庫存（Text-to-SQL）">
+        {(() => {
+          const inv = h.inventory as {
+            ok?: boolean;
+            as_of?: string;
+            tables?: Record<string, number>;
+            problems?: string[];
+          };
+          const run = sqlEvals.data?.runs[0] as Record<string, any> | undefined;
+          return (
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <Dot ok={!!inv.ok} />
+                <span>庫存資料庫 {inv.ok ? "正常（唯讀查詢）" : "無法使用"}</span>
+                <span className="text-xs text-ink-faint">資料日期 {inv.as_of || "—"}</span>
+                <span className="font-mono text-xs text-ink-faint">
+                  {Object.entries(inv.tables ?? {})
+                    .map(([k, v]) => `${k} ${v}`)
+                    .join(" · ")}
+                </span>
+              </p>
+              {!!inv.problems?.length && (
+                <ul className="list-disc pl-5 text-xs text-seal">
+                  {inv.problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              )}
+              {run ? (
+                <p>
+                  最新評估（{formatTaipei(run.created_at)}，{run.summary.n} 題、{run.model}）：執行正確率{" "}
+                  <b>{pct(run.summary.execution_accuracy)}</b>、可執行率 {pct(run.summary.executable_rate)}、一次就能執行{" "}
+                  {pct(run.summary.first_try_rate)}、P50 {seconds(run.summary.p50_total_ms)}、P95{" "}
+                  {seconds(run.summary.p95_total_ms)}、外送 {run.summary.egress_bytes} bytes
+                </p>
+              ) : (
+                <p className="text-ink-soft">
+                  尚無評估結果。執行 <code className="font-mono">make eval-sql</code> 產生。
+                </p>
+              )}
+              {h.recent_sql.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-sm">
+                    <thead className="text-left text-xs text-ink-faint">
+                      <tr>
+                        <th className="py-1">時間</th>
+                        <th>問題</th>
+                        <th>結果</th>
+                        <th>嘗試</th>
+                        <th>總計</th>
+                        <th>外送</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {h.recent_sql.map((q: any) => (
+                        <tr key={q.request_id} className="border-t border-line" title={q.sql ?? ""}>
+                          <td className="whitespace-nowrap py-1.5 pr-2 text-xs">{formatTaipei(q.created_at)}</td>
+                          <td className="max-w-[16rem] truncate pr-2">{q.question}</td>
+                          <td className="text-xs">
+                            {q.ok ? (
+                              <span className="text-jade">✓ {q.row_count} 筆</span>
+                            ) : (
+                              <span className="text-seal" title={q.error ?? ""}>
+                                ✗ 失敗
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-xs">{q.attempts}</td>
+                          <td className="text-xs">{seconds(q.total_ms)}</td>
+                          <td className="text-xs text-jade">0</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-xs text-ink-faint">
+                <Link to="/inventory" className="text-steel underline">
+                  庫存查詢頁
+                </Link>
+                ：本地 Qwen3-VL 產生 SQL → 靜態檢查＋唯讀連線＋白名單 → 依結果回答。庫存屬企業內部資料，雲端策略一律拒絕。
+              </p>
+            </div>
+          );
+        })()}
+      </Card>
+
       <Card title="最近問答紀錄">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">
@@ -326,11 +428,173 @@ export function AdminPage() {
           <li>
             執行 <code className="font-mono">make drawings</code> 產生圖紙、遞增版本、<code className="font-mono">make index</code>
           </li>
+          <li>
+            庫存資料（選填）加 <code className="font-mono">kb/inventory/items/&lt;id&gt;.json</code>：後端偵測到變動就自動重建庫存資料庫
+          </li>
         </ol>
         <p className="mt-2 text-xs text-ink-faint">
           展示時一併由 <code className="font-mono">make demo-add</code> 加入〈治具定位板〉。
         </p>
       </Card>
     </div>
+  );
+}
+
+function MemoryCard({ h }: { h: HealthResponse }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const m = h.memory;
+  if (!m) return null;
+  const release = async () => {
+    setBusy(true);
+    await api.releaseMemory().finally(() => setBusy(false));
+    await qc.invalidateQueries({ queryKey: ["health"] });
+  };
+  const high = m.percent >= m.threshold;
+  return (
+    <Card title="記憶體管理" id="memory" className={high ? "border-amber/40" : ""}>
+      <div className="flex flex-col gap-3 text-sm">
+        <div>
+          <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+            <span>
+              系統記憶體 <b className={`font-mono text-lg ${high ? "text-amber" : "text-jade"}`}>{m.percent}%</b>
+              <span className="ml-2 text-xs text-ink-faint">
+                可用 {(m.available_mb / 1024).toFixed(1)} GB／共 {(m.total_mb / 1024).toFixed(0)} GB
+              </span>
+            </span>
+            <span className="text-xs text-ink-faint">
+              {m.enabled ? `超過 ${m.threshold}% 時釋放目前流程用不到的模型` : "已停用（MEMORY_GUARD=false）"}
+              {m.current_flow_label && ` · 目前流程：${m.current_flow_label}`}
+            </span>
+          </div>
+          <div className="relative h-3 overflow-hidden rounded-full bg-paper-deep">
+            <div
+              className={`h-full rounded-full ${high ? "bg-amber" : "bg-jade"}`}
+              style={{ width: `${Math.min(100, m.percent)}%` }}
+            />
+            <div className="absolute inset-y-0 w-0.5 bg-seal" style={{ left: `${m.threshold}%` }} title="門檻" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead className="text-left text-xs text-ink-faint">
+              <tr>
+                <th className="py-1">模型／服務</th>
+                <th>位置</th>
+                <th className="text-right">約</th>
+                <th>狀態</th>
+              </tr>
+            </thead>
+            <tbody>
+              {m.models.map((x) => (
+                <tr key={x.key} className="border-t border-line">
+                  <td className="py-1.5 pr-2">{x.label}</td>
+                  <td className="pr-2 text-xs text-ink-faint">{x.where}</td>
+                  <td className="pr-2 text-right font-mono text-xs">{(x.approx_mb / 1024).toFixed(1)} GB</td>
+                  <td className="text-xs">
+                    {x.loaded === null ? (
+                      <span className="text-ink-faint">未啟動／不在本機</span>
+                    ) : x.loaded ? (
+                      <span className="text-jade">已載入</span>
+                    ) : (
+                      <span className="text-ink-faint">已釋放（用到時自動載入）</span>
+                    )}
+                    {x.in_use && <span className="ml-1.5 rounded-full bg-steel-soft px-1.5 text-steel-deep">使用中</span>}
+                    {x.needed_by_current_flow && !x.in_use && (
+                      <span className="ml-1.5 rounded-full bg-paper-deep px-1.5 text-ink-soft">目前流程</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {m.events.length > 0 && (
+          <div>
+            <p className="mb-1 text-xs font-bold text-ink-faint">最近的釋放紀錄</p>
+            <ul className="flex flex-col gap-1 text-xs">
+              {m.events.map((e) => (
+                <li key={e.at} className="flex flex-wrap gap-x-2">
+                  <span className="font-mono text-ink-faint">{formatTaipei(e.at)}</span>
+                  <span>{e.trigger}</span>
+                  <span className="font-mono">
+                    {e.percent_before}% → {e.percent_after}%
+                  </span>
+                  <span className="text-jade">
+                    {e.released.length ? `釋放 ${e.released.map((r) => r.label).join("、")}` : "沒有可釋放的模型"}
+                  </span>
+                  {e.kept.length > 0 && <span className="text-ink-faint">保留 {e.kept.join("、")}</span>}
+                  {e.failed.length > 0 && (
+                    <span className="text-amber">失敗 {e.failed.map((f) => `${f.label}：${f.detail}`).join("、")}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {h.demo_controls && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={release}
+              className="rounded-xl bg-steel px-4 py-2 font-bold text-white transition hover:bg-steel-deep disabled:opacity-50"
+            >
+              {busy ? "釋放中…" : "立即釋放閒置模型"}
+            </button>
+            <span className="text-xs text-ink-faint">
+              展示用：不等門檻，立刻釋放「目前流程」與進行中請求以外的模型。Ollama 用 keep_alive=0、Ortho2CAD 用 llama-server
+              的 /models/unload、Chinese-CLIP 與 bge-m3 從後端卸載，下次用到時自動重新載入。
+            </span>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function SchedulerCard({ h }: { h: HealthResponse }) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const e = h.scheduler;
+  if (!e) return null;
+  const reset = async () => {
+    setBusy(true);
+    await api.resetProduction().finally(() => setBusy(false));
+    for (const key of ["production-overview", "part-plan", "inventory-overview", "part-inventory"]) {
+      await qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
+  const mem = e.memory as { usedMb?: number; committedMb?: number } | null | undefined;
+  return (
+    <Card title="生產排程（Timefold）">
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Dot ok={e.available} />
+          <span>{e.available ? `Timefold Solver ${e.version}（Java ${e.java}）` : "排程服務未啟動：排程頁改用簡易排程"}</span>
+          {mem?.committedMb != null && (
+            <span className="font-mono text-xs text-ink-faint">
+              JVM heap {mem.usedMb}／{mem.committedMb} MB
+            </span>
+          )}
+        </p>
+        <p className="break-all text-xs text-ink-faint">{e.detail}</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link to="/schedule" className="font-bold text-steel underline">
+            生產排程頁
+          </Link>
+          {h.demo_controls && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={reset}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-ink-soft transition hover:border-seal hover:text-seal disabled:opacity-50"
+            >
+              {busy ? "清除中…" : "清除圖紙頁開立的工單與排程結果（展示還原）"}
+            </button>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

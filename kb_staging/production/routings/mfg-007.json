@@ -1,0 +1,52 @@
+{
+  "part_id": "mfg-007",
+  "source": "kb/parts/mfg-007.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "鋼板火焰切割 155×105×20 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 20,
+      "run_min_per_pc": 6
+    },
+    {
+      "op_seq": 20,
+      "name": "平面研磨兩面至厚度 15 mm",
+      "kind": "自製",
+      "machine_type": "平面研磨",
+      "setup_min": 30,
+      "run_min_per_pc": 12
+    },
+    {
+      "op_seq": 30,
+      "name": "鑽鉸 2-Ø10H7 定位銷孔",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 40,
+      "run_min_per_pc": 8
+    },
+    {
+      "op_seq": 40,
+      "name": "鑽 4-Ø9 通孔、沉頭 Ø14 深 8.6",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 20,
+      "run_min_per_pc": 5
+    },
+    {
+      "op_seq": 50,
+      "name": "銑中央避讓槽",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 20,
+      "run_min_per_pc": 6
+    },
+    {
+      "op_seq": 60,
+      "name": "無電解鍍鎳",
+      "kind": "委外",
+      "outsource_days": 4
+    }
+  ]
+}

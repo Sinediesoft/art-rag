@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://art-rag.local/schemas/inventory_item.schema.json",
+  "title": "InventoryItem",
+  "description": "工廠庫存示範資料：一張圖紙一個 JSON 檔（kb/inventory/items/<part_id>.json），part_id 必須對應 kb/parts/<part_id>.json。料號、品名、材料等主檔欄位從圖紙知識庫讀取，這裡只放庫存專屬欄位。建庫時另檢查：各倉異動加總＝目前庫存、流水帳不為負、訂單已出貨量＝銷貨出庫、工單完成量＝生產入庫。共用層 §二，負責：D。示範資料為虛構工廠。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["part_id", "unit", "std_cost_twd", "safety_stock", "reorder_qty", "lead_time_days", "make_or_buy", "stock", "moves", "work_orders", "sales_orders"],
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "warehouse": { "type": "string", "pattern": "^WH-[A-Z0-9]+$" }
+  },
+  "properties": {
+    "part_id": { "type": "string", "pattern": "^[a-z]+-[a-z0-9]+$", "description": "圖紙 ID，與檔名相同" },
+    "unit": { "type": "string", "minLength": 1 },
+    "std_cost_twd": { "type": "number", "minimum": 0, "description": "標準成本（新台幣／件）" },
+    "safety_stock": { "type": "integer", "minimum": 0, "description": "安全庫存量（只算狀態為「可用」的庫存）" },
+    "reorder_qty": { "type": "integer", "minimum": 1, "description": "建議補貨批量" },
+    "lead_time_days": { "type": "integer", "minimum": 1, "description": "生產前置天數" },
+    "make_or_buy": { "type": "string", "minLength": 1, "description": "自製／委外方式" },
+    "stock": {
+      "type": "array",
+      "description": "目前庫存，依倉庫、儲位、批號、狀態分列",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["warehouse_id", "bin", "lot_no", "status", "qty", "received_on"],
+        "properties": {
+          "warehouse_id": { "$ref": "#/$defs/warehouse" },
+          "bin": { "type": "string", "minLength": 1 },
+          "lot_no": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["可用", "保留", "待檢", "不良"] },
+          "qty": { "type": "integer", "minimum": 1 },
+          "received_on": { "$ref": "#/$defs/date" },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "moves": {
+      "type": "array",
+      "description": "庫存異動；qty 正數為入、負數為出",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["moved_on", "warehouse_id", "move_type", "qty"],
+        "properties": {
+          "moved_on": { "$ref": "#/$defs/date" },
+          "warehouse_id": { "$ref": "#/$defs/warehouse" },
+          "move_type": { "enum": ["期初", "生產入庫", "銷貨出庫", "調撥入", "調撥出", "報廢", "盤點調整"] },
+          "qty": { "type": "integer", "not": { "const": 0 } },
+          "ref_no": { "type": ["string", "null"] },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "work_orders": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["wo_no", "qty_planned", "qty_done", "status", "line", "start_on", "due_on"],
+        "properties": {
+          "wo_no": { "type": "string", "pattern": "^WO-\\d{4}-\\d{2}$" },
+          "qty_planned": { "type": "integer", "minimum": 1 },
+          "qty_done": { "type": "integer", "minimum": 0 },
+          "status": { "enum": ["已開立", "生產中", "委外處理中", "已完工"] },
+          "line": { "type": "string", "minLength": 1, "description": "產線／機台" },
+          "start_on": { "$ref": "#/$defs/date" },
+          "due_on": { "$ref": "#/$defs/date" },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "sales_orders": {
+      "type": "array",
+      "description": "客戶訂單，一列一個品項；同一張訂單的其他品項放在各自圖紙的檔案",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["so_no", "line_no", "customer", "qty", "qty_shipped", "order_on", "due_on", "status"],
+        "properties": {
+          "so_no": { "type": "string", "pattern": "^SO-\\d{4}-\\d{3}$" },
+          "line_no": { "type": "integer", "minimum": 1 },
+          "customer": { "type": "string", "minLength": 1 },
+          "qty": { "type": "integer", "minimum": 1 },
+          "qty_shipped": { "type": "integer", "minimum": 0 },
+          "order_on": { "$ref": "#/$defs/date" },
+          "due_on": { "$ref": "#/$defs/date" },
+          "status": { "enum": ["待出貨", "部分出貨", "已出貨"] }
+        }
+      }
+    }
+  }
+}

@@ -10,3 +10,6 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 compose.override.yml
+scheduler/.maven/
+scheduler/target/
+scheduler/.java-home

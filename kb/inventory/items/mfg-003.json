@@ -1,0 +1,166 @@
+{
+  "part_id": "mfg-003",
+  "unit": "件",
+  "std_cost_twd": 1280,
+  "safety_stock": 20,
+  "reorder_qty": 50,
+  "lead_time_days": 21,
+  "make_or_buy": "自製",
+  "stock": [
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-03-1",
+      "lot_no": "L2608-12",
+      "status": "可用",
+      "qty": 6,
+      "received_on": "2026-09-06",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-Q",
+      "bin": "Q-02",
+      "lot_no": "L2609-09",
+      "status": "待檢",
+      "qty": 12,
+      "received_on": "2026-09-28",
+      "note": "高週波淬火後待偏擺檢查"
+    },
+    {
+      "warehouse_id": "WH-N",
+      "bin": "N-03",
+      "lot_no": "L2608-12",
+      "status": "不良",
+      "qty": 2,
+      "received_on": "2026-09-06",
+      "note": "淬火後偏擺超過 0.05 mm，待退回校直"
+    }
+  ],
+  "moves": [
+    {
+      "moved_on": "2026-08-01",
+      "warehouse_id": "WH-A",
+      "move_type": "期初",
+      "qty": 4,
+      "ref_no": "OB-2608",
+      "note": "八月期初庫存"
+    },
+    {
+      "moved_on": "2026-09-04",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 50,
+      "ref_no": "WO-2608-12",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-09-06",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -48,
+      "ref_no": "WO-2608-12",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-09-06",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 48,
+      "ref_no": "WO-2608-12",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-09-06",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -2,
+      "ref_no": "WO-2608-12",
+      "note": "檢驗不合格"
+    },
+    {
+      "moved_on": "2026-09-06",
+      "warehouse_id": "WH-N",
+      "move_type": "調撥入",
+      "qty": 2,
+      "ref_no": "WO-2608-12",
+      "note": "淬火後偏擺超差"
+    },
+    {
+      "moved_on": "2026-09-08",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -30,
+      "ref_no": "SO-2608-011",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-17",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -16,
+      "ref_no": "SO-2608-024",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-28",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 12,
+      "ref_no": "WO-2609-09",
+      "note": "完工入庫，待品檢"
+    }
+  ],
+  "work_orders": [
+    {
+      "wo_no": "WO-2608-12",
+      "qty_planned": 50,
+      "qty_done": 50,
+      "status": "已完工",
+      "line": "CNC 車床-01",
+      "start_on": "2026-08-10",
+      "due_on": "2026-09-04",
+      "note": null
+    },
+    {
+      "wo_no": "WO-2609-09",
+      "qty_planned": 50,
+      "qty_done": 12,
+      "status": "生產中",
+      "line": "CNC 車床-01",
+      "start_on": "2026-09-15",
+      "due_on": "2026-10-10",
+      "note": null
+    }
+  ],
+  "sales_orders": [
+    {
+      "so_no": "SO-2608-011",
+      "line_no": 3,
+      "customer": "晨峰自動化",
+      "qty": 30,
+      "qty_shipped": 30,
+      "order_on": "2026-08-12",
+      "due_on": "2026-09-10",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2608-024",
+      "line_no": 1,
+      "customer": "岳承精機",
+      "qty": 16,
+      "qty_shipped": 16,
+      "order_on": "2026-08-26",
+      "due_on": "2026-09-18",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2609-003",
+      "line_no": 2,
+      "customer": "晨峰自動化",
+      "qty": 24,
+      "qty_shipped": 0,
+      "order_on": "2026-09-03",
+      "due_on": "2026-10-06",
+      "status": "待出貨"
+    }
+  ]
+}

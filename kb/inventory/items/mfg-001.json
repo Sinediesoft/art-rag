@@ -1,0 +1,165 @@
+{
+  "part_id": "mfg-001",
+  "unit": "件",
+  "std_cost_twd": 380,
+  "safety_stock": 40,
+  "reorder_qty": 120,
+  "lead_time_days": 12,
+  "make_or_buy": "自製（陽極處理委外）",
+  "stock": [
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-01-2",
+      "lot_no": "L2608-05",
+      "status": "可用",
+      "qty": 56,
+      "received_on": "2026-08-22",
+      "note": null
+    },
+    {
+      "warehouse_id": "WH-A",
+      "bin": "A-01-2",
+      "lot_no": "L2608-05",
+      "status": "保留",
+      "qty": 24,
+      "received_on": "2026-08-22",
+      "note": "保留給 SO-2609-003（晨峰自動化）"
+    },
+    {
+      "warehouse_id": "WH-Q",
+      "bin": "Q-01",
+      "lot_no": "L2609-02",
+      "status": "待檢",
+      "qty": 30,
+      "received_on": "2026-09-29",
+      "note": "陽極處理第一批回廠，待外觀與孔位檢驗"
+    },
+    {
+      "warehouse_id": "WH-N",
+      "bin": "N-01",
+      "lot_no": "L2608-05",
+      "status": "不良",
+      "qty": 3,
+      "received_on": "2026-08-22",
+      "note": "立板垂直度超差（第二次裝夾夾持力過大），待 MRB 判定"
+    }
+  ],
+  "moves": [
+    {
+      "moved_on": "2026-08-01",
+      "warehouse_id": "WH-A",
+      "move_type": "期初",
+      "qty": 67,
+      "ref_no": "OB-2608",
+      "note": "八月期初庫存"
+    },
+    {
+      "moved_on": "2026-08-20",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 120,
+      "ref_no": "WO-2608-05",
+      "note": "完工入庫，待品檢"
+    },
+    {
+      "moved_on": "2026-08-22",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -117,
+      "ref_no": "WO-2608-05",
+      "note": "檢驗合格"
+    },
+    {
+      "moved_on": "2026-08-22",
+      "warehouse_id": "WH-A",
+      "move_type": "調撥入",
+      "qty": 117,
+      "ref_no": "WO-2608-05",
+      "note": "檢驗合格入庫"
+    },
+    {
+      "moved_on": "2026-08-22",
+      "warehouse_id": "WH-Q",
+      "move_type": "調撥出",
+      "qty": -3,
+      "ref_no": "WO-2608-05",
+      "note": "檢驗不合格"
+    },
+    {
+      "moved_on": "2026-08-22",
+      "warehouse_id": "WH-N",
+      "move_type": "調撥入",
+      "qty": 3,
+      "ref_no": "WO-2608-05",
+      "note": "立板垂直度超差"
+    },
+    {
+      "moved_on": "2026-09-03",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -80,
+      "ref_no": "SO-2608-011",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-26",
+      "warehouse_id": "WH-A",
+      "move_type": "銷貨出庫",
+      "qty": -24,
+      "ref_no": "SO-2609-003",
+      "note": null
+    },
+    {
+      "moved_on": "2026-09-29",
+      "warehouse_id": "WH-Q",
+      "move_type": "生產入庫",
+      "qty": 30,
+      "ref_no": "WO-2609-02",
+      "note": "完工入庫，待品檢"
+    }
+  ],
+  "work_orders": [
+    {
+      "wo_no": "WO-2608-05",
+      "qty_planned": 120,
+      "qty_done": 120,
+      "status": "已完工",
+      "line": "VMC-01",
+      "start_on": "2026-08-04",
+      "due_on": "2026-08-20",
+      "note": null
+    },
+    {
+      "wo_no": "WO-2609-02",
+      "qty_planned": 120,
+      "qty_done": 30,
+      "status": "委外處理中",
+      "line": "VMC-01",
+      "start_on": "2026-09-08",
+      "due_on": "2026-10-09",
+      "note": "90 件委外黑色陽極處理中"
+    }
+  ],
+  "sales_orders": [
+    {
+      "so_no": "SO-2608-011",
+      "line_no": 1,
+      "customer": "晨峰自動化",
+      "qty": 80,
+      "qty_shipped": 80,
+      "order_on": "2026-08-12",
+      "due_on": "2026-09-10",
+      "status": "已出貨"
+    },
+    {
+      "so_no": "SO-2609-003",
+      "line_no": 1,
+      "customer": "晨峰自動化",
+      "qty": 48,
+      "qty_shipped": 24,
+      "order_on": "2026-09-03",
+      "due_on": "2026-10-06",
+      "status": "部分出貨"
+    }
+  ]
+}

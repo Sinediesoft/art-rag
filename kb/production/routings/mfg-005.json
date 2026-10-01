@@ -1,0 +1,44 @@
+{
+  "part_id": "mfg-005",
+  "source": "kb/parts/mfg-005.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "扁鋼鋸切長 42 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 10,
+      "run_min_per_pc": 0.4
+    },
+    {
+      "op_seq": 20,
+      "name": "銑兩端面至長度 40",
+      "kind": "自製",
+      "machine_type": "銑削",
+      "setup_min": 20,
+      "run_min_per_pc": 0.8
+    },
+    {
+      "op_seq": 30,
+      "name": "銑 T 形輪廓",
+      "kind": "自製",
+      "machine_type": "銑削",
+      "setup_min": 30,
+      "run_min_per_pc": 1.2
+    },
+    {
+      "op_seq": 40,
+      "name": "鑽 Ø8.5 底孔、攻 M10×1.5、倒角",
+      "kind": "自製",
+      "machine_type": "鑽孔攻牙",
+      "setup_min": 15,
+      "run_min_per_pc": 0.8
+    },
+    {
+      "op_seq": 50,
+      "name": "調質後發黑",
+      "kind": "委外",
+      "outsource_days": 4
+    }
+  ]
+}

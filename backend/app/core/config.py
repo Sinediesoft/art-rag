@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     ortho2cad_model: str = ""
     ortho2cad_api_key: str = "none"
 
+    # 生產排程：Timefold Solver 排程服務（make scheduler 啟動，只聽本機）；
+    # 連不上時改用簡易排程（交期優先派工）。mock＝一律用簡易排程（CI、沒有 Java 的電腦）
+    scheduler_base_url: str = "http://localhost:8082"
+    scheduler_mode: Literal["real", "mock"] = "real"
+
+    # 記憶體管理：系統記憶體使用率超過門檻時，釋放目前流程用不到的模型（services/memory_guard.py）
+    memory_guard: bool = True
+    memory_high_pct: float = 80.0
+    memory_check_interval_s: float = 5.0
+
     lora_enabled: bool = False
     lora_base_url: str = "http://localhost:11434/v1"
     lora_model: str = ""
@@ -117,6 +127,10 @@ class ModelsConfig(BaseModel):
     # 工廠圖紙：以圖搜圖紙的門檻、Ortho2CAD 的 prompt 與影像大小
     drawing_retrieval: dict[str, float] = {}
     cad: dict[str, str | float] = {}
+    # 工廠庫存 Text-to-SQL：生成上限、修正次數、回傳列數與執行逾時
+    text2sql: dict[str, float] = {}
+    # 生產排程（Timefold）：求解秒數、無改善提前結束秒數、進度更新間隔
+    scheduling: dict[str, float] = {}
 
 
 @lru_cache

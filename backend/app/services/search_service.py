@@ -12,6 +12,7 @@ from app.rag.embedders import embed_image, embed_text, embed_text_clip
 from app.rag.preprocess import load_image
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
+from app.services.memory_guard import guarded
 
 
 def artwork_summary(a: dict) -> dict:
@@ -36,6 +37,7 @@ def load_upload(image_id: str) -> bytes:
     return (get_settings().uploads_dir / path).read_bytes()
 
 
+@guarded("search_image", {"clip"})
 def identify(image_id: str, top_k: int | None = None) -> dict:
     """兩階段辨識：Chinese-CLIP 粗篩 → 前 N 名做 ORB 幾何驗證。"""
     cfg = get_models_config().retrieval
@@ -77,6 +79,7 @@ def identify(image_id: str, top_k: int | None = None) -> dict:
     }
 
 
+@guarded("search_text", {"clip", "bge"})
 def search_text(q: str, top_k: int | None = None) -> dict:
     """Chinese-CLIP（文字→畫面）與 bge-m3（文字→知識段落）兩路排序，用 RRF 融合。"""
     store = get_store()
@@ -136,6 +139,7 @@ def _drawing_path(p: dict):
     return REPO_ROOT / p["drawing"]
 
 
+@guarded("search_image", {"clip"})
 def identify_drawing(
     image_id: str, top_k: int | None = None, img: Image.Image | None = None
 ) -> dict:
@@ -199,6 +203,7 @@ def rectify_to_part(img: Image.Image, part: dict) -> Image.Image | None:
     return Image.fromarray(warped)
 
 
+@guarded("search_text", {"bge"})
 def search_parts_text(q: str, top_k: int | None = None) -> dict:
     """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數。"""
     mfg = get_store().mfg

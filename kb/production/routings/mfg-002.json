@@ -1,0 +1,50 @@
+{
+  "part_id": "mfg-002",
+  "source": "kb/parts/mfg-002.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "鋸床下料 Ø105×26 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 15,
+      "run_min_per_pc": 2
+    },
+    {
+      "op_seq": 20,
+      "name": "CNC 粗車外徑、凸轂與內孔",
+      "kind": "自製",
+      "machine_type": "車削",
+      "setup_min": 40,
+      "run_min_per_pc": 7
+    },
+    {
+      "op_seq": 30,
+      "name": "調質",
+      "kind": "委外",
+      "outsource_days": 2
+    },
+    {
+      "op_seq": 40,
+      "name": "CNC 精車，內孔 Ø30H7 精搪",
+      "kind": "自製",
+      "machine_type": "車削",
+      "setup_min": 45,
+      "run_min_per_pc": 9
+    },
+    {
+      "op_seq": 50,
+      "name": "分度鑽 6-Ø9 孔",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 30,
+      "run_min_per_pc": 4
+    },
+    {
+      "op_seq": 60,
+      "name": "發黑處理",
+      "kind": "委外",
+      "outsource_days": 2
+    }
+  ]
+}

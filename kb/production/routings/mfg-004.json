@@ -1,0 +1,52 @@
+{
+  "part_id": "mfg-004",
+  "source": "kb/parts/mfg-004.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "板材剪切 125×105×10 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 10,
+      "run_min_per_pc": 1
+    },
+    {
+      "op_seq": 20,
+      "name": "面銑兩面至厚度 10±0.05",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 30,
+      "run_min_per_pc": 4
+    },
+    {
+      "op_seq": 30,
+      "name": "Ø38.1 定位孔螺旋銑＋精搪",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 30,
+      "run_min_per_pc": 3
+    },
+    {
+      "op_seq": 40,
+      "name": "鑽 4-Ø5.5 孔、銑 4 個長圓孔",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 20,
+      "run_min_per_pc": 3
+    },
+    {
+      "op_seq": 50,
+      "name": "外形精銑與去毛邊",
+      "kind": "自製",
+      "machine_type": "綜合加工",
+      "setup_min": 20,
+      "run_min_per_pc": 2.5
+    },
+    {
+      "op_seq": 60,
+      "name": "本色陽極處理",
+      "kind": "委外",
+      "outsource_days": 3
+    }
+  ]
+}

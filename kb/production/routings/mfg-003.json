@@ -1,0 +1,58 @@
+{
+  "part_id": "mfg-003",
+  "source": "kb/parts/mfg-003.json 的「加工製程」段落；工時為示範估計值",
+  "operations": [
+    {
+      "op_seq": 10,
+      "name": "鋸床下料 Ø35×150 mm",
+      "kind": "自製",
+      "machine_type": "下料",
+      "setup_min": 15,
+      "run_min_per_pc": 1.5
+    },
+    {
+      "op_seq": 20,
+      "name": "鑽中心孔、CNC 粗車各段外徑",
+      "kind": "自製",
+      "machine_type": "車削",
+      "setup_min": 40,
+      "run_min_per_pc": 8
+    },
+    {
+      "op_seq": 30,
+      "name": "調質",
+      "kind": "委外",
+      "outsource_days": 2
+    },
+    {
+      "op_seq": 40,
+      "name": "精車各段，軸承位留研磨量",
+      "kind": "自製",
+      "machine_type": "車削",
+      "setup_min": 45,
+      "run_min_per_pc": 10
+    },
+    {
+      "op_seq": 50,
+      "name": "銑鍵槽 8×4×40",
+      "kind": "自製",
+      "machine_type": "銑削",
+      "setup_min": 30,
+      "run_min_per_pc": 5
+    },
+    {
+      "op_seq": 60,
+      "name": "軸承位高週波淬火",
+      "kind": "委外",
+      "outsource_days": 1
+    },
+    {
+      "op_seq": 70,
+      "name": "外圓研磨兩端 Ø20 至 k6",
+      "kind": "自製",
+      "machine_type": "外圓研磨",
+      "setup_min": 40,
+      "run_min_per_pc": 8
+    }
+  ]
+}

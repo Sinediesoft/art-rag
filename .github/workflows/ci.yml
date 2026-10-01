@@ -1,4 +1,5 @@
-# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型）、openapi 與前端型別同步
+# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型）、openapi 與前端型別同步，
+# 以及生產排程服務（Timefold，Java 21）的建置與單元測試
 name: ci
 on:
   pull_request:
@@ -12,6 +13,8 @@ jobs:
     env:
       EMBED_MODE: mock
       LLM_MODE: mock
+      SCHEDULER_MODE: mock
+      MEMORY_GUARD: "false"
     steps:
       - uses: actions/checkout@v7
       # setup-uv 自 v8 起只發布不可變的完整版本號，沒有 @v10 這種大版本標籤
@@ -37,3 +40,15 @@ jobs:
           cd ../frontend && npm run gen:api && git diff --exit-code src/api/schema.d.ts
       - name: 前端建置
         run: make build
+  scheduler:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: scheduler/pom.xml
+      - name: Timefold 排程服務：建置＋限制條件單元測試
+        run: cd scheduler && mvn -B -ntp package

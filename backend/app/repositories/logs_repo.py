@@ -1,4 +1,7 @@
-"""使用紀錄與回饋（SQLite；正式版改 PostgreSQL，資料表欄位相同）。SQL 只寫在這層。"""
+"""使用紀錄與回饋（SQLite；正式版改 PostgreSQL，資料表欄位相同）。SQL 只寫在這層。
+
+庫存資料（Text-to-SQL 查詢的對象）在另一個檔案，見 inventory_repo.py。
+"""
 
 import sqlite3
 import threading
@@ -25,6 +28,12 @@ CREATE TABLE IF NOT EXISTS cad_logs (
   scale_source TEXT,
   first_token_ms INTEGER, generation_ms INTEGER, exec_ms INTEGER, total_ms INTEGER,
   output_tokens INTEGER
+);
+CREATE TABLE IF NOT EXISTS sql_logs (
+  request_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, question TEXT, strategy_requested TEXT,
+  strategy_used TEXT, model TEXT, prompt_version TEXT, sql TEXT, ok INTEGER, error TEXT,
+  attempts INTEGER, row_count INTEGER, sql_ms INTEGER, exec_ms INTEGER, total_ms INTEGER,
+  input_tokens INTEGER, output_tokens INTEGER, answer TEXT
 );
 CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, rating TEXT NOT NULL,
@@ -110,6 +119,20 @@ class LogsRepo:
             "SELECT job_id, created_at, strategy, model, ok, iou, iou_bbox, total_ms FROM cad_logs"
             " WHERE part_id = ? AND image_id IS NULL ORDER BY created_at DESC LIMIT ?",
             (part_id, limit),
+        )
+        return [dict(r) for r in rows]
+
+    def add_sql_log(self, row: dict) -> None:
+        """Text-to-SQL 紀錄：產生的 SQL、修正次數、筆數與延遲（評估與除錯用）。"""
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        self._exec(f"INSERT INTO sql_logs ({cols}) VALUES ({marks})", tuple(row.values()))
+
+    def recent_sql(self, limit: int = 10) -> list[dict]:
+        rows = self._exec(
+            "SELECT request_id, created_at, question, strategy_used, model, sql, ok, error,"
+            " attempts, row_count, total_ms FROM sql_logs ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         )
         return [dict(r) for r in rows]
 

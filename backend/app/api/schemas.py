@@ -152,6 +152,10 @@ class HealthResponse(BaseModel):
     demo_controls: bool
     recent_chats: list[dict]
     recent_cad: list[dict] = []
+    inventory: dict = Field(default={}, description="庫存資料庫：資料日期、各表筆數、資料問題")
+    recent_sql: list[dict] = []
+    scheduler: "SchedulerEngine | None" = None
+    memory: "MemoryStatus | None" = None
 
 
 class EvalRun(BaseModel):
@@ -301,3 +305,392 @@ class CadJobListResponse(BaseModel):
 
 class CadEvalRunsResponse(BaseModel):
     runs: list[dict]
+
+
+class SqlEvalRunsResponse(BaseModel):
+    runs: list[dict]
+
+
+# ---------------------------------------------------------------- 工廠庫存（Text-to-SQL）
+class InventoryAskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+    strategy: Strategy = Field(
+        default="hybrid",
+        description="hybrid＝本地 Qwen3-VL；雲端策略一律回 CLOUD_CONFIDENTIAL_FORBIDDEN",
+    )
+    allow_fallback: bool = True
+
+
+class InventoryColumn(BaseModel):
+    name: str
+    type: str
+    description: str
+
+
+class InventoryTable(BaseModel):
+    name: str
+    description: str
+    kind: Literal["table", "view"]
+    rows: int | None = Field(description="資料筆數；檢視表為 null")
+    columns: list[InventoryColumn]
+
+
+class InventorySchemaResponse(BaseModel):
+    as_of: str = Field(description="資料日期（Text-to-SQL 把它當成「今天」）")
+    company: str
+    tables: list[InventoryTable]
+    prompt_version: str
+    examples: list[str] = Field(description="few-shot 範例的問題（prompt 內的範例）")
+
+
+class InventoryOverviewRow(BaseModel):
+    part_id: str
+    part_no: str
+    name: str
+    unit: str | None = None
+    std_cost_twd: float | None = None
+    available: int = Field(description="可用")
+    reserved: int = Field(description="保留給訂單")
+    inspecting: int = Field(description="待檢")
+    defective: int = Field(description="不良")
+    on_hand: int = Field(description="合計（所有狀態）")
+    safety_stock: int | None = None
+    open_demand: int = Field(description="未出貨訂單的需求量")
+    in_production: int = Field(description="未完工工單的剩餘數量")
+
+
+class InventoryOverviewResponse(BaseModel):
+    as_of: str
+    company: str
+    items: list[InventoryOverviewRow]
+
+
+class StockLocation(BaseModel):
+    warehouse_id: str
+    warehouse_name: str
+    bin: str
+    lot_no: str
+    status: str
+    qty: int
+    received_on: str
+    note: str | None = None
+
+
+class OpenWorkOrder(BaseModel):
+    wo_no: str
+    qty_planned: int
+    qty_done: int
+    status: str
+    line: str
+    start_on: str
+    due_on: str
+    note: str | None = None
+
+
+class OpenSalesOrder(BaseModel):
+    so_no: str
+    line_no: int
+    customer: str
+    qty: int
+    qty_shipped: int
+    due_on: str
+    status: str
+
+
+class StockMove(BaseModel):
+    moved_on: str
+    warehouse_id: str
+    move_type: str
+    qty: int
+    ref_no: str | None = None
+    note: str | None = None
+
+
+class PartInventory(InventoryOverviewRow):
+    reorder_qty: int | None = None
+    lead_time_days: int | None = None
+    make_or_buy: str | None = None
+    as_of: str
+    locations: list[StockLocation]
+    work_orders: list[OpenWorkOrder] = Field(description="未完工的工單")
+    sales_orders: list[OpenSalesOrder] = Field(description="未出完貨的訂單")
+    recent_moves: list[StockMove] = Field(description="最近 8 筆異動")
+
+
+# ---------------------------------------------------------------- 記憶體管理
+class MemoryModel(BaseModel):
+    key: str = Field(description="clip／bge／qwen／ortho2cad／timefold")
+    label: str
+    where: str = Field(description="後端行程／Ollama／llama-server／JVM")
+    approx_mb: int
+    loaded: bool | None = Field(description="是否載入中；null＝連不上或不在本機")
+    in_use: bool = Field(description="有請求正在使用（不會被釋放）")
+    needed_by_current_flow: bool
+
+
+class MemoryReleased(BaseModel):
+    key: str
+    label: str
+    detail: str
+    approx_mb: int | None = None
+
+
+class MemoryEvent(BaseModel):
+    at: str
+    trigger: str = Field(description="進入「…」流程／背景監控／手動")
+    flow: str | None
+    flow_label: str
+    threshold: float
+    percent_before: float
+    percent_after: float
+    released: list[MemoryReleased]
+    failed: list[MemoryReleased]
+    kept: list[str] = Field(description="目前流程或其他請求正在用、所以保留的模型")
+
+
+class MemoryStatus(BaseModel):
+    enabled: bool
+    percent: float = Field(description="系統記憶體使用率（%）")
+    threshold: float
+    total_mb: int
+    available_mb: int
+    current_flow: str | None
+    current_flow_label: str | None
+    flow_at: str | None
+    models: list[MemoryModel]
+    events: list[MemoryEvent]
+
+
+class MemoryReleaseResponse(BaseModel):
+    event: MemoryEvent | None
+    status: MemoryStatus
+
+
+# ---------------------------------------------------------------- 生產排程（Timefold）
+class SchedulerEngine(BaseModel):
+    available: bool
+    engine: Literal["timefold", "greedy"]
+    version: str | None = None
+    java: str | None = None
+    memory: dict | None = Field(default=None, description="JVM heap（MB）")
+    active_jobs: int | None = None
+    detail: str
+
+
+class RoutingOp(BaseModel):
+    op_seq: int
+    name: str
+    kind: Literal["自製", "委外"]
+    machine_type: str | None = None
+    setup_min: float | None = None
+    run_min_per_pc: float | None = None
+    outsource_days: int | None = None
+    machines: list[str] = Field(default=[], description="這個機型的機台")
+
+
+class ScheduleWorkOrder(BaseModel):
+    wo_no: str
+    part_id: str
+    part_no: str
+    part_name: str
+    qty: int = Field(description="要排程的數量（生產中的工單為剩餘數量）")
+    priority: str
+    weight: int
+    status: str
+    source: str = Field(description="既有工單／系統開立")
+    release_on: str
+    due_on: str
+    release_min: int
+    due_min: int
+    note: str | None = None
+    n_ops: int
+    work_min: int = Field(description="自製工序的準備＋加工分鐘合計")
+
+
+class PlannedWorkOrder(BaseModel):
+    wo_no: str
+    part_id: str
+    part_name: str
+    qty: int
+    priority: str
+    source: str
+    status: str
+    due_on: str
+    due_min: int
+    release_min: int
+    start_min: int | None
+    end_min: int | None
+    start_at: str | None
+    end_at: str | None = Field(description="完工時間（含委外）")
+    late_min: int | None = Field(description="延遲的工作分鐘；0＝準時")
+    on_time: bool | None
+
+
+class SkippedWorkOrder(BaseModel):
+    wo_no: str
+    part_id: str
+    reason: str
+
+
+class PartPlanWorkOrder(ScheduleWorkOrder):
+    plan: PlannedWorkOrder | None = Field(description="目前排程中的完工時間；尚未排程為 null")
+
+
+class WorkOrderSuggestion(BaseModel):
+    qty: int
+    due_on: str
+    priority: Literal["一般", "急件"]
+    reason: str
+
+
+class PartPlan(BaseModel):
+    part_id: str
+    part_name: str
+    plan_start: str
+    has_routing: bool
+    routing: list[RoutingOp]
+    suggestion: WorkOrderSuggestion
+    work_orders: list[PartPlanWorkOrder]
+    skipped: list[SkippedWorkOrder] = Field(description="不排程的工單（委外處理中）")
+    schedule_run_id: str | None
+
+
+class WorkOrderCreate(BaseModel):
+    part_id: str
+    qty: int = Field(ge=1, le=5000)
+    due_on: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$", description="交期（當天下班前完工算準時）")
+    priority: Literal["一般", "急件"] = "一般"
+    release_on: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    note: str | None = Field(default=None, max_length=200)
+
+
+class WorkOrderCreated(BaseModel):
+    wo_no: str
+    part_id: str
+    part_name: str
+    qty: int
+    priority: str
+    release_on: str
+    due_on: str
+    note: str | None
+    status: str
+    created_at: str
+    source: str
+
+
+class ScheduledOp(BaseModel):
+    op_id: str
+    wo_no: str
+    part_id: str
+    op_seq: int
+    op_name: str
+    kind: Literal["自製", "委外"]
+    machine_id: str | None = Field(description="委外為 null")
+    start_min: int = Field(description="工作分鐘（排程起點起算，只計上班時間）")
+    end_min: int
+    setup_min: int
+    run_min: int
+    start_at: str
+    end_at: str
+    pinned: bool = Field(description="生產中、釘選在機台最前面的工序")
+
+
+class ScheduleKpis(BaseModel):
+    n_work_orders: int
+    n_late: int
+    on_time_rate: float | None
+    total_late_min: int
+    total_setup_min: int
+    n_setups: int
+    makespan_min: int
+    finish_at: str | None
+    utilization: dict[str, float] = Field(description="各機台忙碌時間 ÷ 最後一道自製工序完成時間")
+
+
+class ConstraintScore(BaseModel):
+    constraint: str
+    level: Literal["hard", "medium", "soft"]
+    score: int
+    matches: int
+    description: str
+
+
+class AxisDay(BaseModel):
+    date: str
+    weekday: str
+    start_min: int
+    holidays_before: list[dict]
+
+
+class ScheduleRunRow(BaseModel):
+    run_id: str
+    created_at: str
+    engine: str
+    engine_version: str | None
+    status: str
+    seconds_limit: int | None
+    solve_ms: int | None
+    score: str | None
+    hard: int | None
+    medium: int | None
+    soft: int | None
+    initial_score: str | None
+    improvements: int | None
+    n_work_orders: int | None
+    n_operations: int | None
+    kpis: ScheduleKpis
+    score_check: bool | None = Field(
+        default=None, description="後端依同一套規則重算的總分是否與 Timefold 一致；簡易排程為 null"
+    )
+
+
+class ScheduleRunDetail(ScheduleRunRow):
+    request_id: str | None
+    engine_label: str
+    note: str | None
+    analysis: list[ConstraintScore]
+    work_orders: list[PlannedWorkOrder]
+    operations: list[ScheduledOp]
+    axis: list[AxisDay]
+    missing: list[str] = Field(description="目前有、但這次排程沒有的工單（之後才開立）")
+    removed: list[str] = Field(description="這次排程有、但已取消或完工的工單")
+
+
+class MachineInfo(BaseModel):
+    machine_id: str
+    name: str
+    machine_type: str
+    site: str
+
+
+class ProductionCalendar(BaseModel):
+    shifts: list[list[str]]
+    workdays: list[int]
+    holidays: list[dict]
+    day_minutes: int
+
+
+class ProductionOverview(BaseModel):
+    plan_start: str
+    calendar: ProductionCalendar
+    priority_weights: dict[str, int]
+    machine_types: list[dict]
+    machines: list[MachineInfo]
+    work_orders: list[ScheduleWorkOrder]
+    skipped: list[SkippedWorkOrder]
+    problem: dict
+    engine: SchedulerEngine
+    current: ScheduleRunDetail | None
+    runs: list[ScheduleRunRow]
+    solving: bool
+    settings: dict
+
+
+class ScheduleSolveRequest(BaseModel):
+    seconds: int | None = Field(default=None, ge=3, le=60, description="求解秒數；預設 20")
+    engine: Literal["timefold", "greedy"] = Field(
+        default="timefold", description="greedy＝簡易排程（交期優先派工），用來和 Timefold 比較"
+    )
+
+
+HealthResponse.model_rebuild()

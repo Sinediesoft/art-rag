@@ -12,7 +12,16 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="session", autouse=True)
 def mock_env(tmp_path_factory):
     data = tmp_path_factory.mktemp("data")
-    os.environ.update({"EMBED_MODE": "mock", "LLM_MODE": "mock", "DATA_DIR": str(data)})
+    # 排程用簡易排程（不連 Timefold 服務）；記憶體管理關掉，避免測試時卸載開發者本機的模型
+    os.environ.update(
+        {
+            "EMBED_MODE": "mock",
+            "LLM_MODE": "mock",
+            "DATA_DIR": str(data),
+            "SCHEDULER_MODE": "mock",
+            "MEMORY_GUARD": "false",
+        }
+    )
     from app.core import config
 
     config.get_settings.cache_clear()

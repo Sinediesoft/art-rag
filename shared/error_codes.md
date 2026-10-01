@@ -13,9 +13,20 @@
 | `STRATEGY_UNAVAILABLE` | 200（SSE `error`） | 指定的生成端無法使用，本地備援模型也失敗（服務暫停，不改走雲端）；或雲端對照組未開啟（`ALLOW_CLOUD=false`） |
 | `GENERATION_FAILED` | 200（SSE `error`） | 生成端逾時或錯誤，且本地備援也失敗 |
 | `CLOUD_UPLOAD_FORBIDDEN` | 200（SSE `error`） | 雲端對照組不接受使用者上傳的照片（使用者資料不出站） |
-| `PART_NOT_FOUND` | 404／SSE `error` | 圖紙 ID 不存在 |
-| `CLOUD_CONFIDENTIAL_FORBIDDEN` | 200（SSE `error`） | 工廠圖紙屬機密，不送往任何雲端 API（包含對照組） |
+| `PART_NOT_FOUND` | 404／SSE `error` | 圖紙 ID 不存在（`/inventory/parts/{id}`：庫存資料庫中沒有這張圖紙） |
+| `CLOUD_CONFIDENTIAL_FORBIDDEN` | 200（SSE `error`） | 工廠圖紙與庫存資料屬機密，不送往任何雲端 API（包含對照組） |
 | `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在或已過期（與上傳照片同為 7 天） |
-| `FORBIDDEN` | 403 | 展示控制已停用（`DEMO_CONTROLS=false` 時呼叫 `POST /api/v1/admin/outage`） |
+| `SQL_REJECTED` | 200（SSE `error`） | 庫存 Text-to-SQL：模型產生的 SQL 含寫入或管理指令（使用者要求修改資料），執行前攔下、不進修正迴圈；沒有任何資料被修改 |
+| `SQL_FAILED` | 200（SSE `error`） | 庫存 Text-to-SQL：修正 2 次後仍無法產生可執行的 SQL |
+| `INVENTORY_UNAVAILABLE` | 200（SSE `error`） | 庫存資料庫無法建立（`kb/inventory/` 資料有誤，細節見 `/health` 的 `inventory.problems`） |
+| `SCHEDULE_DATA_INVALID` | 503／SSE `error` | 生產排程資料有誤（`kb/production/` 的機台、行事曆或途程不符 schema，細節在 message） |
+| `ROUTING_NOT_FOUND` | 422 | 開立工單時，這張圖紙還沒有製程途程（`kb/production/routings/<part_id>.json`） |
+| `WORK_ORDER_NOT_FOUND` | 404 | 取消工單時找不到（只能取消圖紙頁開立、尚未取消的工單；`kb/inventory` 的既有工單不能取消） |
+| `NO_WORK_ORDERS` | 200（SSE `error`） | 生產排程：沒有需要排程的工單 |
+| `SCHEDULE_BUSY` | 200（SSE `error`） | 生產排程：已有排程正在計算（同一時間只跑一個） |
+| `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
+| `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
+| `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
+| `FORBIDDEN` | 403 | 展示控制已停用（`DEMO_CONTROLS=false` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
 | `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |

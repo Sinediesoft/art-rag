@@ -57,3 +57,22 @@ export const usePartReconstructions = (id: string | undefined) =>
   });
 
 export const useCadEvalRuns = () => useQuery({ queryKey: ["cad-eval-runs"], queryFn: api.cadEvalRuns });
+
+// ---- 工廠庫存（Text-to-SQL）
+export const useInventorySchema = () =>
+  useQuery({ queryKey: ["inventory-schema"], queryFn: api.inventorySchema, staleTime: 60_000 });
+
+export const useInventoryOverview = () =>
+  useQuery({ queryKey: ["inventory-overview"], queryFn: api.inventoryOverview });
+
+export const usePartInventory = (id: string | undefined) =>
+  useQuery({ queryKey: ["part-inventory", id], queryFn: () => api.partInventory(id!), enabled: !!id });
+
+export const useSqlEvalRuns = () => useQuery({ queryKey: ["sql-eval-runs"], queryFn: api.sqlEvalRuns });
+
+// ---- 生產排程（Timefold）
+export const useProductionOverview = () =>
+  useQuery({ queryKey: ["production-overview"], queryFn: api.productionOverview });
+
+export const usePartPlan = (id: string | undefined) =>
+  useQuery({ queryKey: ["part-plan", id], queryFn: () => api.partPlan(id!), enabled: !!id });

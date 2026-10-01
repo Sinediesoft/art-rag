@@ -1,0 +1,7 @@
+{"run": "none", "part": "mfg-003", "wall_s": 44.8, "tokens": 1095, "tok_s": 24.7, "draft_n": null, "accepted": null, "same_as_baseline": true}
+{"run": "ngram-simple", "part": "mfg-003", "wall_s": 33.3, "tokens": 1095, "tok_s": 33.4, "draft_n": 907, "accepted": 383, "same_as_baseline": true}
+{"run": "ngram-simple-4-16", "part": "mfg-003", "wall_s": 40.6, "tokens": 1090, "tok_s": 27.2, "draft_n": 1748, "accepted": 586, "same_as_baseline": false}
+{"run": "ngram-map-k", "part": "mfg-003", "wall_s": 34.3, "tokens": 1095, "tok_s": 32.4, "draft_n": 726, "accepted": 333, "same_as_baseline": true}
+{"run": "ngram-mod", "part": "mfg-003", "wall_s": 36.2, "tokens": 1095, "tok_s": 30.7, "draft_n": 576, "accepted": 259, "same_as_baseline": true}
+{"run": "ngram-cache", "part": "mfg-003", "wall_s": 44.7, "tokens": 1095, "tok_s": 24.8, "draft_n": null, "accepted": null, "same_as_baseline": true}
+{"run": "ngram-simple+cache", "part": "mfg-003", "wall_s": 40.2, "tokens": 1090, "tok_s": 27.5, "draft_n": 1279, "accepted": 479, "same_as_baseline": false}

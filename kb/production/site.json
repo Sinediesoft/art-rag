@@ -1,0 +1,135 @@
+{
+  "plan_start": "2026-10-01",
+  "note": "示範資料：機台、工時與委外天數皆為虛構，只用來展示生產排程（Timefold Solver）。排程從資料日期的下一個工作日 08:00 開始。",
+  "calendar": {
+    "workdays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "shifts": [
+      [
+        "08:00",
+        "12:00"
+      ],
+      [
+        "13:00",
+        "17:00"
+      ]
+    ],
+    "holidays": [
+      {
+        "date": "2026-10-09",
+        "name": "國慶日補假"
+      }
+    ]
+  },
+  "priority_weights": {
+    "一般": 1,
+    "急件": 3
+  },
+  "machine_types": [
+    {
+      "type": "下料",
+      "description": "鋸切、剪切、火焰切割"
+    },
+    {
+      "type": "車削",
+      "description": "CNC 車床"
+    },
+    {
+      "type": "綜合加工",
+      "description": "立式綜合加工機（VMC）：銑、鑽、搪、攻牙"
+    },
+    {
+      "type": "銑削",
+      "description": "立式銑床"
+    },
+    {
+      "type": "鑽孔攻牙",
+      "description": "鑽床、攻牙機"
+    },
+    {
+      "type": "外圓研磨",
+      "description": "外圓研磨機"
+    },
+    {
+      "type": "平面研磨",
+      "description": "平面研磨機"
+    },
+    {
+      "type": "鉗工",
+      "description": "去毛邊、噴砂、塗漆"
+    }
+  ],
+  "machines": [
+    {
+      "machine_id": "鋸床-01",
+      "name": "帶鋸床",
+      "machine_type": "下料",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "切割-01",
+      "name": "剪床／火焰切割機",
+      "machine_type": "下料",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "CNC 車床-01",
+      "name": "CNC 車床",
+      "machine_type": "車削",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "CNC 車床-02",
+      "name": "CNC 車床",
+      "machine_type": "車削",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "VMC-01",
+      "name": "立式綜合加工機",
+      "machine_type": "綜合加工",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "VMC-02",
+      "name": "立式綜合加工機",
+      "machine_type": "綜合加工",
+      "site": "二廠"
+    },
+    {
+      "machine_id": "銑床-03",
+      "name": "立式銑床",
+      "machine_type": "銑削",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "鑽床-01",
+      "name": "鑽床攻牙機",
+      "machine_type": "鑽孔攻牙",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "研磨-01",
+      "name": "外圓研磨機",
+      "machine_type": "外圓研磨",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "研磨-02",
+      "name": "平面研磨機",
+      "machine_type": "平面研磨",
+      "site": "一廠"
+    },
+    {
+      "machine_id": "鉗工-01",
+      "name": "鉗工台",
+      "machine_type": "鉗工",
+      "site": "一廠"
+    }
+  ]
+}
