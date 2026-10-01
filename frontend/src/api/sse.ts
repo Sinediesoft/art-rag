@@ -26,6 +26,8 @@ export interface SourcesEvent {
   strategy: string;
   use_retrieval: boolean;
   sources: SourceItem[];
+  /** 檢索段落篩選（MIRA 的 Rearrange）；沒有篩選時為 null。fallback 有值代表篩選失敗、用原本的段落 */
+  rearrange?: { candidates: number; kept: number; ms: number; fallback: string | null } | null;
 }
 
 export interface DoneEvent {

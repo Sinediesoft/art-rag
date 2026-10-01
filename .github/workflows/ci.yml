@@ -1,4 +1,4 @@
-# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型）、openapi 與前端型別同步
+# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型；含 PostgreSQL 版）、openapi 與前端型別同步
 name: ci
 on:
   pull_request:
@@ -9,9 +9,22 @@ jobs:
   check:
     # 固定版本：ubuntu-latest 自 2026-10-19 起改指向 Ubuntu 26，apt 套件名稱可能不同
     runs-on: ubuntu-24.04
+    # 與 deploy/docker-compose.yml 同一版；test_postgres.py 用它測 PostgreSQL 版的存取層
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg17
+        env:
+          POSTGRES_USER: artrag
+          POSTGRES_PASSWORD: artrag
+          POSTGRES_DB: artrag_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U artrag -d artrag_test"
+          --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       EMBED_MODE: mock
       LLM_MODE: mock
+      TEST_DATABASE_URL: postgresql://artrag:artrag@127.0.0.1:5432/artrag_test
     steps:
       - uses: actions/checkout@v7
       # setup-uv 自 v8 起只發布不可變的完整版本號，沒有 @v10 這種大版本標籤

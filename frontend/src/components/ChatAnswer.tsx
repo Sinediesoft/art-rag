@@ -98,7 +98,15 @@ export function ChatAnswer({
             onClick={() => setOpen((o) => !o)}
             className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-bold text-ink-soft"
           >
-            <span>參考來源（{sources.sources.length} 段）</span>
+            <span>
+              參考來源（{sources.sources.length} 段）
+              {sources.rearrange && !sources.rearrange.fallback && (
+                <span className="font-normal text-ink-faint">
+                  {" "}
+                  · 由模型從 {sources.rearrange.candidates} 段候選中篩選
+                </span>
+              )}
+            </span>
             <span>{open ? "收合" : "展開"}</span>
           </button>
           {open && (

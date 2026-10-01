@@ -1,14 +1,16 @@
-"""建索引指令（make index）：kb/*.json → 驗證 → 向量化 → data/index/ + manifest。
+"""建索引指令（make index）：kb/*.json → 驗證 → 向量化 → data/index/ + manifest
+→ .env 設了 DATABASE_URL 就再寫進 PostgreSQL + pgvector（docs/adr/006）。
 
 畫作：kb/artworks → data/index/*；工廠圖紙：kb/parts → data/index/parts/*
 （另外執行標準 CadQuery 模型，存 STL／STEP 給前端 3D 檢視與 IoU 比對，
-並算出外形尺寸與重量寫進基本資料段落）。
+並算出外形尺寸與重量寫進基本資料段落）。縮圖與 STL／STEP 一律是 data/index/ 下的檔案。
 
 用法：
-    python pipelines/build_index.py           # 驗證並重建索引
-    python pipelines/build_index.py --check   # 只做 JSON Schema 與授權檢查（CI 用）
+    python pipelines/build_index.py            # 驗證並重建索引
+    python pipelines/build_index.py --check    # 只做 JSON Schema 與授權檢查（CI 用）
+    python pipelines/build_index.py --db-only  # 不重算向量，把現有的 data/index/ 寫進資料庫
 
-每位組員與展示主機都用同一個指令從 JSON 重建，不互傳索引檔。
+每位組員與展示主機都用同一個指令從 JSON 重建，不互傳索引檔或資料庫。
 """
 
 import argparse
@@ -102,10 +104,35 @@ async def build_parts(parts: list[dict], out: Path) -> list[dict]:
     return chunks
 
 
+def publish_to_db(index_dir: Path) -> bool:
+    """寫進 PostgreSQL（同一個交易，後端只會看到舊的或新的索引）；失敗回 False。"""
+    from app.repositories.db import DatabaseUnavailable, describe
+    from app.repositories.index_store import IndexMismatch
+    from app.repositories.pg_index_store import publish_index
+
+    url = get_settings().database_url
+    try:
+        publish_index(index_dir)
+    except (DatabaseUnavailable, IndexMismatch) as e:
+        print(f"沒有寫進資料庫：{e}")
+        return False
+    print(f"已寫入 PostgreSQL {describe(url)}")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="只驗證，不建索引")
+    parser.add_argument(
+        "--db-only", action="store_true", help="不重算向量，把現有的 data/index/ 寫進資料庫"
+    )
     args = parser.parse_args()
+
+    if args.db_only:
+        if not get_settings().database_url:
+            print("DATABASE_URL 沒有設定：請先在 .env 填入資料庫位址（見 .env.example）")
+            return 1
+        return 0 if publish_to_db(get_settings().index_dir) else 1
 
     artworks, errors = validate_kb()
     parts, part_errors = validate_parts()
@@ -169,6 +196,9 @@ def main() -> int:
     (tmp / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    # 先寫資料庫：寫不進去就保留舊的目錄，資料庫與 data/index/ 維持同一版
+    if settings.database_url and not publish_to_db(tmp):
+        return 1
     # 整個目錄一次換上，後端不會讀到一半的索引
     shutil.rmtree(settings.index_dir, ignore_errors=True)
     tmp.rename(settings.index_dir)

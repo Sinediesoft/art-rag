@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api import schemas as S
 from app.core.config import REPO_ROOT, get_models_config, get_settings, kb_version
@@ -108,6 +109,7 @@ async def chat(body: S.ChatRequest, request: Request):
         use_retrieval=body.use_retrieval,
         allow_fallback=body.allow_fallback,
         part_id=body.part_id,
+        rearrange=body.rearrange,
     )
     return StreamingResponse(
         stream,
@@ -172,6 +174,12 @@ def get_part_model(part_id: str, ext: str):
 @router.post("/search/drawing", response_model=S.DrawingSearchResponse, tags=["search"])
 def search_drawing(body: S.DrawingSearchRequest):
     return search_service.identify_drawing(body.image_id, body.top_k)
+
+
+@router.post("/search/any", response_model=S.AnySearchResponse, tags=["search"])
+def search_any(body: S.ImageSearchRequest):
+    """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。"""
+    return search_service.identify_any(body.image_id, body.top_k)
 
 
 @router.get("/search/parts", response_model=S.PartTextSearchResponse, tags=["search"])
@@ -252,7 +260,7 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        if not p.name.endswith("-cad.json"):
+        if not p.name.endswith(("-cad.json", "-router.json")):  # 圖紙與領域路由評估另有格式
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
 
@@ -326,7 +334,10 @@ async def health():
             detail="已啟用" if s.lora_enabled else "選做：插槽已保留，未啟用",
         ),
     }
-    db_ok = get_logs_repo().ping()
+    logs = get_logs_repo()
+    # PostgreSQL 容器停了也要回得出狀態頁：ping 放到執行緒（最多等 5 秒，不卡住其他請求），
+    # 失敗就不查最近紀錄
+    db_ok = await run_in_threadpool(logs.ping)
     return S.HealthResponse(
         status="ok" if db_ok and not problems and hybrid_ok else "degraded",
         db=db_ok,
@@ -340,8 +351,8 @@ async def health():
         allow_cloud=s.allow_cloud,
         outage_simulated=providers.OUTAGE["enabled"],
         demo_controls=s.demo_controls,
-        recent_chats=get_logs_repo().recent_chats(10),
-        recent_cad=get_logs_repo().recent_cad(10),
+        recent_chats=logs.recent_chats(10) if db_ok else [],
+        recent_cad=logs.recent_cad(10) if db_ok else [],
     )
 
 

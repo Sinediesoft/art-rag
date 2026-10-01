@@ -1,5 +1,17 @@
 import json
 
+from app.core.config import REPO_ROOT
+
+KB_PHOTOS = (
+    (REPO_ROOT / "kb/drawings/mfg-006.png", "image/png"),
+    (REPO_ROOT / "kb/images/npm-000001.jpg", "image/jpeg"),
+)
+
+
+def upload(client, path, mime: str) -> str:
+    r = client.post("/api/v1/images", files={"file": (path.name, path.read_bytes(), mime)})
+    return r.json()["image_id"]
+
 
 def parse_sse(text: str) -> list[tuple[str, dict]]:
     events = []
@@ -42,6 +54,41 @@ def test_chat_streams_sources_tokens_done(client):
     done = events[-1][1]
     assert done["prompt_version"] == "answer_v1"
     assert "[" in "".join(d["text"] for e, d in events if e == "token")
+
+
+def test_search_any_returns_only_the_routed_domain(client):
+    """領域路由：只回傳判定領域的辨識結果。
+    mock embedding 下判斷本身沒有意義，只驗證格式與一致性。"""
+    for path, mime in KB_PHOTOS:
+        image_id = upload(client, path, mime)
+        body = client.post("/api/v1/search/any", json={"image_id": image_id}).json()
+        route = body["route"]
+        assert route["domain"] in {"art", "mfg"} and route["min_margin"] > 0
+        picked, other = (
+            (body["artwork_result"], body["drawing_result"])
+            if route["domain"] == "art"
+            else (body["drawing_result"], body["artwork_result"])
+        )
+        assert picked["query_image_id"] == image_id and other is None
+
+
+def test_chat_with_photo_only_goes_through_router(client):
+    image_id = upload(client, *KB_PHOTOS[0])
+    r = client.post("/api/v1/chat", json={"question": "這是什麼？", "image_id": image_id})
+    event, data = parse_sse(r.text)[0]
+    if event == "error":  # mock 向量多半過不了相似度門檻：要回報對應領域的「知識庫中沒有」
+        assert data["code"] == "NOT_IN_KB"
+    else:
+        assert event == "sources" and data["route"]["domain"] in {"art", "mfg"}
+
+
+def test_chat_rearrange_is_off_by_default_and_reported_when_on(client):
+    body = {"question": "畫家的簽名藏在哪裡？", "artwork_id": "npm-000001", "strategy": "hybrid"}
+    off = parse_sse(client.post("/api/v1/chat", json=body).text)[0][1]
+    assert off["rearrange"] is None
+    on = parse_sse(client.post("/api/v1/chat", json={**body, "rearrange": True}).text)[0][1]
+    # mock 生成端的輸出不是「1,3」格式 → 退回原本的段落，但要回報篩選資訊
+    assert on["rearrange"]["fallback"] and on["rearrange"]["kept"] == len(on["sources"])
 
 
 def test_unknown_strategy_without_fallback_errors(client):

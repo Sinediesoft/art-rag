@@ -14,7 +14,8 @@ from collections.abc import AsyncIterator
 
 from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.logging import log
-from app.rag.embedders import embed_text
+from app.rag import rearrange as rearrange_mod
+from app.rag.embedders import embed_image, embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import build_messages, prompt_version
 from app.rag.providers import (
@@ -24,10 +25,11 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
+from app.rag.router import route
 from app.rag.textproc import to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services.search_service import identify, load_upload
+from app.services.search_service import identify, identify_drawing, load_upload
 
 # 備援只在本地之間：主推論伺服器 → 本地備援模型；雲端不在任何備援鏈上
 FALLBACK_CHAIN = {"hybrid": ["hybrid_fallback"], "lora": ["hybrid", "hybrid_fallback"]}
@@ -84,6 +86,7 @@ async def chat_stream(
     use_retrieval: bool = True,
     allow_fallback: bool = True,
     part_id: str | None = None,
+    rearrange: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -123,20 +126,33 @@ async def chat_stream(
     if strategy == "api_nokb":
         use_retrieval = False  # A1：只送照片與問題
 
-    # 1. 以圖辨識（已指定畫作或圖紙就跳過）
-    if domain == "art" and not artwork_id and image_id:
-        identified = identify(image_id)
+    # 1. 以圖辨識（已指定畫作或圖紙就跳過）。只給照片時先經過領域路由（MMed-RAG 的領域辨識），
+    #    判斷是畫作還是圖紙，再走該領域的辨識。雲端策略在第 0 步已拒收照片，
+    #    所以路由成圖紙時不會是雲端。
+    route_info = None
+    if not artwork_id and not part_id and image_id:
+        img = load_image(load_upload(image_id))
+        vec = embed_image(img)
+        r = route(vec)
+        route_info, domain = r.summary(), r.domain
+        if domain == "mfg":
+            identified = identify_drawing(image_id, img=img, vec=vec)
+        else:
+            identified = identify(image_id, img=img, vec=vec)
         if not identified["matched"]:
             yield sse(
                 "error",
                 {
                     "code": "NOT_IN_KB",
                     "request_id": request_id,
-                    "message": "知識庫中沒有這幅畫",
+                    "message": "知識庫中沒有這張圖紙" if domain == "mfg" else "知識庫中沒有這幅畫",
                 },
             )
             return
-        artwork_id = identified["best_artwork_id"]
+        if domain == "mfg":
+            part_id = identified["best_part_id"]
+        else:
+            artwork_id = identified["best_artwork_id"]
     if domain == "mfg":
         artwork = store.get_part(part_id)
         if not artwork:
@@ -162,8 +178,13 @@ async def chat_stream(
             )
             return
 
-    # 2. 檢索（關檢索時仍算一次，供前端比較用，但不放進 prompt）
+    # 2. 檢索（關檢索時仍算一次，供前端比較用，但不放進 prompt）。
+    #    開啟段落篩選（MIRA 的 Rearrange）時，再請本地模型只留有幫助的段落；
+    #    只有真的要放進 prompt 才篩，篩選時間算在 retrieval 裡
     sources = retrieve(question, artwork_id, part_id)
+    rearrange_info = None
+    if use_retrieval and rearrange_mod.enabled(rearrange):
+        sources, rearrange_info = await rearrange_mod.rearrange(question, sources)
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     yield sse(
         "sources",
@@ -173,6 +194,8 @@ async def chat_stream(
             "part_id": part_id,
             "strategy": strategy,
             "identified": identified,
+            "route": route_info,
+            "rearrange": rearrange_info,
             "use_retrieval": use_retrieval,
             "sources": sources if use_retrieval else [],
         },
@@ -301,6 +324,7 @@ async def chat_stream(
                 "model": provider.model,
                 "prompt_version": done["prompt_version"],
                 "top_k": [(s["chunk_id"], s["score"]) for s in sources],
+                "rearrange": rearrange_info,
                 "latency_ms": done["latency_ms"],
                 "tokens": done["tokens"],
                 "cost_twd": done["cost_twd"],

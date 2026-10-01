@@ -12,7 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="session", autouse=True)
 def mock_env(tmp_path_factory):
     data = tmp_path_factory.mktemp("data")
-    os.environ.update({"EMBED_MODE": "mock", "LLM_MODE": "mock", "DATA_DIR": str(data)})
+    # DATABASE_URL 清空：.env 指向開發用資料庫時，下面的 build_index
+    # 會把 mock 向量寫進去蓋掉真的索引。PostgreSQL 版另外用 TEST_DATABASE_URL 測（test_postgres.py）
+    os.environ.update(
+        {"EMBED_MODE": "mock", "LLM_MODE": "mock", "DATA_DIR": str(data), "DATABASE_URL": ""}
+    )
     from app.core import config
 
     config.get_settings.cache_clear()

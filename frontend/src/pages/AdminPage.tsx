@@ -150,6 +150,7 @@ export function AdminPage() {
                         <div key={k}>
                           {STRATEGY_LABEL[k] ?? k}：引用 {pct(v.citation_ok)} · 關鍵字 {pct(v.answer_ok)} · P95{" "}
                           {seconds(v.p95_total_ms)}
+                          {v.mean_sources != null && ` · 平均 ${v.mean_sources.toFixed(1)} 段`}
                         </div>
                       ))}
                     </td>

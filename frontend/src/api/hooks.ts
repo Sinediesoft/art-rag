@@ -14,6 +14,15 @@ export const useImageSearch = (imageId: string | null) =>
     staleTime: Infinity,
   });
 
+/** 領域路由＋辨識；畫作頁與圖紙頁共用同一個快取，被轉到另一頁時不會重算 */
+export const useAnySearch = (imageId: string | null) =>
+  useQuery({
+    queryKey: ["search-any", imageId],
+    queryFn: () => api.searchAny(imageId!),
+    enabled: !!imageId,
+    staleTime: Infinity,
+  });
+
 export const useTextSearch = (q: string | null) =>
   useQuery({
     queryKey: ["search-text", q],

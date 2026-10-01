@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # 模型下載完成後設 true：embedding 模型只讀本機快取，不再連 Hugging Face（斷網可用）
     hf_offline: bool = False
 
+    # 檢索段落篩選（MIRA 的 Rearrange）：留空＝shared/models.yaml 的 rearrange.enabled；
+    # true／false 覆寫這台主機的設定（例如只在 5070 Ti 主機打開）
+    rearrange: str = ""
+
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
@@ -63,6 +67,11 @@ class Settings(BaseSettings):
     demo_controls: bool = True
 
     data_dir: Path = REPO_ROOT / "data"
+
+    # PostgreSQL + pgvector（Docker，見 deploy/docker-compose.yml 與 docs/adr/006）：
+    # 畫作、段落、向量、manifest 與使用紀錄都存這裡。
+    # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
+    database_url: str = ""
 
     @property
     def kb_dir(self) -> Path:
@@ -106,6 +115,16 @@ class StrategySpec(BaseModel):
     cost_per_1k_output_twd: float
 
 
+class RearrangeSpec(BaseModel):
+    """檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/005）"""
+
+    enabled: bool = False
+    prompt_version: str = "rearrange_v1"
+    max_candidates: int = 5
+    timeout_s: float = 30
+    max_tokens: int = 16
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -117,6 +136,9 @@ class ModelsConfig(BaseModel):
     # 工廠圖紙：以圖搜圖紙的門檻、Ortho2CAD 的 prompt 與影像大小
     drawing_retrieval: dict[str, float] = {}
     cad: dict[str, str | float] = {}
+    # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/004）
+    router: dict[str, float] = {}
+    rearrange: RearrangeSpec = RearrangeSpec()
 
 
 @lru_cache

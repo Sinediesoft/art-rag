@@ -228,6 +228,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search/any": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Any
+         * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
+         */
+        post: operations["search_any_api_v1_search_any_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/parts": {
         parameters: {
             query?: never;
@@ -414,6 +434,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnySearchResponse */
+        AnySearchResponse: {
+            /** Query Image Id */
+            query_image_id: string;
+            route: components["schemas"]["RouteInfo"];
+            /** @description 判定為畫作時的辨識結果 */
+            artwork_result: components["schemas"]["ImageSearchResponse"] | null;
+            /** @description 判定為圖紙時的辨識結果 */
+            drawing_result: components["schemas"]["DrawingSearchResponse"] | null;
+            /** Latency Ms */
+            latency_ms: number;
+        };
         /** ArtworkDetail */
         ArtworkDetail: {
             /** Id */
@@ -575,6 +607,11 @@ export interface components {
              * @default true
              */
             allow_fallback: boolean;
+            /**
+             * Rearrange
+             * @description 檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）
+             */
+            rearrange?: boolean | null;
         };
         /** Description */
         Description: {
@@ -962,6 +999,43 @@ export interface components {
              * @enum {string}
              */
             strategy: "ortho2cad" | "hybrid";
+        };
+        /**
+         * RouteInfo
+         * @description 領域路由（MMed-RAG 的領域辨識）：照片是畫作還是工廠圖紙
+         */
+        RouteInfo: {
+            /**
+             * Domain
+             * @description art：畫作；mfg：工廠圖紙
+             * @enum {string}
+             */
+            domain: "art" | "mfg";
+            /**
+             * Margin
+             * @description 與圖紙原型的相似度 − 與畫作原型的相似度；> 0 偏向圖紙
+             */
+            margin: number;
+            /**
+             * Art Score
+             * @description 與畫作原型（知識庫畫作 CLIP 向量的平均）的相似度
+             */
+            art_score: number | null;
+            /**
+             * Mfg Score
+             * @description 與圖紙原型的相似度
+             */
+            mfg_score: number | null;
+            /**
+             * Min Margin
+             * @description |margin| 小於此值視為不確定
+             */
+            min_margin: number;
+            /**
+             * Uncertain
+             * @description 不確定時一律當圖紙（機密側）
+             */
+            uncertain: boolean;
         };
         /** StrategyStatus */
         StrategyStatus: {
@@ -1394,6 +1468,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingSearchResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_any_api_v1_search_any_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnySearchResponse"];
                 };
             };
             /** @description Client Error */

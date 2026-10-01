@@ -542,6 +542,48 @@
         }
       }
     },
+    "/api/v1/search/any": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Any",
+        "description": "不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。",
+        "operationId": "search_any_api_v1_search_any_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnySearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/search/parts": {
       "get": {
         "tags": [
@@ -949,6 +991,52 @@
   },
   "components": {
     "schemas": {
+      "AnySearchResponse": {
+        "properties": {
+          "query_image_id": {
+            "type": "string",
+            "title": "Query Image Id"
+          },
+          "route": {
+            "$ref": "#/components/schemas/RouteInfo"
+          },
+          "artwork_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageSearchResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "判定為畫作時的辨識結果"
+          },
+          "drawing_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrawingSearchResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "判定為圖紙時的辨識結果"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query_image_id",
+          "route",
+          "artwork_result",
+          "drawing_result",
+          "latency_ms"
+        ],
+        "title": "AnySearchResponse"
+      },
       "ArtworkDetail": {
         "properties": {
           "id": {
@@ -1392,6 +1480,18 @@
             "type": "boolean",
             "title": "Allow Fallback",
             "default": true
+          },
+          "rearrange": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rearrange",
+            "description": "檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）"
           }
         },
         "type": "object",
@@ -2359,6 +2459,69 @@
         },
         "type": "object",
         "title": "ReconstructRequest"
+      },
+      "RouteInfo": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "enum": [
+              "art",
+              "mfg"
+            ],
+            "title": "Domain",
+            "description": "art：畫作；mfg：工廠圖紙"
+          },
+          "margin": {
+            "type": "number",
+            "title": "Margin",
+            "description": "與圖紙原型的相似度 − 與畫作原型的相似度；> 0 偏向圖紙"
+          },
+          "art_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Art Score",
+            "description": "與畫作原型（知識庫畫作 CLIP 向量的平均）的相似度"
+          },
+          "mfg_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mfg Score",
+            "description": "與圖紙原型的相似度"
+          },
+          "min_margin": {
+            "type": "number",
+            "title": "Min Margin",
+            "description": "|margin| 小於此值視為不確定"
+          },
+          "uncertain": {
+            "type": "boolean",
+            "title": "Uncertain",
+            "description": "不確定時一律當圖紙（機密側）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "margin",
+          "art_score",
+          "mfg_score",
+          "min_margin",
+          "uncertain"
+        ],
+        "title": "RouteInfo",
+        "description": "領域路由（MMed-RAG 的領域辨識）：照片是畫作還是工廠圖紙"
       },
       "StrategyStatus": {
         "properties": {

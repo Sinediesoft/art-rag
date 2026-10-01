@@ -118,6 +118,10 @@ class ChatRequest(BaseModel):
     strategy: Strategy = "hybrid"
     use_retrieval: bool = True
     allow_fallback: bool = True
+    rearrange: bool | None = Field(
+        default=None,
+        description="檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）",
+    )
 
 
 class FeedbackRequest(BaseModel):
@@ -253,6 +257,25 @@ class DrawingSearchResponse(BaseModel):
     best_part_id: str | None
     latency_ms: int
     results: list[DrawingSearchHit]
+
+
+class RouteInfo(BaseModel):
+    """領域路由（MMed-RAG 的領域辨識）：照片是畫作還是工廠圖紙"""
+
+    domain: Literal["art", "mfg"] = Field(description="art：畫作；mfg：工廠圖紙")
+    margin: float = Field(description="與圖紙原型的相似度 − 與畫作原型的相似度；> 0 偏向圖紙")
+    art_score: float | None = Field(description="與畫作原型（知識庫畫作 CLIP 向量的平均）的相似度")
+    mfg_score: float | None = Field(description="與圖紙原型的相似度")
+    min_margin: float = Field(description="|margin| 小於此值視為不確定")
+    uncertain: bool = Field(description="不確定時一律當圖紙（機密側）")
+
+
+class AnySearchResponse(BaseModel):
+    query_image_id: str
+    route: RouteInfo
+    artwork_result: ImageSearchResponse | None = Field(description="判定為畫作時的辨識結果")
+    drawing_result: DrawingSearchResponse | None = Field(description="判定為圖紙時的辨識結果")
+    latency_ms: int
 
 
 class PartTextSearchHit(BaseModel):

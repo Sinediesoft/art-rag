@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from app.api.routes import router
 from app.core.config import get_settings
@@ -18,6 +19,7 @@ from app.core.errors import (
 )
 from app.core.logging import log, new_request_id, setup_logging
 from app.rag.embedders import warmup
+from app.repositories import db
 from app.repositories.index_store import IndexMismatch, get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services.cad_service import purge_jobs
@@ -39,11 +41,13 @@ async def lifespan(app: FastAPI):
     purge_jobs(s.upload_ttl_days)
     warmup()
     m = get_store().manifest
+    where = f"PostgreSQL {db.describe(s.database_url)}" if s.database_url else "檔案索引＋SQLite"
     log.info(
         f"ArtRAG 就緒：{m['artwork_count']} 幅畫、{m.get('part_count', 0)} 張工廠圖紙，"
-        f"kb_version={m['kb_version']}"
+        f"kb_version={m['kb_version']}，資料存放：{where}"
     )
     yield
+    db.close_pool()
 
 
 app = FastAPI(
@@ -64,7 +68,9 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 async def request_context(request: Request, call_next):
     request.state.request_id = request.headers.get("X-Request-ID") or new_request_id()
     if request.url.path.startswith("/api/"):
-        get_store().maybe_reload()  # make index 後自動換上新索引
+        # make index 後自動換上新索引。PostgreSQL 版要查資料庫，放到執行緒：
+        # 資料庫停掉時最多等 5 秒，不能卡住其他正在串流的請求
+        await run_in_threadpool(get_store().maybe_reload)
     response = await call_next(request)
     response.headers["X-Request-ID"] = request.state.request_id
     return response

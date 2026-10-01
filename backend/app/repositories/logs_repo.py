@@ -1,4 +1,5 @@
-"""使用紀錄與回饋（SQLite；正式版改 PostgreSQL，資料表欄位相同）。SQL 只寫在這層。"""
+"""使用紀錄與回饋（SQLite；.env 設了 DATABASE_URL 就改用 PostgreSQL 版 pg_logs_repo.py，
+資料表欄位相同、查詢語句共用）。SQL 只寫在這層。"""
 
 import sqlite3
 import threading
@@ -129,5 +130,11 @@ _repo: LogsRepo | None = None
 def get_logs_repo() -> LogsRepo:
     global _repo
     if _repo is None:
-        _repo = LogsRepo(get_settings().data_dir / "artrag.sqlite3")
+        s = get_settings()
+        if s.database_url:
+            from app.repositories.pg_logs_repo import PgLogsRepo
+
+            _repo = PgLogsRepo()
+        else:
+            _repo = LogsRepo(s.data_dir / "artrag.sqlite3")
     return _repo
