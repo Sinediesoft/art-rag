@@ -82,6 +82,83 @@
         }
       }
     },
+    "/api/v1/images/{image_id}/colors": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Photo Colors",
+        "operationId": "get_photo_colors_api_v1_images__image_id__colors_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColorAnalysis"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/colormap.png": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Photo Colormap",
+        "operationId": "get_photo_colormap_api_v1_images__image_id__colormap_png_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/search/image": {
       "post": {
         "tags": [
@@ -281,6 +358,83 @@
               "type": "string",
               "default": "full",
               "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/artworks/{artwork_id}/colors": {
+      "get": {
+        "tags": [
+          "artworks"
+        ],
+        "summary": "Get Artwork Colors",
+        "operationId": "get_artwork_colors_api_v1_artworks__artwork_id__colors_get",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColorAnalysis"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/artworks/{artwork_id}/colormap.png": {
+      "get": {
+        "tags": [
+          "artworks"
+        ],
+        "summary": "Get Artwork Colormap",
+        "operationId": "get_artwork_colormap_api_v1_artworks__artwork_id__colormap_png_get",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
             }
           }
         ],
@@ -2076,6 +2230,111 @@
         ],
         "title": "ChatRequest"
       },
+      "ChromaStats": {
+        "properties": {
+          "low": {
+            "type": "number",
+            "title": "Low"
+          },
+          "mid": {
+            "type": "number",
+            "title": "Mid"
+          },
+          "high": {
+            "type": "number",
+            "title": "High"
+          },
+          "median": {
+            "type": "number",
+            "title": "Median"
+          },
+          "histogram": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Histogram",
+            "description": "C* 0–100 分 10 格的比例（≥100 算在最後一格）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "low",
+          "mid",
+          "high",
+          "median",
+          "histogram"
+        ],
+        "title": "ChromaStats"
+      },
+      "ColorAnalysis": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "original",
+              "photo"
+            ],
+            "title": "Source",
+            "description": "original＝知識庫原圖；photo＝上傳的照片"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "palette": {
+            "items": {
+              "$ref": "#/components/schemas/PaletteColor"
+            },
+            "type": "array",
+            "title": "Palette"
+          },
+          "temperature": {
+            "$ref": "#/components/schemas/TemperatureShare"
+          },
+          "lightness": {
+            "$ref": "#/components/schemas/LightnessStats"
+          },
+          "chroma": {
+            "$ref": "#/components/schemas/ChromaStats"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "map_url": {
+            "type": "string",
+            "title": "Map Url",
+            "description": "色塊分布圖 PNG（每個像素塗成所屬主色）"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms",
+            "description": "計算耗時；知識庫畫作為建索引時算好的，回 0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "method",
+          "palette",
+          "temperature",
+          "lightness",
+          "chroma",
+          "summary",
+          "notes",
+          "map_url",
+          "latency_ms"
+        ],
+        "title": "ColorAnalysis"
+      },
       "ConstraintScore": {
         "properties": {
           "constraint": {
@@ -2962,6 +3221,53 @@
         ],
         "title": "InventoryTable"
       },
+      "LightnessStats": {
+        "properties": {
+          "dark": {
+            "type": "number",
+            "title": "Dark"
+          },
+          "mid": {
+            "type": "number",
+            "title": "Mid"
+          },
+          "light": {
+            "type": "number",
+            "title": "Light"
+          },
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "p5": {
+            "type": "number",
+            "title": "P5"
+          },
+          "p95": {
+            "type": "number",
+            "title": "P95"
+          },
+          "histogram": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Histogram",
+            "description": "L* 0–100 分 10 格的比例"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dark",
+          "mid",
+          "light",
+          "mean",
+          "p5",
+          "p95",
+          "histogram"
+        ],
+        "title": "LightnessStats"
+      },
       "MachineInfo": {
         "properties": {
           "machine_id": {
@@ -3383,6 +3689,68 @@
           "enabled"
         ],
         "title": "OutageRequest"
+      },
+      "PaletteColor": {
+        "properties": {
+          "hex": {
+            "type": "string",
+            "title": "Hex",
+            "description": "#RRGGBB"
+          },
+          "rgb": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Rgb"
+          },
+          "lab": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Lab"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share",
+            "description": "占畫面比例 0–1"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "最接近的基本色名（CIEDE2000）"
+          },
+          "temperature": {
+            "type": "string",
+            "enum": [
+              "warm",
+              "cool",
+              "neutral"
+            ],
+            "title": "Temperature"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "dark",
+              "mid",
+              "light"
+            ],
+            "title": "Tone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hex",
+          "rgb",
+          "lab",
+          "share",
+          "name",
+          "temperature",
+          "tone"
+        ],
+        "title": "PaletteColor"
       },
       "PartDescription": {
         "properties": {
@@ -5505,6 +5873,29 @@
           "detail"
         ],
         "title": "StrategyStatus"
+      },
+      "TemperatureShare": {
+        "properties": {
+          "warm": {
+            "type": "number",
+            "title": "Warm"
+          },
+          "cool": {
+            "type": "number",
+            "title": "Cool"
+          },
+          "neutral": {
+            "type": "number",
+            "title": "Neutral"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warm",
+          "cool",
+          "neutral"
+        ],
+        "title": "TemperatureShare"
       },
       "TextSearchHit": {
         "properties": {

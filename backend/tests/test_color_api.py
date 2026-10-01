@@ -6,7 +6,7 @@
 
 import json
 
-from app.core.config import get_models_config
+from app.core.config import REPO_ROOT, get_models_config
 from app.repositories.index_store import Hit, get_store
 
 
@@ -56,3 +56,42 @@ def test_manifest_records_color_params(mock_env):
 def test_kb_hash_ignores_computed_colors(client):
     """colors 是建索引算出來的，不能讓 /health 以為知識庫被改過。"""
     assert client.get("/api/v1/health").json()["index_consistent"] is True
+
+
+def _upload(client, path) -> str:
+    r = client.post("/api/v1/images", files={"file": (path.name, path.read_bytes(), "image/jpeg")})
+    return r.json()["image_id"]
+
+
+def test_artwork_colors_api(client):
+    r = client.get("/api/v1/artworks/npm-000001/colors")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source"] == "original" and body["method"] == "lab-kmeans-v1"
+    assert body["summary"] and body["notes"]
+    assert "?v=" in body["map_url"]
+    png = client.get(body["map_url"])
+    assert png.status_code == 200 and png.headers["content-type"] == "image/png"
+
+
+def test_artwork_colors_404(client):
+    r = client.get("/api/v1/artworks/nope-1/colors")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "ARTWORK_NOT_FOUND"
+    r = client.get("/api/v1/artworks/nope-1/colormap.png")
+    assert r.status_code == 404
+
+
+def test_photo_colors_api(client):
+    image_id = _upload(client, REPO_ROOT / "eval/photos/unknown/unknown-05.jpg")
+    body = client.get(f"/api/v1/images/{image_id}/colors").json()
+    assert body["source"] == "photo" and 1 <= len(body["palette"]) <= 6
+    assert any("照片" in n for n in body["notes"])
+    png = client.get(body["map_url"])
+    assert png.status_code == 200 and png.headers["content-type"] == "image/png"
+    again = client.get(f"/api/v1/images/{image_id}/colors").json()
+    assert again["palette"] == body["palette"]  # 快取或重算，結果都一樣
+
+
+def test_photo_colors_404(client):
+    r = client.get("/api/v1/images/img_doesnotexist0/colors")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "IMAGE_NOT_FOUND"
