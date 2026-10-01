@@ -76,3 +76,14 @@ export const useProductionOverview = () =>
 
 export const usePartPlan = (id: string | undefined) =>
   useQuery({ queryKey: ["part-plan", id], queryFn: () => api.partPlan(id!), enabled: !!id });
+
+// ---- 智慧助理（身分、核准、稽核）
+export const useAccounts = () =>
+  useQuery({ queryKey: ["accounts"], queryFn: api.accounts, refetchInterval: 10_000 });
+
+export const useApprovals = () =>
+  useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });
+
+export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit });
+
+export const useRouteEvalRuns = () => useQuery({ queryKey: ["route-eval-runs"], queryFn: api.routeEvalRuns });

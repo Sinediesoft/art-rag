@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.agent import local_router
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.errors import (
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # noqa: BLE001
         log.error(f"庫存資料庫建立失敗：{e}")
     warmup()
+    local_router.warmup()
     m = get_store().manifest
     log.info(
         f"ArtRAG 就緒：{m['artwork_count']} 幅畫、{m.get('part_count', 0)} 張工廠圖紙，"

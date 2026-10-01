@@ -320,7 +320,8 @@ def build_db(
 ) -> dict[str, int]:
     """寫到暫存檔再換上，查詢中的連線不受影響。回傳各資料表筆數。
 
-    production：{"machines": kb/production 的機台, "work_orders": 使用者開立的工單, "ops": 目前排程}
+    production：{"machines": kb/production 的機台, "work_orders": 使用者開立的工單, "ops": 目前排程,
+                 "changes": 智慧助理寫入的異動（依序重播）}
     """
     production = production or {}
     tmp = path.with_suffix(".tmp")
@@ -397,6 +398,7 @@ def build_db(
             [r for r in _user_work_orders(production) if r[1] in part_ids],
         )
         known = {r[0] for r in conn.execute("SELECT wo_no FROM work_orders")}
+        _replay_changes(conn, production.get("changes", []))
         conn.executemany(
             "INSERT OR IGNORE INTO schedule_ops VALUES (?,?,?,?,?,?,?,?,?)",
             [
@@ -412,6 +414,24 @@ def build_db(
         conn.close()
     os.replace(tmp, path)
     return counts
+
+
+def _replay_changes(conn: sqlite3.Connection, changes: list[dict]) -> None:
+    """智慧助理寫入的異動（production.sqlite3 的 data_changes）依序重播；每筆各自一個 savepoint，
+    某筆因知識庫改了而不再成立（例如庫存不夠扣）就跳過並記錄，不影響其他筆。"""
+    from app.repositories.data_changes import REPLAYED, ChangeError, apply
+
+    for ch in changes:
+        if ch["op"] not in REPLAYED:
+            continue
+        conn.execute("SAVEPOINT change")
+        try:
+            apply(conn, ch["op"], ch["params"], ch["change_no"], ch["moved_on"])
+            conn.execute("RELEASE change")
+        except (ChangeError, sqlite3.Error) as e:
+            conn.execute("ROLLBACK TO change")
+            conn.execute("RELEASE change")
+            log.error(f"異動 {ch['change_no']} 無法重播，已略過：{e}")
 
 
 def _authorizer(action, arg1, arg2, db, _source):
@@ -515,6 +535,20 @@ class InventoryRepo:
             return [dict(r) for r in conn.execute(sql, params).fetchall()]
         finally:
             conn.close()
+
+    def query(self, sql: str, params: tuple = ()) -> list[dict]:
+        """系統自己的固定查詢（智慧助理推定倉庫、讀回寫入結果）；唯讀連線，不經模型。"""
+        return self._query(sql, params)
+
+    def copy_to_memory(self) -> sqlite3.Connection:
+        """把工廠資料庫複製到記憶體（修改資料的試算：在交易內套用、讀出差異後回滾）。"""
+        src = self._connect_ro()
+        mem = sqlite3.connect(":memory:", check_same_thread=False)
+        try:
+            src.backup(mem)
+        finally:
+            src.close()
+        return mem
 
     def run_readonly(self, sql: str, max_rows: int, timeout_ms: int) -> QueryResult:
         """執行模型產生的 SQL（呼叫前已通過 text2sql.check_sql 的靜態檢查）。"""

@@ -156,6 +156,8 @@ class HealthResponse(BaseModel):
     recent_sql: list[dict] = []
     scheduler: "SchedulerEngine | None" = None
     memory: "MemoryStatus | None" = None
+    system1: "System1Status | None" = None
+    recent_routes: list[dict] = []
 
 
 class EvalRun(BaseModel):
@@ -691,6 +693,216 @@ class ScheduleSolveRequest(BaseModel):
     engine: Literal["timefold", "greedy"] = Field(
         default="timefold", description="greedy＝簡易排程（交期優先派工），用來和 Timefold 比較"
     )
+
+
+# ---------------------------------------------------------------- 智慧助理（docs/adr/007）
+class Account(BaseModel):
+    id: str
+    label: str
+    role: str
+    role_label: str
+    ops: list[str]
+    warehouses: list[str]
+    customers: list[str]
+    note: str
+
+
+class AccountsResponse(BaseModel):
+    current: Account
+    accounts: list[Account]
+    demo_controls: bool
+    pending_approvals: int = Field(description="待核准單數量（主管看得到要處理幾件）")
+
+
+class SwitchAccountRequest(BaseModel):
+    account_id: str
+
+
+class System1Status(BaseModel):
+    jev_configured: bool
+    detail: str
+    model: str
+    timeout_s: float
+    thresholds: dict[str, float]
+    clarify_margin: float
+
+
+class RouteRequest(BaseModel):
+    question: str = Field(default="", max_length=300)
+    image_id: str | None = None
+    forced_intent: str | None = Field(default=None, description="使用者點澄清按鈕選的意圖")
+    engine: Literal["auto", "jev", "local"] = Field(
+        default="auto", description="auto：有金鑰用 Jev、否則本地；eval-route 用 jev／local 比較"
+    )
+
+
+class RankedIntent(BaseModel):
+    intent: str
+    label: str
+    prob: float
+
+
+class RouteEgress(BaseModel):
+    bytes: int = Field(description="送出本機的位元組數（Jev 請求本文）；本地路由為 0")
+    to: str | None
+    images: int = 0
+
+
+class RoutePhoto(BaseModel):
+    kind: Literal["art", "drawing", "unknown"]
+    id: str | None
+    label: str
+
+
+class RouteResponse(BaseModel):
+    request_id: str
+    account: Account
+    question: str
+    masked_text: str = Field(description="送 Jev 的代號化文字（本地路由時只在本機）")
+    mapping: dict[str, dict] = Field(description="代號 → 實體（只留在本機）")
+    entities: list[dict]
+    photo: RoutePhoto | None
+    engine: Literal["jev", "local", "user"]
+    engine_label: str
+    model: str
+    fallback_reason: str | None
+    intent: str
+    intent_label: str
+    risk: Literal["read", "heavy", "write"]
+    confidence: float
+    margin: float
+    jev_confidence: float | None
+    ranked: list[RankedIntent]
+    modify_op: str | None
+    flags: dict[str, bool]
+    gate: Literal["direct", "confirm", "modify", "clarify", "out_of_scope"]
+    threshold: float
+    gate_reason: str
+    options: list[RankedIntent]
+    permitted: bool
+    permission_note: str
+    dispatch: dict
+    egress: RouteEgress
+    latency_ms: dict[str, int]
+    detail: dict
+    jev_request: dict | None = Field(description="實際送給 Jev 的請求本文（畫面上可展開檢查）")
+
+
+class ChangeCheck(BaseModel):
+    key: Literal["role", "scope", "field", "limit"]
+    label: str
+    ok: bool | None = Field(description="null＝前一項已不符，未檢查")
+    detail: str
+
+
+class ChangeDiff(BaseModel):
+    label: str
+    field: str
+    before: str | int | float | None
+    after: str | int | float | None
+
+
+class ChangePreviewRequest(BaseModel):
+    question: str | None = Field(default=None, max_length=300)
+    op: str | None = Field(default=None, description="路由判斷的操作；表單送出時必填")
+    params: dict | None = Field(default=None, description="表單送出時的參數（不經參數抽取）")
+
+
+class ChangePreview(BaseModel):
+    request_id: str
+    op: str
+    op_label: str
+    account: Account
+    params: dict
+    param_labels: dict
+    sources: dict[str, str]
+    notes: list[str]
+    llm: dict | None
+    missing: list[str]
+    checks: list[ChangeCheck]
+    diff: list[ChangeDiff]
+    reasons: list[str] = Field(description="超過額度的原因（非空＝要送主管核准）")
+    pending_id: str | None
+    summary: str
+    next: Literal["confirm", "approval", "rejected", "need_info"]
+    message: str
+    latency_ms: int | None = None
+
+
+class ChangeCommitted(BaseModel):
+    change_no: str
+    text: str = Field(description="依資料庫讀回結果套固定模板的回覆")
+    rows: list[ChangeDiff]
+    moves: int
+    op: str
+    summary: str
+    account: Account
+
+
+class ApprovalRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ReturnRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class Approval(BaseModel):
+    ap_no: str
+    op: str
+    op_label: str
+    params: dict
+    param_labels: dict
+    summary: str
+    reasons: list[str]
+    diff: list[ChangeDiff]
+    note: str | None
+    requester_id: str
+    requester_label: str
+    created_at: str
+    status: Literal["待核准", "已核准", "已退回", "已失效"]
+    decided_label: str | None
+    decided_at: str | None
+    decision_note: str | None
+    change_no: str | None
+
+
+class ApprovalsResponse(BaseModel):
+    can_approve: bool
+    pending: list[Approval]
+    mine: list[Approval]
+    recent: list[Approval]
+
+
+class ApprovalDecision(BaseModel):
+    ap_no: str
+    status: str
+    text: str
+    change_no: str | None = None
+    rows: list[ChangeDiff] = []
+    moves: int = 0
+
+
+class RouteEvalRunsResponse(BaseModel):
+    runs: list[dict] = Field(description="eval/runs/*-route.json 的摘要（新到舊）")
+
+
+class AuditRow(BaseModel):
+    id: int
+    at: str
+    actor_id: str
+    actor_label: str
+    action: str
+    op: str | None
+    ref_no: str | None
+    summary: str | None
+    detail: dict | list | str | None
+    request_id: str | None
+
+
+class AuditResponse(BaseModel):
+    items: list[AuditRow]
+    changes: list[dict] = Field(description="最近寫入的異動單")
 
 
 HealthResponse.model_rebuild()

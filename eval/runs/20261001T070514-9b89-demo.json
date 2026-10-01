@@ -1,0 +1,82 @@
+{
+  "run_id": "20261001T070514-9b89",
+  "created_at": "2026-10-01T07:05:14.665262+00:00",
+  "base": "http://localhost:8000",
+  "steps": [
+    {
+      "step": "1. 以文字找圖紙",
+      "ok": true,
+      "detail": "「有 6 個螺栓孔的法蘭」→ 連接法蘭（mfg-002）、「L 型固定支架」→ L 型固定支架（mfg-001）、「階梯傳動軸」→ 階梯傳動軸（mfg-003）",
+      "seconds": 0.1,
+      "memory_before": 79.0,
+      "memory_after": 79.0,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "events": []
+    },
+    {
+      "step": "2. 製程問答",
+      "ok": true,
+      "detail": "連接法蘭：「精車內孔尺寸為 Ø30H7，表面粗糙度 Ra 1.6，需以精搪刀加工 [1][3…」（qwen3-vl:4b-instruct，6.0 秒）",
+      "seconds": 6.0,
+      "memory_before": 79.0,
+      "memory_after": 78.7,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "events": []
+    },
+    {
+      "step": "4. 從圖紙開立工單",
+      "ok": true,
+      "detail": "WO-2610-06 連接法蘭 80 件（急件，AP-2610-03 主管核准，交期 2026-10-16）、WO-2610-07 L 型固定支架 120 件（一般，交期 2026-10-20）、WO-2610-08 階梯傳動軸 50 件（一般，交期 2026-10-21）",
+      "seconds": 0.1,
+      "memory_before": 78.7,
+      "memory_after": 78.7,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "events": []
+    },
+    {
+      "step": "5. 生產排程",
+      "ok": true,
+      "detail": "0hard/-3408medium/-42615soft；準時 4/8、換線 29 次、全部完工 2026-10-27 09:55",
+      "seconds": 0.0,
+      "memory_before": 78.7,
+      "memory_after": 78.7,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "events": []
+    },
+    {
+      "step": "6. Text-to-SQL 查排程",
+      "ok": true,
+      "detail": "「WO-2610-06 排程後什麼時候完工？會不會延遲？」→ 1 筆（3.2 秒）\n    SQL：SELECT wo_no AS 工單號, name AS 品名, priority AS 優先, due_on AS 交期, planned_end AS 排程完工, on_time AS 是否延遲\nFROM v_wo_plan\nWHERE wo_no = 'WO-2610-06'\nORDER BY planned_end\n    回答：WO-2610-06 排程完工為 2026-10-19 14:20，已延遲。",
+      "seconds": 3.2,
+      "memory_before": 78.7,
+      "memory_after": 77.5,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "events": []
+    }
+  ]
+}

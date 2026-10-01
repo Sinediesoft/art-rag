@@ -60,6 +60,7 @@ def create_work_order(
     priority: str = "一般",
     release_on: str | None = None,
     note: str | None = None,
+    created_by: str | None = None,
 ) -> dict:
     site, routings, parts, _, cal = load_setup()
     if part_id not in parts:
@@ -87,6 +88,7 @@ def create_work_order(
             "release_on": release_on,
             "due_on": due_on,
             "note": note,
+            "created_by": created_by,
         }
     )
     get_inventory_repo().ensure_built(force=True)
@@ -94,6 +96,14 @@ def create_work_order(
         "work_order", extra={"fields": {"wo_no": row["wo_no"], "part_id": part_id, "qty": qty}}
     )
     return {**row, "part_name": parts[part_id]["name"]["zh"], "source": "系統開立"}
+
+
+def next_wo_no() -> tuple[str, str]:
+    """下一個工單號（智慧助理的確認卡先顯示預定單號，實際寫入時再配一次）與排程起始日。"""
+    *_, cal = load_setup()
+    return get_production_repo().next_wo_no(cal.start.strftime("%y%m"), _taken_wo_numbers()), str(
+        cal.start
+    )
 
 
 def cancel_work_order(wo_no: str) -> None:

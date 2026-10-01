@@ -43,6 +43,7 @@ FLOWS: dict[str, str] = {
     "reconstruct": "3D 重建",
     "sql": "庫存查詢",
     "schedule": "生產排程",
+    "route": "智慧助理路由",
     "manual": "手動釋放",
 }
 

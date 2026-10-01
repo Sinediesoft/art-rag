@@ -5,7 +5,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Layout } from "./Layout";
 import "./index.css";
 import { AdminPage } from "./pages/AdminPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { ArtworkPage } from "./pages/ArtworkPage";
+import { AssistantPage } from "./pages/AssistantPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ComparePage } from "./pages/ComparePage";
 import { HomePage } from "./pages/HomePage";
@@ -40,6 +42,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="reconstruct" element={<ReconstructPage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="schedule" element={<SchedulePage />} />
+            <Route path="assistant" element={<AssistantPage />} />
+            <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="admin" element={<AdminPage />} />
           </Route>

@@ -1,0 +1,44 @@
+{"id": "r01", "question": "河岸邊有人撐傘散步的那幅畫是哪一幅？", "intent": "art_search"}
+{"id": "r02", "question": "有一幅畫是高山和很細的瀑布", "intent": "art_search"}
+{"id": "r03", "question": "我想找畫裡有金黃色麥田的作品", "intent": "art_search"}
+{"id": "r04", "question": "有沒有畫一群人在河邊草地休息的畫", "intent": "art_search"}
+{"id": "r05", "question": "有絲柏的麥田是在哪一年畫的？", "intent": "art_qa"}
+{"id": "r06", "question": "范寬這張山水畫的筆法有什麼特色？", "intent": "art_qa"}
+{"id": "r07", "question": "秀拉的點描法是什麼？", "intent": "art_qa"}
+{"id": "r08", "question": "這幅畫是誰畫的，哪一年完成？", "intent": "art_qa"}
+{"id": "r09", "question": "我要看連接法蘭那張圖", "intent": "drawing_search"}
+{"id": "r10", "question": "有沒有用不鏽鋼做的零件？", "intent": "drawing_search"}
+{"id": "r11", "question": "圖號 D-24-0117 是什麼零件？", "intent": "drawing_search"}
+{"id": "r12", "question": "法蘭的內孔精度要求多少？", "intent": "drawing_qa"}
+{"id": "r13", "question": "傳動軸要做什麼熱處理？硬度多少？", "intent": "drawing_qa"}
+{"id": "r14", "question": "L 型固定支架的加工製程有幾道工序？", "intent": "drawing_qa"}
+{"id": "r15", "question": "軸承座組裝時螺栓扭力是多少？", "intent": "drawing_qa"}
+{"id": "r16", "question": "連接法蘭現在可以出貨的有多少？", "intent": "data_query"}
+{"id": "r17", "question": "有哪些料已經低於安全存量了？", "intent": "data_query"}
+{"id": "r18", "question": "WO-2610-01 什麼時候完工？", "intent": "data_query"}
+{"id": "r19", "question": "栩達設備的訂單還有多少沒交？", "intent": "data_query"}
+{"id": "r20", "question": "哪些訂單交期延後了？", "intent": "data_query"}
+{"id": "r21", "question": "隔離區裡面現在放了哪些東西？", "intent": "data_query"}
+{"id": "r22", "question": "CNC 車床-01 手上還有幾張工單？", "intent": "data_query"}
+{"id": "r23", "question": "上個月報廢了多少件？", "intent": "data_query"}
+{"id": "r24", "question": "把法蘭轉成 3D", "intent": "reconstruct"}
+{"id": "r25", "question": "幫我把這張圖紙建模成立體模型", "intent": "reconstruct"}
+{"id": "r26", "question": "工單都重新排一次", "intent": "schedule"}
+{"id": "r27", "question": "幫我重跑排程看看能不能準時", "intent": "schedule"}
+{"id": "r28", "question": "一廠成品倉的 L 型支架盤點多了 2 件", "intent": "modify", "op": "stock_adjust"}
+{"id": "r29", "question": "把二廠成品倉的螺帽數量改成 300", "intent": "modify", "op": "stock_adjust"}
+{"id": "r30", "question": "可以幫我把一廠的法蘭盤點少 2 件嗎？", "intent": "modify", "op": "stock_adjust"}
+{"id": "r31", "question": "隔離區那 2 支傳動軸報廢掉", "intent": "modify", "op": "stock_scrap"}
+{"id": "r32", "question": "T 型槽螺帽 30 件從一廠成品倉調到不良品隔離區", "intent": "modify", "op": "stock_transfer"}
+{"id": "r33", "question": "待驗區的軸承座 8 件放行", "intent": "modify", "op": "stock_status"}
+{"id": "r34", "question": "SO-2609-003 第 2 項的交期往後延到 10/09", "intent": "modify", "op": "so_update"}
+{"id": "r35", "question": "幫我開一張軸承座的工單，20 件，10/22 要", "intent": "modify", "op": "wo_create"}
+{"id": "r36", "question": "WO-2610-01 的交期提前到 10/14", "intent": "modify", "op": "wo_update_due"}
+{"id": "r37", "question": "WO-2610-02 不要做了，取消掉", "intent": "modify", "op": "wo_cancel"}
+{"id": "r38", "question": "把連接法蘭的標準成本改成 500", "intent": "modify", "op": "other"}
+{"id": "r39", "question": "現在記憶體用了多少？", "intent": "system"}
+{"id": "r40", "question": "Qwen 模型目前有載入嗎？", "intent": "system"}
+{"id": "r41", "question": "明天會下雨嗎？", "intent": "out_of_scope"}
+{"id": "r42", "question": "推薦我一部好看的電影", "intent": "out_of_scope"}
+{"id": "r43", "question": "法蘭", "intent": "drawing_search", "gate": "clarify"}
+{"id": "r44", "question": "軸承座", "intent": "drawing_search", "gate": "clarify"}

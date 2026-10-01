@@ -201,7 +201,15 @@ def build_problem() -> Problem:
     jobs: list[Job] = []
     skipped: list[dict] = []
 
+    # 智慧助理改過的工單交期（同一張工單以最後一次為準）
+    due_override = {
+        c["params"]["wo_no"]: c["params"]["due_on"]
+        for c in get_production_repo().changes()
+        if c["op"] == "wo_update_due"
+    }
+
     def make_job(w: dict, source: str, qty: int, release_on: str, priority: str) -> None:
+        w = {**w, "due_on": due_override.get(w["wo_no"], w["due_on"])}
         pid = w["part_id"]
         part = parts.get(pid)
         if pid not in routings or part is None:

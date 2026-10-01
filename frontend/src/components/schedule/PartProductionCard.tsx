@@ -19,7 +19,8 @@ export function PartProductionCard({ partId }: { partId: string }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<WorkOrderCreated | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<ApiError | null>(null);
+  const [approvalNo, setApprovalNo] = useState<string | null>(null);
   const [showRouting, setShowRouting] = useState(false);
 
   // 建議值帶進表單（換圖紙時重新帶）
@@ -30,6 +31,7 @@ export function PartProductionCard({ partId }: { partId: string }) {
     setPriority(plan.suggestion.priority);
     setCreated(null);
     setFailure(null);
+    setApprovalNo(null);
   }, [plan?.part_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error || !plan) return null;
@@ -38,6 +40,7 @@ export function PartProductionCard({ partId }: { partId: string }) {
     e.preventDefault();
     setBusy(true);
     setFailure(null);
+    setApprovalNo(null);
     try {
       const wo = await api.createWorkOrder({ part_id: partId, qty, due_on: due, priority, note: note.trim() || null });
       setCreated(wo);
@@ -46,7 +49,27 @@ export function PartProductionCard({ partId }: { partId: string }) {
         void qc.invalidateQueries({ queryKey: [key] });
       }
     } catch (err) {
-      setFailure(err instanceof ApiError ? err.message : String(err));
+      setFailure(err instanceof ApiError ? err : new ApiError("ERROR", String(err), "", 0));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 急件超過額度：同一套修改資料流程（權限判定＋試算）建立待核准單
+  const requestApproval = async () => {
+    setBusy(true);
+    try {
+      const preview = await api.changePreview({
+        op: "wo_create",
+        params: { part_id: partId, qty, due_on: due, priority, note: note.trim() || null },
+      });
+      if (!preview.pending_id || preview.next !== "approval") throw new ApiError("REJECTED", preview.message, "", 0);
+      const ap = await api.requestApproval(preview.pending_id, note.trim());
+      setApprovalNo(ap.ap_no);
+      setFailure(null);
+      void qc.invalidateQueries({ queryKey: ["accounts"] });
+    } catch (err) {
+      setFailure(err instanceof ApiError ? err : new ApiError("ERROR", String(err), "", 0));
     } finally {
       setBusy(false);
     }
@@ -198,7 +221,25 @@ export function PartProductionCard({ partId }: { partId: string }) {
                 </Link>
               </span>
             )}
-            {failure && <span className="text-seal">{failure}</span>}
+            {failure && <span className="text-seal">{failure.message}</span>}
+            {failure?.code === "APPROVAL_REQUIRED" && (
+              <button
+                type="button"
+                onClick={() => void requestApproval()}
+                disabled={busy}
+                className="rounded-lg bg-amber px-3 py-1.5 font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              >
+                送主管核准
+              </button>
+            )}
+            {approvalNo && (
+              <span className="text-amber">
+                已建立待核准單 <b className="font-mono">{approvalNo}</b> ·{" "}
+                <Link to="/approvals" className="font-bold underline">
+                  待核准清單
+                </Link>
+              </span>
+            )}
           </div>
           <p className="mt-2 text-[11px] text-ink-faint">
             工單寫入生產資料庫，工廠資料庫同步更新（庫存查詢頁的「生產中」、Text-to-SQL 都看得到）；排程時從 {plan.plan_start} 起排。

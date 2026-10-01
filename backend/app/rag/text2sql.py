@@ -1,6 +1,6 @@
 """Text-to-SQL：中文問題 → SQLite 查詢 → 依查詢結果回答。
 
-- prompt：shared/prompts/sql_v2.md（產生 SQL）與 sql_answer_v1.md（依結果回答），
+- prompt：shared/prompts/sql_v2.md（產生 SQL）與 sql_answer_v2.md（依結果回答），
   few-shot 範例在 sql_v2_examples.json；schema 與欄位值（零件、倉庫、客戶、機台）由資料庫即時產生
 - check_sql：執行前的靜態檢查（只准一條 SELECT／WITH、擋寫入與管理指令）；
   真正的保護在 repositories/inventory_repo.run_readonly（唯讀連線＋authorizer 白名單＋逾時）

@@ -53,6 +53,14 @@ class Settings(BaseSettings):
     memory_high_pct: float = 80.0
     memory_check_interval_s: float = 5.0
 
+    # 智慧助理的 System 1（意圖判斷）：TypeSafe Jev（雲端，只收代號化文字，docs/adr/007）。
+    # 金鑰留空、JEV_ENABLED=false 或呼叫失敗時一律改走本地路由（關鍵字＋bge-m3），其他功能照常
+    jev_enabled: bool = True
+    jev_base_url: str = "https://api.typesafe.ai/v1"
+    jev_model: str = "jev-1.13.0"  # 文件建議固定版本，換版要重跑 make eval-route
+    jev_api_key: str = ""
+    jev_timeout_s: float = 1.5
+
     lora_enabled: bool = False
     lora_base_url: str = "http://localhost:11434/v1"
     lora_model: str = ""
@@ -142,6 +150,20 @@ def get_settings() -> Settings:
 def get_models_config() -> ModelsConfig:
     path = get_settings().shared_dir / "models.yaml"
     return ModelsConfig.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
+@lru_cache
+def get_agent_config() -> dict:
+    """智慧助理的路由設定：意圖、門檻、關鍵字、範例句、別名（shared/agent.yaml）。"""
+    path = get_settings().shared_dir / "agent.yaml"
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+@lru_cache
+def get_access_config() -> dict:
+    """展示帳號、角色權限、硬性上限與核准額度（shared/access.yaml）。"""
+    path = get_settings().shared_dir / "access.yaml"
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
 def kb_version() -> str:

@@ -1,0 +1,54 @@
+# 展示帳號、角色權限、硬性上限與核准額度（docs/adr/007，負責：B）
+#
+# - 展示版不用密碼：頁首切換身分（DEMO_CONTROLS=true 才顯示），身分存在伺服器端的工作階段。
+#   Jev 與 Qwen3-VL 都看不到、也決定不了權限；使用者打「我是主管」不會有任何效果。
+# - 預設不允許：沒列在角色 ops 裡的操作一律拒絕。零件主檔、機台資料不開放用對話修改。
+# - 權限在 API 層檢查：智慧助理、圖紙頁「開立工單」、取消工單、開始排程、展示還原都走同一套規則。
+# - 查詢不限範圍：任何身分都看得到全部資料（只有「修改」受權限限制）。
+
+default_account: guest
+
+accounts:
+  guest:   {label: 訪客, role: guest}
+  wh1:     {label: 倉管・一廠, role: warehouse, warehouses: [WH-A, WH-Q, WH-N]}
+  wh2:     {label: 倉管・二廠, role: warehouse, warehouses: [WH-B]}
+  sales_a: {label: 業務・甲, role: sales, customers: [晨峰自動化, 栩達設備]}
+  sales_b: {label: 業務・乙, role: sales, customers: [岳承精機, 沛宇機電]}
+  planner: {label: 生管, role: planner}
+  manager: {label: 主管, role: manager}
+
+roles:
+  guest:     {label: 訪客, ops: [], note: 只能查詢}
+  warehouse: {label: 倉管, ops: [stock_adjust, stock_transfer, stock_scrap, stock_status], note: 自己廠區的倉庫}
+  sales:     {label: 業務, ops: [so_update], note: 自己負責的客戶}
+  planner:   {label: 生管, ops: [wo_create, wo_update_due, wo_cancel, schedule_run, demo_reset], note: 全廠；只能取消自己開的工單}
+  manager:   {label: 主管, ops: [approve, demo_reset], note: 核准所有人的超額申請；不能核准自己的申請}
+
+# 每種操作開放修改的欄位（其他欄位一律不開放，例如訂單的已出貨數量）
+fields:
+  stock_adjust: [qty]
+  stock_transfer: [warehouse_id, qty]
+  stock_scrap: [qty]
+  stock_status: [status]
+  so_update: [due_on, qty]
+  wo_create: [work_order]
+  wo_update_due: [due_on]
+  wo_cancel: [status]
+
+# 硬性上限：直接拒絕，主管也不能核准
+hard_limits:
+  max_rows: 5              # 單次影響的庫存列數
+  # 另外三條寫在程式裡：庫存不能變成負數、訂購數量不能少於已出貨、零件主檔與機台資料不開放
+
+# 額度：超過就送主管核准（初值，可調）
+quotas:
+  stock_adjust: {max_qty: 20, max_ratio: 0.20}   # 盤點差異超過 20 件或 20%
+  stock_scrap: {max_qty: 10}                      # 報廢超過 10 件
+  stock_transfer: {max_qty: 50}                   # 調撥超過 50 件
+  so_update: {max_delay_days: 7, qty_decrease: true}  # 交期延後超過 7 天；訂購數量減少
+  wo_create: {rush: true}                         # 急件工單
+  wo_cancel: {in_progress: true}                  # 取消已在生產中的工單
+
+approval:
+  expire_hours: 24         # 超過 24 小時沒人處理就自動失效（make demo-reset 也會清掉）
+  pending_ttl_min: 15      # 確認卡的有效時間：超過就要重新試算
