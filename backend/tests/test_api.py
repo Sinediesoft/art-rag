@@ -82,13 +82,26 @@ def test_chat_with_photo_only_goes_through_router(client):
         assert event == "sources" and data["route"]["domain"] in {"art", "mfg"}
 
 
-def test_chat_rearrange_is_off_by_default_and_reported_when_on(client):
+def test_chat_rearrange_is_off_by_default_and_reported_when_on(client, monkeypatch):
+    from app.services import chat_service
+
+    # mock 向量是雜湊亂數，相似度都在門檻以下：已指定畫作時檢索只留最相關的 1 段，
+    # 只有 1 段時篩選直接跳過。這裡改成不設門檻、取這幅畫的前 3 段，篩選才會交給生成端判斷
+    def top3(question, artwork_id, part_id=None):
+        store = chat_service.get_store()
+        qvec = chat_service.embed_text([question])[0]
+        hits = store.art.search_chunks(qvec, 3, owner_id=artwork_id)
+        return [chat_service._source(i, h, store) for i, h in enumerate(hits)]
+
+    monkeypatch.setattr(chat_service, "retrieve", top3)
     body = {"question": "畫家的簽名藏在哪裡？", "artwork_id": "npm-000001", "strategy": "hybrid"}
     off = parse_sse(client.post("/api/v1/chat", json=body).text)[0][1]
     assert off["rearrange"] is None
     on = parse_sse(client.post("/api/v1/chat", json={**body, "rearrange": True}).text)[0][1]
     # mock 生成端的輸出不是「1,3」格式 → 退回原本的段落，但要回報篩選資訊
-    assert on["rearrange"]["fallback"] and on["rearrange"]["kept"] == len(on["sources"])
+    info = on["rearrange"]
+    assert info["candidates"] == 3 and info["fallback"]
+    assert info["kept"] == len(on["sources"]) == 3
 
 
 def test_unknown_strategy_without_fallback_errors(client):
