@@ -23,6 +23,16 @@ export const usePhotoColors = (imageId: string | null) =>
     staleTime: Infinity,
   });
 
+/** 對位結果固定；對不上（ALIGN_FAILED）是確定的答案，不重試 */
+export const useImageAlignment = (imageId: string, target: string | null) =>
+  useQuery({
+    queryKey: ["photo-alignment", imageId, target],
+    queryFn: () => api.photoAlignment(imageId, target!),
+    enabled: !!target,
+    staleTime: Infinity,
+    retry: false,
+  });
+
 export const useImageSearch = (imageId: string | null) =>
   useQuery({
     queryKey: ["search-image", imageId],

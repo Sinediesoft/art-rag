@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../../api/client";
 import { usePartTextSearch, useRoutedSearch } from "../../api/hooks";
+import { DrawingDiff } from "../../components/align/AlignmentCards";
 import { ErrorMessage, Loading } from "../../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../../components/common/StatusNotices";
 import { PartCard } from "../../components/parts/PartCard";
@@ -96,6 +97,8 @@ function ImageResults({
           </div>
         </section>
       )}
+
+      {best && <DrawingDiff imageId={imageId} partId={best.part.id} revision={best.part.revision} />}
 
       {data && !data.matched && (
         <>
