@@ -314,3 +314,281 @@ def location_png(ref_img: Image.Image, loc: Location) -> bytes:
     rgb = np.ascontiguousarray(rgb.astype(np.uint8))
     cv2.polylines(rgb, [poly], True, _AMBER, max(2, round(max(ww, hh) / 300)), cv2.LINE_AA)
     return _png(rgb)
+
+
+# ---------------------------------------------------------------- 照片比照片：形狀與顏色（畫作）
+@dataclass
+class ToneDiff:
+    status: str  # same／changed／global_change
+    regions: list[Region]  # kind：shape（形狀不同）／color（顏色不同）／both
+    changed_ratio: float  # 差異面積占比對範圍的比例
+    shape: np.ndarray = field(repr=False)  # 以下都是參考圖（照片 A）原始大小的布林陣列
+    color: np.ndarray = field(repr=False)
+    compared: np.ndarray = field(repr=False)
+
+
+_PAD_DARK = 12  # 照片四邊相連、每個色版都不超過這個值的區塊，是照片自己的黑邊
+
+
+def _padding(src: np.ndarray) -> np.ndarray:
+    """照片自己的黑邊（拍歪拉正後補的黑色、截圖的黑框）→ True：和照片四邊相連、近乎全黑的區塊。
+    畫上的墨色很少黑到這個程度，又剛好連到照片邊緣；就算是，也只是那一塊不比，不會報假差異。"""
+    dark = (src.max(axis=2) <= _PAD_DARK).astype(np.uint8)
+    _, labels = cv2.connectedComponents(dark)
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    return np.isin(labels, edge[edge > 0])
+
+
+def _mblur(x: np.ndarray, m: np.ndarray, sigma: float) -> np.ndarray:
+    """只用遮罩內的像素做高斯平均（遮罩外的像素完全不參與）。x 可以是 (H, W) 或 (H, W, C)。"""
+    w = cv2.GaussianBlur(m, (0, 0), sigma)
+    num = cv2.GaussianBlur(x * (m[..., None] if x.ndim == 3 else m), (0, 0), sigma)
+    return num / ((w[..., None] if x.ndim == 3 else w) + 1e-6)
+
+
+def _ssim(a: np.ndarray, b: np.ndarray, m: np.ndarray, sigma: float = 3.0) -> np.ndarray:
+    def g(x):
+        return _mblur(x, m, sigma)
+
+    ma, mb = g(a), g(b)
+    va, vb, cov = g(a * a) - ma * ma, g(b * b) - mb * mb, g(a * b) - ma * mb
+    c1, c2 = (0.01 * 255) ** 2, (0.03 * 255) ** 2
+    return ((2 * ma * mb + c1) * (2 * cov + c2)) / ((ma * ma + mb * mb + c1) * (va + vb + c2))
+
+
+def _local_norm(gray: np.ndarray, m: np.ndarray, sigma: float) -> np.ndarray:
+    """局部亮度、對比正規化：去掉光線不均、整體偏暗，只留下筆觸與形狀。只用拍到的像素算，
+    沒拍到的地方（補黑）若算進來，在素色牆面這種平坦處會被放大成一圈假的差異。"""
+    mean = _mblur(gray, m, sigma)
+    s = np.sqrt(np.maximum(_mblur((gray - mean) ** 2, m, sigma), 0)) + 8
+    return np.clip((gray - mean) / s * 40 + 128, 0, 255).astype(np.float32)
+
+
+_TONE_SHIFT_PX = 1  # 比形狀時容許錯開幾 px（工作大小）
+# 參考圖要模糊多少才和照片一樣清楚：一個一個試，取和照片最像的（ECC 相關係數最高）
+_BLUR_STEPS = (0.5, 0.75, 1.0, 1.5, 2.0, 3.0)
+
+
+def _shift(x: np.ndarray, dx: int, dy: int) -> np.ndarray:
+    return np.roll(np.roll(x, dy, axis=0), dx, axis=1)
+
+
+def _match_blur(a_g: np.ndarray, b_g: np.ndarray, covered: np.ndarray) -> np.ndarray:
+    """參考圖模糊到和照片一樣清楚。照片拍不出比自己更細的筆觸（手震、失焦、拍照後縮小），
+    原圖上那些細節在照片裡糊掉不是畫改了；照片上新加的筆畫在照片裡，不受影響。"""
+    m = covered.astype(np.uint8)
+    if not m.any():
+        return a_g
+    best, sigma = cv2.computeECC(a_g, b_g, m), 0.0
+    for s in _BLUR_STEPS:
+        c = cv2.computeECC(cv2.GaussianBlur(a_g, (0, 0), s), b_g, m)
+        if c > best:
+            best, sigma = c, s
+    return cv2.GaussianBlur(a_g, (0, 0), sigma) if sigma else a_g
+
+
+# 對位微調由粗到細：先在 1/4 大小只找平移，再到 1/2 找仿射，最後原大小找單應。
+# 直接在原大小找單應，差到十幾 px 時不收斂（實測霧多、特徵點擠在一角的近照）
+_TONE_REFINE = (
+    (0.25, cv2.MOTION_TRANSLATION),
+    (0.5, cv2.MOTION_AFFINE),
+    (1.0, cv2.MOTION_HOMOGRAPHY),
+)
+_TONE_REFINE_MAX = 0.06  # 微調最多移動比對範圍四角多少（工作大小長邊的比例），超過就當沒調好
+
+
+def _refine_tone(
+    a_g: np.ndarray, src: np.ndarray, valid: np.ndarray, hs: np.ndarray, size: tuple[int, int]
+) -> np.ndarray:
+    """照片對到參考圖之後再用 ECC 微調，回傳新的 hs（照片 → 工作大小的參考圖）。
+
+    辨識的 H 只靠特徵點，特徵點少的地方（霧、素色的絹）會差幾 px 到十幾 px，
+    SSIM 一錯位整片都像「形狀不同」。對得更準（ECC 相關係數變高）才採用，不然照原本的。
+    """
+    b_g = cv2.cvtColor(cv2.warpPerspective(src, hs, size), cv2.COLOR_RGB2GRAY).astype(np.float32)
+    cov = cv2.erode(cv2.warpPerspective(valid, hs, size), np.ones((9, 9), np.uint8))
+    if np.count_nonzero(cov) < 2000:
+        return hs
+
+    def level(x, k, interp=cv2.INTER_AREA):
+        return cv2.resize(
+            x, (max(8, round(size[0] * k)), max(8, round(size[1] * k))), interpolation=interp
+        )
+
+    w = np.eye(3)
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-6)
+    for k, motion in _TONE_REFINE:
+        s = np.diag([k, k, 1.0])
+        init = s @ w @ np.linalg.inv(s)
+        init = init if motion == cv2.MOTION_HOMOGRAPHY else init[:2]
+        try:
+            _, r = cv2.findTransformECC(
+                cv2.GaussianBlur(level(a_g, k), (0, 0), 1.0),
+                cv2.GaussianBlur(level(b_g, k), (0, 0), 1.0),
+                init.astype(np.float32),
+                motion,
+                criteria,
+                (level(cov, k, cv2.INTER_NEAREST) > 0).astype(np.uint8),
+                3,
+            )
+        except cv2.error:  # 這一層沒收斂：沿用上一層的結果
+            continue
+        r = r.astype(np.float64)
+        w = np.linalg.inv(s) @ (r if r.shape[0] == 3 else np.vstack([r, [0, 0, 1]])) @ s
+    ys, xs = np.nonzero(cov)
+    box = np.float32(
+        [[[xs.min(), ys.min()], [xs.max(), ys.min()], [xs.max(), ys.max()], [xs.min(), ys.max()]]]
+    )
+    if np.abs(cv2.perspectiveTransform(box, w) - box).max() > _TONE_REFINE_MAX * max(size):
+        return hs
+    refined = np.linalg.inv(w) @ hs
+    b2 = cv2.cvtColor(cv2.warpPerspective(src, refined, size), cv2.COLOR_RGB2GRAY).astype(
+        np.float32
+    )
+    m = (cov > 0).astype(np.uint8)
+    t = cv2.GaussianBlur(a_g, (0, 0), 1.0)
+    before = cv2.computeECC(t, cv2.GaussianBlur(b_g, (0, 0), 1.0), m)
+    after = cv2.computeECC(t, cv2.GaussianBlur(b2, (0, 0), 1.0), m)
+    return refined if after > before else hs
+
+
+def diff_tone(
+    photo: Image.Image, h: np.ndarray, ref_img: Image.Image, spec: CompareSpec
+) -> ToneDiff:
+    """照片（B）對齊到參考圖（ref_img：知識庫原圖，或兩張照片互比時的照片 A）之後比兩件事，
+    只比兩張都拍到的範圍：
+
+    - 形狀：灰階做局部亮度正規化後的 SSIM（加筆、補筆、塗糊、多了東西）；
+    - 顏色：B 的整體色彩先拉齊參考圖（L*、a*、b* 對齊平均與幅度，吸收光線、白平衡、整張變淡），
+      再算 Lab 色差（褪色、補色）。觀眾照片 vs 原圖的光線差比較多，models.yaml 給較高的門檻。
+
+    比之前先排除不是畫本身的差異：照片自己的黑邊、辨識給的位置差幾 px（ECC 微調）、
+    照片比原圖模糊（原圖模糊到一樣清楚）、參考圖最外圈（edge_margin_px）。
+    在長邊 work_long_edge 的大小比：再細會被照片雜訊、筆觸的細微錯位干擾。
+    """
+    from app.analysis.color import srgb_to_lab
+
+    W, H = ref_img.size
+    s = min(1.0, spec.work_long_edge / max(W, H))
+    size = (round(W * s), round(H * s))
+    hs = np.diag([s, s, 1.0]) @ h
+    # 照片先縮到差不多的大小再投影：warpPerspective 只有線性內插，直接大幅縮小會有疊紋
+    f = s * float(np.sqrt(abs(np.linalg.det(h[:2, :2]))))
+    src = np.asarray(photo.convert("RGB"))
+    valid = np.where(_padding(src), 0, 255).astype(np.uint8)  # 照片上真的拍到東西的地方
+    if f < 0.9:
+        dsize = (round(src.shape[1] * f), round(src.shape[0] * f))
+        src = cv2.resize(src, dsize, interpolation=cv2.INTER_AREA)
+        valid = np.where(cv2.resize(valid, dsize, interpolation=cv2.INTER_AREA) > 250, 255, 0)
+        valid = valid.astype(np.uint8)
+        hs = hs @ np.diag([1 / f, 1 / f, 1.0])
+    a_rgb = np.asarray(ref_img.convert("RGB").resize(size, Image.Resampling.LANCZOS))
+
+    def gray(x):
+        return cv2.cvtColor(x, cv2.COLOR_RGB2GRAY).astype(np.float32)
+
+    hs = _refine_tone(gray(a_rgb), src, valid, hs, size)
+    b_rgb = cv2.warpPerspective(src, hs, size, flags=cv2.INTER_LINEAR, borderValue=(0, 0, 0))
+    raw = cv2.warpPerspective(valid, hs, size, borderValue=0)
+    m = (
+        cv2.erode(raw, np.ones((3, 3), np.uint8)).astype(np.float32) / 255
+    )  # 濾波時的權重：拍到的像素
+    covered = cv2.erode(raw, np.ones((9, 9), np.uint8)).astype(bool)  # 比對範圍：再往內縮
+
+    if spec.edge_margin_px:  # 參考圖最外圈不比：整幅掛牆拍時，畫的邊緣拉正後會混到牆面
+        k = spec.edge_margin_px
+        inner = np.zeros(covered.shape, bool)
+        inner[k:-k, k:-k] = True
+        covered &= inner
+
+    sigma = max(size) / 25
+    a_g, b_g = _match_blur(gray(a_rgb), gray(b_rgb), covered), gray(b_rgb)
+    na, nb = _local_norm(a_g, m, sigma), _local_norm(b_g, m, sigma)
+    # 容許錯開 1 px：微調後還剩不到 1 px 的誤差，絹的紋理一錯開 SSIM 就掉
+    d_shape = np.full(size[::-1], np.inf, np.float32)
+    for dx in range(-_TONE_SHIFT_PX, _TONE_SHIFT_PX + 1):
+        for dy in range(-_TONE_SHIFT_PX, _TONE_SHIFT_PX + 1):
+            ms = m * _shift(m, dx, dy)
+            d_shape = np.minimum(d_shape, (1 - _ssim(_shift(nb, dx, dy), na, ms)) / 2)
+    shape = (_mblur(d_shape.astype(np.float32), m, 4) > spec.shape_threshold) & covered
+
+    la, lb = (_mblur(srgb_to_lab(x).astype(np.float32), m, 3) for x in (a_rgb, b_rgb))
+    if covered.any():
+        ma, mb = la[covered].mean(axis=0), lb[covered].mean(axis=0)
+        k = (la[covered].std(axis=0) + 1e-6) / (lb[covered].std(axis=0) + 1e-6)
+        # a*、b* 的幅度也拉齊：整張一起變淡（展間偏暗、相機飽和度）不是褪色；
+        # 夾在 0.5–2 倍，近乎無彩的畫才不會把雜訊放大成色差
+        k[1:] = np.clip(k[1:], 0.5, 2.0)
+        lb = (lb - mb) * k + ma
+    color = (np.linalg.norm(la - lb, axis=2) > spec.color_threshold) & covered
+
+    area = max(int(covered.sum()), 1)
+    changed = shape | color
+    changed_ratio = round(float(changed.sum()) / area, 4)
+
+    def full(m):
+        return cv2.resize(m.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST).astype(bool)
+
+    if changed_ratio > spec.max_changed_ratio:
+        return ToneDiff("global_change", [], changed_ratio, full(shape), full(color), full(covered))
+
+    blobs = cv2.dilate(changed.astype(np.uint8), np.ones((5, 5), np.uint8))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(blobs)
+    found = []
+    for i in range(1, n):
+        comp = labels == i
+        sp, cp = int((shape & comp).sum()), int((color & comp).sum())
+        px = int((changed & comp).sum())
+        if px < spec.min_region_frac * area:
+            continue
+        kind = "color" if sp < 0.2 * px else "shape" if cp < 0.2 * px else "both"
+        x, y, w, hh = (int(v) for v in stats[i, :4])
+        bbox = [
+            round(x / size[0], 4),
+            round(y / size[1], 4),
+            round((x + w) / size[0], 4),
+            round((y + hh) / size[1], 4),
+        ]
+        found.append((px, Region(bbox=bbox, kind=kind, area_ratio=round(px / area, 4))))
+    regions = [r for _, r in sorted(found, key=lambda t: -t[0])]
+    return ToneDiff(
+        "changed" if regions else "same",
+        regions,
+        changed_ratio,
+        full(shape),
+        full(color),
+        full(covered),
+    )
+
+
+_TONE_COLOR = {"shape": (220, 38, 38), "color": (217, 119, 6), "both": (147, 51, 234)}
+
+
+def tone_overlay_png(ref_img: Image.Image, d: ToneDiff) -> bytes:
+    """照片 A 調暗，形狀不同塗紅、顏色不同塗橘（兩種都有塗紫），每處框起來編號；
+    沒比對的地方再暗一層。"""
+    rgb = np.asarray(ref_img.convert("RGB")).astype(np.float32) * 0.6
+    rgb[~d.compared] *= 0.4
+    for mask, color in ((d.color, _TONE_COLOR["color"]), (d.shape, _TONE_COLOR["shape"])):
+        rgb[mask] = rgb[mask] * 0.45 + np.array(color) * 0.55
+    rgb[d.shape & d.color] = rgb[d.shape & d.color] * 0.45 + np.array(_TONE_COLOR["both"]) * 0.55
+    rgb = np.ascontiguousarray(rgb.astype(np.uint8))
+    hh, ww = rgb.shape[:2]
+    lw = max(2, round(max(ww, hh) / 400))
+    for i, r in enumerate(d.regions, 1):
+        x0, y0, x1, y1 = (
+            int(round(v)) for v in (r.bbox[0] * ww, r.bbox[1] * hh, r.bbox[2] * ww, r.bbox[3] * hh)
+        )
+        color = _TONE_COLOR[r.kind]
+        cv2.rectangle(rgb, (x0, y0), (x1, y1), color, lw)
+        cv2.putText(
+            rgb,
+            str(i),
+            (x0 + 3, max(y0 - 6, 16)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6 * lw / 2 + 0.3,
+            color,
+            lw,
+            cv2.LINE_AA,
+        )
+    return _png(rgb)

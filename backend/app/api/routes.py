@@ -82,14 +82,15 @@ def get_photo_colormap(image_id: str):
 
 _TARGET = Query(
     pattern=compare_service.TARGET_PATTERN,
-    description="比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+    description="比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A）",
     examples=["part:mfg-001"],
 )
 
 
 @router.get("/images/{image_id}/align", response_model=S.ImageAlignment, tags=["images"])
 def get_photo_alignment(image_id: str, target: str = _TARGET):
-    """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊；圖紙另外比對三視圖的線條差異。"""
+    """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
+    畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。"""
     return compare_service.align_photo(image_id, target)
 
 

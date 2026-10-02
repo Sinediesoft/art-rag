@@ -165,7 +165,7 @@
           "images"
         ],
         "summary": "Get Photo Alignment",
-        "description": "影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊；圖紙另外比對三視圖的線條差異。",
+        "description": "影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——\n畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。",
         "operationId": "get_photo_alignment_api_v1_images__image_id__align_get",
         "parameters": [
           {
@@ -183,14 +183,14 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^(artwork|part):[A-Za-z0-9_.-]+$",
-              "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+              "pattern": "^(artwork|part|image):[A-Za-z0-9_.-]+$",
+              "description": "比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A）",
               "examples": [
                 "part:mfg-001"
               ],
               "title": "Target"
             },
-            "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>"
+            "description": "比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A）"
           }
         ],
         "responses": {
@@ -240,14 +240,14 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^(artwork|part):[A-Za-z0-9_.-]+$",
-              "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+              "pattern": "^(artwork|part|image):[A-Za-z0-9_.-]+$",
+              "description": "比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A）",
               "examples": [
                 "part:mfg-001"
               ],
               "title": "Target"
             },
-            "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>"
+            "description": "比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A）"
           }
         ],
         "responses": {
@@ -2359,9 +2359,12 @@
         "properties": {
           "method": {
             "type": "string",
-            "const": "ink",
+            "enum": [
+              "ink",
+              "tone"
+            ],
             "title": "Method",
-            "description": "ink：拉正後比對三視圖的線條"
+            "description": "ink：拉正後比對三視圖的線條（圖紙）；tone：比形狀與顏色（畫作：照片 vs 知識庫原圖，或兩張照片）"
           },
           "status": {
             "type": "string",
@@ -2371,7 +2374,7 @@
               "global_change"
             ],
             "title": "Status",
-            "description": "same：沒有差異；changed：列出差異；global_change：差異遍布整張（多半是改了外形尺寸），不列區塊"
+            "description": "same：沒有差異；changed：列出差異；global_change：差異遍布整張，不列區塊（圖紙多半是改了外形尺寸；畫作多半是光線差太多、大片反光、照片太模糊，或拍的不是同一處）"
           },
           "regions": {
             "items": {
@@ -2384,7 +2387,7 @@
           "changed_ratio": {
             "type": "number",
             "title": "Changed Ratio",
-            "description": "所有差異像素占知識庫圖紙線條像素的比例"
+            "description": "所有差異的大小：ink 占知識庫圖紙線條像素、tone 占比對範圍的比例"
           }
         },
         "type": "object",
@@ -2446,15 +2449,17 @@
             "enum": [
               "missing",
               "extra",
+              "shape",
+              "color",
               "both"
             ],
             "title": "Kind",
-            "description": "missing：知識庫圖紙有、照片沒有；extra：照片有、知識庫圖紙沒有；both：兩種都有"
+            "description": "ink（圖紙）：missing＝知識庫圖紙有、照片沒有，extra＝照片有、知識庫圖紙沒有；tone（畫作：照片 vs 原圖、兩張照片）：shape＝形狀不同，color＝顏色不同；both＝兩種都有"
           },
           "area_ratio": {
             "type": "number",
             "title": "Area Ratio",
-            "description": "這處差異的像素占知識庫圖紙線條像素的比例"
+            "description": "這處差異的大小：ink 是占知識庫圖紙線條像素的比例，tone 是占比對範圍的比例"
           }
         },
         "type": "object",
@@ -2471,9 +2476,11 @@
             "type": "string",
             "enum": [
               "artwork",
-              "part"
+              "part",
+              "image"
             ],
-            "title": "Kind"
+            "title": "Kind",
+            "description": "artwork：知識庫畫作原圖；part：知識庫圖紙；image：另一張上傳照片（兩張照片互比）"
           },
           "id": {
             "type": "string",
@@ -4354,7 +4361,7 @@
                 "type": "null"
               }
             ],
-            "description": "畫作為 null（只標位置）；圖紙為線條差異"
+            "description": "知識庫畫作原圖、另一張照片為形狀與顏色差異（tone）；圖紙為線條差異（ink）；image_compare 設成 diff: none 的領域為 null（只標位置）"
           },
           "reference_url": {
             "type": "string",
@@ -4364,7 +4371,7 @@
           "overlay_url": {
             "type": "string",
             "title": "Overlay Url",
-            "description": "疊圖 PNG：畫作是原圖上框出拍到的範圍；圖紙是差異塗色並編號"
+            "description": "疊圖 PNG：參考圖上差異塗色並編號（畫作沒拍到的地方調暗）；只標位置時是框出拍到的範圍"
           },
           "notes": {
             "items": {
