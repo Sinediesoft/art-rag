@@ -27,7 +27,7 @@ help:
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
-	@echo "make eval-align  影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、圖紙找不同的偵出率與假差異"
+	@echo "make eval-align  影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、畫作找不同、圖紙找不同、兩張照片互比的偵出率與假差異"
 	@echo "make demo-add    展示用：加入第 4、5 筆畫作（早春圖、睡蓮）與第 7 張圖紙（治具定位板，含庫存與途程）並重建索引"
 	@echo "make demo-reset  展示用：移除上述展示資料、清掉開立的工單、排程結果、智慧助理的異動與核准單，並重建索引"
 	@echo "make demo-test   展示前測試：查圖紙 → 開立工單 → 生產排程 → Text-to-SQL 查排程，逐步顯示記憶體與釋放的模型"
