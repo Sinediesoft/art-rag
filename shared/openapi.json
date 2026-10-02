@@ -159,6 +159,114 @@
         }
       }
     },
+    "/api/v1/images/{image_id}/align": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Photo Alignment",
+        "description": "影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊；圖紙另外比對三視圖的線條差異。",
+        "operationId": "get_photo_alignment_api_v1_images__image_id__align_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(artwork|part):[A-Za-z0-9_.-]+$",
+              "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+              "examples": [
+                "part:mfg-001"
+              ],
+              "title": "Target"
+            },
+            "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAlignment"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/align.png": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Photo Alignment Overlay",
+        "operationId": "get_photo_alignment_overlay_api_v1_images__image_id__align_png_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          },
+          {
+            "name": "target",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(artwork|part):[A-Za-z0-9_.-]+$",
+              "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+              "examples": [
+                "part:mfg-001"
+              ],
+              "title": "Target"
+            },
+            "description": "比對對象：artwork:<畫作 id> 或 part:<圖紙 id>"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/search/image": {
       "post": {
         "tags": [
@@ -2247,6 +2355,138 @@
         ],
         "title": "AccountsResponse"
       },
+      "AlignDiff": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "ink",
+            "title": "Method",
+            "description": "ink：拉正後比對三視圖的線條"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "same",
+              "changed",
+              "global_change"
+            ],
+            "title": "Status",
+            "description": "same：沒有差異；changed：列出差異；global_change：差異遍布整張（多半是改了外形尺寸），不列區塊"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/AlignRegion"
+            },
+            "type": "array",
+            "title": "Regions",
+            "description": "依差異大小排序；global_change 時是空的"
+          },
+          "changed_ratio": {
+            "type": "number",
+            "title": "Changed Ratio",
+            "description": "所有差異像素占知識庫圖紙線條像素的比例"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "status",
+          "regions",
+          "changed_ratio"
+        ],
+        "title": "AlignDiff"
+      },
+      "AlignLocation": {
+        "properties": {
+          "polygon": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Polygon",
+            "description": "照片四個角（左上、右上、右下、左下）在參考圖上的位置，0–1；照片拍到參考圖外面時會超出 0–1"
+          },
+          "coverage": {
+            "type": "number",
+            "title": "Coverage",
+            "description": "照片拍到參考圖面積的比例 0–1"
+          },
+          "center": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Center",
+            "description": "拍到的範圍的中心 [x, y]，0–1"
+          }
+        },
+        "type": "object",
+        "required": [
+          "polygon",
+          "coverage",
+          "center"
+        ],
+        "title": "AlignLocation"
+      },
+      "AlignRegion": {
+        "properties": {
+          "bbox": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Bbox",
+            "description": "[x0, y0, x1, y1]，0–1，參考圖座標"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "extra",
+              "both"
+            ],
+            "title": "Kind",
+            "description": "missing：知識庫圖紙有、照片沒有；extra：照片有、知識庫圖紙沒有；both：兩種都有"
+          },
+          "area_ratio": {
+            "type": "number",
+            "title": "Area Ratio",
+            "description": "這處差異的像素占知識庫圖紙線條像素的比例"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bbox",
+          "kind",
+          "area_ratio"
+        ],
+        "title": "AlignRegion"
+      },
+      "AlignTarget": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artwork",
+              "part"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "AlignTarget"
+      },
       "AnySearchResponse": {
         "properties": {
           "query_image_id": {
@@ -4091,6 +4331,66 @@
           "recent_chats"
         ],
         "title": "HealthResponse"
+      },
+      "ImageAlignment": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/AlignTarget"
+          },
+          "inliers": {
+            "type": "integer",
+            "title": "Inliers",
+            "description": "照片與參考圖對上的特徵點數（RANSAC inlier）"
+          },
+          "location": {
+            "$ref": "#/components/schemas/AlignLocation"
+          },
+          "diff": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlignDiff"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "畫作為 null（只標位置）；圖紙為線條差異"
+          },
+          "reference_url": {
+            "type": "string",
+            "title": "Reference Url",
+            "description": "參考圖：知識庫畫作原圖或圖紙"
+          },
+          "overlay_url": {
+            "type": "string",
+            "title": "Overlay Url",
+            "description": "疊圖 PNG：畫作是原圖上框出拍到的範圍；圖紙是差異塗色並編號"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms",
+            "description": "對位與比對的計算時間（不含讀檔）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "inliers",
+          "location",
+          "diff",
+          "reference_url",
+          "overlay_url",
+          "notes",
+          "latency_ms"
+        ],
+        "title": "ImageAlignment"
       },
       "ImageSearchHit": {
         "properties": {

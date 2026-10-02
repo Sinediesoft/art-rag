@@ -158,6 +158,26 @@ class ColorAnalysisSpec(BaseModel):
     chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
 
 
+class CompareSpec(BaseModel):
+    """影像對位與比對（docs/adr/012），一個領域一份。不影響索引，改了不用重建。"""
+
+    diff: Literal["none", "ink"] = "none"  # none：只標位置；ink：拉正後比線條（圖紙）
+    tolerance_px: int = 3  # 線條差幾 px 以內算同一條（照片拉正後的誤差）
+    faint_ink_c: int = 8  # 判「缺少」時照片線條的門檻（比周圍暗多少就算有線），比辨識用的 20 寬鬆
+    refine_max_shift_px: int = 15  # 每格視圖各自微調位置（只平移、旋轉）：最多平移幾 px
+    refine_max_linear: float = 0.03  # 微調最多旋轉多少（sin θ；0.03 約 1.7°）
+    min_region_px: int = 30  # 一處差異至少要有這麼多像素，太小的當雜訊
+    merge_px: int = 9  # 差異像素先膨脹這麼多再找連通區塊
+    merge_gap_px: int = 24  # 區塊之間距離在這以內併成一處
+    edge_margin_px: int = 12  # 圖紙最外圈不比：照片裡的紙張邊緣拉正後落在這裡
+    max_changed_ratio: float = 0.25  # 差異超過圖紙線條的這個比例 → 整體變了（多半是外形尺寸）
+
+
+class ImageCompareSpec(BaseModel):
+    art: CompareSpec = CompareSpec()
+    mfg: CompareSpec = CompareSpec(diff="ink")
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -177,6 +197,7 @@ class ModelsConfig(BaseModel):
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
+    image_compare: ImageCompareSpec = ImageCompareSpec()
 
 
 @lru_cache

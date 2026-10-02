@@ -1,0 +1,1321 @@
+{
+  "run_id": "20261002T070710-d3ee",
+  "created_at": "2026-10-02T07:07:17.663683+00:00",
+  "kind": "align",
+  "params": {
+    "art": {
+      "diff": "none",
+      "tolerance_px": 3,
+      "faint_ink_c": 8,
+      "refine_max_shift_px": 15,
+      "refine_max_linear": 0.03,
+      "min_region_px": 30,
+      "merge_px": 9,
+      "merge_gap_px": 24,
+      "edge_margin_px": 12,
+      "max_changed_ratio": 0.25
+    },
+    "mfg": {
+      "diff": "ink",
+      "tolerance_px": 3,
+      "faint_ink_c": 8,
+      "refine_max_shift_px": 15,
+      "refine_max_linear": 0.03,
+      "min_region_px": 30,
+      "merge_px": 9,
+      "merge_gap_px": 24,
+      "edge_margin_px": 12,
+      "max_changed_ratio": 0.25
+    }
+  },
+  "elapsed_s": 7,
+  "summary": {
+    "art": {
+      "whole": {
+        "photos": 5,
+        "located": 5,
+        "ok": 5,
+        "corner_error_median": 0.0026
+      },
+      "crop50": {
+        "photos": 10,
+        "located": 10,
+        "ok": 10,
+        "corner_error_median": 0.0016
+      },
+      "crop30": {
+        "photos": 10,
+        "located": 4,
+        "ok": 4,
+        "corner_error_median": 0.0013
+      }
+    },
+    "mfg": {
+      "same": {
+        "photos": 24,
+        "located": 24,
+        "zero_regions": 24,
+        "global_change": 0,
+        "false_regions_max": 0
+      },
+      "hole": {
+        "photos": 12,
+        "located": 12,
+        "all_found": 12,
+        "changes_found": 12,
+        "changes_expected": 12,
+        "false_regions_total": 0,
+        "false_regions_max": 0
+      },
+      "erase": {
+        "photos": 12,
+        "located": 12,
+        "all_found": 12,
+        "changes_found": 12,
+        "changes_expected": 12,
+        "false_regions_total": 0,
+        "false_regions_max": 0
+      },
+      "revA": {
+        "photos": 5,
+        "located": 5,
+        "all_found": 5,
+        "changes_found": 15,
+        "changes_expected": 15,
+        "false_regions_total": 1,
+        "false_regions_max": 1
+      }
+    },
+    "stress_old_photos": {
+      "photos": 35,
+      "located": 35,
+      "zero_regions": 32,
+      "with_regions": [
+        "mfg-001__tilt.jpg（changed，1 處）",
+        "mfg-002__tilt.jpg（changed，2 處）",
+        "mfg-007__tilt.jpg（changed，1 處）"
+      ]
+    },
+    "latency_ms_p50": 45,
+    "latency_ms_p95": 82
+  },
+  "photos": [
+    {
+      "file": "art/aic-27992__crop50-1.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 197,
+      "inliers": 288,
+      "coverage": 0.27,
+      "corner_error": 0.001,
+      "ok": true
+    },
+    {
+      "file": "art/aic-27992__crop50-2.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 10,
+      "inliers": 158,
+      "coverage": 0.2621,
+      "corner_error": 0.0031,
+      "ok": true
+    },
+    {
+      "file": "art/aic-27992__crop30-1.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": true,
+      "ms": 10,
+      "inliers": 28,
+      "coverage": 0.0996,
+      "corner_error": 0.0015,
+      "ok": true
+    },
+    {
+      "file": "art/aic-27992__crop30-2.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": true,
+      "ms": 9,
+      "inliers": 36,
+      "coverage": 0.1012,
+      "corner_error": 0.001,
+      "ok": true
+    },
+    {
+      "file": "art/aic-27992__whole.jpg",
+      "case": "whole",
+      "variant": null,
+      "located": true,
+      "ms": 12,
+      "inliers": 1157,
+      "coverage": 1.0,
+      "corner_error": 0.0026,
+      "ok": true
+    },
+    {
+      "file": "art/met-436535__crop50-1.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 28,
+      "inliers": 177,
+      "coverage": 0.2715,
+      "corner_error": 0.0009,
+      "ok": true
+    },
+    {
+      "file": "art/met-436535__crop50-2.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 13,
+      "inliers": 70,
+      "coverage": 0.266,
+      "corner_error": 0.0031,
+      "ok": true
+    },
+    {
+      "file": "art/met-436535__crop30-1.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 12,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/met-436535__crop30-2.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": true,
+      "ms": 13,
+      "inliers": 29,
+      "coverage": 0.0984,
+      "corner_error": 0.0044,
+      "ok": true
+    },
+    {
+      "file": "art/met-436535__whole.jpg",
+      "case": "whole",
+      "variant": null,
+      "located": true,
+      "ms": 14,
+      "inliers": 1085,
+      "coverage": 1.0,
+      "corner_error": 0.0027,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000001__crop50-1.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 12,
+      "inliers": 59,
+      "coverage": 0.2725,
+      "corner_error": 0.0011,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000001__crop50-2.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 7,
+      "inliers": 144,
+      "coverage": 0.2733,
+      "corner_error": 0.0012,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000001__crop30-1.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 8,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/npm-000001__crop30-2.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 5,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/npm-000001__whole.jpg",
+      "case": "whole",
+      "variant": null,
+      "located": true,
+      "ms": 6,
+      "inliers": 353,
+      "coverage": 1.0,
+      "corner_error": 0.0012,
+      "ok": true
+    },
+    {
+      "file": "art/aic-16568__crop50-1.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 28,
+      "inliers": 292,
+      "coverage": 0.2835,
+      "corner_error": 0.0019,
+      "ok": true
+    },
+    {
+      "file": "art/aic-16568__crop50-2.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 14,
+      "inliers": 273,
+      "coverage": 0.2731,
+      "corner_error": 0.0016,
+      "ok": true
+    },
+    {
+      "file": "art/aic-16568__crop30-1.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 14,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/aic-16568__crop30-2.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 12,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/aic-16568__whole.jpg",
+      "case": "whole",
+      "variant": null,
+      "located": true,
+      "ms": 13,
+      "inliers": 740,
+      "coverage": 1.0,
+      "corner_error": 0.003,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000002__crop50-1.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 25,
+      "inliers": 191,
+      "coverage": 0.272,
+      "corner_error": 0.0022,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000002__crop50-2.jpg",
+      "case": "crop50",
+      "variant": null,
+      "located": true,
+      "ms": 14,
+      "inliers": 361,
+      "coverage": 0.2757,
+      "corner_error": 0.0016,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000002__crop30-1.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": false,
+      "ms": 12,
+      "corner_error": null,
+      "ok": false
+    },
+    {
+      "file": "art/npm-000002__crop30-2.jpg",
+      "case": "crop30",
+      "variant": null,
+      "located": true,
+      "ms": 13,
+      "inliers": 103,
+      "coverage": 0.0988,
+      "corner_error": 0.001,
+      "ok": true
+    },
+    {
+      "file": "art/npm-000002__whole.jpg",
+      "case": "whole",
+      "variant": null,
+      "located": true,
+      "ms": 14,
+      "inliers": 1038,
+      "coverage": 1.0,
+      "corner_error": 0.0015,
+      "ok": true
+    },
+    {
+      "file": "mfg/mfg-001__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 98,
+      "inliers": 160,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 42,
+      "inliers": 149,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 51,
+      "inliers": 203,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 44,
+      "inliers": 703,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 48,
+      "inliers": 153,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 48,
+      "inliers": 122,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 82,
+      "inliers": 147,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 68,
+      "inliers": 197,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 58,
+      "inliers": 157,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 76,
+      "inliers": 155,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 48,
+      "inliers": 230,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 41,
+      "inliers": 664,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 43,
+      "inliers": 242,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 51,
+      "inliers": 111,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 46,
+      "inliers": 155,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-002__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 66,
+      "inliers": 231,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 50,
+      "inliers": 202,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 45,
+      "inliers": 137,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 48,
+      "inliers": 201,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 42,
+      "inliers": 552,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 62,
+      "inliers": 178,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 49,
+      "inliers": 158,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 60,
+      "inliers": 163,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-003__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 97,
+      "inliers": 201,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 53,
+      "inliers": 192,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 45,
+      "inliers": 118,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 58,
+      "inliers": 161,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 45,
+      "inliers": 661,
+      "coverage": 0.9999,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 50,
+      "inliers": 163,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 45,
+      "inliers": 108,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 47,
+      "inliers": 133,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-004__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 59,
+      "inliers": 160,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 63,
+      "inliers": 147,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 39,
+      "inliers": 136,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 48,
+      "inliers": 176,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 37,
+      "inliers": 437,
+      "coverage": 0.9998,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 43,
+      "inliers": 129,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 45,
+      "inliers": 101,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 39,
+      "inliers": 143,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-005__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 46,
+      "inliers": 156,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__same-ptilt.jpg",
+      "case": "same",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 50,
+      "inliers": 231,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__same-glare.jpg",
+      "case": "same",
+      "variant": "glare",
+      "located": true,
+      "ms": 39,
+      "inliers": 168,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__same-blur.jpg",
+      "case": "same",
+      "variant": "blur",
+      "located": true,
+      "ms": 51,
+      "inliers": 299,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__same-dim.jpg",
+      "case": "same",
+      "variant": "dim",
+      "located": true,
+      "ms": 39,
+      "inliers": 769,
+      "coverage": 1.0,
+      "status": "same",
+      "regions": 0,
+      "found": 0,
+      "expected": 0,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__hole-ptilt.jpg",
+      "case": "hole",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 39,
+      "inliers": 171,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__hole-glare.jpg",
+      "case": "hole",
+      "variant": "glare",
+      "located": true,
+      "ms": 84,
+      "inliers": 150,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__erase-ptilt.jpg",
+      "case": "erase",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 41,
+      "inliers": 186,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-006__erase-blur.jpg",
+      "case": "erase",
+      "variant": "blur",
+      "located": true,
+      "ms": 52,
+      "inliers": 275,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 1,
+      "found": 1,
+      "expected": 1,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001-revA__ptilt.jpg",
+      "case": "revA",
+      "variant": "ptilt",
+      "located": true,
+      "ms": 46,
+      "inliers": 126,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 3,
+      "found": 3,
+      "expected": 3,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001-revA__glare.jpg",
+      "case": "revA",
+      "variant": "glare",
+      "located": true,
+      "ms": 45,
+      "inliers": 106,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 3,
+      "found": 3,
+      "expected": 3,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001-revA__blur.jpg",
+      "case": "revA",
+      "variant": "blur",
+      "located": true,
+      "ms": 50,
+      "inliers": 138,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 3,
+      "found": 3,
+      "expected": 3,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001-revA__dim.jpg",
+      "case": "revA",
+      "variant": "dim",
+      "located": true,
+      "ms": 40,
+      "inliers": 501,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 3,
+      "found": 3,
+      "expected": 3,
+      "false_regions": 0
+    },
+    {
+      "file": "mfg/mfg-001-revA__tilt.jpg",
+      "case": "revA",
+      "variant": "tilt",
+      "located": true,
+      "ms": 52,
+      "inliers": 107,
+      "coverage": 1.0,
+      "status": "changed",
+      "regions": 4,
+      "found": 3,
+      "expected": 3,
+      "false_regions": 1
+    }
+  ],
+  "stress": [
+    {
+      "file": "mfg-001__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-001__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-001__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-001__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-001__tilt.jpg",
+      "located": true,
+      "status": "changed",
+      "regions": 1
+    },
+    {
+      "file": "mfg-002__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-002__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-002__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-002__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-002__tilt.jpg",
+      "located": true,
+      "status": "changed",
+      "regions": 2
+    },
+    {
+      "file": "mfg-003__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-003__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-003__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-003__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-003__tilt.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-004__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-004__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-004__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-004__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-004__tilt.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-005__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-005__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-005__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-005__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-005__tilt.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-006__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-006__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-006__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-006__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-006__tilt.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-007__blur.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-007__crop.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-007__dim.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-007__glare.jpg",
+      "located": true,
+      "status": "same",
+      "regions": 0
+    },
+    {
+      "file": "mfg-007__tilt.jpg",
+      "located": true,
+      "status": "changed",
+      "regions": 1
+    }
+  ]
+}

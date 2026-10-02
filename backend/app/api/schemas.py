@@ -160,6 +160,51 @@ class ColorAnalysis(BaseModel):
     latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
 
 
+# ---------------------------------------------------------------- 影像對位與比對（docs/adr/012）
+class AlignTarget(BaseModel):
+    kind: Literal["artwork", "part"]
+    id: str
+
+
+class AlignLocation(BaseModel):
+    polygon: list[list[float]] = Field(
+        description="照片四個角（左上、右上、右下、左下）在參考圖上的位置，0–1；"
+        "照片拍到參考圖外面時會超出 0–1"
+    )
+    coverage: float = Field(description="照片拍到參考圖面積的比例 0–1")
+    center: list[float] = Field(description="拍到的範圍的中心 [x, y]，0–1")
+
+
+class AlignRegion(BaseModel):
+    bbox: list[float] = Field(description="[x0, y0, x1, y1]，0–1，參考圖座標")
+    kind: Literal["missing", "extra", "both"] = Field(
+        description="missing：知識庫圖紙有、照片沒有；extra：照片有、知識庫圖紙沒有；both：兩種都有"
+    )
+    area_ratio: float = Field(description="這處差異的像素占知識庫圖紙線條像素的比例")
+
+
+class AlignDiff(BaseModel):
+    method: Literal["ink"] = Field(description="ink：拉正後比對三視圖的線條")
+    status: Literal["same", "changed", "global_change"] = Field(
+        description="same：沒有差異；changed：列出差異；global_change：差異遍布整張（多半是改了外形尺寸），不列區塊"
+    )
+    regions: list[AlignRegion] = Field(description="依差異大小排序；global_change 時是空的")
+    changed_ratio: float = Field(description="所有差異像素占知識庫圖紙線條像素的比例")
+
+
+class ImageAlignment(BaseModel):
+    target: AlignTarget
+    inliers: int = Field(description="照片與參考圖對上的特徵點數（RANSAC inlier）")
+    location: AlignLocation
+    diff: AlignDiff | None = Field(description="畫作為 null（只標位置）；圖紙為線條差異")
+    reference_url: str = Field(description="參考圖：知識庫畫作原圖或圖紙")
+    overlay_url: str = Field(
+        description="疊圖 PNG：畫作是原圖上框出拍到的範圍；圖紙是差異塗色並編號"
+    )
+    notes: list[str]
+    latency_ms: int = Field(description="對位與比對的計算時間（不含讀檔）")
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None

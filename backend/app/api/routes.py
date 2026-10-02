@@ -33,6 +33,7 @@ from app.services import (
     change_service,
     chat_service,
     color_service,
+    compare_service,
     identity,
     memory_guard,
     schedule_service,
@@ -77,6 +78,24 @@ def get_photo_colors(image_id: str):
 @router.get("/images/{image_id}/colormap.png", response_class=Response, tags=["images"])
 def get_photo_colormap(image_id: str):
     return Response(color_service.photo_colormap(image_id), media_type="image/png")
+
+
+_TARGET = Query(
+    pattern=compare_service.TARGET_PATTERN,
+    description="比對對象：artwork:<畫作 id> 或 part:<圖紙 id>",
+    examples=["part:mfg-001"],
+)
+
+
+@router.get("/images/{image_id}/align", response_model=S.ImageAlignment, tags=["images"])
+def get_photo_alignment(image_id: str, target: str = _TARGET):
+    """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊；圖紙另外比對三視圖的線條差異。"""
+    return compare_service.align_photo(image_id, target)
+
+
+@router.get("/images/{image_id}/align.png", response_class=Response, tags=["images"])
+def get_photo_alignment_overlay(image_id: str, target: str = _TARGET):
+    return Response(compare_service.align_overlay(image_id, target), media_type="image/png")
 
 
 @router.post("/search/image", response_model=S.ImageSearchResponse, tags=["search"])
@@ -485,9 +504,18 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試與智慧助理路由（-route）的評估另有格式
+        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）
+        # 與影像比對（-align）的評估另有格式
         if not p.name.endswith(
-            ("-cad.json", "-router.json", "-sql.json", "-color.json", "-demo.json", "-route.json")
+            (
+                "-cad.json",
+                "-router.json",
+                "-sql.json",
+                "-color.json",
+                "-demo.json",
+                "-route.json",
+                "-align.json",
+            )
         ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
