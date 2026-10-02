@@ -184,6 +184,8 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 13 | 沒收錄也能建模 | 第 10 步的拒答頁按「沒收錄也能用 Ortho2CAD 重建 3D」 | Qwen3-VL 讀尺寸＋Ortho2CAD 建模 |
 | 14 | 製程問答 | 「問問這張圖」→「有哪些公差要求？」→ 點 [n] 看內部文件出處；問「單價多少」看它說不知道 | 引用、防幻覺；機密圖紙不提供雲端生成端 |
 | 15 | 擴充 | `make demo-add` 同時加入第 7 張圖紙〈治具定位板〉，重新整理就辨識得出 | 新增圖紙不改程式 |
+| 15b | 照片建檔 | 「工廠圖紙」→「拍照建檔」，上傳 `eval/drawing_photos/unknown/unknown-03__glare.jpg`（〈皮帶輪輪轂〉，知識庫沒有）：看清晰度、拉正、Qwen3-VL 逐字抄標題欄 → 確認頁補「類別」「負責單位」→ 切到「主管」按「收錄」→ 約 2 分鐘後再上傳 `unknown-03__tilt.jpg` 就辨識得出 | 模型讀、規則驗、人確認；糊照（`*__blur.jpg`）直接請重拍；收錄只有主管能按（ADR 013）。展示完刪 `kb/parts`、`kb/drawings` 裡那一張再 `make index` |
+| 15c | 畫作照片建檔 | 「尋畫」→「拍照建檔」，上傳 `eval/photos/unknown/unknown-01.jpg`（〈神奈川沖浪裏〉，知識庫沒有）：表單自動跳出 → 填畫名、作者、年代、典藏單位（The Met → ID 自動帶 `met-…`）、典藏頁網址、授權 → 主管收錄 → 約 1.5 分鐘後換一張同一幅畫的照片就辨識得出；上傳 `eval/photos/known/*__blur.jpg` 直接被擋 | 畫作不讀展牌（館方著作）、資料由人填；圖紙與畫作同一個模糊門檻。展示完刪 `kb/artworks`、`kb/images` 裡那一筆再 `make index` |
 
 ### 工廠庫存 Text-to-SQL（約 3 分鐘）
 
@@ -244,12 +246,22 @@ Jev 金鑰在 `.env` 的 `JEV_API_KEY`（目前留空 → 一律走本地路由�
 6. （選填）依 `shared/schemas/routing.schema.json` 寫 `kb/production/routings/<id>.json`（工序號與「加工製程」段落一致、
    機型、準備與每件工時、委外天數）：這張圖紙就能在圖紙頁開立工單並排程
 
+手上只有紙本圖紙、沒有標準模型時，用「工廠圖紙」→「拍照建檔」（`/drawings/intake`，見 `docs/adr/013-photo-intake.md`）：
+本地 Qwen3-VL 讀標題欄與外形尺寸，系統驗證格式、和知識庫有沒有重複、材料依既有零件校正並補密度，人確認後由**主管**收錄，
+後端寫 `kb/parts/<id>.json`、`kb/drawings/<id>.png`（拉正、對齊版面後的照片）、遞增 `kb/VERSION` 並重建索引（這台筆電約 2 分鐘）。
+這類零件沒有 `cad`，改填 `dimensions_mm` 與 `intake`：沒有重量、標準 3D 模型與 IoU；只收和知識庫圖紙同一種版面（三視圖＋下方標題欄）的圖紙。
+
 ## 新增一幅畫（不改程式）
 
 1. 圖片縮到長邊 1024 px，存成 `kb/images/<id>.jpg`（ID 格式 `<來源代碼>-<編號>`，只用小寫 ASCII）
 2. 依 `shared/schemas/artwork.schema.json` 寫 `kb/artworks/<id>.json`（必填授權與出處；授權只收 CC0、公有領域、CC BY 4.0）
 3. 遞增 `kb/VERSION`（`uv run --project backend python pipelines/bump_version.py`）
 4. `make index` — 執行中的後端會自動載入新索引
+
+也可以用「尋畫」→「拍照建檔」（`/artworks/intake`，見 `docs/adr/013-photo-intake.md` 第 2 步）：拍畫作本身（不用拍展牌），
+太模糊的直接請重拍；資料在跳出的表單填（畫名、作者、年代、典藏單位、典藏頁網址、照片授權；介紹選填），
+來源代碼依典藏單位對照既有畫作自動帶入。**主管**收錄後，照片存成 `kb/images/<id>.jpg`、寫 `kb/artworks/<id>.json`、遞增版本並重建索引。
+沒填介紹時系統只寫一段「基本資料」（CC0、出處是典藏頁），技法與背景要另外從開放授權的來源補。
 
 ## 評估
 
@@ -306,6 +318,20 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 | 畫作找不同・壓力測試（eval/photos/known，沒改過） | 模糊、偏暗、裁切 15/15 張 0 處；反光 5 張都標出反光處（顏色不同）；雙線性 tilt 0/5 |
 | 兩張照片互比・沒改過（10 組，同光線、不同角度） | 10/10 組 0 處差異 |
 | 兩張照片互比・換掉一塊／塗糊／小印章／褪色／補色（各 5 組） | 5/5、5/5、5/5、4/5、5/5 找到；別處多報 0 處；P50 288 ms |
+
+### 照片建檔（`make eval-intake`）
+
+不用開後端、不用索引，要有本地生成端（Ollama）；這台約 20 分鐘。7 張圖紙的原圖＋`eval/drawing_photos/known` 的 5 種拍法共 42 張，
+每張讀 11 個欄位和 `kb/parts` 的真值比（見 ADR 013）。2026-10-03 在 Windows 筆電（GTX 1650、`qwen3-vl:4b-instruct`）上的結果（run_id `20261002T180328-4216`）：
+
+| 項目 | 結果 |
+|---|---|
+| 擋下請重拍 | 18/42 張：模糊 7/7（模糊程度 ≥ 0.348，門檻 0.30；其他拍法 ≤ 0.143）、裁切 7/7、tilt 4/7（標題欄沒拍完整） |
+| 畫作的模糊門檻（不用模型） | `eval/photos` 的 blur 5/5 擋下（≥ 0.361）；其他拍法 20 張、原圖 10 張都不擋（≤ 0.265） |
+| 沒擋下的照片，每個欄位 | 正確 254/264（96.2%）、空白 10（標紅由人補）、**錯了卻通過驗證 0** |
+| 料號、圖號、版次、材料、外形尺寸 | 28/28 |
+| 模型原始輸出 → 套規則之後 | 正確 230 → 254（材料寫法、密度、英數字與中文之間的空格） |
+| 讀一張（中位數） | 42 秒；冷啟動第一次逾時、改走本地備援 |
 
 ### 領域路由（`make eval-router`）
 
@@ -417,18 +443,20 @@ art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
 ├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
 │   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）、
-│   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）
+│   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）、
+│   │                     page（照片建檔：清晰度、找紙張四角拉正、對齊標題欄外框、去陰影）
 │   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、router（領域路由）、verify（ORB＋線條重合）、prompt、providers、textproc
 │   ├── cad/           C  drawing（三視圖產生器）、sandbox／runner（CadQuery 沙箱）、metrics（IoU）、preprocess
 │   ├── rag/text2sql   C  庫存 Text-to-SQL：prompt、SQL 擷取與靜態檢查；執行在 repositories/inventory_repo（唯讀＋白名單）
 │   ├── scheduling/    C  生產排程：calendar（工作分鐘↔實際時間）、problem（工單×途程×機台）、solution（計分、簡易排程）、timefold_client
 │   ├── services/memory_guard  記憶體管理：超過 80% 時釋放目前流程用不到的模型
 │   ├── agent/         C  智慧助理 System 1：entities（代號化）、jev、local_router、gate（信心閘門）、extract（參數抽取）
-│   └── services/change_service  修改資料流程：權限判定、試算、額度、確認寫入、主管核准（repositories/data_changes 白名單操作）
+│   ├── services/change_service  修改資料流程：權限判定、試算、額度、確認寫入、主管核准（repositories/data_changes 白名單操作）
+│   └── services/intake_service  照片建檔：讀標題欄、規則驗證、草稿（data/intake/）、主管收錄寫 kb/ 並重建索引
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md
