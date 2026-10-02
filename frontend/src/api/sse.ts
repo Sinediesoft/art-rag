@@ -1,11 +1,13 @@
 // SSE 解析：全專案只有這一份實作（共用層 §八）。問答（POST /chat）、3D 重建（POST /cad/reconstruct）、
-// 庫存 Text-to-SQL（POST /inventory/ask）與生產排程（POST /schedule/solve）共用。
+// 庫存 Text-to-SQL（POST /inventory/ask）、生產排程（POST /schedule/solve）與照片建檔（POST /intake）共用。
 // 瀏覽器內建 EventSource 只支援 GET，所以用 fetch 讀取串流。事件格式見 shared/sse_events.md。
 import {
   API_BASE,
+  type ArtworkSummary,
   type AxisDay,
   type ChatRequest,
   type ConstraintScore,
+  type IntakeDraft,
   type InventoryAskRequest,
   type MemoryEvent,
   type PartSummary,
@@ -379,6 +381,44 @@ export function streamScheduleSolve(body: ScheduleSolveRequest, h: ScheduleHandl
       progress: h.onProgress,
       tick: h.onTick,
       solution: h.onSolution,
+      done: h.onDone,
+      error: h.onError,
+    },
+    signal,
+  );
+}
+
+// ---- 照片建檔（POST /intake，docs/adr/013）
+export type IntakeStage = "sharpness" | "identify" | "page" | "read" | "validate";
+
+/**
+ * 已收錄（INTAKE_ALREADY_IN_KB）時附上那張圖紙或那幅畫；太模糊（INTAKE_TOO_BLURRY）時附上模糊程度；
+ * 領域不對（INTAKE_WRONG_DOMAIN）時附上路由結果
+ */
+export interface IntakeErrorEvent extends ErrorEvent {
+  part?: PartSummary;
+  artwork?: ArtworkSummary;
+  blur?: number;
+  route?: { domain: "art" | "mfg"; margin: number; uncertain: boolean };
+}
+
+export interface IntakeHandlers {
+  onStage?: (e: { stage: IntakeStage; label: string }) => void;
+  onToken?: (text: string) => void;
+  onDraft?: (d: IntakeDraft) => void;
+  onDone?: (e: { request_id: string; draft_id: string; latency_ms: { read: number | null; total: number } }) => void;
+  onError?: (e: IntakeErrorEvent) => void;
+}
+
+/** domain：從哪一邊進來（工廠圖紙 mfg、尋畫 art）；路由很確定是另一邊時回 INTAKE_WRONG_DOMAIN */
+export function streamIntake(imageId: string, domain: "mfg" | "art", h: IntakeHandlers, signal?: AbortSignal) {
+  return streamSSE(
+    "/intake",
+    { image_id: imageId, domain },
+    {
+      stage: h.onStage,
+      token: (d) => h.onToken?.(d.text),
+      draft: h.onDraft,
       done: h.onDone,
       error: h.onError,
     },

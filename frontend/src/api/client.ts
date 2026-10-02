@@ -54,6 +54,10 @@ export type Approval = Schemas["Approval"];
 export type ApprovalsResponse = Schemas["ApprovalsResponse"];
 export type ApprovalDecision = Schemas["ApprovalDecision"];
 export type AuditResponse = Schemas["AuditResponse"];
+// 照片建檔（docs/adr/013）
+export type IntakeDraft = Schemas["IntakeDraft"];
+export type IntakeField = Schemas["IntakeField"];
+export type IntakeCheck = Schemas["IntakeCheck"];
 type ChatDefaults = "strategy" | "use_retrieval" | "allow_fallback";
 /** 有預設值的欄位在請求時可省略 */
 export type ChatRequest = Omit<Schemas["ChatRequest"], ChatDefaults> &
@@ -172,4 +176,12 @@ export const api = {
     request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason })),
   audit: () => request<AuditResponse>("/audit"),
   routeEvalRuns: () => request<Schemas["RouteEvalRunsResponse"]>("/eval/route-runs"),
+  // 照片建檔（docs/adr/013）：建立草稿走 SSE（sse.ts 的 streamIntake）
+  intakeDraft: (draftId: string) => request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}`),
+  updateIntake: (draftId: string, values: Record<string, string | number | null>) =>
+    request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}`, { ...json({ values }), method: "PUT" }),
+  commitIntake: (draftId: string) =>
+    request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" }),
+  discardIntake: (draftId: string) =>
+    request<Schemas["OkResponse"]>(`/intake/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
 };

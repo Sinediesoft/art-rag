@@ -11,6 +11,7 @@ import { AssistantPage } from "./pages/AssistantPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ComparePage } from "./pages/ComparePage";
 import { HomePage } from "./pages/HomePage";
+import { IntakePage } from "./pages/IntakePage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { PhotoDiffPage } from "./pages/PhotoDiffPage";
 import { SchedulePage } from "./pages/SchedulePage";
@@ -33,10 +34,12 @@ createRoot(document.getElementById("root")!).render(
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="search" element={<SearchPage />} />
+            <Route path="artworks/intake" element={<IntakePage domain="art" />} />
             <Route path="artworks/:id" element={<ArtworkPage />} />
             <Route path="artworks/:id/chat" element={<ChatPage />} />
             <Route path="drawings" element={<DrawingsHomePage />} />
             <Route path="drawings/search" element={<DrawingSearchPage />} />
+            <Route path="drawings/intake" element={<IntakePage domain="mfg" />} />
             <Route path="drawings/:id" element={<PartPage />} />
             <Route path="drawings/:id/chat" element={<PartChatPage />} />
             <Route path="drawings/:id/reconstruct" element={<ReconstructPage />} />

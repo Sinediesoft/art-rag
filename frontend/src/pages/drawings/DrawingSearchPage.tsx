@@ -120,6 +120,18 @@ function ImageResults({
             </span>
             <span aria-hidden>→</span>
           </Link>
+          <Link
+            to={`/drawings/intake?image=${imageId}`}
+            className="flex items-center justify-between rounded-xl border border-jade/30 bg-jade-soft/60 px-4 py-3 font-bold text-jade transition hover:border-jade"
+          >
+            <span>
+              把這張圖紙建進知識庫
+              <span className="block text-xs font-normal text-ink-soft">
+                本地 Qwen3-VL 讀標題欄，你確認後由主管收錄；之後拍同一張就認得出來
+              </span>
+            </span>
+            <span aria-hidden>→</span>
+          </Link>
         </>
       )}
 

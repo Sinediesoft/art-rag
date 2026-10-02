@@ -45,6 +45,12 @@ export function DrawingsHomePage() {
             labels={{ camera: "拍攝圖紙", file: "上傳圖紙" }}
             onUploaded={(id) => navigate(`/drawings/search?image=${id}`)}
           />
+          <Link
+            to="/drawings/intake"
+            className="mt-2 inline-block text-sm font-bold text-ink-soft underline-offset-2 hover:text-steel hover:underline"
+          >
+            知識庫還沒有的圖紙？拍照建檔 →
+          </Link>
         </div>
 
         <form onSubmit={submit} className="mt-5 flex max-w-xl gap-2">
@@ -106,7 +112,11 @@ export function DrawingsHomePage() {
         </div>
         <p className="mt-3 text-xs text-ink-faint">
           示範資料為虛構工廠「示範精密機械」。新增圖紙只要加一個 JSON 與一支 CadQuery 標準模型，執行{" "}
-          <code className="font-mono">make drawings index</code>，不改任何程式。也可以{" "}
+          <code className="font-mono">make drawings index</code>，不改任何程式；手上只有紙本圖紙的話可以{" "}
+          <Link to="/drawings/intake" className="text-steel underline">
+            拍照建檔
+          </Link>
+          。也可以{" "}
           <Link to="/reconstruct" className="text-steel underline">
             上傳任何三視圖直接做 3D 重建
           </Link>

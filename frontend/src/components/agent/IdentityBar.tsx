@@ -17,7 +17,7 @@ export function scopeText(a: Account) {
   if (a.role === "warehouse") return `盤點、調撥、報廢、庫存狀態 · ${a.warehouses.join("、")}`;
   if (a.role === "sales") return `訂單交期、數量 · ${a.customers.join("、")}`;
   if (a.role === "planner") return "開立工單、改交期、取消自己開的工單、執行排程 · 全廠";
-  if (a.role === "manager") return "核准超額申請（不能核准自己的）";
+  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙";
   return a.note;
 }
 

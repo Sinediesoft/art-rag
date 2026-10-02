@@ -40,7 +40,8 @@ export function PartCard({
         <h3 className="text-lg font-bold leading-snug">{part.name_zh}</h3>
         <p className="text-sm text-ink-soft">{part.material}</p>
         <p className="text-xs text-ink-faint">
-          {g.width}×{g.depth}×{g.height} mm · {g.weight_kg.toFixed(3)} kg
+          {g.width}×{g.depth}×{g.height} mm ·{" "}
+          {g.weight_kg != null ? `${g.weight_kg.toFixed(3)} kg` : "照片建檔（沒有標準模型）"}
         </p>
         {footer && <div className="mt-auto pt-2">{footer}</div>}
       </div>

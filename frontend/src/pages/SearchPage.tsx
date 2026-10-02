@@ -97,9 +97,23 @@ function ImageResults({
       )}
 
       {data && !data.matched && (
-        <NotInKbNotice
-          detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
-        />
+        <>
+          <NotInKbNotice
+            detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
+          />
+          <Link
+            to={`/artworks/intake?image=${imageId}`}
+            className="flex items-center justify-between rounded-xl border border-jade/30 bg-jade-soft/60 px-4 py-3 font-bold text-jade transition hover:border-jade"
+          >
+            <span>
+              把這幅畫建進知識庫
+              <span className="block text-xs font-normal text-ink-soft">
+                在表單填畫名、作者、典藏與授權，主管收錄後之後拍同一幅就認得出來
+              </span>
+            </span>
+            <span aria-hidden>→</span>
+          </Link>
+        </>
       )}
 
       {best && <PhotoLocation imageId={imageId} artworkId={best.artwork.id} />}

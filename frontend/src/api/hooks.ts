@@ -163,3 +163,14 @@ export const useApprovals = () =>
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit });
 
 export const useRouteEvalRuns = () => useQuery({ queryKey: ["route-eval-runs"], queryFn: api.routeEvalRuns });
+
+// ---- 照片建檔（docs/adr/013）
+/** 收錄後背景重建索引（status＝indexing）期間每 1.5 秒重抓，直到 done／failed */
+export const useIntakeDraft = (draftId: string | null) =>
+  useQuery({
+    queryKey: ["intake", draftId],
+    queryFn: () => api.intakeDraft(draftId!),
+    enabled: !!draftId,
+    retry: false,
+    refetchInterval: (q) => (q.state.data?.status === "indexing" ? 1500 : false),
+  });

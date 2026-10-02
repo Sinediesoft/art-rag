@@ -358,7 +358,7 @@ function ResultCard({
     files: Record<string, string>;
   };
   target: Dims | null;
-  gt: { volume_mm3: number } | null;
+  gt: { volume_mm3: number | null } | null;
 }) {
   if (!result.ok)
     return (
@@ -437,7 +437,7 @@ function ResultCard({
         <p className="text-xs text-ink-faint">
           模型輸出為 DeepCAD 正規化尺度（原始外形 {result.raw_dims!.width.toFixed(3)} × {result.raw_dims!.depth.toFixed(3)} ×{" "}
           {result.raw_dims!.height.toFixed(3)}），依圖紙標註等比縮放 ×{result.scale!.toFixed(2)}，單位 mm。
-          {gt && result.volume != null && (
+          {gt?.volume_mm3 != null && result.volume != null && (
             <>
               {" "}
               體積 {Math.round(result.volume).toLocaleString()} mm³（標準模型 {Math.round(gt.volume_mm3).toLocaleString()}）。

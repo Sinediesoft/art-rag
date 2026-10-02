@@ -391,6 +391,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Intake
+         * @description 拍照 → 擋模糊 → 確認知識庫還沒有 → 建檔草稿（任何身分都可以；收錄要主管）。
+         *
+         *     圖紙由本地 Qwen3-VL 讀標題欄；畫作不讀照片，欄位由人在表單填。
+         */
+        post: operations["create_intake_api_v1_intake_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intake/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Intake */
+        get: operations["get_intake_api_v1_intake__draft_id__get"];
+        /**
+         * Update Intake
+         * @description 人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。
+         */
+        put: operations["update_intake_api_v1_intake__draft_id__put"];
+        post?: never;
+        /** Discard Intake */
+        delete: operations["discard_intake_api_v1_intake__draft_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intake/{draft_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Intake
+         * @description 收錄（只有主管）：寫 kb/（圖紙 parts＋drawings、畫作 artworks＋images）、遞增 kb/VERSION，
+         *     背景重建索引。
+         *
+         *     回傳時狀態是 indexing；重建完成後 GET 這份草稿會變成 done（或 failed，已還原）。
+         */
+        post: operations["commit_intake_api_v1_intake__draft_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/intake/{draft_id}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake File
+         * @description 草稿的原照片（photo.jpg）、要存進知識庫的圖（圖紙 drawing.png、畫作 image.jpg）。
+         */
+        get: operations["get_intake_file_api_v1_intake__draft_id___name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cad/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -1911,6 +1998,209 @@ export interface components {
             /** Height */
             height: number;
         };
+        /** IntakeCheck */
+        IntakeCheck: {
+            /** Label */
+            label: string;
+            /** Ok */
+            ok: boolean;
+            /** Detail */
+            detail: string;
+        };
+        /** IntakeCommit */
+        IntakeCommit: {
+            /** By */
+            by: string;
+            /** By Label */
+            by_label: string;
+            /** At */
+            at: string;
+            /**
+             * Kb Version
+             * @description 收錄後的 kb/VERSION
+             */
+            kb_version: string;
+            /**
+             * Index Ms
+             * @description 重建索引花的時間；還在重建為 null
+             */
+            index_ms: number | null;
+            /**
+             * Error
+             * @description 收錄失敗的原因（寫進去的檔案與版本已還原）
+             */
+            error: string | null;
+        };
+        /** IntakeDraft */
+        IntakeDraft: {
+            /** Draft Id */
+            draft_id: string;
+            /**
+             * Domain
+             * @enum {string}
+             */
+            domain: "mfg" | "art";
+            /**
+             * Status
+             * @description indexing＝已寫進 kb/、背景重建索引中；failed＝收錄失敗、已還原，可以改了再收錄
+             * @enum {string}
+             */
+            status: "draft" | "indexing" | "done" | "failed";
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+            /** Image Id */
+            image_id: string;
+            /** Photo Url */
+            photo_url: string;
+            /**
+             * Kb Image Url
+             * @description 要存進知識庫的圖：圖紙是拉正、對齊版面後的圖（kb/drawings），畫作是照片本身（kb/images）
+             */
+            kb_image_url: string;
+            /**
+             * Item Id
+             * @description 收錄後的 ID：圖紙是預定的編號（收錄時再確認一次）；畫作是「來源代碼－編號」
+             */
+            item_id: string;
+            /** Fields */
+            fields: components["schemas"]["IntakeField"][];
+            /** Checks */
+            checks: components["schemas"]["IntakeCheck"][];
+            /** @description 讀標題欄的結果；畫作不讀照片，全為 null */
+            extraction: components["schemas"]["IntakeExtraction"];
+            /**
+             * Can Commit
+             * @description 欄位都通過驗證（還要有 kb_intake 權限，只有主管）
+             */
+            can_commit: boolean;
+            /**
+             * Blockers
+             * @description 還沒通過驗證的欄位
+             */
+            blockers: string[];
+            commit: components["schemas"]["IntakeCommit"] | null;
+            /**
+             * Item Url
+             * @description 收錄完成後的圖紙頁或畫作頁（前端路由）
+             */
+            item_url: string | null;
+            /** Egress */
+            egress: {
+                [key: string]: number;
+            };
+        };
+        /** IntakeExtraction */
+        IntakeExtraction: {
+            /**
+             * Model
+             * @description 讀標題欄的模型；沒讀（mock、模型無法使用）為 null
+             */
+            model: string | null;
+            /** Strategy */
+            strategy: string | null;
+            /** Ms */
+            ms: number | null;
+            /**
+             * Raw
+             * @description 模型的原始輸出（前 1,000 字）
+             */
+            raw: string | null;
+            /** Error */
+            error: string | null;
+            /** Tokens */
+            tokens?: {
+                [key: string]: number;
+            } | null;
+        };
+        /** IntakeField */
+        IntakeField: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: string | number | null;
+            /**
+             * Source
+             * @description Qwen3-VL＝從照片讀的；規則＝依知識庫校正或補上的；人＝在確認頁或表單填的
+             */
+            source: ("Qwen3-VL" | "規則" | "人") | null;
+            /**
+             * Note
+             * @description 規則改了什麼
+             */
+            note?: string | null;
+            /**
+             * Hint
+             * @description 輸入提示（人填的欄位）
+             */
+            hint?: string | null;
+            /**
+             * Group
+             * @description 表單分區（畫作的跳出表單）
+             */
+            group?: string | null;
+            /**
+             * Read
+             * @description 從照片讀的欄位；false＝照片上沒有，由人填
+             */
+            read: boolean;
+            /**
+             * Required
+             * @description 必填；畫作的條件必填（CC BY 4.0 的標示文字、填了介紹的出處）也算
+             */
+            required: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "number" | "enum" | "url" | "longtext";
+            /**
+             * Options
+             * @description 列舉值（kind＝enum）
+             * @default []
+             */
+            options: string[];
+            /**
+             * Suggestions
+             * @description 知識庫既有零件用過的值
+             * @default []
+             */
+            suggestions: string[];
+            /**
+             * Status
+             * @description invalid、missing 要處理完才能收錄；empty＝選填沒填
+             * @enum {string}
+             */
+            status: "ok" | "invalid" | "missing" | "empty";
+            /** Message */
+            message?: string | null;
+        };
+        /** IntakeRequest */
+        IntakeRequest: {
+            /**
+             * Image Id
+             * @description 上傳的照片（POST /images）
+             */
+            image_id: string;
+            /**
+             * Domain
+             * @description 從哪一邊進來：mfg＝工廠圖紙、art＝畫作；null＝交給領域路由判斷。指定了但路由很確定是另一個領域時回 INTAKE_WRONG_DOMAIN
+             */
+            domain?: ("mfg" | "art") | null;
+        };
+        /** IntakeUpdate */
+        IntakeUpdate: {
+            /**
+             * Values
+             * @description 要修改的欄位（key → 值，null＝清空）；改過的欄位來源標成「人」
+             */
+            values: {
+                [key: string]: string | number | null;
+            };
+        };
         /** InventoryAskRequest */
         InventoryAskRequest: {
             /** Question */
@@ -2299,11 +2589,15 @@ export interface components {
             /** Thumb Url */
             thumb_url: string;
             /** Model Url */
-            model_url: string;
+            model_url: string | null;
             /** Step Url */
-            step_url: string;
+            step_url: string | null;
+            intake?: components["schemas"]["PartIntakeInfo"] | null;
         };
-        /** PartGeometry */
+        /**
+         * PartGeometry
+         * @description 有標準模型時由模型計算；照片建檔的零件（docs/adr/013）只有圖上標註的外形，其餘為 null。
+         */
         PartGeometry: {
             /**
              * Width
@@ -2320,15 +2614,49 @@ export interface components {
              * @description Z 方向外形尺寸（mm）
              */
             height: number;
-            /** Volume Mm3 */
-            volume_mm3: number;
+            /**
+             * Volume Mm3
+             * @description 標準模型體積；沒有標準模型為 null
+             */
+            volume_mm3: number | null;
             /**
              * Weight Kg
-             * @description 標準模型體積 × 材料密度
+             * @description 標準模型體積 × 材料密度；沒有標準模型為 null
              */
-            weight_kg: number;
+            weight_kg: number | null;
             /** Faces */
-            faces: number;
+            faces: number | null;
+        };
+        /**
+         * PartIntakeInfo
+         * @description 照片建檔紀錄（part.schema.json 的 intake）。
+         */
+        PartIntakeInfo: {
+            /**
+             * Method
+             * @constant
+             */
+            method: "photo";
+            /** Date */
+            date: string;
+            /** Draft Id */
+            draft_id?: string | null;
+            /**
+             * Model
+             * @description 讀標題欄的模型
+             */
+            model?: string | null;
+            /**
+             * Fields From Model
+             * @description 由模型讀取、人沒有改過的欄位
+             * @default []
+             */
+            fields_from_model: string[];
+            /**
+             * Confirmed By
+             * @description 按「收錄」的展示帳號
+             */
+            confirmed_by: string;
         };
         /** PartInventory */
         PartInventory: {
@@ -2511,9 +2839,15 @@ export interface components {
             thumb_url: string;
             /**
              * Model Url
-             * @description 標準 3D 模型（STL）
+             * @description 標準 3D 模型（STL）；照片建檔的零件沒有，為 null
              */
-            model_url: string;
+            model_url: string | null;
+            /**
+             * Intake
+             * @description 照片建檔的零件（docs/adr/013）
+             * @default false
+             */
+            intake: boolean;
             /**
              * Tags
              * @default []
@@ -3992,6 +4326,197 @@ export interface operations {
                 content: {
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_intake_api_v1_intake_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE：stage／token／draft／done／error（見 shared/sse_events.md） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_intake_api_v1_intake__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_intake_api_v1_intake__draft_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discard_intake_api_v1_intake__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    commit_intake_api_v1_intake__draft_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_intake_file_api_v1_intake__draft_id___name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Client Error */
             "4XX": {

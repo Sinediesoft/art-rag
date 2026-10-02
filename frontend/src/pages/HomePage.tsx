@@ -37,12 +37,20 @@ export function HomePage() {
         </p>
         <div className="mt-5 max-w-md">
           <ImageUploader onUploaded={(id) => navigate(`/search?image=${id}`)} />
-          <Link
-            to="/photo-diff"
-            className="mt-2 inline-block text-sm font-bold text-ink-soft underline-offset-2 hover:text-seal hover:underline"
-          >
-            比對兩張照片（修復前後、真跡與複製品）→
-          </Link>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <Link
+              to="/photo-diff"
+              className="text-sm font-bold text-ink-soft underline-offset-2 hover:text-seal hover:underline"
+            >
+              比對兩張照片（修復前後、真跡與複製品）→
+            </Link>
+            <Link
+              to="/artworks/intake"
+              className="text-sm font-bold text-ink-soft underline-offset-2 hover:text-seal hover:underline"
+            >
+              知識庫還沒有的畫？拍照建檔 →
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={submit} className="mt-5 flex max-w-xl gap-2">
