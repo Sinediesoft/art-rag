@@ -200,7 +200,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Chat */
+        /**
+         * Chat
+         * @description 圖文問答。工廠圖紙要看目前身分的資料範圍（看不到的回 403 DATA_SCOPE_DENIED）；
+         *     檢索只取看得到的段落（Metadata Filter），放進 prompt 前先過濾夾帶指令的段落（docs/adr/012）。
+         */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
         options?: never;
@@ -215,7 +219,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Parts */
+        /**
+         * List Parts
+         * @description 只列目前身分看得到的圖紙（業務看不到機密圖紙；訪客不能使用工廠圖紙 → 403）。
+         */
         get: operations["list_parts_api_v1_parts_get"];
         put?: never;
         post?: never;
@@ -308,6 +315,7 @@ export interface paths {
         /**
          * Search Any
          * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
+         *     判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。
          */
         post: operations["search_any_api_v1_search_any_post"];
         delete?: never;
@@ -323,7 +331,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Search Parts */
+        /**
+         * Search Parts
+         * @description 以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter）。
+         */
         get: operations["search_parts_api_v1_search_parts_get"];
         put?: never;
         post?: never;
@@ -345,6 +356,7 @@ export interface paths {
         /**
          * Reconstruct
          * @description 工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。
+         *     要能使用工廠圖紙；指定或照片辨識出的圖紙也要看得到（資料範圍）。
          */
         post: operations["reconstruct_api_v1_cad_reconstruct_post"];
         delete?: never;
@@ -868,7 +880,8 @@ export interface paths {
         put?: never;
         /**
          * Agent Route
-         * @description System 1：判斷意圖與信心（Jev 或本地路由）→ 信心閘門 → 分派到哪個本地模組。
+         * @description 五段防護的第 1、2 段（docs/adr/012）：個資遮蔽 → 本地分流判斷意圖＋信心閘門 →
+         *     RBAC（身分、資料範圍、動作權限）→ Jev 第一層護欄 → 分派到哪個本地模組；擋下就拒絕並記錄。
          */
         post: operations["agent_route_api_v1_agent_route_post"];
         delete?: never;
@@ -997,6 +1010,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/security/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Security Logs
+         * @description 五段防護的拒絕並記錄（docs/adr/012）：RBAC 與 Jev 護欄擋下的請求、Jev 過濾移除的段落。
+         *     只存遮蔽個資後的文字。
+         */
+        get: operations["security_logs_api_v1_security_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1039,6 +1073,18 @@ export interface components {
             customers: string[];
             /** Note */
             note: string;
+            /**
+             * Domains
+             * @description 能讀的資料領域：art／mfg／factory（docs/adr/012）
+             */
+            domains: string[];
+            /**
+             * Levels
+             * @description 看得到的機密等級
+             */
+            levels: string[];
+            /** Scope Note */
+            scope_note: string;
         };
         /** AccountsResponse */
         AccountsResponse: {
@@ -1277,6 +1323,25 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** BlockedInfo */
+        BlockedInfo: {
+            /**
+             * Stage
+             * @enum {integer}
+             */
+            stage: 1 | 2;
+            /** Rule */
+            rule: string;
+            /**
+             * Log No
+             * @description 拒絕並記錄的紀錄編號（SEC-0001）
+             */
+            log_no: string;
+            /** Judge */
+            judge: string;
+            /** Reason */
+            reason: string | null;
+        };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
             /** File */
@@ -1478,6 +1543,11 @@ export interface components {
              * @description 檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）
              */
             rearrange?: boolean | null;
+            /**
+             * Post Filter
+             * @description 五段防護第 4 段（docs/adr/012）：jev＝公開段落送 Jev 判斷注入與關聯性、local＝全在地端；兩者都最多留 3 段。null＝只用地端規則移除夾帶指令的段落（其他頁面）
+             */
+            post_filter?: ("jev" | "local") | null;
         };
         /** ChromaStats */
         ChromaStats: {
@@ -1550,7 +1620,12 @@ export interface components {
             /** Text */
             text: string;
             /** Source Url */
-            source_url: string;
+            source_url?: string | null;
+            /**
+             * Source
+             * @description 沒有網址的出處（使用者投稿、外部文件）
+             */
+            source?: string | null;
             /** License */
             license: string;
             /** Attribution */
@@ -1651,6 +1726,57 @@ export interface components {
             rating: "up" | "down";
             /** Note */
             note?: string | null;
+        };
+        /** GuardCheck */
+        GuardCheck: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "地端" | "Jev";
+            /**
+             * Ok
+             * @description null＝沒判定（等使用者選、或段落沒放進上下文）
+             */
+            ok: boolean | null;
+            /** Detail */
+            detail: string;
+            /**
+             * Warn
+             * @default false
+             */
+            warn: boolean;
+        };
+        /**
+         * GuardInfo
+         * @description 第 2 段：Jev 第一層護欄（或地端規則）。
+         */
+        GuardInfo: {
+            /** Passed */
+            passed: boolean;
+            /**
+             * Engine
+             * @enum {string}
+             */
+            engine: "jev" | "local" | "skip";
+            /** Checks */
+            checks: components["schemas"]["GuardCheck"][];
+            /** Tag */
+            tag: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Skipped */
+            skipped: string | null;
+            /**
+             * Fallback Reason
+             * @description 想用 Jev 但不能用的原因（改用地端規則）
+             */
+            fallback_reason: string | null;
+            call: components["schemas"]["JevCallInfo"] | null;
         };
         /** HealthResponse */
         HealthResponse: {
@@ -1894,6 +2020,46 @@ export interface components {
             /** Columns */
             columns: components["schemas"]["InventoryColumn"][];
         };
+        /** JevAnswerRow */
+        JevAnswerRow: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+            /** Alert */
+            alert: boolean;
+        };
+        /**
+         * JevCallInfo
+         * @description 一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。
+         */
+        JevCallInfo: {
+            /**
+             * Stage
+             * @enum {integer}
+             */
+            stage: 2 | 4;
+            /** Model */
+            model: string;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Bytes */
+            bytes: number;
+            /** Request */
+            request: {
+                [key: string]: unknown;
+            };
+            /** Sent */
+            sent: string[];
+            /** Mapping */
+            mapping: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Answers */
+            answers: components["schemas"]["JevAnswerRow"][];
+        };
         /** LightnessStats */
         LightnessStats: {
             /** Dark */
@@ -2024,6 +2190,26 @@ export interface components {
             models: components["schemas"]["MemoryModel"][];
             /** Events */
             events: components["schemas"]["MemoryEvent"][];
+        };
+        /** MetaFilterInfo */
+        MetaFilterInfo: {
+            /**
+             * Domain
+             * @enum {string}
+             */
+            domain: "art" | "mfg";
+            /** Domain Label */
+            domain_label: string;
+            /** Levels */
+            levels: string[];
+            /** Doc Id */
+            doc_id: string | null;
+            /** Doc Label */
+            doc_label: string | null;
+            /** Doc Level */
+            doc_level: string | null;
+            /** Text */
+            text: string;
         };
         /** OkResponse */
         OkResponse: {
@@ -2271,6 +2457,12 @@ export interface components {
             kb_version: string;
             /** Items */
             items: components["schemas"]["PartSummary"][];
+            /**
+             * Hidden
+             * @description 不在目前身分資料範圍內、沒有列出的圖紙張數
+             * @default 0
+             */
+            hidden: number;
         };
         /** PartPlan */
         PartPlan: {
@@ -2398,6 +2590,24 @@ export interface components {
             latency_ms: number;
             /** Results */
             results: components["schemas"]["PartTextSearchHit"][];
+            /**
+             * Hidden
+             * @description 不在目前身分資料範圍內、檢索時就濾掉的圖紙張數
+             * @default 0
+             */
+            hidden: number;
+            /**
+             * Filter
+             * @description Metadata Filter（機密等級）
+             */
+            filter?: string | null;
+        };
+        /** PiiItem */
+        PiiItem: {
+            /** Kind */
+            kind: string;
+            /** Code */
+            code: string;
         };
         /** PlannedWorkOrder */
         PlannedWorkOrder: {
@@ -2496,6 +2706,29 @@ export interface components {
             /** Prob */
             prob: number;
         };
+        /**
+         * RbacInfo
+         * @description 第 1 段：身分、資料範圍、動作權限（後端硬性檢查）。
+         */
+        RbacInfo: {
+            /** Passed */
+            passed: boolean;
+            /**
+             * Pending
+             * @description 要做什麼還不確定（等使用者選），範圍與動作之後再檢查
+             */
+            pending: boolean;
+            /** Checks */
+            checks: components["schemas"]["GuardCheck"][];
+            /** Tag */
+            tag: string | null;
+            /** Reason */
+            reason: string | null;
+            /** @description 換成這個身分就可以（切換身分再試一次） */
+            retry: components["schemas"]["RetryAccount"] | null;
+            /** @description 第 3 段向量檢索的 Metadata Filter */
+            filter: components["schemas"]["MetaFilterInfo"] | null;
+        };
         /** ReconstructRequest */
         ReconstructRequest: {
             /**
@@ -2516,6 +2749,13 @@ export interface components {
              */
             strategy: "ortho2cad" | "hybrid";
         };
+        /** RetryAccount */
+        RetryAccount: {
+            /** Account Id */
+            account_id: string;
+            /** Label */
+            label: string;
+        };
         /** ReturnRequest */
         ReturnRequest: {
             /** Reason */
@@ -2525,7 +2765,7 @@ export interface components {
         RouteEgress: {
             /**
              * Bytes
-             * @description 送出本機的位元組數（Jev 請求本文）；本地路由為 0
+             * @description 送出本機的位元組數（第 2 段 Jev 請求本文）；地端規則為 0
              */
             bytes: number;
             /** To */
@@ -2611,7 +2851,7 @@ export interface components {
             forced_intent?: string | null;
             /**
              * Engine
-             * @description auto：有金鑰用 Jev、否則本地；eval-route 用 jev／local 比較
+             * @description 第 2、4 段由誰判斷：auto／jev＝有金鑰用 Jev（失敗改地端規則），local＝只用地端規則
              * @default auto
              * @enum {string}
              */
@@ -2622,11 +2862,19 @@ export interface components {
             /** Request Id */
             request_id: string;
             account: components["schemas"]["Account"];
-            /** Question */
+            /**
+             * Question
+             * @description 收到的文字（已遮蔽個資）
+             */
             question: string;
             /**
+             * Pii
+             * @description 遮蔽了哪些個資（只留種類與代號，不留原值）
+             */
+            pii: components["schemas"]["PiiItem"][];
+            /**
              * Masked Text
-             * @description 送 Jev 的代號化文字（本地路由時只在本機）
+             * @description 代號化後的文字（第 2 段只把這個送 Jev）
              */
             masked_text: string;
             /**
@@ -2643,17 +2891,7 @@ export interface components {
                 [key: string]: unknown;
             }[];
             photo: components["schemas"]["RoutePhoto"] | null;
-            /**
-             * Engine
-             * @enum {string}
-             */
-            engine: "jev" | "local" | "user";
-            /** Engine Label */
-            engine_label: string;
-            /** Model */
-            model: string;
-            /** Fallback Reason */
-            fallback_reason: string | null;
+            router: components["schemas"]["RouterInfo"];
             /** Intent */
             intent: string;
             /** Intent Label */
@@ -2667,8 +2905,6 @@ export interface components {
             confidence: number;
             /** Margin */
             margin: number;
-            /** Jev Confidence */
-            jev_confidence: number | null;
             /** Ranked */
             ranked: components["schemas"]["RankedIntent"][];
             /** Modify Op */
@@ -2688,30 +2924,49 @@ export interface components {
             gate_reason: string;
             /** Options */
             options: components["schemas"]["RankedIntent"][];
-            /** Permitted */
-            permitted: boolean;
-            /** Permission Note */
-            permission_note: string;
+            rbac: components["schemas"]["RbacInfo"];
+            /** @description 第 1 段沒過就沒有執行（null） */
+            guard: components["schemas"]["GuardInfo"] | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "pass" | "blocked_rbac" | "blocked_guard";
+            blocked: components["schemas"]["BlockedInfo"] | null;
             /** Dispatch */
             dispatch: {
                 [key: string]: unknown;
             };
+            /**
+             * Post Filter
+             * @description 分派到 /chat 時帶的第 4 段判斷者
+             * @enum {string}
+             */
+            post_filter: "jev" | "local";
             egress: components["schemas"]["RouteEgress"];
             /** Latency Ms */
             latency_ms: {
                 [key: string]: number;
             };
+        };
+        /**
+         * RouterInfo
+         * @description 第 1 段的本地分流：誰判斷意圖（本地分流、使用者點選、照片辨識）。
+         */
+        RouterInfo: {
+            /**
+             * Engine
+             * @enum {string}
+             */
+            engine: "local" | "user";
+            /** Model */
+            model: string;
+            /** Latency Ms */
+            latency_ms: number;
             /** Detail */
             detail: {
                 [key: string]: unknown;
             };
-            /**
-             * Jev Request
-             * @description 實際送給 Jev 的請求本文（畫面上可展開檢查）
-             */
-            jev_request: {
-                [key: string]: unknown;
-            } | null;
         };
         /** RoutingOp */
         RoutingOp: {
@@ -2994,6 +3249,45 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** SecurityLogRow */
+        SecurityLogRow: {
+            /** No */
+            no: string;
+            /** Created At */
+            created_at: string;
+            /** Request Id */
+            request_id: string | null;
+            /**
+             * Stage
+             * @enum {integer}
+             */
+            stage: 1 | 2 | 4;
+            /** Rule */
+            rule: string;
+            /** Judge */
+            judge: string | null;
+            /** Account Id */
+            account_id: string | null;
+            /** Account Label */
+            account_label: string | null;
+            /** Text */
+            text: string | null;
+        };
+        /**
+         * SecurityLogsResponse
+         * @description 五段防護的拒絕並記錄：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，第 4 段移除的段落。
+         */
+        SecurityLogsResponse: {
+            /** Items */
+            items: components["schemas"]["SecurityLogRow"][];
+            /**
+             * Today
+             * @description 今天（UTC+8）各段筆數：rbac／guard／post
+             */
+            today: {
+                [key: string]: number;
+            };
+        };
         /** SkippedWorkOrder */
         SkippedWorkOrder: {
             /** Wo No */
@@ -3060,7 +3354,10 @@ export interface components {
             /** Account Id */
             account_id: string;
         };
-        /** System1Status */
+        /**
+         * System1Status
+         * @description Jev 的設定狀態（2026-10-02 起用在五段防護的第 2、4 段，不再判斷意圖）與信心閘門門檻。
+         */
         System1Status: {
             /** Jev Configured */
             jev_configured: boolean;
@@ -4807,6 +5104,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    security_logs_api_v1_security_logs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityLogsResponse"];
                 };
             };
             /** @description Client Error */

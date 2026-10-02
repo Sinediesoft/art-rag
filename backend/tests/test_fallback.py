@@ -58,7 +58,7 @@ def test_outage_falls_back_to_local_model_not_cloud(real_llm, monkeypatch):
     done = event(events, "done")
     assert done and done["fallback"] is True
     assert done["strategy_used"] == "hybrid_fallback"
-    assert done["egress"] == {"images": 0, "chunks": 0, "bytes": 0}
+    assert done["egress"] == {"images": 0, "chunks": 0, "bytes": 0, "jev_bytes": 0}
     assert not set(real_llm) & providers.CLOUD_STRATEGIES
 
 

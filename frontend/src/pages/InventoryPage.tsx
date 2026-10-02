@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { ApiError, InventoryOverviewRow } from "../api/client";
+import type { InventoryOverviewRow } from "../api/client";
 import { useHealth, useInventoryOverview, useInventorySchema } from "../api/hooks";
-import { ErrorMessage, Loading } from "../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../components/common/Feedback";
 import { SqlAnswer } from "../components/inventory/SqlAnswer";
 
 const SUGGESTIONS = [
@@ -142,7 +142,7 @@ function OverviewTable() {
   const { data, isLoading, error } = useInventoryOverview();
   if (isLoading) return <Loading />;
   if (error || !data)
-    return <ErrorMessage message={(error as Error)?.message ?? ""} requestId={(error as ApiError)?.requestId} />;
+    return <ApiErrorMessage error={error} />;
   const cols: [keyof InventoryOverviewRow, string][] = [
     ["available", "可用"],
     ["reserved", "保留"],

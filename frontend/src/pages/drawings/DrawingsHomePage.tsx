@@ -1,8 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError } from "../../api/client";
 import { useHealth, useParts } from "../../api/hooks";
-import { ErrorMessage, Loading } from "../../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../../components/common/Feedback";
 import { ImageUploader } from "../../components/common/ImageUploader";
 import { PartCard } from "../../components/parts/PartCard";
 
@@ -98,12 +97,15 @@ export function DrawingsHomePage() {
           )}
         </div>
         {parts.isLoading && <Loading />}
-        {parts.error && (
-          <ErrorMessage message={(parts.error as Error).message} requestId={(parts.error as ApiError).requestId} />
-        )}
+        {parts.error && <ApiErrorMessage error={parts.error} />}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {parts.data?.items.map((p) => <PartCard key={p.id} part={p} to={`/drawings/${p.id}`} />)}
         </div>
+        {!!parts.data?.hidden && (
+          <p className="mt-2 rounded-lg bg-paper-deep px-3 py-2 text-xs text-ink-soft">
+            另有 {parts.data.hidden} 張圖紙不在目前身分的資料範圍（機密等級），沒有列出。
+          </p>
+        )}
         <p className="mt-3 text-xs text-ink-faint">
           示範資料為虛構工廠「示範精密機械」。新增圖紙只要加一個 JSON 與一支 CadQuery 標準模型，執行{" "}
           <code className="font-mono">make drawings index</code>，不改任何程式。也可以{" "}

@@ -11,7 +11,7 @@ import {
   type ScheduleKpis,
 } from "../api/client";
 import { useProductionOverview } from "../api/hooks";
-import { ErrorMessage, Loading } from "../components/common/Feedback";
+import { ApiErrorMessage, ErrorMessage, Loading } from "../components/common/Feedback";
 import { GanttChart, GanttLegend, orderColor, type GanttOrder } from "../components/schedule/GanttChart";
 import { useScheduleSolve, type SolveState } from "../hooks/useScheduleSolve";
 import { formatTaipei, seconds } from "../lib/format";
@@ -83,10 +83,9 @@ export function SchedulePage() {
   if (isLoading) return <Loading />;
   if (error || !data)
     return (
-      <ErrorMessage
-        title="無法載入生產排程"
-        message={(error as Error)?.message ?? ""}
-        requestId={(error as ApiError)?.requestId}
+      <ApiErrorMessage
+        error={error}
+        title={(error as ApiError)?.code === "DATA_SCOPE_DENIED" ? undefined : "無法載入生產排程"}
       />
     );
 

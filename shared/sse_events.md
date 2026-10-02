@@ -20,6 +20,19 @@
 `candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
 `sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
 
+`sources` 另帶五段防護（docs/adr/012）的第 3、4 段：
+- `filter`：Metadata Filter `{"domain", "domain_label", "levels", "doc_id", "doc_label", "doc_level", "text"}`，
+  依目前身分的資料範圍產生（工廠圖紙從全庫補足時只取看得到的圖紙）
+- `candidates`：第 3 段檢索出的候選段落數（第 4 段過濾前）
+- `post_filter`：第 4 段 `{"mode", "engine", "candidates", "kept", "injected", "dropped", "checks", "cloud", "local",
+  "call", "fallback_reason", "ms"}`。`mode` 為 `jev`／`local`（請求帶 `post_filter`，智慧助理用：注入＋關聯性重排，
+  最多 3 段）或 `scan`（沒帶，其他頁面：只用地端規則移除夾帶指令的段落，段落數照原本規則）；
+  `injected`／`dropped` 是被移除、沒放進上下文的段落 `{"chunk_id", "title", "topic"}`；`checks` 是每段的判斷；
+  `cloud` 是送 Jev 的段落數（只有公開段落）、`call` 是 Jev 請求的紀錄（送出的代號化內容、代號對照、回答、請求本文）。
+  關檢索或沒有段落時為 `null`。
+每段多一個 `level`（畫作「公開」，圖紙「內部」或「機密」）。`done.egress` 多 `jev_bytes`（第 4 段送 Jev 的位元組），
+`bytes`／`chunks` 也算進去；本地策略只有這一項外送。
+
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
 雲端策略一律回 `error`（`CLOUD_CONFIDENTIAL_FORBIDDEN`）。

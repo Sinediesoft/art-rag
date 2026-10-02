@@ -1,14 +1,25 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import type { MemoryStatus } from "./api/client";
-import { useHealth } from "./api/hooks";
+import { useAccounts, useHealth } from "./api/hooks";
 import { IdentityBar } from "./components/agent/IdentityBar";
 
-const NAV = [
+/** domain：這一頁要讀的資料領域（docs/adr/012 資料範圍）；目前身分不能讀就在導覽列標鎖頭 */
+const NAV: { to: string; label: string; icon: string; domain?: string }[] = [
   { to: "/assistant", label: "智慧助理", icon: "M4 5h16v11H8l-4 4zM8 10h.01M12 10h.01M16 10h.01" },
   { to: "/", label: "尋畫", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.3-4.3" },
-  { to: "/drawings", label: "工廠圖紙", icon: "M3 21V9l6-4v4l6-4v4l6-4v16zM7 17h2m4 0h2" },
-  { to: "/inventory", label: "庫存查詢", icon: "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9" },
-  { to: "/schedule", label: "生產排程", icon: "M3 5h18M3 19h18M5 9h7v3H5zM10 14h9v3h-9zM14 9h5v3h-5" },
+  { to: "/drawings", label: "工廠圖紙", icon: "M3 21V9l6-4v4l6-4v4l6-4v16zM7 17h2m4 0h2", domain: "mfg" },
+  {
+    to: "/inventory",
+    label: "庫存查詢",
+    icon: "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9",
+    domain: "factory",
+  },
+  {
+    to: "/schedule",
+    label: "生產排程",
+    icon: "M3 5h18M3 19h18M5 9h7v3H5zM10 14h9v3h-9zM14 9h5v3h-5",
+    domain: "factory",
+  },
   { to: "/compare", label: "策略比較", icon: "M4 5h7v14H4zM13 5h7v14h-7z" },
   { to: "/admin", label: "系統狀態", icon: "M4 19V9m6 10V5m6 14v-7m4 7H2" },
 ];
@@ -19,7 +30,11 @@ const isActive = (to: string, path: string, active: boolean) =>
 
 export function Layout() {
   const { data: health } = useHealth();
+  const { data: accounts } = useAccounts();
   const { pathname } = useLocation();
+  const locked = (domain?: string) => !!domain && !!accounts && !accounts.current.domains.includes(domain);
+  const lockTitle = (domain?: string) =>
+    locked(domain) ? `目前身分「${accounts?.current.label}」的資料範圍不含這一頁，請在下方切換身分` : undefined;
   const degraded = health && health.status !== "ok";
   return (
     <div className="flex min-h-dvh flex-col">
@@ -39,12 +54,18 @@ export function Layout() {
                 key={n.to}
                 to={n.to}
                 end={n.to === "/"}
+                title={lockTitle(n.domain)}
                 className={({ isActive: a }) =>
                   `whitespace-nowrap rounded-lg px-2 py-1.5 text-sm font-medium transition md:px-3 ${
-                    isActive(n.to, pathname, a) ? "bg-ink text-paper" : "text-ink-soft hover:bg-paper-deep"
+                    isActive(n.to, pathname, a)
+                      ? "bg-ink text-paper"
+                      : locked(n.domain)
+                        ? "text-ink-faint/70 hover:bg-paper-deep"
+                        : "text-ink-soft hover:bg-paper-deep"
                   }`
                 }
               >
+                {locked(n.domain) && <span aria-label="資料範圍外">🔒 </span>}
                 {n.label}
               </NavLink>
             ))}
@@ -72,9 +93,10 @@ export function Layout() {
             key={n.to}
             to={n.to}
             end={n.to === "/"}
+            title={lockTitle(n.domain)}
             className={({ isActive: a }) =>
               `flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${
-                isActive(n.to, pathname, a) ? "text-seal" : "text-ink-faint"
+                isActive(n.to, pathname, a) ? "text-seal" : locked(n.domain) ? "text-ink-faint/40" : "text-ink-faint"
               }`
             }
           >

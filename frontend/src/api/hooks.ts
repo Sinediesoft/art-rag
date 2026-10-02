@@ -135,8 +135,9 @@ export const usePartPlan = (id: string | undefined) =>
 export const useAccounts = () =>
   useQuery({ queryKey: ["accounts"], queryFn: api.accounts, refetchInterval: 10_000 });
 
-/** 和身分無關、重算又慢（CLIP＋ORB 辨識、色彩分析）的查詢：切換身分時不重抓 */
-const IDENTITY_FREE = new Set(["search-image", "search-any", "search-drawing", "photo-colors", "artwork-colors"]);
+/** 和身分無關、重算又慢（CLIP＋ORB 辨識、色彩分析）的查詢：切換身分時不重抓。
+ * 圖紙的辨識結果會依資料範圍過濾（docs/adr/012），所以 search-any、search-drawing 要重抓 */
+const IDENTITY_FREE = new Set(["search-image", "photo-colors", "artwork-colors"]);
 
 /** 切換展示身分，其他查詢（帳號、待核准、庫存、排程…）全部重抓 */
 export function useSwitchAccount() {
@@ -151,5 +152,9 @@ export const useApprovals = () =>
   useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });
 
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit });
+
+/** 五段防護的拒絕並記錄（RBAC、Jev 護欄擋下的請求，Jev 過濾移除的段落） */
+export const useSecurityLogs = (limit = 20) =>
+  useQuery({ queryKey: ["security-logs", limit], queryFn: () => api.securityLogs(limit), refetchInterval: 10_000 });
 
 export const useRouteEvalRuns = () => useQuery({ queryKey: ["route-eval-runs"], queryFn: api.routeEvalRuns });

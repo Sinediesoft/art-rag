@@ -1,0 +1,39 @@
+question_id,split,type,artwork_id,source_lang,strategy,model,kb_version,prompt_version,answer_ok,citation_ok,n_sources,rearrange_ms,rearrange_fallback,first_token_ms,total_ms,cost_twd,egress_images,egress_chunks,egress_bytes,error,answer
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,6361,7028,0.0,0,0,0,,畫家簽名藏在畫面右下方、騾隊後方的樹叢枝葉間 [1]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,2,,,1945,3270,0.0,0,0,0,,李霖燦於 1958 年在畫面右下方樹叢間發現「范寬」款[1]。畫作作者為范寬，創作於北宋（約 11 世紀初）[2]。
+q-npm1-03,test,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1062,2531,0.0,0,0,0,,這幅畫的山石使用了「雨點皴」，是范寬以密集、短促筆觸層層點染所呈現的技法 [1]。這種皴法強調岩石的堅硬與粗糙質感，是北宋山水畫的重要特色 [2]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1191,2261,0.0,0,0,0,,近景右下方山路上，有一支馱著貨物的騾隊正在趕路，人與牲口在山勢襯托下顯得極為渺小 [1]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,978,1933,0.0,0,0,0,,〈谿山行旅圖〉常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑 [1]。
+q-met-01,dev,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,3608,4927,0.0,0,0,0,,這幅畫是在法國南部聖雷米附近的聖保羅療養院周圍的田野現場完成的 [3]。畫面中的麥田與絲柏，正是梵谷在療養院附近寫生的景觀 [5]。
+q-met-02,dev,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,933,1762,0.0,0,0,0,,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美，並說還沒有人用他看到的方式畫過絲柏 [1]。
+q-met-03,test,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,806,2488,0.0,0,0,0,,這幅畫有其他版本，包括一幅尺寸相近的版本藏於倫敦國家美術館，以及一幅較小的版本是畫給母親與妹妹的 [1]。   它目前收藏於大都會藝術博物館，於1993年由安納伯格基金會捐款購得 [2]。
+q-met-04,test,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,825,1579,0.0,0,0,0,,大都會藝術博物館於 1993 年以安納伯格基金會的捐款購得這幅畫 [1]。
+q-met-05,test,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,3,,,607,1092,0.0,0,0,0,,遠方的山是阿爾皮耶山丘（Alpilles）[1]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,4,,,3794,4694,0.0,0,0,0,,秀拉用的是「點描法」，他把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,3,,,642,961,0.0,0,0,0,,右邊的女子牽著一隻猴子 [1]。
+q-aic-03,test,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,996,1741,0.0,0,0,0,,這幅畫在1886年第八屆印象派畫展首次展出，也是最後一屆印象派畫展 [1]。
+q-aic-04,test,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1011,1748,0.0,0,0,0,,畫布四周的邊框是在1888至1889年間由秀拉重新修改加上去的 [1]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,4,,,857,1224,0.0,0,0,0,,畫的是塞納河上的大碗島 [1][3]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1241,1440,0.0,0,0,0,,知識庫中沒有這方面的資料。
+q-npm1-06,test,untyped,npm-000001,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1263,2450,0.0,0,0,0,,這幅畫主要使用深褐、褐、黑等中性色，整體色彩低彩度、以暗調為主 [1]。畫面以水墨為主，僅略施淡彩 [2]。
+q-aic-06,test,untyped,aic-27992,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1381,2885,0.0,0,0,0,,這幅畫整體偏冷，暖色僅佔 24%，冷色佔 19%，中性色佔 56%[2]。畫面以中性色為主，色彩飽和度低，呈現出寧靜的氛圍[2]。
+q-met-06,test,untyped,met-436535,zh,hybrid,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,True,5,,,1133,2860,0.0,0,0,0,,這幅畫的色彩不算極鮮豔，整體呈現冷暖並陳、中等彩度的風格，以中間調為主 [1]。麥田的金黃與絲柏的深綠形成對比，但天空的藍綠與雲朵的白灰則較為柔和 [3]。
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,3234,3990,0.0,0,0,0,,這幅畫無明顯簽名，畫家范寬常以「無名款」呈現，畫中未見其署名[0]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,696,1865,0.0,0,0,0,,這幅畫的作者是北宋畫家范寬，約創作於11世紀初。   畫中並無明顯簽名，後世學者多依畫風與歷史記載推定作者。   [0]
+q-npm1-03,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,249,1006,0.0,0,0,0,,這幅畫山石用「雨點皴」與「峽谷皴」，表現出雄偉的山體質感 [0]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,247,651,0.0,0,0,0,,近景無人或動物，僅有岩石與樹木[0]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,236,1641,0.0,0,0,0,,這幅畫常與《富春山居圖》《溪山行旅圖》並稱，但《谿山行旅圖》本身即為北宋巨匠范寬代表作，與郭熙、李成等同屬「北宋山水四大家」[0]。
+q-met-01,dev,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,3106,3768,0.0,0,0,0,,這幅畫是梵谷在聖雷米精神病院期間所繪，位於法國普羅旺斯地區 [0]。
+q-met-02,dev,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,295,1299,0.0,0,0,0,,梵谷稱絲柏為「綠色的哨兵」，挺拔如守護者。   他喜愛其形態，常以強烈筆觸表現其生命力。   [0]
+q-met-03,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,259,2067,0.0,0,0,0,,這幅畫有其他版本，最著名的是1889年創作的版本，收藏於大都會藝術博物館 [0]。此外，梵谷也創作過其他風格或尺寸的版本，如1888年的《麥田與絲柏》（The Wheat Field with Cypresses），收藏於奧賽美術館 [0]。
+q-met-04,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,260,797,0.0,0,0,0,,大都會博物館於1914年取得〈有絲柏的麥田〉。[0]
+q-met-05,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,248,977,0.0,0,0,0,,這幅畫中遠方的山並無特定名稱，梵谷只以抽象的筆觸表現山脈輪廓 [0]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,3350,4263,0.0,0,0,0,,秀拉使用「點描法」（Pointillism），以細小色點構成畫面，營造光與色的視覺效果 [0]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,389,676,0.0,0,0,0,,右邊女子牽著一隻狗。[0]
+q-aic-03,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,251,984,0.0,0,0,0,,這幅畫首次於1886年在「獨立藝術展」（Salon des Indépendants）展出。   [0]
+q-aic-04,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,255,823,0.0,0,0,0,,畫布四周的點描外框是在1888–1889年加上[0]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,244,858,0.0,0,0,0,,這幅畫描繪的是塞納河上的大碗島（Île de la Grande Jatte）[0]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,251,983,0.0,0,0,0,,這幅畫在1906年以1500法郎售出，當時是藝術市場的熱門作品[0]。
+q-npm1-06,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,True,False,0,,,354,1080,0.0,0,0,0,,這幅畫以墨色為主，搭配淡赭石與淺褐，營造出沉穩的山川氣息。[0]
+q-aic-06,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,375,1205,0.0,0,0,0,,這幅畫整體偏暖，以綠色、黃色、橙色為主調，營造出陽光明媚的夏日氛圍。[0]
+q-met-06,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:4b-instruct,2026.10.1,answer_v1,False,False,0,,,365,974,0.0,0,0,0,,是的，顏色非常鮮豔，尤其是黃色的麥田與藍綠色的天空[0]。

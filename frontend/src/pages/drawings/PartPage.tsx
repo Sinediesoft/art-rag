@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { assetUrl, type ApiError } from "../../api/client";
 import { usePart, usePartReconstructions } from "../../api/hooks";
-import { ErrorMessage, Loading } from "../../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../../components/common/Feedback";
 import { PartInventoryCard } from "../../components/inventory/PartInventoryCard";
 import { ModelViewer } from "../../components/LazyModelViewer";
 import { PartProductionCard } from "../../components/schedule/PartProductionCard";
@@ -17,10 +17,9 @@ export function PartPage() {
   if (isLoading) return <Loading />;
   if (error || !p)
     return (
-      <ErrorMessage
-        title="找不到圖紙"
-        message={(error as Error)?.message ?? ""}
-        requestId={(error as ApiError)?.requestId}
+      <ApiErrorMessage
+        error={error}
+        title={(error as ApiError)?.code === "DATA_SCOPE_DENIED" ? undefined : "找不到圖紙"}
       />
     );
 

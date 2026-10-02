@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { api, ApiError } from "../../api/client";
+import { api } from "../../api/client";
 import { usePartTextSearch, useRoutedSearch } from "../../api/hooks";
-import { ErrorMessage, Loading } from "../../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../../components/common/StatusNotices";
 import { PartCard } from "../../components/parts/PartCard";
 
@@ -58,7 +58,7 @@ function ImageResults({
 
       {route && <RouteNotice route={route} imageId={imageId} redirected={redirected} />}
       {isLoading && <Loading label="辨識中：判斷畫作或圖紙、比對特徵點並拉正圖紙…" />}
-      {error && <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />}
+      {error && <ApiErrorMessage error={error} />}
 
       {best && (
         <section className="grid gap-4 rounded-2xl border border-steel/30 bg-steel-soft/50 p-4 sm:grid-cols-[240px_1fr]">
@@ -172,7 +172,7 @@ function TextResults({ q }: { q: string }) {
         {data && <p className="text-xs text-ink-faint">bge-m3（文字→製程與檢驗段落） · {data.latency_ms} ms</p>}
       </div>
       {isLoading && <Loading label="搜尋中…" />}
-      {error && <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />}
+      {error && <ApiErrorMessage error={error} />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {data?.results.map((r, i) => (
           <PartCard

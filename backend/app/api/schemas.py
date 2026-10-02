@@ -76,7 +76,8 @@ class Description(BaseModel):
     lang: str
     topic: str | None = None
     text: str
-    source_url: str
+    source_url: str | None = None
+    source: str | None = Field(default=None, description="沒有網址的出處（使用者投稿、外部文件）")
     license: str
     attribution: str | None = None
 
@@ -171,6 +172,11 @@ class ChatRequest(BaseModel):
     rearrange: bool | None = Field(
         default=None,
         description="檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）",
+    )
+    post_filter: Literal["jev", "local"] | None = Field(
+        default=None,
+        description="五段防護第 4 段（docs/adr/012）：jev＝公開段落送 Jev 判斷注入與關聯性、"
+        "local＝全在地端；兩者都最多留 3 段。null＝只用地端規則移除夾帶指令的段落（其他頁面）",
     )
 
 
@@ -289,6 +295,7 @@ class PartDetail(BaseModel):
 class PartListResponse(BaseModel):
     kb_version: str
     items: list[PartSummary]
+    hidden: int = Field(default=0, description="不在目前身分資料範圍內、沒有列出的圖紙張數")
 
 
 class DrawingSearchRequest(BaseModel):
@@ -345,6 +352,8 @@ class PartTextSearchResponse(BaseModel):
     query: str
     latency_ms: int
     results: list[PartTextSearchHit]
+    hidden: int = Field(default=0, description="不在目前身分資料範圍內、檢索時就濾掉的圖紙張數")
+    filter: str | None = Field(default=None, description="Metadata Filter（機密等級）")
 
 
 class ReconstructRequest(BaseModel):
@@ -778,6 +787,9 @@ class Account(BaseModel):
     warehouses: list[str]
     customers: list[str]
     note: str
+    domains: list[str] = Field(description="能讀的資料領域：art／mfg／factory（docs/adr/012）")
+    levels: list[str] = Field(description="看得到的機密等級")
+    scope_note: str
 
 
 class AccountsResponse(BaseModel):
@@ -792,6 +804,8 @@ class SwitchAccountRequest(BaseModel):
 
 
 class System1Status(BaseModel):
+    """Jev 的設定狀態（2026-10-02 起用在五段防護的第 2、4 段，不再判斷意圖）與信心閘門門檻。"""
+
     jev_configured: bool
     detail: str
     model: str
@@ -805,7 +819,9 @@ class RouteRequest(BaseModel):
     image_id: str | None = None
     forced_intent: str | None = Field(default=None, description="使用者點澄清按鈕選的意圖")
     engine: Literal["auto", "jev", "local"] = Field(
-        default="auto", description="auto：有金鑰用 Jev、否則本地；eval-route 用 jev／local 比較"
+        default="auto",
+        description="第 2、4 段由誰判斷：auto／jev＝有金鑰用 Jev（失敗改地端規則），"
+        "local＝只用地端規則",
     )
 
 
@@ -816,7 +832,7 @@ class RankedIntent(BaseModel):
 
 
 class RouteEgress(BaseModel):
-    bytes: int = Field(description="送出本機的位元組數（Jev 請求本文）；本地路由為 0")
+    bytes: int = Field(description="送出本機的位元組數（第 2 段 Jev 請求本文）；地端規則為 0")
     to: str | None
     images: int = 0
 
@@ -827,24 +843,111 @@ class RoutePhoto(BaseModel):
     label: str
 
 
+class GuardCheck(BaseModel):
+    key: str
+    label: str
+    by: Literal["地端", "Jev"]
+    ok: bool | None = Field(description="null＝沒判定（等使用者選、或段落沒放進上下文）")
+    detail: str
+    warn: bool = False
+
+
+class JevAnswerRow(BaseModel):
+    label: str
+    value: str
+    alert: bool
+
+
+class JevCallInfo(BaseModel):
+    """一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。"""
+
+    stage: Literal[2, 4]
+    model: str
+    latency_ms: int
+    bytes: int
+    request: dict
+    sent: list[str]
+    mapping: dict[str, dict]
+    answers: list[JevAnswerRow]
+
+
+class MetaFilterInfo(BaseModel):
+    domain: Literal["art", "mfg"]
+    domain_label: str
+    levels: list[str]
+    doc_id: str | None
+    doc_label: str | None
+    doc_level: str | None
+    text: str
+
+
+class RetryAccount(BaseModel):
+    account_id: str
+    label: str
+
+
+class RbacInfo(BaseModel):
+    """第 1 段：身分、資料範圍、動作權限（後端硬性檢查）。"""
+
+    passed: bool
+    pending: bool = Field(description="要做什麼還不確定（等使用者選），範圍與動作之後再檢查")
+    checks: list[GuardCheck]
+    tag: str | None
+    reason: str | None
+    retry: RetryAccount | None = Field(description="換成這個身分就可以（切換身分再試一次）")
+    filter: MetaFilterInfo | None = Field(description="第 3 段向量檢索的 Metadata Filter")
+
+
+class GuardInfo(BaseModel):
+    """第 2 段：Jev 第一層護欄（或地端規則）。"""
+
+    passed: bool
+    engine: Literal["jev", "local", "skip"]
+    checks: list[GuardCheck]
+    tag: str | None
+    reason: str | None
+    skipped: str | None
+    fallback_reason: str | None = Field(description="想用 Jev 但不能用的原因（改用地端規則）")
+    call: JevCallInfo | None
+
+
+class BlockedInfo(BaseModel):
+    stage: Literal[1, 2]
+    rule: str
+    log_no: str = Field(description="拒絕並記錄的紀錄編號（SEC-0001）")
+    judge: str
+    reason: str | None
+
+
+class RouterInfo(BaseModel):
+    """第 1 段的本地分流：誰判斷意圖（本地分流、使用者點選、照片辨識）。"""
+
+    engine: Literal["local", "user"]
+    model: str
+    latency_ms: int
+    detail: dict
+
+
+class PiiItem(BaseModel):
+    kind: str
+    code: str
+
+
 class RouteResponse(BaseModel):
     request_id: str
     account: Account
-    question: str
-    masked_text: str = Field(description="送 Jev 的代號化文字（本地路由時只在本機）")
+    question: str = Field(description="收到的文字（已遮蔽個資）")
+    pii: list[PiiItem] = Field(description="遮蔽了哪些個資（只留種類與代號，不留原值）")
+    masked_text: str = Field(description="代號化後的文字（第 2 段只把這個送 Jev）")
     mapping: dict[str, dict] = Field(description="代號 → 實體（只留在本機）")
     entities: list[dict]
     photo: RoutePhoto | None
-    engine: Literal["jev", "local", "user"]
-    engine_label: str
-    model: str
-    fallback_reason: str | None
+    router: RouterInfo
     intent: str
     intent_label: str
     risk: Literal["read", "heavy", "write"]
     confidence: float
     margin: float
-    jev_confidence: float | None
     ranked: list[RankedIntent]
     modify_op: str | None
     flags: dict[str, bool]
@@ -852,13 +955,33 @@ class RouteResponse(BaseModel):
     threshold: float
     gate_reason: str
     options: list[RankedIntent]
-    permitted: bool
-    permission_note: str
+    rbac: RbacInfo
+    guard: GuardInfo | None = Field(description="第 1 段沒過就沒有執行（null）")
+    outcome: Literal["pass", "blocked_rbac", "blocked_guard"]
+    blocked: BlockedInfo | None
     dispatch: dict
+    post_filter: Literal["jev", "local"] = Field(description="分派到 /chat 時帶的第 4 段判斷者")
     egress: RouteEgress
     latency_ms: dict[str, int]
-    detail: dict
-    jev_request: dict | None = Field(description="實際送給 Jev 的請求本文（畫面上可展開檢查）")
+
+
+class SecurityLogRow(BaseModel):
+    no: str
+    created_at: str
+    request_id: str | None
+    stage: Literal[1, 2, 4]
+    rule: str
+    judge: str | None
+    account_id: str | None
+    account_label: str | None
+    text: str | None
+
+
+class SecurityLogsResponse(BaseModel):
+    """五段防護的拒絕並記錄：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，第 4 段移除的段落。"""
+
+    items: list[SecurityLogRow]
+    today: dict[str, int] = Field(description="今天（UTC+8）各段筆數：rbac／guard／post")
 
 
 class ChangeCheck(BaseModel):

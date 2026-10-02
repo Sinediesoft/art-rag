@@ -3,6 +3,7 @@
 // 瀏覽器內建 EventSource 只支援 GET，所以用 fetch 讀取串流。事件格式見 shared/sse_events.md。
 import {
   API_BASE,
+  type Schemas,
   type AxisDay,
   type ChatRequest,
   type ConstraintScore,
@@ -20,6 +21,8 @@ import {
 export interface SourceItem {
   ref: number;
   chunk_id: string;
+  /** 機密等級：畫作「公開」，圖紙「內部」或「機密」（第 4 段只把公開段落送 Jev） */
+  level?: string;
   /** 畫作段落才有 */
   artwork_id?: string;
   artwork_title?: string;
@@ -43,6 +46,34 @@ export interface SourcesEvent {
   sources: SourceItem[];
   /** 檢索段落篩選（MIRA 的 Rearrange）；沒有篩選時為 null。fallback 有值代表篩選失敗、用原本的段落 */
   rearrange?: { candidates: number; kept: number; ms: number; fallback: string | null } | null;
+  /** 第 3 段：Metadata Filter（依目前身分的資料範圍產生） */
+  filter?: MetaFilterInfo;
+  /** 第 3 段檢索出的候選段落數（第 4 段過濾前） */
+  candidates?: number;
+  /** 第 4 段：後置過濾（docs/adr/012）；關檢索時為 null */
+  post_filter?: PostFilterInfo | null;
+}
+
+export type MetaFilterInfo = Schemas["MetaFilterInfo"];
+export type GuardCheck = Schemas["GuardCheck"];
+export type JevCallInfo = Schemas["JevCallInfo"];
+
+export interface PostFilterInfo {
+  /** jev／local：智慧助理的完整第 4 段；scan：其他頁面，只用地端規則移除夾帶指令的段落 */
+  mode: "jev" | "local" | "scan";
+  engine: "jev" | "local";
+  candidates: number;
+  kept: number;
+  /** 夾帶指令被移除的段落；by＝誰抓到的（Jev 或地端規則） */
+  injected: { chunk_id: string; title: string; topic: string; by?: "Jev" | "地端" }[];
+  dropped: { chunk_id: string; title: string; topic: string }[];
+  checks: GuardCheck[];
+  /** 送 Jev 的段落數（只有公開段落）／留在地端過濾的段落數 */
+  cloud: number;
+  local: number;
+  call: JevCallInfo | null;
+  fallback_reason: string | null;
+  ms: number;
 }
 
 export interface DoneEvent {
@@ -57,8 +88,8 @@ export interface DoneEvent {
   latency_ms: { retrieval: number; first_token: number | null; generation: number; total: number };
   tokens: { input: number; output: number };
   cost_twd: number;
-  /** 送出本機的資料量；本地策略恆為 0 */
-  egress: { images: number; chunks: number; bytes: number };
+  /** 送出本機的資料量；本地策略只有第 4 段送 Jev 的代號化公開段落（jev_bytes） */
+  egress: { images: number; chunks: number; bytes: number; jev_bytes?: number };
 }
 
 export interface ErrorEvent {

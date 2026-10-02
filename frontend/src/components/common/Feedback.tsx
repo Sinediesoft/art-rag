@@ -10,6 +10,20 @@ export function Loading({ label = "載入中…" }: { label?: string }) {
   );
 }
 
+/** API 錯誤（ApiError）直接顯示：資料範圍不符（DATA_SCOPE_DENIED）時提示到頁首切換身分 */
+export function ApiErrorMessage({ error, title }: { error: unknown; title?: string }) {
+  const e = error as { code?: string; message?: string; requestId?: string } | null;
+  const scope = e?.code === "DATA_SCOPE_DENIED" || e?.code === "PERMISSION_DENIED";
+  return (
+    <ErrorMessage
+      title={title ?? (scope ? "目前身分看不到這些資料" : undefined)}
+      message={e?.message ?? "載入失敗"}
+      code={e?.code}
+      requestId={e?.requestId}
+    />
+  );
+}
+
 /** 錯誤訊息一律附 request_id，方便對照後端日誌（共用層 §七） */
 export function ErrorMessage({
   title = "發生錯誤",

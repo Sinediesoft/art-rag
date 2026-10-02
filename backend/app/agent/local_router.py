@@ -1,8 +1,8 @@
-"""本地路由（System 1 的備援）：Jev 沒金鑰、停用、失敗或只有照片時使用，資料不出本機。
+"""本地分流（五段防護第 1 段，docs/adr/012）：判斷使用者想做什麼，資料不出本機。
+2026-10-02 起意圖一律由這裡判斷（之前是 Jev 的備援）。
 
-分數 = 關鍵字（shared/agent.yaml）＋實體加分（句子裡有零件、單號、客戶…）
-＋bge-m3 與各意圖範例句的相似度，再做 softmax 得到機率；輸出格式與 Jev 相同，
-信心閘門不必分辨是誰判斷的。
+分數 = 關鍵字（shared/agent.yaml，只看名稱以外的字）＋實體加分（句子裡有零件、單號、客戶…）
+＋bge-m3 與各意圖範例句的相似度，再做 softmax 得到機率，交給信心閘門。
 疑問句（沒有「把、幫我」這類祈使語氣）時降低修改類關鍵字的分數：「哪些訂單延後了？」是查詢不是修改。
 """
 
@@ -10,6 +10,7 @@ import math
 import re
 import threading
 import time
+from dataclasses import replace
 from functools import lru_cache
 
 import numpy as np
@@ -95,13 +96,43 @@ def classify_op(text: str) -> tuple[str | None, dict[str, float]]:
     return best[0], {k: math.exp(v) / total for k, v in scores.items()}
 
 
+# 畫名與畫家名換成〈A〉再算關鍵字與相似度：〈有絲柏的麥田〉〈大碗島的星期天下午〉
+# 本身就是描述畫面的詞，不換的話「有絲柏的麥田收藏在哪裡？」會被當成用畫面描述找畫（以文搜畫）。
+# 圖紙名稱（連接法蘭、軸承座）對判斷意圖有幫助，保留
+TITLE_KINDS = {"artwork", "artist"}
+TITLE_MASK = "〈A〉"
+
+
+def _mask_titles(text: str, entities: list[Entity]) -> tuple[str, list[Entity]]:
+    out, moved, pos, shift = [], [], 0, 0
+    for e in sorted(entities, key=lambda e: e.start):
+        out.append(text[pos : e.start])
+        start = e.start + shift
+        if e.kind in TITLE_KINDS:
+            out.append(TITLE_MASK)
+            moved.append(replace(e, start=start, end=start + len(TITLE_MASK)))
+            shift += len(TITLE_MASK) - (e.end - e.start)
+        else:
+            out.append(text[e.start : e.end])
+            moved.append(replace(e, start=start, end=start + (e.end - e.start)))
+        pos = e.end
+    out.append(text[pos:])
+    return "".join(out), moved
+
+
 def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -> System1Result:
     t0 = time.perf_counter()
+    text, entities = _mask_titles(text, entities)
     cfg = get_agent_config()
     lr = cfg["local_router"]
     c = _compiled()
     keys = list(cfg["intents"])
-    logits = {k: _score(c["intents"][k], text) for k in keys}
+    # 關鍵字只看名稱以外的字：〈有絲柏的麥田〉裡的「麥田、絲柏」是畫名，不是在描述畫面
+    # （名稱本身已經有實體加分，見 ENTITY_BOOST）
+    residual = text
+    for e in sorted(entities, key=lambda e: e.start, reverse=True):
+        residual = residual[: e.start] + " " + residual[e.end :]
+    logits = {k: _score(c["intents"][k], residual) for k in keys}
     question = is_question(text)
     write_hit = logits["modify"] > 0
     if question:
@@ -122,9 +153,6 @@ def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -
         logits["out_of_scope"] += float(lr["out_of_scope_base"])
 
     # 只有名稱（「法蘭」）：看不出想做什麼，不用範例句相似度硬猜，交給信心閘門出澄清按鈕
-    residual = text
-    for e in sorted(entities, key=lambda e: e.start, reverse=True):
-        residual = residual[: e.start] + residual[e.end :]
     bare = bool(entities) and not re.sub(r"[\s，,。？?！!、]", "", residual)
 
     used_embed = False

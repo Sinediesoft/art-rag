@@ -75,6 +75,16 @@ export function FallbackBadge({ done }: { done: DoneEvent }) {
 export function EgressBadge({ egress }: { egress: DoneEvent["egress"] }) {
   const out = egress.images > 0 || egress.chunks > 0 || egress.bytes > 0;
   const kb = (egress.bytes / 1024).toFixed(egress.bytes < 10240 ? 1 : 0);
+  // 只有第 4 段送 Jev（代號化公開段落，只判斷、不生成）：生成仍全在本機
+  if (out && egress.jev_bytes && egress.jev_bytes === egress.bytes)
+    return (
+      <span
+        title="只送代號化的公開段落讓 Jev 判斷夾帶指令與關聯性；照片、機密段落與生成都在本機"
+        className="inline-flex items-center gap-1 rounded-full bg-[#fde8df] px-2 py-0.5 text-xs font-bold text-[#b5481f]"
+      >
+        外送 {kb} KB → Jev（公開段落 {egress.chunks} 段，只判斷）
+      </span>
+    );
   return (
     <span
       title={out ? `共 ${kb} KB 送往第三方雲端` : "照片、問題與知識庫全程留在本機"}

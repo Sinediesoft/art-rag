@@ -47,12 +47,14 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["lang", "text", "source_url", "license"],
+        "required": ["lang", "text", "license"],
+        "anyOf": [{ "required": ["source_url"] }, { "required": ["source"] }],
         "properties": {
           "lang": { "type": "string", "enum": ["zh", "en"] },
           "topic": { "type": "string", "description": "段落主題，例如：構圖、技法、創作背景" },
           "text": { "type": "string", "minLength": 20 },
           "source_url": { "type": "string", "format": "uri" },
+          "source": { "type": "string", "minLength": 1, "description": "沒有網址的出處（使用者投稿、外部上傳的文件）；與 source_url 至少填一個" },
           "license": { "$ref": "#/$defs/license" },
           "attribution": { "type": "string" }
         }

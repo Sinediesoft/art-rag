@@ -1,15 +1,17 @@
-"""智慧助理的路由評估（make eval-route）：Jev 與本地路由在 eval/route_qa.jsonl
-的中文句子上誰比較準。
+"""智慧助理的路由評估（make eval-route）：五段防護的第 1、2 段（docs/adr/012）在
+eval/route_qa.jsonl 的中文句子上準不準、會不會誤擋。
 
-對執行中的後端呼叫 POST /api/v1/agent/route（engine=local／jev），
-結果存 eval/runs/<run_id>-route.json。
+對執行中的後端呼叫 POST /api/v1/agent/route（engine＝第 2 段由誰判斷：local 地端規則／jev），
+結果存 eval/runs/<run_id>-route.json。意圖一律由第 1 段本地分流判斷，兩種 engine 的意圖結果相同。
 
 - 意圖正確率：第一名意圖＝標準答案（標了 gate 的題目改看閘門，例如只說「法蘭」應該出澄清按鈕）
 - 修改誤判：查詢被判成修改、或修改被判成查詢（代價最高的錯：一個會進入權限判定，一個會漏掉）
 - 修改操作正確率：修改類題目的操作（盤點、報廢、調撥…）是否正確
 - 直接處理率：意圖正確而且不必再問（沒有出澄清按鈕）的比例；出澄清按鈕不算錯，但多一次點選
-- 閘門分布、平均信心、延遲、外送位元組（本地路由恆為 0）
-Jev 沒有金鑰時只跑本地路由，Jev 那一欄標示「未設定金鑰，略過」。
+- 第 2 段誤擋：題目都是正常的請求，被第 2 段（Jev 護欄或地端規則）擋下就是誤擋
+- 閘門分布、平均信心、第 1、2 段延遲、外送位元組（地端規則恆為 0）
+每題先切換成做得了這件事的展示身分（修改庫存＝倉管、改訂單＝業務、工單與排程＝生管、其他＝主管），
+讓第 1 段 RBAC 不擋，第 2 段每題都會執行。Jev 沒有金鑰時 jev 那一欄標示「略過」。
 門檻要依這份結果再調（shared/agent.yaml）。
 
 用法：python eval/run_route_eval.py [--base http://localhost:8000] [--engines local,jev]
@@ -30,14 +32,26 @@ EVAL = Path(__file__).resolve().parent
 print = functools.partial(print, flush=True)  # noqa: A001 — 背景執行時也能即時看到進度
 
 
+def account_for(it: dict) -> str:
+    """做得了這件事的展示身分：讓第 1 段 RBAC 不擋，第 2 段每題都會執行。"""
+    op = it.get("op", "")
+    if it["intent"] == "modify":
+        return {"stock": "wh1", "so": "sales_a", "wo": "planner"}.get(op.split("_")[0], "manager")
+    return "planner" if it["intent"] == "schedule" else "manager"
+
+
 def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
-    rows, skipped = [], None
+    rows, skipped, current = [], None, None
     for it in items:
+        if (account := account_for(it)) != current:
+            client.post("/api/v1/auth/switch", json={"account_id": account}).raise_for_status()
+            current = account
         r = client.post(
             "/api/v1/agent/route", json={"question": it["question"], "engine": engine}
         ).json()
-        if engine == "jev" and r["engine"] != "jev":
-            skipped = r.get("fallback_reason") or "Jev 無法使用"
+        guard = r.get("guard") or {}
+        if engine == "jev" and guard.get("engine") == "local":
+            skipped = guard.get("fallback_reason") or "Jev 無法使用"
             break
         expect_gate = it.get("gate")
         ok = r["gate"] == expect_gate if expect_gate else r["intent"] == it["intent"]
@@ -56,13 +70,19 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
                 "op_ok": op_ok,
                 "confidence": r["confidence"],
                 "gate": r["gate"],
-                "ms": r["latency_ms"]["system1"],
+                "outcome": r["outcome"],
+                "blocked_rule": (r.get("blocked") or {}).get("rule"),
+                "ms": r["latency_ms"]["router"],
+                "guard_ms": r["latency_ms"]["guard"],
                 "egress_bytes": r["egress"]["bytes"],
             }
         )
         mark = "✓" if ok else "✗"
         got = f"{rows[-1]['got']} ({r['confidence']:.2f})"
-        print(f"  {mark} {it['id']} {it['question'][:24]:<26} → {got}")
+        blocked = ""
+        if r["outcome"] == "blocked_guard":
+            blocked = f" ⚠ 第 2 段擋下：{rows[-1]['blocked_rule']}"
+        print(f"  {mark} {it['id']} {it['question'][:24]:<26} → {got}{blocked}")
     if skipped:
         return {"engine": engine, "skipped": skipped}
     ops = [r for r in rows if r["op_ok"] is not None]
@@ -80,7 +100,10 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
         "op_accuracy": round(sum(r["op_ok"] for r in ops) / len(ops), 4) if ops else None,
         "gates": dict(Counter(r["gate"] for r in rows)),
         "mean_confidence": round(statistics.mean(r["confidence"] for r in rows), 3),
+        "false_blocks": sum(r["outcome"] == "blocked_guard" for r in rows),
+        "rbac_blocks": sum(r["outcome"] == "blocked_rbac" for r in rows),
         "p50_ms": statistics.median(r["ms"] for r in rows),
+        "guard_p50_ms": statistics.median(r["guard_ms"] for r in rows),
         "egress_bytes": sum(r["egress_bytes"] for r in rows),
         "rows": rows,
     }
@@ -98,7 +121,7 @@ def main() -> int:
     except httpx.HTTPError:
         print(f"連不上後端 {args.base}，請先執行 make demo")
         return 1
-    print(f"路由評估：{len(items)} 題 · System 1：{health['system1']['detail']}")
+    print(f"路由評估：{len(items)} 題 · 第 2、4 段 Jev：{health['system1']['detail']}")
     results = []
     for engine in args.engines.split(","):
         print(f"\n▷ {engine}")
@@ -116,7 +139,8 @@ def main() -> int:
             f" · 直接處理 {r['auto_rate']:.0%}"
             f" · 修改誤判 {r['write_misfires']} 題"
             f" · 操作正確率 {op_acc} · 平均信心 {r['mean_confidence']}"
-            f" · p50 {r['p50_ms']} ms · 外送 {r['egress_bytes']} B · 閘門 {r['gates']}"
+            f" · 第 2 段誤擋 {r['false_blocks']} 題 · 分流 p50 {r['p50_ms']} ms"
+            f" · 護欄 p50 {r['guard_p50_ms']} ms · 外送 {r['egress_bytes']} B · 閘門 {r['gates']}"
         )
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     out = EVAL / "runs" / f"{run_id}-route.json"

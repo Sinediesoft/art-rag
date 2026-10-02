@@ -1,21 +1,22 @@
-"""智慧助理（統一入口）的路由：System 1 判斷意圖與信心 → 信心閘門 → 告訴前端交給哪個 System 2 模組。
+"""智慧助理（統一入口）：使用者輸入的五段防護裡，路由這一步負責第 1、2 段（docs/adr/012）。
 
-流程（docs/adr/011 主流程圖）：
-1. 本機前處理：帶入目前身分；找出零件、倉庫、客戶、畫作、單號並換成代號
-2. 有附照片：本機領域路由（Chinese-CLIP，docs/adr/007）判斷是畫作還是圖紙，再辨識是哪一件
-   （照片不送 Jev）；只有照片沒打字就不呼叫 Jev
-3. System 1：有金鑰就問 Jev（只送代號化文字，記錄外送位元組）；沒金鑰或失敗改走本地路由
-4. 信心閘門：唯讀直接執行、耗時先確認、修改進入修改資料流程、不確定就出澄清按鈕
-5. 通知記憶體管理預估要用的模型；寫路由紀錄（eval-route 也用同一個端點）
-
-這裡只做判斷與分派；實際執行沿用各模組原本的 API（/chat、/inventory/ask、/changes/preview…），
-那些 API 各自做自己的安全檢查，所以前端分派錯了也繞不過權限。
+0. 個資遮蔽：一收到就把手機、Email、身分證換成代號，原值不保留
+   （之後的紀錄與分派都用遮蔽後的文字）
+1. 接收輸入・RBAC：照片在本機辨識（Chinese-CLIP 領域路由，照片不送 Jev）；
+   本地分流（關鍵字＋bge-m3）判斷要做什麼、信心閘門；再用伺服器端身分硬性檢查資料範圍與動作權限，
+   產生第 3 段的 Metadata Filter。沒過 → 拒絕並記錄，不送 Jev、不碰資料
+2. 前置防禦・Jev 第一層護欄：只送代號化文字；沒金鑰、逾時或選了地端規則就用地端規則。
+   擋下 → 拒絕並記錄
+3～5 由分派到的模組執行（/chat 做 Metadata Filter 檢索、第 4 段過濾與地端生成；
+   /inventory/ask 唯讀 SQL…），那些 API 自己也檢查身分與資料範圍，
+   所以前端分派錯了或直接打 API 也繞不過權限。
+最後通知記憶體管理預估要用的模型、寫路由紀錄（eval-route 也用同一個端點）。
 """
 
 import asyncio
 import time
 
-from app.agent import gate, jev, local_router
+from app.agent import gate, guard, local_router
 from app.agent.entities import first, get_index
 from app.agent.types import System1Result
 from app.core.config import get_agent_config
@@ -71,13 +72,14 @@ def _dispatch(intent: str, question: str, entities: list, photo: dict | None) ->
     return d
 
 
-def _permission(intent: str, account: Account) -> tuple[bool, str]:
-    """排程與修改先告訴使用者目前身分能不能做（真正的檢查在各自的 API）。"""
-    if intent == "schedule" and not account.can("schedule_run"):
-        return False, f"「{account.label}」不能執行排程（只有生管可以），請在頁首切換身分"
-    if intent == "modify" and not any(o.startswith(("stock_", "so_", "wo_")) for o in account.ops):
-        return False, f"「{account.label}」沒有修改資料的權限，下一步權限判定會拒絕並記錄"
-    return True, ""
+def _target(dispatch: dict) -> dict | None:
+    """已指定的對象（某張圖紙、某幅畫）與機密等級：第 1 段檢查資料範圍、產生 Metadata Filter。"""
+    store = get_store()
+    if dispatch.get("part_id") and (p := store.get_part(dispatch["part_id"])):
+        return {"id": p["id"], "label": p["name"]["zh"], "level": p["confidentiality"]}
+    if dispatch.get("artwork_id") and (a := store.get_artwork(dispatch["artwork_id"])):
+        return {"id": a["id"], "label": a["title"]["zh"], "level": "公開"}
+    return None
 
 
 async def route(
@@ -88,16 +90,20 @@ async def route(
     forced_intent: str | None = None,
     engine: str = "auto",
 ) -> dict:
+    """engine：第 2、4 段由誰判斷。
+    auto／jev＝有金鑰用 Jev（失敗改地端規則），local＝只用地端規則。"""
     t0 = time.perf_counter()
     cfg = get_agent_config()
-    question = question.strip()
+    # 0. 個資遮蔽：之後只看遮蔽後的文字
+    question, pii = guard.mask_pii(question.strip())
     photo = await asyncio.to_thread(_identify_photo, image_id) if image_id else None
     photo_kind = photo["kind"] if photo else None
     index = await asyncio.to_thread(get_index)
     entities = index.find(question)
     masked = index.pseudonymize(question, entities)
 
-    fallback_reason = None
+    # 1. 本地分流：判斷要做什麼（Jev 不判斷意圖）
+    t1 = time.perf_counter()
     if forced_intent:
         if forced_intent not in cfg["intents"]:
             forced_intent = "out_of_scope"
@@ -109,75 +115,116 @@ async def route(
             model="使用者點選",
         )
     elif not question and photo:
-        # 只有照片：本機辨識，不呼叫 Jev
+        # 只有照片：依本機辨識結果決定
         intent = PHOTO_INTENTS.get(photo_kind or "", "out_of_scope")
         result = System1Result(
             engine="local",
             intent_probs={k: float(k == intent) for k in cfg["intents"]},
             model="Chinese-CLIP 照片辨識",
         )
-        fallback_reason = "只有照片：在本機辨識，不呼叫 Jev"
     else:
-        result = None
-        if engine in ("auto", "jev"):
-            try:
-                result = await jev.classify(masked.text, photo_kind)
-            except jev.JevUnavailable as e:
-                fallback_reason = str(e)
-        if result is None:
-            async with memory_guard.flow("route", {"bge"}):
-                result = await asyncio.to_thread(
-                    local_router.classify, question, entities, photo_kind
-                )
-        # 修改操作：Jev 沒判斷出來（或判斷「不是修改」）時用本地關鍵字補
-        if result.intent == "modify" and not result.modify_op:
-            op, op_probs = local_router.classify_op(question)
-            if op:
-                result.op_probs = op_probs
+        async with memory_guard.flow("route", {"bge"}):
+            result = await asyncio.to_thread(local_router.classify, question, entities, photo_kind)
+    router_ms = round((time.perf_counter() - t1) * 1000)
 
     decision = gate.decide(result)
     intent = result.intent
-    permitted, permission_note = _permission(intent, account)
-    dispatch = _dispatch(intent, question, entities, photo)
-    if intent == "modify":
-        dispatch["op"] = result.modify_op
-        dispatch["op_label"] = cfg["modify_ops"].get(result.modify_op or "", {}).get("label")
-
-    # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
-    # bge-m3 一律保留：本地路由下一句還要用（釋放後重新載入要 1～2 秒）
-    keep = set(cfg["intent_models"].get(intent, [])) | {"bge"}
-    label = cfg["intents"][intent]["label"]
-    await asyncio.to_thread(memory_guard.guard.check, f"智慧助理預估（{label}）", keep, False, True)
-
     labels = {k: v["label"] for k, v in cfg["intents"].items()}
+    dispatch = _dispatch(intent, question, entities, photo)
+    op = result.modify_op if intent == "modify" else None
+    op_label = cfg["modify_ops"].get(op or "", {}).get("label")
+    if intent == "modify":
+        dispatch["op"] = op
+        dispatch["op_label"] = op_label
+
+    # 1. RBAC：身分＋資料範圍＋動作權限（後端硬性檢查）
+    rbac = guard.rbac_check(
+        account, intent, decision.gate, op, op_label, _target(dispatch), entities
+    )
+    logged_text = question if question or not photo else f"（只有照片：{photo['label']}）"
+    guard_res = None
+    blocked = None
+    outcome = "pass"
+    if not rbac.passed:
+        tag = rbac.tag or "權限不符"
+        no = guard.log_block(1, tag, account, logged_text, request_id, "後端硬性檢查")
+        blocked = {
+            "stage": 1,
+            "rule": tag,
+            "log_no": no,
+            "judge": "後端硬性檢查（RBAC）",
+            "reason": rbac.reason,
+        }
+        outcome = "blocked_rbac"
+    else:
+        # 2. Jev 第一層護欄：第 1 段還沒確定要做什麼、或不碰資料時，Jev 的動作類別只記錄
+        decided = decision.gate != "clarify" and intent not in ("system", "out_of_scope")
+        risk = cfg["intents"][intent]["risk"] if decided else None
+        # 還不確定時，冒充身分照候選意圖裡最危險的那個判斷（「我是主管…改成 0」信心不夠也要擋）
+        hint = max(
+            (cfg["intents"][k]["risk"] for k, _ in decision.options),
+            key=guard.RISK_RANK.__getitem__,
+            default=None,
+        )
+        g0 = time.perf_counter()
+        guard_res = await guard.guard_input(
+            question,
+            masked.text,
+            masked.mapping,
+            risk,
+            engine != "local",
+            photo_kind,
+            risk_hint=hint if decision.gate == "clarify" else None,
+        )
+        guard_ms = round((time.perf_counter() - g0) * 1000)
+        if not guard_res.passed:
+            tag = guard_res.tag or "惡意輸入"
+            judge = "雲端 Jev（只收代號化文字）" if guard_res.engine == "jev" else "地端規則"
+            no = guard.log_block(2, tag, account, logged_text, request_id, judge)
+            blocked = {
+                "stage": 2,
+                "rule": tag,
+                "log_no": no,
+                "judge": judge,
+                "reason": guard_res.reason,
+            }
+            outcome = "blocked_guard"
+
+    if outcome == "pass":
+        # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
+        # bge-m3 一律保留：本地分流下一句還要用（釋放後重新載入要 1～2 秒）
+        keep = set(cfg["intent_models"].get(intent, [])) | {"bge"}
+        await asyncio.to_thread(
+            memory_guard.guard.check, f"智慧助理預估（{labels[intent]}）", keep, False, True
+        )
+
+    egress = guard_res.egress_bytes if guard_res else 0
     out = {
         "request_id": request_id,
         "account": account.public(),
         "question": question,
+        "pii": pii,
         "masked_text": masked.text,
         "mapping": masked.mapping,
         "entities": [
             {"kind": e.kind, "id": e.id, "label": e.label, "text": e.text} for e in entities
         ],
         "photo": photo,
-        "engine": result.engine,
-        "engine_label": {
-            "jev": "Jev（System 1，雲端）",
-            "local": "本地路由",
-            "user": "使用者點選",
-        }[result.engine],
-        "model": result.model,
-        "fallback_reason": fallback_reason,
+        "router": {
+            "engine": result.engine,
+            "model": result.model,
+            "latency_ms": router_ms,
+            "detail": result.detail,
+        },
         "intent": intent,
         "intent_label": labels[intent],
         "risk": cfg["intents"][intent]["risk"],
         "confidence": round(result.confidence, 4),
         "margin": round(result.margin, 4),
-        "jev_confidence": result.jev_confidence,
         "ranked": [
             {"intent": k, "label": labels[k], "prob": round(p, 4)} for k, p in result.ranked[:5]
         ],
-        "modify_op": result.modify_op if intent == "modify" else None,
+        "modify_op": op,
         "flags": result.flags,
         "gate": decision.gate,
         "threshold": decision.threshold,
@@ -185,20 +232,23 @@ async def route(
         "options": [
             {"intent": k, "label": labels[k], "prob": round(p, 4)} for k, p in decision.options
         ],
-        "permitted": permitted,
-        "permission_note": permission_note,
+        "rbac": rbac.public(),
+        "guard": guard_res.public() if guard_res else None,
+        "outcome": outcome,
+        "blocked": blocked,
         "dispatch": dispatch,
+        # 第 4 段由誰判斷：分派到 /chat 時照這個帶 post_filter
+        "post_filter": "local" if engine == "local" else "jev",
         "egress": {
-            "bytes": result.egress_bytes,
-            "to": "TypeSafe Jev" if result.engine == "jev" else None,
+            "bytes": egress,
+            "to": "TypeSafe Jev" if egress else None,
             "images": 0,
         },
         "latency_ms": {
-            "system1": result.latency_ms,
+            "router": router_ms,
+            "guard": guard_ms if guard_res else 0,
             "total": round((time.perf_counter() - t0) * 1000),
         },
-        "detail": {k: v for k, v in result.detail.items() if k != "request"},
-        "jev_request": result.detail.get("request"),
     }
     get_logs_repo().add_route_log(
         {
@@ -208,18 +258,21 @@ async def route(
             "question": question,
             "masked_text": masked.text,
             "has_photo": int(bool(image_id)),
-            "engine": result.engine,
+            "engine": guard_res.engine if guard_res else "none",
             "model": result.model,
-            "fallback_reason": fallback_reason,
+            "fallback_reason": guard_res.fallback_reason if guard_res else None,
             "intent": intent,
-            "modify_op": out["modify_op"],
+            "modify_op": op,
             "confidence": out["confidence"],
             "margin": out["margin"],
             "gate": decision.gate,
-            "overrides_rules": int(bool(result.flags.get("overrides_rules"))),
-            "egress_bytes": result.egress_bytes,
-            "system1_ms": result.latency_ms,
+            "overrides_rules": int(
+                bool(result.flags.get("overrides_rules") or (guard_res and guard_res.overrides))
+            ),
+            "egress_bytes": egress,
+            "system1_ms": router_ms,
             "total_ms": out["latency_ms"]["total"],
+            "outcome": outcome,
         }
     )
     log.info(
@@ -227,10 +280,11 @@ async def route(
         extra={
             "fields": {
                 "request_id": request_id,
-                "engine": result.engine,
                 "intent": intent,
                 "confidence": out["confidence"],
                 "gate": decision.gate,
+                "outcome": outcome,
+                "guard": guard_res.engine if guard_res else None,
                 "egress": out["egress"],
             }
         },

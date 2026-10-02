@@ -44,6 +44,9 @@ export type Account = Schemas["Account"];
 export type AccountsResponse = Schemas["AccountsResponse"];
 export type RouteRequest = Pick<Schemas["RouteRequest"], "question"> & Partial<Omit<Schemas["RouteRequest"], "question">>;
 export type RouteResponse = Schemas["RouteResponse"];
+export type SecurityLogsResponse = Schemas["SecurityLogsResponse"];
+/** 第 2、4 段由誰判斷：雲端 Jev（只收代號化文字）或地端規則 */
+export type GuardEngine = "jev" | "local";
 export type ChangePreview = Schemas["ChangePreview"];
 export type ChangePreviewRequest = Schemas["ChangePreviewRequest"];
 export type ChangeCommitted = Schemas["ChangeCommitted"];
@@ -165,5 +168,6 @@ export const api = {
   returnApproval: (apNo: string, reason: string) =>
     request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason })),
   audit: () => request<AuditResponse>("/audit"),
+  securityLogs: (limit = 20) => request<SecurityLogsResponse>(`/security/logs?limit=${limit}`),
   routeEvalRuns: () => request<Schemas["RouteEvalRunsResponse"]>("/eval/route-runs"),
 };

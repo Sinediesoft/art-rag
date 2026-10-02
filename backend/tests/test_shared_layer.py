@@ -30,10 +30,12 @@ def test_long_paragraph_is_split_with_overlap():
 
 
 def test_every_chunk_has_source_and_license():
+    """每段都有出處：網址，或沒有網址時的出處文字（使用者投稿、外部文件，例如示範用的觀眾留言）。"""
     ok, _ = validate_kb()
     for a in ok:
         for c in build_chunks(a):
-            assert c["source_url"].startswith("http") and c["license"]
+            assert (c["source_url"] or "").startswith("http") or c.get("source")
+            assert c["license"]
 
 
 def test_manifest_mismatch_is_rejected(mock_env):

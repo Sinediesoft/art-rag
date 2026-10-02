@@ -82,6 +82,8 @@ def main() -> int:
     repo.ensure_built()
     qa = [json.loads(line) for line in (EVAL / "sql_qa.jsonl").read_text().splitlines() if line]
     client = httpx.Client(base_url=args.base, timeout=300)
+    # 資料範圍（docs/adr/012）：訪客不能讀工廠圖紙與工廠資料庫，用看得到全部資料的主管身分評估
+    client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
     health = client.get("/api/v1/health").json()
     rows = []
     for q in qa:

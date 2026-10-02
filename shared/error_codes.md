@@ -28,6 +28,7 @@
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
 | `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原也會回這個（ADR 011） |
+| `DATA_SCOPE_DENIED` | 403／SSE `error` | 目前身分的資料範圍不含這份資料（ADR 012）：訪客不能使用工廠圖紙與工廠資料庫、業務看不到機密圖紙。所有讀取 API 都檢查；`/chat`、`/cad/reconstruct` 用照片辨識出看不到的圖紙時改在串流裡回 `error` |
 | `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
 | `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
 | `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |

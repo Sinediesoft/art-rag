@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, rating TEXT NOT NULL,
   note TEXT, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS security_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL, request_id TEXT,
+  stage INTEGER NOT NULL, rule TEXT NOT NULL, judge TEXT, account_id TEXT, account_label TEXT,
+  text TEXT
+);
 """
 
 # 舊版資料庫缺少的欄位：啟動時補上（正式版改用 Alembic migration）
@@ -57,6 +62,7 @@ _ADDED_COLUMNS = {
         "part_id": "TEXT",
     },
     "cad_logs": {"iou_bbox": "REAL"},
+    "route_logs": {"outcome": "TEXT"},
 }
 
 
@@ -144,7 +150,8 @@ class LogsRepo:
         return [dict(r) for r in rows]
 
     def add_route_log(self, row: dict) -> None:
-        """智慧助理的路由紀錄：誰判斷的（Jev／本地）、意圖、信心、閘門、外送位元組。"""
+        """智慧助理的路由紀錄：意圖、信心、閘門、第 2 段由誰判斷（Jev／地端規則）、
+        外送位元組、結果（通過或在第幾段擋下）。"""
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)
         # 同一個 request_id 再寫一次就覆蓋；用 ON CONFLICT 而不是 SQLite 專用的 INSERT OR REPLACE，
@@ -159,11 +166,44 @@ class LogsRepo:
     def recent_routes(self, limit: int = 10) -> list[dict]:
         rows = self._exec(
             "SELECT request_id, created_at, account_id, question, masked_text, engine, model,"
-            " fallback_reason, intent, modify_op, confidence, gate, egress_bytes, total_ms"
+            " fallback_reason, intent, modify_op, confidence, gate, egress_bytes, total_ms, outcome"
             " FROM route_logs ORDER BY created_at DESC LIMIT ?",
             (limit,),
         )
         return [dict(r) for r in rows]
+
+    def add_security_log(self, row: dict) -> str:
+        """五段防護的「拒絕並記錄」（docs/adr/012）：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，
+        第 4 段移除的夾帶指令段落。text 只存遮蔽個資後的文字。回傳紀錄編號（SEC-0001）。"""
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        rows = self._exec(
+            f"INSERT INTO security_logs ({cols}) VALUES ({marks}) RETURNING id",
+            tuple(row.values()),
+        )
+        return f"SEC-{rows[0]['id']:04d}"
+
+    def recent_security(self, limit: int = 20) -> list[dict]:
+        rows = self._exec(
+            "SELECT id, created_at, request_id, stage, rule, judge, account_id, account_label, text"
+            " FROM security_logs ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return [{**dict(r), "no": f"SEC-{r['id']:04d}"} for r in rows]
+
+    def clear_security(self) -> int:
+        """展示還原：清掉拒絕並記錄的紀錄（評估腳本也會寫入），回傳清掉幾筆。"""
+        n = self._exec("SELECT COUNT(*) AS n FROM security_logs")[0]["n"]
+        self._exec("DELETE FROM security_logs")
+        return int(n)
+
+    def count_security(self, since: str) -> dict[int, int]:
+        """since（ISO 時間）之後各段擋下或移除的筆數。"""
+        rows = self._exec(
+            "SELECT stage, COUNT(*) AS n FROM security_logs WHERE created_at >= ? GROUP BY stage",
+            (since,),
+        )
+        return {int(r["stage"]): int(r["n"]) for r in rows}
 
     def add_feedback(self, request_id: str, rating: str, note: str | None) -> None:
         self._exec(

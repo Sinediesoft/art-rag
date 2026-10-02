@@ -4,6 +4,9 @@
   後端重啟就回到「訪客」
 - 帳號、角色、範圍都在 shared/access.yaml（種子檔，不用密碼）；DEMO_CONTROLS=false 時不能切換
 - 任何模型（Jev、Qwen3-VL）都看不到、也決定不了身分：權限只由這裡的帳號決定
+- 資料範圍（docs/adr/012，五段防護的第 1 段）：角色能讀哪些領域（畫作／工廠圖紙／工廠資料庫）
+  與哪些機密等級；所有讀取 API 用 require_domain()／require_part() 檢查，
+  檢索用 levels 產生 Metadata Filter
 """
 
 import secrets
@@ -28,9 +31,19 @@ class Account:
     warehouses: tuple[str, ...] = ()
     customers: tuple[str, ...] = ()
     note: str = ""
+    # 資料範圍：能讀的領域（art／mfg／factory）與看得到的機密等級
+    domains: tuple[str, ...] = ("art",)
+    levels: tuple[str, ...] = ("公開",)
+    scope_note: str = ""
 
     def can(self, op: str) -> bool:
         return op in self.ops
+
+    def can_read(self, domain: str) -> bool:
+        return domain in self.domains
+
+    def can_see(self, level: str) -> bool:
+        return level in self.levels
 
     def public(self) -> dict:
         return {
@@ -42,6 +55,9 @@ class Account:
             "warehouses": list(self.warehouses),
             "customers": list(self.customers),
             "note": self.note,
+            "domains": list(self.domains),
+            "levels": list(self.levels),
+            "scope_note": self.scope_note,
         }
 
 
@@ -50,6 +66,8 @@ def accounts() -> dict[str, Account]:
     out = {}
     for aid, a in cfg["accounts"].items():
         role = cfg["roles"][a["role"]]
+        # 沒列在 clearance 的角色只能讀公開畫作（預設不允許）
+        cl = cfg.get("clearance", {}).get(a["role"], {})
         out[aid] = Account(
             id=aid,
             label=a["label"],
@@ -59,8 +77,15 @@ def accounts() -> dict[str, Account]:
             warehouses=tuple(a.get("warehouses", [])),
             customers=tuple(a.get("customers", [])),
             note=role.get("note", ""),
+            domains=tuple(cl.get("domains", ["art"])),
+            levels=tuple(cl.get("levels", ["公開"])),
+            scope_note=cl.get("note", "只查公開的畫作知識庫"),
         )
     return out
+
+
+def domain_label(domain: str) -> str:
+    return get_access_config().get("domains", {}).get(domain, domain)
 
 
 def get_account(account_id: str) -> Account:
@@ -105,3 +130,35 @@ def require(account: Account, op: str, what: str) -> None:
         f"目前身分「{account.label}」沒有{what}的權限（可以的身分：{who}）。請在頁首切換身分。",
         403,
     )
+
+
+def who_can_read(domain: str, level: str | None = None, op: str | None = None) -> list[Account]:
+    """哪些帳號能讀這個領域（與等級）、能做這個操作：給「切換成〇〇再試一次」與錯誤訊息用。"""
+    return [
+        a
+        for a in accounts().values()
+        if a.can_read(domain) and (level is None or a.can_see(level)) and (op is None or a.can(op))
+    ]
+
+
+def _scope_denied(account: Account, what: str, domain: str, level: str | None = None) -> AppError:
+    who = "、".join(a.label for a in who_can_read(domain, level)) or "沒有任何身分"
+    return AppError(
+        "DATA_SCOPE_DENIED",
+        f"目前身分「{account.label}」{what}（{account.scope_note}）。可以的身分：{who}。請在頁首切換身分。",
+        403,
+    )
+
+
+def require_domain(account: Account, domain: str) -> None:
+    """資料範圍：這個身分能不能讀這個領域（工廠圖紙、工廠資料庫）。畫作人人可讀。"""
+    if not account.can_read(domain):
+        raise _scope_denied(account, f"不能使用「{domain_label(domain)}」", domain)
+
+
+def require_part(account: Account, part: dict) -> None:
+    """資料範圍：工廠圖紙要能讀 mfg 領域，而且看得到這張圖紙的機密等級。"""
+    require_domain(account, "mfg")
+    level = part.get("confidentiality", "機密")
+    if not account.can_see(level):
+        raise _scope_denied(account, f"看不到{level}圖紙〈{part['name']['zh']}〉", "mfg", level)

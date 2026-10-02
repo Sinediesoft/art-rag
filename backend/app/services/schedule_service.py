@@ -21,6 +21,7 @@ from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.errors import AppError
 from app.core.logging import log
 from app.repositories.inventory_repo import get_inventory_repo
+from app.repositories.logs_repo import get_logs_repo
 from app.repositories.production_repo import get_production_repo
 from app.scheduling import timefold_client
 from app.scheduling.problem import Problem, build_problem, job_dict, load_setup
@@ -543,6 +544,7 @@ def run_detail(run_id: str) -> dict:
 
 
 def reset() -> None:
-    """展示還原：清掉圖紙頁開立的工單與所有排程結果。"""
+    """展示還原：清掉圖紙頁開立的工單、所有排程結果與五段防護的攔截紀錄。"""
     get_production_repo().reset()
     get_inventory_repo().ensure_built(force=True)
+    get_logs_repo().clear_security()
