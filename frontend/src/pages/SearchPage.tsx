@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { useAnySearch, useImageSearch, useTextSearch } from "../api/hooks";
+import { PhotoColors } from "../components/color/ColorAnalysisCard";
 import { ArtworkCard } from "../components/common/ArtworkCard";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../components/common/StatusNotices";
@@ -106,6 +107,8 @@ function ImageResults({
           detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
         />
       )}
+
+      {data && <PhotoColors imageId={imageId} matched={data.matched} />}
 
       {others.length > 0 && (
         <section>

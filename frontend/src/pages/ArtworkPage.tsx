@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { assetUrl, type ApiError } from "../api/client";
 import { useArtwork } from "../api/hooks";
+import { ArtworkColors } from "../components/color/ColorAnalysisCard";
 import { ErrorMessage, LicenseLabel, Loading } from "../components/common/Feedback";
 
 export function ArtworkPage() {
@@ -67,6 +68,8 @@ export function ArtworkPage() {
               </div>
             ))}
         </dl>
+
+        <ArtworkColors artworkId={a.id} />
 
         <section className="flex flex-col gap-4">
           {a.descriptions.map((d, i) => (

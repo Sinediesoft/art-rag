@@ -143,6 +143,21 @@ class RearrangeSpec(BaseModel):
     max_tokens: int = 16
 
 
+class ColorAnalysisSpec(BaseModel):
+    """畫作色彩分析（docs/adr/010）；改了要重建索引（manifest 比對）"""
+
+    method: str = "lab-kmeans-v1"
+    n_colors: int = 6
+    fit_long_edge: int = 256  # k-means 分群用的圖（約 6 萬像素）
+    map_long_edge: int = 512  # 算占比、畫色塊分布圖用的圖
+    kmeans_max_iter: int = 30
+    seed: int = 0
+    neutral_chroma: float = 10  # C* 小於這個值算中性色（接近黑白灰）
+    warm_hue_deg: list[float] = [340, 110]  # 色相角落在這段（可跨 0°）為暖色，其餘有彩色為冷色
+    lightness_bands: list[float] = [30, 60]  # L*：暗調／中間調／亮調的分界
+    chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -161,6 +176,7 @@ class ModelsConfig(BaseModel):
     # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/007）
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
+    color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
 
 
 @lru_cache

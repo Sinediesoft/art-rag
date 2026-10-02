@@ -32,6 +32,7 @@ from app.services import (
     cad_service,
     change_service,
     chat_service,
+    color_service,
     identity,
     memory_guard,
     schedule_service,
@@ -66,6 +67,16 @@ def get_image(image_id: str):
     if not path:
         raise AppError("IMAGE_NOT_FOUND", "找不到這張照片", 404)
     return FileResponse(get_settings().uploads_dir / path, media_type="image/jpeg")
+
+
+@router.get("/images/{image_id}/colors", response_model=S.ColorAnalysis, tags=["images"])
+def get_photo_colors(image_id: str):
+    return color_service.photo_colors(image_id)
+
+
+@router.get("/images/{image_id}/colormap.png", response_class=Response, tags=["images"])
+def get_photo_colormap(image_id: str):
+    return Response(color_service.photo_colormap(image_id), media_type="image/png")
 
 
 @router.post("/search/image", response_model=S.ImageSearchResponse, tags=["search"])
@@ -107,6 +118,20 @@ def get_artwork_image(artwork_id: str, size: str = "full"):
         else REPO_ROOT / a["image"]["path"]
     )
     return FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/artworks/{artwork_id}/colors", response_model=S.ColorAnalysis, tags=["artworks"])
+def get_artwork_colors(artwork_id: str):
+    return color_service.artwork_colors(artwork_id)
+
+
+@router.get("/artworks/{artwork_id}/colormap.png", response_class=FileResponse, tags=["artworks"])
+def get_artwork_colormap(artwork_id: str):
+    return FileResponse(
+        color_service.artwork_colormap_path(artwork_id),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.post(
@@ -460,9 +485,9 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        # 圖紙、領域路由、Text-to-SQL、展示測試與智慧助理路由（-route）的評估另有格式
+        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試與智慧助理路由（-route）的評估另有格式
         if not p.name.endswith(
-            ("-cad.json", "-router.json", "-sql.json", "-demo.json", "-route.json")
+            ("-cad.json", "-router.json", "-sql.json", "-color.json", "-demo.json", "-route.json")
         ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}

@@ -110,6 +110,56 @@ class ArtworkListResponse(BaseModel):
     items: list[ArtworkSummary]
 
 
+# ---------------------------------------------------------------- 色彩分析（docs/adr/010）
+class PaletteColor(BaseModel):
+    hex: str = Field(description="#RRGGBB")
+    rgb: list[int]
+    lab: list[float]
+    share: float = Field(description="占畫面比例 0–1")
+    name: str = Field(description="最接近的基本色名（CIEDE2000）")
+    temperature: Literal["warm", "cool", "neutral"]
+    tone: Literal["dark", "mid", "light"]
+
+
+class TemperatureShare(BaseModel):
+    warm: float
+    cool: float
+    neutral: float
+
+
+class LightnessStats(BaseModel):
+    dark: float
+    mid: float
+    light: float
+    mean: float
+    p5: float
+    p95: float
+    histogram: list[float] = Field(description="L* 0–100 分 10 格的比例")
+
+
+class ChromaStats(BaseModel):
+    low: float
+    mid: float
+    high: float
+    median: float
+    histogram: list[float] = Field(description="C* 0–100 分 10 格的比例（≥100 算在最後一格）")
+
+
+class ColorAnalysis(BaseModel):
+    source: Literal["original", "photo"] = Field(
+        description="original＝知識庫原圖；photo＝上傳的照片"
+    )
+    method: str
+    palette: list[PaletteColor]
+    temperature: TemperatureShare
+    lightness: LightnessStats
+    chroma: ChromaStats
+    summary: str
+    notes: list[str]
+    map_url: str = Field(description="色塊分布圖 PNG（每個像素塗成所屬主色）")
+    latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None

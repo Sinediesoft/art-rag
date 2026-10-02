@@ -17,6 +17,7 @@
 ```
 照片 ─► 領域路由（與畫作／圖紙原型比 CLIP 相似度，MMed-RAG 的領域辨識）─► 畫作走下一行、圖紙走「工廠圖紙」那行
 照片 ─► 前處理（EXIF 轉正、1024px）─► Chinese-CLIP 粗篩 ─► ORB 幾何驗證 ─► 辨識結果／「知識庫中沒有這幅畫」
+照片／畫作 ─► 色彩分析（CIELAB k-means 主色、冷暖、明度／彩度、色塊分布圖；建索引時算好並寫成可引用的段落）
 問題 ─► bge-m3 ─► 只取該畫作段落（門檻＋最多 5 段；比較／背景題才從全庫補足）
       ─►（選用，預設關）本地模型篩掉沒幫助的段落（MIRA 的 Rearrange）─► 共用 prompt（answer_v1）
       ─► strategy：hybrid（Ollama Qwen3-VL）｜lora（選做）｜api_nokb／api_kb（雲端對照組）─► OpenCC ─► SSE
@@ -129,11 +130,10 @@ uv run python ..\pipelines\import_sqlite_logs.py
 5. **確認建好**：開「系統狀態」頁，「索引一致」要打勾，知識庫版本要和其他人相同（例如 `2026.09.6`）。
    模型版本鎖在 `shared/models.yaml`，embedding 一律用 CPU 算，所以各自建出來的內容相同。
 
-**直接在 Windows 執行（不在 WSL 裡）時**：`make index` 會在工廠圖紙的標準模型那步失敗
-（`backend/app/cad/runner.py` 的 `import resource`，Windows 沒有這個模組）。
-修好之前，改用部署包附的 `data/index/`（已建好的索引）寫進資料庫：
-`cd backend; uv run python ..\pipelines\build_index.py --db-only`。
-不要改用資料庫匯出檔：縮圖與 STL／STEP 不在資料庫裡，而且 `--db-only` 會先檢查知識庫與模型版本是否一致。
+**直接在 Windows 執行（不在 WSL 裡）時**：`make index` 可以照常重建（Windows 沒有 `resource` 模組，
+知識庫自己的標準模型改成不限制 CPU 與檔案大小執行）；但 **Ortho2CAD 3D 重建不能用**——限制不了子行程，
+模型產生的程式碼一律拒絕執行，請在 macOS、Linux 或 WSL 上重建。沒有 `make` 時：
+`cd backend; uv run python ..\pipelines\build_index.py`。
 
 **要把使用紀錄給別人**（例如問答紀錄給 D 做評估）：只匯出紀錄表，對方還原到另一個資料庫，不會蓋掉自己的紀錄。
 紀錄裡有使用者的問題與回答，請私下傳，不要貼在群組。
@@ -158,7 +158,9 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 |---|---|---|---|
 | 1 | 以圖搜圖 | 首頁「拍照辨識」，用手機拍螢幕上的〈谿山行旅圖〉 | Top-1 ≥ 90% |
 | 2 | 拒答 | 拍李唐〈萬壑松風圖〉（`eval/photos/unknown/unknown-05.jpg`）：CLIP 相似度 0.96 仍判定「知識庫中沒有這幅畫」 | 拒答率 ≥ 80% |
+| 2b | 沒收錄也能分析色彩 | 第 2 步的拒答頁往下捲：「色彩分析（依你的照片）」——色盤、冷暖、明度／彩度、色塊分布圖 | 對應圖紙的「沒收錄也能重建 3D」 |
 | 3 | 圖文問答 | 辨識成功 →「問問這幅畫」→ 點建議問題；點 [1] 標籤看出處；問「當年賣了多少錢？」看它說不知道 | 引用正確率、防幻覺 |
+| 3b | 色彩分析 | 〈谿山行旅圖〉畫作頁的「色彩分析」：點色票看色塊分布圖；再到問答頁問「這幅畫主要用了哪些顏色？」，[n] 的出處是「系統計算」 | 數字交給計算、不靠模型目測 |
 | 4 | 以文搜圖 | 首頁輸入「水邊草地上撐陽傘的人群」 | 中文以文搜圖 |
 | 5 | 策略比較 | 「策略比較」頁選〈谿山行旅圖〉，問簽名在哪：開檢索答對、關檢索亂編；A1（雲端無檢索）、A2（雲端＋檢索）欄顯示「外送」標示（需 `ALLOW_CLOUD=true`，否則顯示未開啟） | 可替換、檢索增益、零外送對比 |
 | 6 | 容錯 | 「系統狀態」按「模擬斷線」→ 回問答頁再問，回答標註「本地備援模型」；直接結束 Ollama 則顯示服務暫停，不改走雲端 | 5 秒內改走本地備援 |
@@ -262,6 +264,23 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 
 ⚠️ 這些只驗證架構能運作：資料只有 3 筆、評估題由開發者撰寫、實拍照是由數位原圖加工的**模擬照**
 （`eval/make_synthetic_photos.py`）。正式評估請 D 換成真實實拍照與兩人獨立評分。
+
+2026-10-01 起 `eval/qa.jsonl` 多了 3 題顏色題（已收錄的 3 幅畫從 16 題變成 19 題），所以上表（16 題）和之後
+`make eval` 的數字不能直接比較。
+
+### 色彩分析（`make eval-color`）
+
+不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
+（run_id `20261001T071333-6b5f`，細節見 ADR 010）：
+
+| 指標 | 結果 |
+|---|---|
+| 結果固定（5 幅原圖各算兩次） | 是（5/5 幅兩次完全相同） |
+| 照片 vs 原圖色盤色差（ΔE00 平均，25 張） | 6.12；依拍法：blur 7.94、crop 2.25、dim 8.91、glare 5.92、tilt 5.57 |
+| 冷暖比例差（平均） | 21.9 個百分點；依拍法：blur 37.3、crop 5.2、dim 27.8、glare 16.4、tilt 22.7 |
+| 顏色題取到色彩段落 | 3/3 |
+| 其他題混進色彩段落／段落被擠掉 | 2/16 題；有段落被擠掉 2 題（被擠掉的段落都不屬於該題主題，與主題相關 0 題） |
+| 延遲 P50／P95 | 248／326 ms（評估時 demo 後端也開著，P95 隨負載有出入：三次跑從 452 降到 326 ms，取收錄的那一次） |
 
 ### 領域路由（`make eval-router`）
 
@@ -372,6 +391,7 @@ bge-m3、Qwen3-VL（73% → 49%），載入後 79%；進入 Text-to-SQL 時預�
 art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
 ├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
+│   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）
 │   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、router（領域路由）、verify（ORB＋線條重合）、prompt、providers、textproc
 │   ├── cad/           C  drawing（三視圖產生器）、sandbox／runner（CadQuery 沙箱）、metrics（IoU）、preprocess
 │   ├── rag/text2sql   C  庫存 Text-to-SQL：prompt、SQL 擷取與靜態檢查；執行在 repositories/inventory_repo（唯讀＋白名單）
@@ -382,7 +402,7 @@ art-rag/
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md

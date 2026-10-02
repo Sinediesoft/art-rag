@@ -23,6 +23,9 @@
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
 雲端策略一律回 `error`（`CLOUD_CONFIDENTIAL_FORBIDDEN`）。
 
+畫作的「色彩分析」段落（`chunk_id` 為 `<id>#color`，建索引時由系統計算，見 `docs/adr/010`）同樣 `source_url` 為 `null`，
+改帶 `source_label`（「系統計算：色彩分析（數位圖檔）」）；其他畫作段落不帶 `source_label`。
+
 ## `POST /api/v1/cad/reconstruct`（工廠圖紙 → 3D）
 
 | event | data（JSON） | 說明 |
