@@ -12,6 +12,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { ComparePage } from "./pages/ComparePage";
 import { HomePage } from "./pages/HomePage";
 import { InventoryPage } from "./pages/InventoryPage";
+import { PhotoDiffPage } from "./pages/PhotoDiffPage";
 import { SchedulePage } from "./pages/SchedulePage";
 import { SearchPage } from "./pages/SearchPage";
 import { DrawingSearchPage } from "./pages/drawings/DrawingSearchPage";
@@ -45,6 +46,7 @@ createRoot(document.getElementById("root")!).render(
             <Route path="assistant" element={<AssistantPage />} />
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="compare" element={<ComparePage />} />
+            <Route path="photo-diff" element={<PhotoDiffPage />} />
             <Route path="admin" element={<AdminPage />} />
           </Route>
         </Routes>

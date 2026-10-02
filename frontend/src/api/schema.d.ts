@@ -81,7 +81,8 @@ export interface paths {
         };
         /**
          * Get Photo Alignment
-         * @description 影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊；圖紙另外比對三視圖的線條差異。
+         * @description 影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
+         *     畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
          */
         get: operations["get_photo_alignment_api_v1_images__image_id__align_get"];
         put?: never;
@@ -1094,13 +1095,13 @@ export interface components {
         AlignDiff: {
             /**
              * Method
-             * @description ink：拉正後比對三視圖的線條
-             * @constant
+             * @description ink：拉正後比對三視圖的線條（圖紙）；tone：比形狀與顏色（畫作：照片 vs 知識庫原圖，或兩張照片）
+             * @enum {string}
              */
-            method: "ink";
+            method: "ink" | "tone";
             /**
              * Status
-             * @description same：沒有差異；changed：列出差異；global_change：差異遍布整張（多半是改了外形尺寸），不列區塊
+             * @description same：沒有差異；changed：列出差異；global_change：差異遍布整張，不列區塊（圖紙多半是改了外形尺寸；畫作多半是光線差太多、大片反光、照片太模糊，或拍的不是同一處）
              * @enum {string}
              */
             status: "same" | "changed" | "global_change";
@@ -1111,7 +1112,7 @@ export interface components {
             regions: components["schemas"]["AlignRegion"][];
             /**
              * Changed Ratio
-             * @description 所有差異像素占知識庫圖紙線條像素的比例
+             * @description 所有差異的大小：ink 占知識庫圖紙線條像素、tone 占比對範圍的比例
              */
             changed_ratio: number;
         };
@@ -1142,13 +1143,13 @@ export interface components {
             bbox: number[];
             /**
              * Kind
-             * @description missing：知識庫圖紙有、照片沒有；extra：照片有、知識庫圖紙沒有；both：兩種都有
+             * @description ink（圖紙）：missing＝知識庫圖紙有、照片沒有，extra＝照片有、知識庫圖紙沒有；tone（畫作：照片 vs 原圖、兩張照片）：shape＝形狀不同，color＝顏色不同；both＝兩種都有
              * @enum {string}
              */
-            kind: "missing" | "extra" | "both";
+            kind: "missing" | "extra" | "shape" | "color" | "both";
             /**
              * Area Ratio
-             * @description 這處差異的像素占知識庫圖紙線條像素的比例
+             * @description 這處差異的大小：ink 是占知識庫圖紙線條像素的比例，tone 是占比對範圍的比例
              */
             area_ratio: number;
         };
@@ -1156,9 +1157,10 @@ export interface components {
         AlignTarget: {
             /**
              * Kind
+             * @description artwork：知識庫畫作原圖；part：知識庫圖紙；image：另一張上傳照片（兩張照片互比）
              * @enum {string}
              */
-            kind: "artwork" | "part";
+            kind: "artwork" | "part" | "image";
             /** Id */
             id: string;
         };
@@ -1840,7 +1842,7 @@ export interface components {
              */
             inliers: number;
             location: components["schemas"]["AlignLocation"];
-            /** @description 畫作為 null（只標位置）；圖紙為線條差異 */
+            /** @description 知識庫畫作原圖、另一張照片為形狀與顏色差異（tone）；圖紙為線條差異（ink）；image_compare 設成 diff: none 的領域為 null（只標位置） */
             diff: components["schemas"]["AlignDiff"] | null;
             /**
              * Reference Url
@@ -1849,7 +1851,7 @@ export interface components {
             reference_url: string;
             /**
              * Overlay Url
-             * @description 疊圖 PNG：畫作是原圖上框出拍到的範圍；圖紙是差異塗色並編號
+             * @description 疊圖 PNG：參考圖上差異塗色並編號（畫作沒拍到的地方調暗）；只標位置時是框出拍到的範圍
              */
             overlay_url: string;
             /** Notes */
@@ -3438,7 +3440,7 @@ export interface operations {
     get_photo_alignment_api_v1_images__image_id__align_get: {
         parameters: {
             query: {
-                /** @description 比對對象：artwork:<畫作 id> 或 part:<圖紙 id> */
+                /** @description 比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A） */
                 target: string;
             };
             header?: never;
@@ -3472,7 +3474,7 @@ export interface operations {
     get_photo_alignment_overlay_api_v1_images__image_id__align_png_get: {
         parameters: {
             query: {
-                /** @description 比對對象：artwork:<畫作 id> 或 part:<圖紙 id> */
+                /** @description 比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A） */
                 target: string;
             };
             header?: never;

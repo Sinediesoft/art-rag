@@ -37,6 +37,12 @@ export function HomePage() {
         </p>
         <div className="mt-5 max-w-md">
           <ImageUploader onUploaded={(id) => navigate(`/search?image=${id}`)} />
+          <Link
+            to="/photo-diff"
+            className="mt-2 inline-block text-sm font-bold text-ink-soft underline-offset-2 hover:text-seal hover:underline"
+          >
+            比對兩張照片（修復前後、真跡與複製品）→
+          </Link>
         </div>
 
         <form onSubmit={submit} className="mt-5 flex max-w-xl gap-2">
