@@ -233,13 +233,15 @@ async def _chat_stream(
         },
     )
 
-    # 3. 組 prompt（照片優先，否則用知識庫圖檔；圖紙要看得清楚標註，用 1024 px 原圖）
+    # 3. 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
+    #    Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
+    #    縮圖省不到時間，模型反而看得比較模糊
     if image_id:
         image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
     elif artwork:
-        image_jpeg = (get_settings().index_dir / "thumbs" / f"{artwork['id']}.jpg").read_bytes()
+        image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["image"]["path"]))
     else:
         image_jpeg = None
     messages = build_messages(
