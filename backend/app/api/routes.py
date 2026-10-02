@@ -613,7 +613,7 @@ async def health():
         scheduler=scheduler,
         memory=memory,
         system1=_system1_status(),
-        recent_routes=get_logs_repo().recent_routes(10),
+        recent_routes=logs.recent_routes(10) if db_ok else [],
     )
 
 

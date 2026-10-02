@@ -15,7 +15,7 @@ from collections.abc import AsyncIterator
 from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.logging import log
 from app.rag import rearrange as rearrange_mod
-from app.rag.embedders import embed_image, embed_text
+from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import build_messages, prompt_version
 from app.rag.providers import (
@@ -25,12 +25,11 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
-from app.rag.router import route
 from app.rag.textproc import to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
-from app.services.search_service import identify, identify_drawing, load_upload
+from app.services.search_service import identify_any, load_upload
 
 # 備援只在本地之間：主推論伺服器 → 本地備援模型；雲端不在任何備援鏈上
 FALLBACK_CHAIN = {"hybrid": ["hybrid_fallback"], "lora": ["hybrid", "hybrid_fallback"]}
@@ -167,18 +166,14 @@ async def _chat_stream(
         use_retrieval = False  # A1：只送照片與問題
 
     # 1. 以圖辨識（已指定畫作或圖紙就跳過）。只給照片時先經過領域路由（MMed-RAG 的領域辨識），
-    #    判斷是畫作還是圖紙，再走該領域的辨識。雲端策略在第 0 步已拒收照片，
-    #    所以路由成圖紙時不會是雲端。
+    #    判斷是畫作還是圖紙，再走該領域的辨識（和以圖搜圖、智慧助理同一個 identify_any）。
+    #    雲端策略在第 0 步已拒收照片，所以路由成圖紙時不會是雲端。
     route_info = None
     if not artwork_id and not part_id and image_id:
-        img = load_image(load_upload(image_id))
-        vec = embed_image(img)
-        r = route(vec)
-        route_info, domain = r.summary(), r.domain
-        if domain == "mfg":
-            identified = identify_drawing(image_id, img=img, vec=vec)
-        else:
-            identified = identify(image_id, img=img, vec=vec)
+        found = identify_any(image_id)
+        route_info = found["route"]
+        domain = route_info["domain"]
+        identified = found["drawing_result"] if domain == "mfg" else found["artwork_result"]
         if not identified["matched"]:
             yield sse(
                 "error",
@@ -224,7 +219,7 @@ async def _chat_stream(
     sources = retrieve(question, artwork_id, part_id)
     rearrange_info = None
     if use_retrieval and rearrange_mod.enabled(rearrange):
-        sources, rearrange_info = await rearrange_mod.rearrange(question, sources)
+        sources, rearrange_info = await rearrange_mod.rearrange(question, sources, strategy)
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     yield sse(
         "sources",

@@ -3,8 +3,9 @@
 依 retrieval 規則取出的候選段落，一次交給本地生成端判斷哪幾段對回答問題有幫助，只留挑中的，
 至少留 1 段（MIRA 也保底）。留下幾段由模型逐題決定，這就是「動態調整筆數」。
 
-- 只呼叫本地主推論伺服器（hybrid），不論問答用哪個策略都不送雲端
-- 只看文字、不送照片；一題只呼叫一次
+- 只呼叫本地主推論伺服器（hybrid），不論問答用哪個策略都不送雲端；
+  問答選 mock 時也用 mock，不呼叫模型
+- 只看文字、不送照片；一題只呼叫一次；只有 0～1 段可篩時不呼叫（ms 為 0）
 - 逾時、連不上、輸出不是「1,3」或「無」這種固定格式時，一律退回原本的段落，不擋回答
 - 開關優先順序：請求的 rearrange ＞ .env 的 REARRANGE ＞ shared/models.yaml 的 rearrange.enabled
 """
@@ -59,16 +60,19 @@ def build_messages(question: str, candidates: list[dict]) -> list[dict]:
     ]
 
 
-async def _judge(question: str, candidates: list[dict]) -> str:
+async def _judge(question: str, candidates: list[dict], strategy: str) -> str:
     cfg = get_models_config().rearrange
-    provider = get_provider("hybrid")
+    provider = get_provider("mock" if strategy == "mock" else "hybrid")
     provider.max_tokens, provider.temperature = cfg.max_tokens, 0
     return "".join([p async for p in provider.stream(build_messages(question, candidates))])
 
 
-async def rearrange(question: str, sources: list[dict]) -> tuple[list[dict], dict]:
+async def rearrange(
+    question: str, sources: list[dict], strategy: str = "hybrid"
+) -> tuple[list[dict], dict]:
     """回傳（留下的段落，篩選資訊）。留下的段落重新編號 ref 1..n，回答裡的 [n] 才對得上。
 
+    strategy 是問答用的策略，只用來判斷是不是 mock。
     篩選失敗（fallback 有值）時原封不動回傳全部段落。"""
     cfg = get_models_config().rearrange
     candidates = sources[: cfg.max_candidates]
@@ -78,7 +82,7 @@ async def rearrange(question: str, sources: list[dict]) -> tuple[list[dict], dic
     t0 = time.perf_counter()
     kept = sources
     try:
-        text = await asyncio.wait_for(_judge(question, candidates), cfg.timeout_s)
+        text = await asyncio.wait_for(_judge(question, candidates, strategy), cfg.timeout_s)
         picked = parse_choice(text, len(candidates))
         if picked is None:
             info["fallback"] = f"模型輸出看不懂：{text.strip()[:40]}"

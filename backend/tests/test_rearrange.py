@@ -85,6 +85,23 @@ def test_timeout_falls_back(monkeypatch):
     assert kept == SOURCES and "逾時" in info["fallback"]
 
 
+def test_mock_strategy_does_not_call_the_local_model(monkeypatch):
+    """問答選 mock（「不呼叫模型」）時篩選也用 mock；其他策略（含雲端）一律問本地的 hybrid。"""
+    asked = []
+    fake = fake_provider("1")
+    monkeypatch.setattr(rearrange, "get_provider", lambda s: asked.append(s) or fake(s))
+    asyncio.run(rearrange.rearrange("簽名在哪？", SOURCES, strategy="mock"))
+    asyncio.run(rearrange.rearrange("簽名在哪？", SOURCES, strategy="api_kb"))
+    assert asked == ["mock", "hybrid"]
+
+
+def test_single_candidate_skips_the_model(monkeypatch):
+    """只有 1 段可篩時不呼叫模型，ms 為 0（前端據此不顯示「由模型篩選」）。"""
+    monkeypatch.setattr(rearrange, "get_provider", fake_provider(error=AssertionError("不該呼叫")))
+    kept, info = asyncio.run(rearrange.rearrange("簽名在哪？", SOURCES[:1]))
+    assert kept == SOURCES[:1] and info == {"candidates": 1, "kept": 1, "ms": 0, "fallback": None}
+
+
 def test_switch_priority(monkeypatch):
     """請求 ＞ .env 的 REARRANGE ＞ models.yaml（預設關）。"""
     env = SimpleNamespace(rearrange="")

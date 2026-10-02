@@ -16,8 +16,9 @@
 `sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008；請求的 `rearrange`、
 `.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，預設關）時為
 `{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`，
-失敗時 `sources` 是原本的全部段落）；沒有篩選時為 `null`。`sources` 永遠只列真正放進 prompt 的段落，
-`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
+失敗時 `sources` 是原本的全部段落）；沒開篩選（或關檢索）時為 `null`。候選只有 0～1 段時不呼叫模型，
+`candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
+`sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
 
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，

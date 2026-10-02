@@ -100,7 +100,8 @@ export function ChatAnswer({
           >
             <span>
               參考來源（{sources.sources.length} 段）
-              {sources.rearrange && !sources.rearrange.fallback && (
+              {/* 只有 0～1 段候選時後端不呼叫模型（candidates ≤ 1、ms 為 0），不算篩選過 */}
+              {sources.rearrange && !sources.rearrange.fallback && sources.rearrange.candidates > 1 && (
                 <span className="font-normal text-ink-faint">
                   {" "}
                   · 由模型從 {sources.rearrange.candidates} 段候選中篩選

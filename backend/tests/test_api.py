@@ -27,6 +27,29 @@ def test_health(client):
     assert r.json()["index_consistent"] is True
 
 
+def test_health_when_database_is_down(client, monkeypatch):
+    """PostgreSQL 容器停了：ping 失敗就不查任何最近紀錄，狀態頁照樣回得出來（degraded、db=false）。
+    查了會等連線池逾時（每次 5 秒，卡住整個後端）再 500。"""
+    from app.api import routes
+
+    class DownRepo:
+        def ping(self):
+            return False
+
+        def __getattr__(self, name):
+            def query(*args, **kwargs):
+                raise AssertionError(f"資料庫連不上還呼叫 {name}()")
+
+            return query
+
+    monkeypatch.setattr(routes, "get_logs_repo", DownRepo)
+    r = client.get("/api/v1/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["db"] is False and body["status"] == "degraded"
+    assert body["recent_chats"] == body["recent_routes"] == []
+
+
 def test_artwork_detail_and_404(client):
     items = client.get("/api/v1/artworks").json()["items"]
     r = client.get(f"/api/v1/artworks/{items[0]['id']}")

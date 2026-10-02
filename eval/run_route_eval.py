@@ -109,11 +109,13 @@ def main() -> int:
         if r["skipped"]:
             print(f"  {r['engine']:<6} 略過：{r['skipped']}")
             continue
+        # 題目裡沒有標修改操作（op）的題目時，操作正確率是 None
+        op_acc = "—" if r["op_accuracy"] is None else f"{r['op_accuracy']:.0%}"
         print(
             f"  {r['engine']:<6} 正確率 {r['accuracy']:.0%}（{r['n']} 題）"
             f" · 直接處理 {r['auto_rate']:.0%}"
             f" · 修改誤判 {r['write_misfires']} 題"
-            f" · 操作正確率 {r['op_accuracy']:.0%} · 平均信心 {r['mean_confidence']}"
+            f" · 操作正確率 {op_acc} · 平均信心 {r['mean_confidence']}"
             f" · p50 {r['p50_ms']} ms · 外送 {r['egress_bytes']} B · 閘門 {r['gates']}"
         )
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]

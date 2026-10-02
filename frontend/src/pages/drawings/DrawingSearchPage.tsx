@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../../api/client";
-import { useAnySearch, useDrawingSearch, usePartTextSearch } from "../../api/hooks";
+import { usePartTextSearch, useRoutedSearch } from "../../api/hooks";
 import { ErrorMessage, Loading } from "../../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../../components/common/StatusNotices";
 import { PartCard } from "../../components/parts/PartCard";
@@ -30,18 +30,12 @@ function ImageResults({
   redirected: boolean;
 }) {
   // 預設先經過領域路由；使用者在路由提示按「改用工廠圖紙辨識」（domain=mfg）時直接做圖紙辨識
-  const routed = useAnySearch(forced ? null : imageId);
-  const direct = useDrawingSearch(forced ? imageId : null);
-  const { isLoading, error } = forced ? direct : routed;
-  const route = forced ? undefined : routed.data?.route;
-  const data = forced ? direct.data : (routed.data?.drawing_result ?? undefined);
+  const { data, route, isLoading, error, latencyMs, redirectTo } = useRoutedSearch("mfg", imageId, forced);
   const best = data?.matched ? data.results[0] : null;
   const others = data ? data.results.filter((r) => r !== best) : [];
 
-  // 判定為畫作：轉到畫作辨識頁（結果已在快取裡，不會重算）
-  if (route?.domain === "art") {
-    return <Navigate to={`/search?image=${imageId}&routed=1`} replace />;
-  }
+  // 判定為畫作：轉到畫作辨識頁
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   return (
     <div className="flex flex-col gap-5">
@@ -56,8 +50,7 @@ function ImageResults({
           <h1 className="text-2xl font-bold">辨識結果</h1>
           {data && (
             <p className="text-xs text-ink-faint">
-              {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 → 線條重合度 ·{" "}
-              {routed.data?.latency_ms ?? data.latency_ms} ms
+              {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 → 線條重合度 · {latencyMs} ms
             </p>
           )}
         </div>
