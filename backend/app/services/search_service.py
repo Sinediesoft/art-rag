@@ -141,7 +141,9 @@ def part_summary(p: dict) -> dict:
         "geometry": p["geometry"],
         "drawing_url": f"/api/v1/parts/{p['id']}/drawing?v={v}",
         "thumb_url": f"/api/v1/parts/{p['id']}/drawing?size=thumb&v={v}",
-        "model_url": f"/api/v1/parts/{p['id']}/model.stl?v={v}",
+        # 照片建檔的零件沒有標準模型（docs/adr/013）
+        "model_url": f"/api/v1/parts/{p['id']}/model.stl?v={v}" if "cad" in p else None,
+        "intake": "intake" in p,
         "tags": p.get("tags", []),
     }
 

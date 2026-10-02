@@ -61,6 +61,11 @@ async def main() -> int:
     if not parts:
         print(f"{base}/parts 沒有零件")
         return 1
+    # 照片建檔的零件沒有標準模型，圖紙就是拉正後的照片（docs/adr/013），不重畫、也不覆蓋
+    for p in parts:
+        if "cad" not in p:
+            print(f"  － {p['id']}  {p['name']['zh']}：照片建檔，沒有標準模型，略過")
+    parts = [p for p in parts if "cad" in p]
     results = await asyncio.gather(*(render(p, base) for p in parts), return_exceptions=True)
     failed = 0
     for p, r in zip(parts, results, strict=True):

@@ -171,7 +171,8 @@ async def _reconstruct_stream(
     if part:
         g = part["geometry"]
         scale_to = {k: g[k] for k in ("width", "depth", "height")}
-        scale_source = "知識庫圖紙標註尺寸"
+        # 照片建檔的零件沒有標準模型（docs/adr/013）：外形是建檔時人確認過的圖上標註
+        scale_source = "知識庫圖紙標註尺寸" if "cad" in part else "照片建檔時確認的圖上標註"
     else:
         scale_to = await read_dimensions(photo)
         scale_source = "Qwen3-VL 讀取圖上標註" if scale_to else None
@@ -211,7 +212,8 @@ async def _reconstruct_stream(
         provider.temperature = float(cfg["temperature"])
         pieces = provider.stream(messages)
     else:
-        gt = (REPO_ROOT / part["cad"]).read_text(encoding="utf-8") if part else MOCK_CODE
+        has_gt = part is not None and "cad" in part
+        gt = (REPO_ROOT / part["cad"]).read_text(encoding="utf-8") if has_gt else MOCK_CODE
         pieces = _mock_stream(gt)
     t_gen = time.perf_counter()
     answer, first_token_ms = "", None

@@ -107,6 +107,61 @@ image_compare:
     edge_margin_px: 10        # 照片 A 最外圈（工作大小）不比
     max_changed_ratio: 0.3    # 差異超過比對範圍的 30% → 光線差太多或拍的不是同一處
 
+# 照片建檔（見 docs/adr/013）：
+# - 圖紙（mfg）：本地 Qwen3-VL 依欄位提示讀標題欄與外形尺寸（JSON schema 限制輸出）→ 規則驗證（格式、和知識庫重複、
+#   材料依牌號校正並補密度）→ 人確認；
+# - 畫作（art）：拍畫作本身，不讀展牌（館方解說有著作權、也沒有統一版面），資料由人在跳出的表單填；
+# → 主管收錄寫進 kb/ → 重建索引。換領域＝換一份欄位設定。不影響索引，改了不用重建。
+# 模型看不清楚時不會填 null 而是編（模糊照 30/49 格是編的），所以兩個領域都先擋模糊照
+intake:
+  prompt_version: intake_v1   # 對應 shared/prompts/intake_v1.md
+  max_tokens: 300             # 10 個欄位的 JSON 約 110 token
+  # 模糊程度（重新模糊法，0 清楚～1 模糊），高於就請重拍。2026-10-03 模擬照：模糊 0.345–0.448；
+  # 其他拍法與知識庫原圖：畫作 ≤ 0.265、圖紙 ≤ 0.143。拉普拉斯變異數在畫作上分不開（低對比的水墨清楚照只有 125）
+  max_blur: 0.30
+  page_size: [800, 970]       # 知識庫圖紙的版面：拉正後縮成這個大小
+  page_aspect_tol: 0.08       # 找到的紙張長寬比和版面差超過 8% 就請重拍（不是同一種版面，或沒拍到整張）
+  mfg:
+    id_prefix: mfg
+    fields:                   # read＝從照片讀（hint 是給模型的位置說明）；pattern 是這座工廠的編號格式
+      company: {label: 公司, hint: 標題欄左欄最上面一行的公司名稱}
+      name: {label: 品名, hint: 標題欄左欄中間最大的字}
+      part_no: {label: 料號, hint: 標題欄「料號」格, pattern: '[A-Z]{2,4}-\d{3,5}'}
+      drawing_no: {label: 圖號, hint: 標題欄「圖號」格, pattern: '[A-Z]-\d{2}-\d{4}'}
+      revision: {label: 版次, hint: 標題欄「版次」格, pattern: '[A-Z0-9]{1,3}'}
+      material: {label: 材料, hint: 標題欄「材料」格，牌號加名稱（例如 S45C 中碳鋼）}
+      confidentiality: {label: 機密等級, hint: 標題欄左下角「機密等級：」後面的字, kind: enum}
+      width: {label: 寬（mm）, hint: 俯視圖（Top View）正下方的水平尺寸, kind: number, min: 0.1, max: 5000}
+      depth: {label: 深（mm）, hint: 俯視圖（Top View）右側的垂直尺寸, kind: number, min: 0.1, max: 5000}
+      height: {label: 高（mm）, hint: 前視圖（Front View）右側的垂直尺寸, kind: number, min: 0.1, max: 5000}
+      density_g_cm3: {label: 密度（g/cm³）, read: false, kind: number, min: 0.5, max: 25}
+      category: {label: 類別, read: false}
+      owner: {label: 負責單位, read: false}
+      surface: {label: 表面處理, read: false, required: false}
+      name_en: {label: 英文品名, read: false, required: false}
+  art:
+    id_prefix: photo          # 知識庫 ID 的來源代碼：典藏單位對不到既有畫作時的預設
+    fields:                   # 全部由人在跳出的表單填（read: false）；group 是表單分區，hint 是輸入提示
+      title: {label: 畫名, read: false, group: 基本資料, hint: 例如：早春圖}
+      title_en: {label: 英文畫名, read: false, required: false, group: 基本資料}
+      artist: {label: 作者, read: false, group: 基本資料, hint: 例如：郭熙}
+      artist_en: {label: 作者英文名, read: false, required: false, group: 基本資料}
+      date_text: {label: 年代, read: false, group: 基本資料, hint: 例如：北宋 1072 年}
+      medium: {label: 材質, read: false, required: false, group: 基本資料, hint: 例如：絹本 水墨淡設色}
+      dimensions: {label: 尺寸, read: false, required: false, group: 基本資料, hint: 例如：158.3 × 108.1 cm}
+      style_tags: {label: 風格標籤, read: false, required: false, group: 基本資料, hint: 用頓號或逗號分隔}
+      collection: {label: 典藏單位, read: false, group: 典藏與授權}
+      source_id: {label: 館藏編號, read: false, required: false, group: 典藏與授權}
+      source_url: {label: 典藏頁網址, read: false, kind: url, group: 典藏與授權, hint: 館方的作品頁（資料出處）}
+      image_license: {label: 照片授權, read: false, kind: enum, group: 典藏與授權}
+      image_attribution: {label: 照片標示文字, read: false, required: false, group: 典藏與授權, hint: 授權是 CC BY 4.0 時必填}
+      description: {label: 介紹, read: false, required: false, kind: longtext, group: 介紹（選填）, hint: 至少 20 字；沒填就由系統依上面的欄位寫一段「基本資料」}
+      description_source_url: {label: 介紹出處網址, read: false, required: false, kind: url, group: 介紹（選填）}
+      description_license: {label: 介紹授權, read: false, required: false, kind: enum, group: 介紹（選填）, hint: 只收 CC0、公有領域、CC BY 4.0}
+      description_attribution: {label: 介紹標示文字, read: false, required: false, group: 介紹（選填）, hint: 授權是 CC BY 4.0 時必填}
+      id_code: {label: 來源代碼, read: false, pattern: '[a-z]+', group: 知識庫 ID, hint: 小寫英文；典藏單位是知識庫已有的就自動帶入（例如 npm）}
+      id_no: {label: 編號, read: false, pattern: '[a-z0-9]+', group: 知識庫 ID, hint: 小寫英數字；預設取館藏編號}
+
 # 檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）：依 retrieval 的規則取出候選段落後，
 # 再請本地生成端判斷哪幾段對回答有幫助，只留挑中的（至少 1 段）。只呼叫本地模型、不送雲端；
 # 逾時、連不上或輸出看不懂時退回原本的段落，不擋回答。
@@ -127,6 +182,7 @@ prompt:
   drawing_version: drawing_v1 # 工廠圖紙問答，對應 shared/prompts/drawing_v1.md
   sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
   sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）
+  # 照片建檔讀標題欄的提示詞版本在 intake.prompt_version（intake_v1.md）
 
 # 工廠庫存 Text-to-SQL：沿用 hybrid 生成端（本地 Qwen3-VL，失敗改走本地備援），不另外載入模型。
 # 庫存屬企業內部資料，雲端策略一律拒絕；SQL 只在唯讀連線＋白名單下執行（docs/adr/004）

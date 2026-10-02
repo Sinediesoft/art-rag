@@ -71,6 +71,21 @@
 時間欄位：`*_min` 是工作分鐘（排程起點起算、只計上班時間），`*_at` 是台灣時間 `YYYY-MM-DD HH:MM`。
 使用者離開頁面（串流中斷）時後端會停止 Timefold 的求解；`POST /api/v1/schedule/stop` 提前結束並採用目前最佳解。
 
+## `POST /api/v1/intake`（照片建檔，docs/adr/013）
+
+請求 `{"image_id", "domain"}`：`domain` 是從哪一邊進來（`mfg` 工廠圖紙、`art` 畫作），null 時交給領域路由判斷。
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `stage` | `{"stage", "label"}` | 進到哪一步。圖紙：`sharpness`（清晰度）→ `identify`（知識庫有沒有）→ `page`（拉正、對齊版面）→ `read`（Qwen3-VL 讀標題欄）→ `validate`（驗證）；畫作不讀照片：`sharpness` → `identify` → `validate` |
+| `token` | `{"text"}` | 模型輸出的 JSON 片段（不做 OpenCC 轉換）；只有圖紙，`LLM_MODE=mock` 或模型無法使用時沒有 |
+| `draft` | `IntakeDraft`（同 `GET /api/v1/intake/{draft_id}`） | 草稿：每個欄位的值、來源（Qwen3-VL／規則／人）、驗證結果、能不能收錄；畫作的欄位全由人在跳出的表單填 |
+| `done` | `{"request_id", "draft_id", "latency_ms": {"read", "total"}, "egress"}` | 完成；`egress` 恆為 0 |
+| `error` | `{"code", "message", "request_id"}` | `INTAKE_TOO_BLURRY`（另帶 `blur`）、`INTAKE_ALREADY_IN_KB`（另帶 `part` 或 `artwork`）、`INTAKE_WRONG_DOMAIN`（另帶 `route`）、`INTAKE_PAGE_NOT_FOUND`、`INTAKE_DOMAIN_UNSUPPORTED`、`IMAGE_NOT_FOUND`；之後不再有其他事件 |
+
+圖紙的模型無法使用（主推論伺服器與本地備援都失敗）不算錯誤：照樣給 `draft`，欄位全空、`extraction.error` 說明原因，由人對照照片填。
+收錄（`POST /api/v1/intake/{draft_id}/commit`，只有主管）不是 SSE：回傳時 `status` 為 `indexing`，背景重建索引完成後 `GET` 會變成 `done`（失敗為 `failed`，寫進去的檔案與版本已還原）。
+
 ## 問答的 `strategy`
 
 `strategy` 可用值：`hybrid`（主架構）、`lora`（選做）、`api_nokb`／`api_kb`（雲端對照組 A1／A2，

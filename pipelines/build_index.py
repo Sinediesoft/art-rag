@@ -4,7 +4,9 @@
 畫作：kb/artworks → data/index/*（另外算色彩分析：colors 欄位、colormaps/、「色彩分析」段落）；
 工廠圖紙：kb/parts → data/index/parts/*
 （另外執行標準 CadQuery 模型，存 STL／STEP 給前端 3D 檢視與 IoU 比對，
-並算出外形尺寸與重量寫進基本資料段落）。縮圖與 STL／STEP 一律是 data/index/ 下的檔案。
+並算出外形尺寸與重量寫進基本資料段落；
+照片建檔的零件沒有標準模型，外形取自圖上標註，見 docs/adr/013）。
+縮圖與 STL／STEP 一律是 data/index/ 下的檔案。
 
 用法：
     python pipelines/build_index.py            # 驗證並重建索引
@@ -48,6 +50,11 @@ def git_commit() -> str:
         return "no-git"
 
 
+def photo_geometry(p: dict) -> dict:
+    """照片建檔的零件沒有標準模型（docs/adr/013）：外形取自圖上標註，體積、重量、面數都沒有。"""
+    return {**p["dimensions_mm"], "volume_mm3": None, "weight_kg": None, "faces": None}
+
+
 async def build_parts(parts: list[dict], out: Path) -> list[dict]:
     """工廠圖紙：執行標準模型（STL／STEP／尺寸）→ 圖紙向量 → 段落向量。"""
     from app.cad.sandbox import run_cad
@@ -56,6 +63,7 @@ async def build_parts(parts: list[dict], out: Path) -> list[dict]:
 
     (out / "thumbs").mkdir(parents=True)
     (out / "gt").mkdir()
+    modeled = [p for p in parts if "cad" in p]
     runs = await asyncio.gather(
         *(
             run_cad(
@@ -63,28 +71,33 @@ async def build_parts(parts: list[dict], out: Path) -> list[dict]:
                 out / "gt" / p["id"],
                 trusted=True,
             )
-            for p in parts
+            for p in modeled
         )
     )
+    run_of = {p["id"]: r for p, r in zip(modeled, runs, strict=True)}
     image_vecs, chunks, items = [], [], []
-    for p, r in zip(parts, runs, strict=True):
-        if not r.ok:
-            raise SystemExit(f"{p['id']} 標準模型執行失敗：{r.error}")
-        job = out / "gt" / p["id"]
-        (job / "model.stl").rename(out / "gt" / f"{p['id']}.stl")
-        (job / "model.step").rename(out / "gt" / f"{p['id']}.step")
-        shutil.rmtree(job)
-        dims = {k: round(v, 3) for k, v in r.data["dims"].items()}
-        volume = r.data["volume"]
-        item = {
-            **p,
-            "geometry": {
-                **dims,
-                "volume_mm3": round(volume, 1),
-                "weight_kg": round(volume * p["density_g_cm3"] / 1e6, 4),
-                "faces": r.data["faces"],
-            },
-        }
+    for p in parts:
+        r = run_of.get(p["id"])
+        if r is None:
+            item = {**p, "geometry": photo_geometry(p)}
+        else:
+            if not r.ok:
+                raise SystemExit(f"{p['id']} 標準模型執行失敗：{r.error}")
+            job = out / "gt" / p["id"]
+            (job / "model.stl").rename(out / "gt" / f"{p['id']}.stl")
+            (job / "model.step").rename(out / "gt" / f"{p['id']}.step")
+            shutil.rmtree(job)
+            dims = {k: round(v, 3) for k, v in r.data["dims"].items()}
+            volume = r.data["volume"]
+            item = {
+                **p,
+                "geometry": {
+                    **dims,
+                    "volume_mm3": round(volume, 1),
+                    "weight_kg": round(volume * p["density_g_cm3"] / 1e6, 4),
+                    "faces": r.data["faces"],
+                },
+            }
         img = load_image(REPO_ROOT / p["drawing"])
         image_vecs.append(embed_image(img))
         # 卡片縮圖只取三視圖區（去掉標題欄與留白），線條才看得清楚
@@ -94,9 +107,10 @@ async def build_parts(parts: list[dict], out: Path) -> list[dict]:
         chunks.extend(build_part_chunks(item))
         items.append(item)
         g = item["geometry"]
+        weight = "照片建檔，沒有標準模型" if g["weight_kg"] is None else f"{g['weight_kg']:.3f} kg"
         print(
             f"  ✓ {p['id']}  {p['name']['zh']}  {g['width']:g}×{g['depth']:g}×{g['height']:g} mm, "
-            f"{g['weight_kg']:.3f} kg"
+            f"{weight}"
         )
     np.save(out / "image_vecs.npy", np.stack(image_vecs).astype(np.float32))
     np.save(out / "chunk_vecs.npy", embed_text([c["text"] for c in chunks]).astype(np.float32))
@@ -121,13 +135,14 @@ def publish_to_db(index_dir: Path) -> bool:
     return True
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    """argv＝None 時讀命令列；後端在行程內重建（照片建檔收錄，docs/adr/013）傳 []。"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true", help="只驗證，不建索引")
     parser.add_argument(
         "--db-only", action="store_true", help="不重算向量，把現有的 data/index/ 寫進資料庫"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.db_only:
         if not get_settings().database_url:

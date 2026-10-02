@@ -72,7 +72,8 @@ def eval_photos(client: httpx.Client, api: str, kb_ids: set[str]) -> dict:
 
 def eval_reconstruction(client: httpx.Client, api: str, parts: list[dict], strategy: str) -> dict:
     rows = []
-    for p in parts:
+    # 照片建檔的零件沒有標準模型（docs/adr/013），算不出 IoU，不列入
+    for p in (p for p in parts if p.get("model_url")):
         body = {"part_id": p["id"], "strategy": strategy}
         events = sse_events(client, f"{api}/cad/reconstruct", body)
         err = next((d for e, d in events if e == "error"), None)

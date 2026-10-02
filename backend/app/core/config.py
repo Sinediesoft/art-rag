@@ -112,6 +112,11 @@ class Settings(BaseSettings):
         return self.data_dir / "uploads"
 
     @property
+    def intake_dir(self) -> Path:
+        """照片建檔的草稿（docs/adr/013）：照片、拉正後的圖紙、欄位；和上傳照片同一個保存期限。"""
+        return self.data_dir / "intake"
+
+    @property
     def frontend_dist(self) -> Path:
         return REPO_ROOT / "frontend" / "dist"
 
@@ -191,6 +196,40 @@ class ImageCompareSpec(BaseModel):
     pair: CompareSpec = CompareSpec(diff="tone", edge_margin_px=10, max_changed_ratio=0.3)
 
 
+class IntakeFieldSpec(BaseModel):
+    """照片建檔的一個欄位：從照片讀（read）或由人填；格式不對就標紅、不能收錄。"""
+
+    label: str
+    hint: str | None = None  # 給模型的位置說明（只有 read 的欄位用）；人填的欄位當輸入提示
+    read: bool = True  # 從照片讀；false＝照片上沒有，由人填
+    required: bool = True
+    kind: Literal["text", "number", "enum", "url", "longtext"] = "text"
+    pattern: str | None = None  # 編號格式（正規表示式，整串比對）
+    min: float | None = None
+    max: float | None = None
+    group: str | None = None  # 表單分區（畫作的跳出表單）
+
+
+class IntakeDomainSpec(BaseModel):
+    id_prefix: str
+    fields: dict[str, IntakeFieldSpec]
+
+
+class IntakeSpec(BaseModel):
+    """照片建檔（docs/adr/013）。不影響索引，改了不用重建。"""
+
+    prompt_version: str = "intake_v1"
+    max_tokens: int = 300
+    # 模糊程度（analysis/page.blur_score，0 清楚～1 模糊）高於這個值請使用者重拍、不送模型；
+    # 圖紙與畫作共用
+    max_blur: float = 0.30
+    # 知識庫圖紙的版面（800×800 三視圖＋170 px 標題欄）；找到的紙張長寬比差太多就請重拍
+    page_size: list[int] = [800, 970]
+    page_aspect_tol: float = 0.08
+    mfg: IntakeDomainSpec | None = None
+    art: IntakeDomainSpec | None = None
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -211,6 +250,7 @@ class ModelsConfig(BaseModel):
     rearrange: RearrangeSpec = RearrangeSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
+    intake: IntakeSpec = IntakeSpec()
 
 
 @lru_cache

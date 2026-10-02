@@ -35,6 +35,7 @@ from app.services import (
     color_service,
     compare_service,
     identity,
+    intake_service,
     memory_guard,
     schedule_service,
     search_service,
@@ -210,7 +211,7 @@ def get_part(part_id: str):
         "drawing_url": summary["drawing_url"],
         "thumb_url": summary["thumb_url"],
         "model_url": summary["model_url"],
-        "step_url": f"/api/v1/parts/{part_id}/model.step",
+        "step_url": f"/api/v1/parts/{part_id}/model.step" if "cad" in p else None,
     }
 
 
@@ -229,10 +230,12 @@ def get_part_drawing(part_id: str, size: str = "full"):
 @router.get("/parts/{part_id}/model.{ext}", response_class=FileResponse, tags=["parts"])
 def get_part_model(part_id: str, ext: str):
     """知識庫零件的標準 3D 模型（由 kb/cad/<id>.py 產生）：stl 給前端 3D 檢視、step 給 CAD 軟體。"""
-    _part_or_404(part_id)
+    p = _part_or_404(part_id)
     if ext not in ("stl", "step"):
         raise AppError("VALIDATION_ERROR", "只提供 stl 或 step", 422)
     path = get_store().parts_dir / "gt" / f"{part_id}.{ext}"
+    if "cad" not in p or not path.is_file():
+        raise AppError("PART_MODEL_NOT_FOUND", f"圖紙 {part_id} 沒有標準 3D 模型（照片建檔）", 404)
     media = "model/stl" if ext == "stl" else "application/step"
     return FileResponse(path, media_type=media, filename=f"{part_id}.{ext}")
 
@@ -277,6 +280,66 @@ async def reconstruct(body: S.ReconstructRequest, request: Request):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------- 照片建檔（docs/adr/013）
+@router.post(
+    "/intake",
+    tags=["intake"],
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE：stage／token／draft／done／error（見 shared/sse_events.md）",
+        }
+    },
+)
+async def create_intake(body: S.IntakeRequest, request: Request):
+    """拍照 → 擋模糊 → 確認知識庫還沒有 → 建檔草稿（任何身分都可以；收錄要主管）。
+
+    圖紙由本地 Qwen3-VL 讀標題欄；畫作不讀照片，欄位由人在表單填。
+    """
+    stream = intake_service.intake_stream(body.image_id, request.state.request_id, body.domain)
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/intake/{draft_id}", response_model=S.IntakeDraft, tags=["intake"])
+def get_intake(draft_id: str):
+    return intake_service.get_draft(draft_id)
+
+
+@router.put("/intake/{draft_id}", response_model=S.IntakeDraft, tags=["intake"])
+def update_intake(draft_id: str, body: S.IntakeUpdate):
+    """人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。"""
+    return intake_service.update_draft(draft_id, body.values)
+
+
+@router.post("/intake/{draft_id}/commit", response_model=S.IntakeDraft, tags=["intake"])
+def commit_intake(draft_id: str, request: Request):
+    """收錄（只有主管）：寫 kb/（圖紙 parts＋drawings、畫作 artworks＋images）、遞增 kb/VERSION，
+    背景重建索引。
+
+    回傳時狀態是 indexing；重建完成後 GET 這份草稿會變成 done（或 failed，已還原）。
+    """
+    return intake_service.commit_draft(
+        draft_id, identity.current(request), request.state.request_id
+    )
+
+
+@router.delete("/intake/{draft_id}", response_model=S.OkResponse, tags=["intake"])
+def discard_intake(draft_id: str):
+    intake_service.discard_draft(draft_id)
+    return S.OkResponse()
+
+
+@router.get("/intake/{draft_id}/{name}", response_class=FileResponse, tags=["intake"])
+def get_intake_file(draft_id: str, name: str):
+    """草稿的原照片（photo.jpg）、要存進知識庫的圖（圖紙 drawing.png、畫作 image.jpg）。"""
+    return FileResponse(intake_service.draft_file(draft_id, name))
 
 
 @router.get("/cad/jobs/{job_id}", response_model=S.CadJobSummary, tags=["cad"])
@@ -506,7 +569,7 @@ def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）
-        # 與影像比對（-align）的評估另有格式
+        # 與影像比對（-align）、照片建檔（-intake）的評估另有格式
         if not p.name.endswith(
             (
                 "-cad.json",
@@ -516,6 +579,7 @@ def eval_runs():
                 "-demo.json",
                 "-route.json",
                 "-align.json",
+                "-intake.json",
             )
         ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))

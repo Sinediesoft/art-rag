@@ -54,8 +54,18 @@ def validate_kb() -> tuple[list[dict], list[str]]:
     return ok, errors
 
 
+def _file_problems(data: dict, check_drawing: bool) -> list[str]:
+    problems = []
+    # 照片建檔的零件沒有標準模型（docs/adr/013）：沒填 cad 就不檢查，schema 會要求 dimensions_mm
+    if "cad" in data and not (REPO_ROOT / data["cad"]).is_file():
+        problems.append(f"找不到標準模型 {data['cad']}")
+    if check_drawing and not (REPO_ROOT / data.get("drawing", "")).is_file():
+        problems.append(f"找不到圖紙 {data.get('drawing')}（請先執行 make drawings）")
+    return problems
+
+
 def validate_parts(check_drawing: bool = True) -> tuple[list[dict], list[str]]:
-    """零件 JSON＋標準 CadQuery 模型＋圖紙。
+    """零件 JSON＋標準 CadQuery 模型（有填才檢查）＋圖紙。
 
     check_drawing=False 給 make drawings 用（圖紙還沒產生）。
     """
@@ -64,15 +74,33 @@ def validate_parts(check_drawing: bool = True) -> tuple[list[dict], list[str]]:
     for path in sorted((REPO_ROOT / "kb" / "parts").glob("*.json")):
         data, problems = _load(path, validator)
         if data is not None:
-            if not (REPO_ROOT / data.get("cad", "")).is_file():
-                problems.append(f"找不到標準模型 {data.get('cad')}")
-            if check_drawing and not (REPO_ROOT / data.get("drawing", "")).is_file():
-                problems.append(f"找不到圖紙 {data.get('drawing')}（請先執行 make drawings）")
+            problems += _file_problems(data, check_drawing)
         if problems:
             errors.extend(f"{path.name}: {p}" for p in problems)
         else:
             ok.append(data)
     return ok, errors
+
+
+def _schema_problems(data: dict, schema: str) -> list[str]:
+    return [
+        f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}"
+        for e in _validator(schema).iter_errors(data)
+    ]
+
+
+def part_problems(data: dict) -> list[str]:
+    """單筆零件 JSON 的 schema 問題（照片建檔收錄前用；不檢查檔案，檔案還沒寫）。"""
+    return _schema_problems(data, "part.schema.json")
+
+
+def artwork_problems(data: dict) -> list[str]:
+    """單筆畫作 JSON 的 schema 與授權問題（同 validate_kb，不檢查圖檔，圖檔還沒寫）。"""
+    problems = _schema_problems(data, "artwork.schema.json")
+    for item in [data.get("image", {}), *data.get("descriptions", [])]:
+        if item.get("license") == "CC BY 4.0" and not item.get("attribution"):
+            problems.append("CC BY 4.0 的項目必須填 attribution（標示文字）")
+    return problems
 
 
 def validate_inventory(part_ids: set[str]) -> tuple[dict | None, list[dict], list[str]]:
@@ -227,7 +255,8 @@ def kb_hash(artworks: list[dict], parts: list[dict] | None = None) -> str:
         h.update((REPO_ROOT / a["image"]["path"]).read_bytes())
     for p in parts or []:
         h.update(json.dumps(p, ensure_ascii=False, sort_keys=True).encode("utf-8"))
-        h.update((REPO_ROOT / p["cad"]).read_bytes())
+        if "cad" in p:
+            h.update((REPO_ROOT / p["cad"]).read_bytes())
         h.update((REPO_ROOT / p["drawing"]).read_bytes())
     return h.hexdigest()[:16]
 

@@ -17,6 +17,16 @@
 | `PART_NOT_FOUND` | 404／SSE `error` | 圖紙 ID 不存在（`/inventory/parts/{id}`：庫存資料庫中沒有這張圖紙） |
 | `CLOUD_CONFIDENTIAL_FORBIDDEN` | 200（SSE `error`） | 工廠圖紙與庫存資料屬機密，不送往任何雲端 API（包含對照組） |
 | `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在或已過期（與上傳照片同為 7 天） |
+| `PART_MODEL_NOT_FOUND` | 404 | 這張圖紙沒有標準 3D 模型（照片建檔的零件，`/parts/{id}/model.stl`、`model.step`；docs/adr/013） |
+| `INTAKE_TOO_BLURRY` | 200（SSE `error`） | 照片建檔：照片太模糊（模糊程度超過 `intake.max_blur`，圖紙與畫作共用），不送模型、不建檔——模型看不清楚時不會留空而是猜，糊的原圖之後也認不出來（docs/adr/013） |
+| `INTAKE_ALREADY_IN_KB` | 200（SSE `error`） | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔 |
+| `INTAKE_WRONG_DOMAIN` | 200（SSE `error`） | 照片建檔：從圖紙頁進來，領域路由卻很確定是畫作（或反過來）；`route` 附上路由結果，前端帶著同一張照片轉到另一邊 |
+| `INTAKE_DOMAIN_UNSUPPORTED` | 200（SSE `error`）／422 | 照片建檔：`shared/models.yaml` 沒有這個領域的 `intake` 設定 |
+| `INTAKE_PAGE_NOT_FOUND` | 200（SSE `error`） | 照片建檔：找不到整張圖紙的四個角或完整的標題欄外框（沒拍完整，或不是知識庫圖紙的版面） |
+| `INTAKE_DRAFT_NOT_FOUND` | 404 | 建檔草稿不存在或已過期（與上傳照片同為 7 天） |
+| `INTAKE_CLOSED` | 409 | 建檔草稿已經收錄或正在收錄，不能修改、捨棄或再收錄 |
+| `INTAKE_INVALID` | 422 | 收錄時還有欄位沒通過驗證，或組出來的零件 JSON 不符 `part.schema.json` |
+| `INTAKE_BUSY` | 409 | 另一張圖紙正在收錄、重建索引（一次只收錄一張） |
 | `SQL_REJECTED` | 200（SSE `error`） | 庫存 Text-to-SQL：模型產生的 SQL 含寫入或管理指令（使用者要求修改資料），執行前攔下、不進修正迴圈；沒有任何資料被修改 |
 | `SQL_FAILED` | 200（SSE `error`） | 庫存 Text-to-SQL：修正 2 次後仍無法產生可執行的 SQL |
 | `INVENTORY_UNAVAILABLE` | 200（SSE `error`） | 庫存資料庫無法建立（`kb/inventory/` 資料有誤，細節見 `/health` 的 `inventory.problems`） |
@@ -28,7 +38,7 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原也會回這個（ADR 011） |
+| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原、照片建檔收錄（只有主管，ADR 013）也會回這個（ADR 011） |
 | `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
 | `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
 | `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |

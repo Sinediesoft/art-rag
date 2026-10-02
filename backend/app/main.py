@@ -27,6 +27,7 @@ from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
 from app.services.cad_service import purge_jobs
+from app.services.intake_service import purge_drafts
 
 
 @asynccontextmanager
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     for path in get_logs_repo().purge_uploads(s.upload_ttl_days):
         (s.uploads_dir / path).unlink(missing_ok=True)
     purge_jobs(s.upload_ttl_days)
+    purge_drafts(s.upload_ttl_days)
     # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動
     try:
         get_inventory_repo().ensure_built()

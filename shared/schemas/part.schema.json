@@ -2,10 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://art-rag.local/schemas/part.schema.json",
   "title": "Part",
-  "description": "工廠機械加工圖知識庫：一個零件一個 JSON 檔（kb/parts/<id>.json），配一支標準 CadQuery 模型（kb/cad/<id>.py）與一張圖紙（kb/drawings/<id>.png，由 make drawings 產生）。共用層 §二，負責：D。示範資料為虛構工廠。",
+  "description": "工廠機械加工圖知識庫：一個零件一個 JSON 檔（kb/parts/<id>.json），配一支標準 CadQuery 模型（kb/cad/<id>.py）與一張圖紙（kb/drawings/<id>.png，由 make drawings 產生）。照片建檔的零件（docs/adr/013）沒有標準模型：不填 cad，改填 dimensions_mm 與 intake，圖紙是拉正後的照片。共用層 §二，負責：D。示範資料為虛構工廠。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "part_no", "drawing_no", "revision", "name", "category", "material", "density_g_cm3", "company", "owner", "confidentiality", "cad", "drawing", "descriptions"],
+  "required": ["id", "part_no", "drawing_no", "revision", "name", "category", "material", "density_g_cm3", "company", "owner", "confidentiality", "drawing", "descriptions"],
+  "if": { "not": { "required": ["cad"] } },
+  "then": { "required": ["dimensions_mm", "intake"] },
   "properties": {
     "id": {
       "type": "string",
@@ -32,8 +34,33 @@
       "enum": ["公開", "內部", "機密"],
       "description": "機密等級；「機密」的圖紙不得送往任何雲端 API（包含對照組）"
     },
-    "cad": { "type": "string", "pattern": "^kb/cad/[a-z]+-[a-z0-9]+\\.py$", "description": "標準 CadQuery 模型，最後把實體指定給變數 solid" },
+    "cad": { "type": "string", "pattern": "^kb/cad/[a-z]+-[a-z0-9]+\\.py$", "description": "標準 CadQuery 模型，最後把實體指定給變數 solid；照片建檔的零件沒有" },
     "drawing": { "type": "string", "pattern": "^kb/drawings/[a-z]+-[a-z0-9]+\\.png$" },
+    "dimensions_mm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "depth", "height"],
+      "description": "外形尺寸（寬、深、高，mm）：沒有標準模型時必填，取自圖上標註、人確認過；有標準模型時由模型計算，不填",
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "depth": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "date", "confirmed_by"],
+      "description": "照片建檔紀錄（docs/adr/013）：哪些欄位是模型讀的、誰確認收錄",
+      "properties": {
+        "method": { "type": "string", "enum": ["photo"] },
+        "date": { "type": "string", "format": "date" },
+        "draft_id": { "type": "string" },
+        "model": { "type": "string", "description": "讀標題欄的模型" },
+        "fields_from_model": { "type": "array", "items": { "type": "string" }, "description": "由模型讀取、人沒有改過的欄位" },
+        "confirmed_by": { "type": "string", "description": "按「收錄」的展示帳號" }
+      }
+    },
     "descriptions": {
       "type": "array",
       "minItems": 1,

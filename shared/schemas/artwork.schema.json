@@ -58,7 +58,20 @@
         }
       }
     },
-    "style_tags": { "type": "array", "items": { "type": "string" } }
+    "style_tags": { "type": "array", "items": { "type": "string" } },
+    "intake": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "date", "confirmed_by"],
+      "description": "照片建檔紀錄（docs/adr/013）：圖檔是拍的照片、資料由人填，誰確認收錄",
+      "properties": {
+        "method": { "type": "string", "enum": ["photo"] },
+        "date": { "type": "string", "format": "date" },
+        "draft_id": { "type": "string" },
+        "generated_description": { "type": "boolean", "description": "介紹段落是系統依欄位寫的「基本資料」" },
+        "confirmed_by": { "type": "string", "description": "按「收錄」的展示帳號" }
+      }
+    }
   },
   "$defs": {
     "license": {

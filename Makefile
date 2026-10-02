@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-align eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -26,6 +26,7 @@ help:
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
+	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
 	@echo "make eval-align  影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、畫作找不同、圖紙找不同、兩張照片互比的偵出率與假差異"
 	@echo "make demo-add    展示用：加入第 4、5 筆畫作（早春圖、睡蓮）與第 7 張圖紙（治具定位板，含庫存與途程）並重建索引"
@@ -161,6 +162,10 @@ eval-color:
 # 影像對位與比對（docs/adr/012）：在程序內執行，不用開後端；照片由 eval/make_align_photos.py 產生（已附在 repo）
 eval-align:
 	$(PY) eval/run_align_eval.py
+
+# 照片建檔（docs/adr/013）：在程序內執行，不用開後端；要有本地生成端（Ollama）。--read-rejected 連被擋下的照片也讀
+eval-intake:
+	$(PY) eval/run_intake_eval.py
 
 # 檢索段落篩選（MIRA 的 Rearrange）開關對照：同一批題目各跑一次，比正確率、引用、段數與延遲
 eval-rearrange:

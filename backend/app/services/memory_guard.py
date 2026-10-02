@@ -11,6 +11,7 @@
 | 3D 重建 | Ortho2CAD（照片另加 Chinese-CLIP；未收錄圖紙讀尺寸另加 Qwen3-VL） |
 | 庫存查詢（Text-to-SQL） | Qwen3-VL |
 | 生產排程 | Timefold（不用任何 AI 模型） |
+| 照片建檔 | Chinese-CLIP、Qwen3-VL（讀標題欄）；收錄後重建索引另用 bge-m3 |
 
 觸發時機：進入流程時檢查一次——把這個流程還要載入的模型算進去，預估超過門檻就先釋放；
 背景每 5 秒再檢查一次（保留最近一次流程的模型）。
@@ -44,6 +45,8 @@ FLOWS: dict[str, str] = {
     "sql": "庫存查詢",
     "schedule": "生產排程",
     "route": "智慧助理路由",
+    "intake": "照片建檔",
+    "intake_index": "照片建檔：重建索引",
     "manual": "手動釋放",
 }
 

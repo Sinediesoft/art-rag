@@ -106,7 +106,10 @@ def build_chunks(a: dict) -> list[dict]:
 
 # ---------------------------------------------------------------- 工廠圖紙
 def part_metadata_text(p: dict) -> str:
-    """零件基本資料＋由標準 3D 模型算出的外形尺寸與重量，組成一段可檢索、可引用的文字。"""
+    """零件基本資料＋由標準 3D 模型算出的外形尺寸與重量，組成一段可檢索、可引用的文字。
+
+    照片建檔的零件（docs/adr/013）沒有標準模型：外形取自圖上標註，不寫體積與重量。
+    """
     g = p["geometry"]
     name = p["name"]["zh"] + (f"（{p['name']['en']}）" if p["name"].get("en") else "")
     text = (
@@ -115,12 +118,15 @@ def part_metadata_text(p: dict) -> str:
     )
     if p.get("surface"):
         text += f"，表面處理：{p['surface']}"
-    text += (
-        f"。外形尺寸 {g['width']:g} × {g['depth']:g} × {g['height']:g} mm（寬 × 深 × 高），"
-        f"依標準 3D 模型計算體積 {g['volume_mm3']:,.0f} mm³，"
-        f"以密度 {p['density_g_cm3']} g/cm³ 估算重量約 {g['weight_kg']:.3f} kg。"
-        f"負責單位：{p['owner']}；機密等級：{p['confidentiality']}。"
-    )
+    text += f"。外形尺寸 {g['width']:g} × {g['depth']:g} × {g['height']:g} mm（寬 × 深 × 高），"
+    if g["volume_mm3"] is None:
+        text += "取自圖上標註（照片建檔，沒有標準 3D 模型，未估算重量）。"
+    else:
+        text += (
+            f"依標準 3D 模型計算體積 {g['volume_mm3']:,.0f} mm³，"
+            f"以密度 {p['density_g_cm3']} g/cm³ 估算重量約 {g['weight_kg']:.3f} kg。"
+        )
+    text += f"負責單位：{p['owner']}；機密等級：{p['confidentiality']}。"
     if p.get("tags"):
         text += "關鍵字：" + "、".join(p["tags"]) + "。"
     return text
@@ -135,7 +141,8 @@ def build_part_chunks(p: dict) -> list[dict]:
             "chunk_id": f"{p['id']}#meta",
             "topic": "基本資料",
             "text": part_metadata_text(p),
-            "source": f"圖紙 {p['drawing_no']} rev.{p['revision']}＋標準 3D 模型",
+            "source": f"圖紙 {p['drawing_no']} rev.{p['revision']}"
+            + ("＋標準 3D 模型" if "cad" in p else "（照片建檔）"),
         }
     ]
     for i, d in enumerate(p["descriptions"]):

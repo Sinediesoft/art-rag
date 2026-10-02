@@ -22,7 +22,7 @@ roles:
   warehouse: {label: 倉管, ops: [stock_adjust, stock_transfer, stock_scrap, stock_status], note: 自己廠區的倉庫}
   sales:     {label: 業務, ops: [so_update], note: 自己負責的客戶}
   planner:   {label: 生管, ops: [wo_create, wo_update_due, wo_cancel, schedule_run, demo_reset], note: 全廠；只能取消自己開的工單}
-  manager:   {label: 主管, ops: [approve, demo_reset], note: 核准所有人的超額申請；不能核准自己的申請}
+  manager:   {label: 主管, ops: [approve, demo_reset, kb_intake], note: 核准所有人的超額申請；不能核准自己的申請；照片建檔的草稿只有主管能收錄（docs/adr/013）}
 
 # 每種操作開放修改的欄位（其他欄位一律不開放，例如訂單的已出貨數量）
 fields:

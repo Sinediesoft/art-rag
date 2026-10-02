@@ -293,12 +293,25 @@ class OutageRequest(BaseModel):
 
 # ---------------------------------------------------------------- 工廠機械加工圖
 class PartGeometry(BaseModel):
+    """有標準模型時由模型計算；照片建檔的零件（docs/adr/013）只有圖上標註的外形，其餘為 null。"""
+
     width: float = Field(description="X 方向外形尺寸（mm）")
     depth: float = Field(description="Y 方向外形尺寸（mm）")
     height: float = Field(description="Z 方向外形尺寸（mm）")
-    volume_mm3: float
-    weight_kg: float = Field(description="標準模型體積 × 材料密度")
-    faces: int
+    volume_mm3: float | None = Field(description="標準模型體積；沒有標準模型為 null")
+    weight_kg: float | None = Field(description="標準模型體積 × 材料密度；沒有標準模型為 null")
+    faces: int | None
+
+
+class PartIntakeInfo(BaseModel):
+    """照片建檔紀錄（part.schema.json 的 intake）。"""
+
+    method: Literal["photo"]
+    date: str
+    draft_id: str | None = None
+    model: str | None = Field(default=None, description="讀標題欄的模型")
+    fields_from_model: list[str] = Field(default=[], description="由模型讀取、人沒有改過的欄位")
+    confirmed_by: str = Field(description="按「收錄」的展示帳號")
 
 
 class PartSummary(BaseModel):
@@ -314,7 +327,8 @@ class PartSummary(BaseModel):
     geometry: PartGeometry
     drawing_url: str
     thumb_url: str
-    model_url: str = Field(description="標準 3D 模型（STL）")
+    model_url: str | None = Field(description="標準 3D 模型（STL）；照片建檔的零件沒有，為 null")
+    intake: bool = Field(default=False, description="照片建檔的零件（docs/adr/013）")
     tags: list[str] = []
 
 
@@ -342,8 +356,9 @@ class PartDetail(BaseModel):
     tags: list[str] = []
     drawing_url: str
     thumb_url: str
-    model_url: str
-    step_url: str
+    model_url: str | None
+    step_url: str | None
+    intake: PartIntakeInfo | None = None
 
 
 class PartListResponse(BaseModel):
@@ -1036,6 +1051,95 @@ class AuditRow(BaseModel):
 class AuditResponse(BaseModel):
     items: list[AuditRow]
     changes: list[dict] = Field(description="最近寫入的異動單")
+
+
+# ---------------------------------------------------------------- 照片建檔（docs/adr/013）
+class IntakeRequest(BaseModel):
+    image_id: str = Field(description="上傳的照片（POST /images）")
+    domain: Literal["mfg", "art"] | None = Field(
+        default=None,
+        description="從哪一邊進來：mfg＝工廠圖紙、art＝畫作；null＝交給領域路由判斷。"
+        "指定了但路由很確定是另一個領域時回 INTAKE_WRONG_DOMAIN",
+    )
+
+
+class IntakeField(BaseModel):
+    key: str
+    label: str
+    value: str | float | None
+    source: Literal["Qwen3-VL", "規則", "人"] | None = Field(
+        description="Qwen3-VL＝從照片讀的；規則＝依知識庫校正或補上的；人＝在確認頁或表單填的"
+    )
+    note: str | None = Field(default=None, description="規則改了什麼")
+    hint: str | None = Field(default=None, description="輸入提示（人填的欄位）")
+    group: str | None = Field(default=None, description="表單分區（畫作的跳出表單）")
+    read: bool = Field(description="從照片讀的欄位；false＝照片上沒有，由人填")
+    required: bool = Field(
+        description="必填；畫作的條件必填（CC BY 4.0 的標示文字、填了介紹的出處）也算"
+    )
+    kind: Literal["text", "number", "enum", "url", "longtext"]
+    options: list[str] = Field(default=[], description="列舉值（kind＝enum）")
+    suggestions: list[str] = Field(default=[], description="知識庫既有零件用過的值")
+    status: Literal["ok", "invalid", "missing", "empty"] = Field(
+        description="invalid、missing 要處理完才能收錄；empty＝選填沒填"
+    )
+    message: str | None = None
+
+
+class IntakeCheck(BaseModel):
+    label: str
+    ok: bool
+    detail: str
+
+
+class IntakeExtraction(BaseModel):
+    model: str | None = Field(description="讀標題欄的模型；沒讀（mock、模型無法使用）為 null")
+    strategy: str | None
+    ms: int | None
+    raw: str | None = Field(description="模型的原始輸出（前 1,000 字）")
+    error: str | None
+    tokens: dict[str, int] | None = None
+
+
+class IntakeCommit(BaseModel):
+    by: str
+    by_label: str
+    at: str
+    kb_version: str = Field(description="收錄後的 kb/VERSION")
+    index_ms: int | None = Field(description="重建索引花的時間；還在重建為 null")
+    error: str | None = Field(description="收錄失敗的原因（寫進去的檔案與版本已還原）")
+
+
+class IntakeDraft(BaseModel):
+    draft_id: str
+    domain: Literal["mfg", "art"]
+    status: Literal["draft", "indexing", "done", "failed"] = Field(
+        description="indexing＝已寫進 kb/、背景重建索引中；failed＝收錄失敗、已還原，可以改了再收錄"
+    )
+    created_at: str
+    updated_at: str | None
+    image_id: str
+    photo_url: str
+    kb_image_url: str = Field(
+        description="要存進知識庫的圖：圖紙是拉正、對齊版面後的圖（kb/drawings），畫作是照片本身（kb/images）"
+    )
+    item_id: str = Field(
+        description="收錄後的 ID：圖紙是預定的編號（收錄時再確認一次）；畫作是「來源代碼－編號」"
+    )
+    fields: list[IntakeField]
+    checks: list[IntakeCheck]
+    extraction: IntakeExtraction = Field(description="讀標題欄的結果；畫作不讀照片，全為 null")
+    can_commit: bool = Field(description="欄位都通過驗證（還要有 kb_intake 權限，只有主管）")
+    blockers: list[str] = Field(description="還沒通過驗證的欄位")
+    commit: IntakeCommit | None
+    item_url: str | None = Field(description="收錄完成後的圖紙頁或畫作頁（前端路由）")
+    egress: dict[str, int]
+
+
+class IntakeUpdate(BaseModel):
+    values: dict[str, str | float | None] = Field(
+        description="要修改的欄位（key → 值，null＝清空）；改過的欄位來源標成「人」"
+    )
 
 
 HealthResponse.model_rebuild()

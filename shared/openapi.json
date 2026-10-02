@@ -944,6 +944,265 @@
         }
       }
     },
+    "/api/v1/intake": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Create Intake",
+        "description": "拍照 → 擋模糊 → 確認知識庫還沒有 → 建檔草稿（任何身分都可以；收錄要主管）。\n\n圖紙由本地 Qwen3-VL 讀標題欄；畫作不讀照片，欄位由人在表單填。",
+        "operationId": "create_intake_api_v1_intake_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：stage／token／draft／done／error（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/intake/{draft_id}": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake",
+        "operationId": "get_intake_api_v1_intake__draft_id__get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Update Intake",
+        "description": "人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。",
+        "operationId": "update_intake_api_v1_intake__draft_id__put",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Discard Intake",
+        "operationId": "discard_intake_api_v1_intake__draft_id__delete",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/intake/{draft_id}/commit": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Commit Intake",
+        "description": "收錄（只有主管）：寫 kb/（圖紙 parts＋drawings、畫作 artworks＋images）、遞增 kb/VERSION，\n背景重建索引。\n\n回傳時狀態是 indexing；重建完成後 GET 這份草稿會變成 done（或 failed，已還原）。",
+        "operationId": "commit_intake_api_v1_intake__draft_id__commit_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/intake/{draft_id}/{name}": {
+      "get": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Get Intake File",
+        "description": "草稿的原照片（photo.jpg）、要存進知識庫的圖（圖紙 drawing.png、畫作 image.jpg）。",
+        "operationId": "get_intake_file_api_v1_intake__draft_id___name__get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/cad/jobs/{job_id}": {
       "get": {
         "tags": [
@@ -4537,6 +4796,518 @@
         ],
         "title": "ImageUploadResponse"
       },
+      "IntakeCheck": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "ok",
+          "detail"
+        ],
+        "title": "IntakeCheck"
+      },
+      "IntakeCommit": {
+        "properties": {
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "by_label": {
+            "type": "string",
+            "title": "By Label"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version",
+            "description": "收錄後的 kb/VERSION"
+          },
+          "index_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ms",
+            "description": "重建索引花的時間；還在重建為 null"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "收錄失敗的原因（寫進去的檔案與版本已還原）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by",
+          "by_label",
+          "at",
+          "kb_version",
+          "index_ms",
+          "error"
+        ],
+        "title": "IntakeCommit"
+      },
+      "IntakeDraft": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "title": "Draft Id"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "mfg",
+              "art"
+            ],
+            "title": "Domain"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "indexing",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "description": "indexing＝已寫進 kb/、背景重建索引中；failed＝收錄失敗、已還原，可以改了再收錄"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "photo_url": {
+            "type": "string",
+            "title": "Photo Url"
+          },
+          "kb_image_url": {
+            "type": "string",
+            "title": "Kb Image Url",
+            "description": "要存進知識庫的圖：圖紙是拉正、對齊版面後的圖（kb/drawings），畫作是照片本身（kb/images）"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id",
+            "description": "收錄後的 ID：圖紙是預定的編號（收錄時再確認一次）；畫作是「來源代碼－編號」"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeField"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/IntakeCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "extraction": {
+            "$ref": "#/components/schemas/IntakeExtraction",
+            "description": "讀標題欄的結果；畫作不讀照片，全為 null"
+          },
+          "can_commit": {
+            "type": "boolean",
+            "title": "Can Commit",
+            "description": "欄位都通過驗證（還要有 kb_intake 權限，只有主管）"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blockers",
+            "description": "還沒通過驗證的欄位"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntakeCommit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "item_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Url",
+            "description": "收錄完成後的圖紙頁或畫作頁（前端路由）"
+          },
+          "egress": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Egress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_id",
+          "domain",
+          "status",
+          "created_at",
+          "updated_at",
+          "image_id",
+          "photo_url",
+          "kb_image_url",
+          "item_id",
+          "fields",
+          "checks",
+          "extraction",
+          "can_commit",
+          "blockers",
+          "commit",
+          "item_url",
+          "egress"
+        ],
+        "title": "IntakeDraft"
+      },
+      "IntakeExtraction": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "讀標題欄的模型；沒讀（mock、模型無法使用）為 null"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy"
+          },
+          "ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ms"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw",
+            "description": "模型的原始輸出（前 1,000 字）"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model",
+          "strategy",
+          "ms",
+          "raw",
+          "error"
+        ],
+        "title": "IntakeExtraction"
+      },
+      "IntakeField": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "Qwen3-VL",
+                  "規則",
+                  "人"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "Qwen3-VL＝從照片讀的；規則＝依知識庫校正或補上的；人＝在確認頁或表單填的"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "規則改了什麼"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint",
+            "description": "輸入提示（人填的欄位）"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group",
+            "description": "表單分區（畫作的跳出表單）"
+          },
+          "read": {
+            "type": "boolean",
+            "title": "Read",
+            "description": "從照片讀的欄位；false＝照片上沒有，由人填"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "description": "必填；畫作的條件必填（CC BY 4.0 的標示文字、填了介紹的出處）也算"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "number",
+              "enum",
+              "url",
+              "longtext"
+            ],
+            "title": "Kind"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options",
+            "description": "列舉值（kind＝enum）",
+            "default": []
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggestions",
+            "description": "知識庫既有零件用過的值",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "invalid",
+              "missing",
+              "empty"
+            ],
+            "title": "Status",
+            "description": "invalid、missing 要處理完才能收錄；empty＝選填沒填"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "value",
+          "source",
+          "read",
+          "required",
+          "kind",
+          "status"
+        ],
+        "title": "IntakeField"
+      },
+      "IntakeRequest": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id",
+            "description": "上傳的照片（POST /images）"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "mfg",
+                  "art"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "從哪一邊進來：mfg＝工廠圖紙、art＝畫作；null＝交給領域路由判斷。指定了但路由很確定是另一個領域時回 INTAKE_WRONG_DOMAIN"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id"
+        ],
+        "title": "IntakeRequest"
+      },
+      "IntakeUpdate": {
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values",
+            "description": "要修改的欄位（key → 值，null＝清空）；改過的欄位來源標成「人」"
+          }
+        },
+        "type": "object",
+        "required": [
+          "values"
+        ],
+        "title": "IntakeUpdate"
+      },
       "InventoryAskRequest": {
         "properties": {
           "question": {
@@ -5452,12 +6223,36 @@
             "title": "Thumb Url"
           },
           "model_url": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Model Url"
           },
           "step_url": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Step Url"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartIntakeInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -5500,16 +6295,38 @@
             "description": "Z 方向外形尺寸（mm）"
           },
           "volume_mm3": {
-            "type": "number",
-            "title": "Volume Mm3"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Mm3",
+            "description": "標準模型體積；沒有標準模型為 null"
           },
           "weight_kg": {
-            "type": "number",
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Weight Kg",
-            "description": "標準模型體積 × 材料密度"
+            "description": "標準模型體積 × 材料密度；沒有標準模型為 null"
           },
           "faces": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Faces"
           }
         },
@@ -5522,7 +6339,66 @@
           "weight_kg",
           "faces"
         ],
-        "title": "PartGeometry"
+        "title": "PartGeometry",
+        "description": "有標準模型時由模型計算；照片建檔的零件（docs/adr/013）只有圖上標註的外形，其餘為 null。"
+      },
+      "PartIntakeInfo": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "const": "photo",
+            "title": "Method"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "讀標題欄的模型"
+          },
+          "fields_from_model": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields From Model",
+            "description": "由模型讀取、人沒有改過的欄位",
+            "default": []
+          },
+          "confirmed_by": {
+            "type": "string",
+            "title": "Confirmed By",
+            "description": "按「收錄」的展示帳號"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "date",
+          "confirmed_by"
+        ],
+        "title": "PartIntakeInfo",
+        "description": "照片建檔紀錄（part.schema.json 的 intake）。"
       },
       "PartInventory": {
         "properties": {
@@ -5956,9 +6832,22 @@
             "title": "Thumb Url"
           },
           "model_url": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Model Url",
-            "description": "標準 3D 模型（STL）"
+            "description": "標準 3D 模型（STL）；照片建檔的零件沒有，為 null"
+          },
+          "intake": {
+            "type": "boolean",
+            "title": "Intake",
+            "description": "照片建檔的零件（docs/adr/013）",
+            "default": false
           },
           "tags": {
             "items": {
