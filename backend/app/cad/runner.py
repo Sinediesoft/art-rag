@@ -3,15 +3,20 @@
 stdin 收到工作 JSON → 以受限的內建函式執行程式碼 → 取出變數 solid →
 （選擇性）依圖紙標註尺寸等比縮放 → 輸出 STL、STEP、回投影三視圖，與標準模型比 IoU。
 結果寫到 out_dir/result.json；任何例外都寫成 {"ok": false, "error": ...}。
+Windows 沒有 resource 模組：只執行知識庫自己的標準模型（trusted），模型產生的程式碼一律拒絕。
 """
 
 import builtins
 import json
-import resource
 import sys
 import time
 import traceback
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # Windows 沒有：只有知識庫自己的標準模型能在這裡跑（見 sandbox.run_cad）
+    resource = None
 
 SAFE_BUILTINS = [
     "abs", "all", "any", "bool", "dict", "enumerate", "filter", "float", "int", "isinstance",
@@ -28,7 +33,13 @@ def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
     return __import__(name, globals, locals, fromlist, level)
 
 
-def _limit(cpu_s: int) -> None:
+def _limit(cpu_s: int, trusted: bool) -> None:
+    if resource is None:
+        if not trusted:
+            raise RuntimeError(
+                "這個平台沒有 resource 模組，限制不了 CPU 與檔案大小，不執行模型產生的程式碼"
+            )
+        return
     resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s + 5))
     resource.setrlimit(resource.RLIMIT_FSIZE, (200 * 1024 * 1024, 200 * 1024 * 1024))
 
@@ -57,7 +68,7 @@ def main() -> None:
     result: dict = {"ok": False, "error": None}
     t0 = time.perf_counter()
     try:
-        _limit(job.get("cpu_limit_s", 60))
+        _limit(job.get("cpu_limit_s", 60), bool(job.get("trusted")))
         import cadquery as cq
 
         from app.cad.drawing import render_ortho

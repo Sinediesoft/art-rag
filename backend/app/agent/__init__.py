@@ -1,4 +1,4 @@
-"""智慧助理（統一入口）：System 1 判斷意圖與信心，System 2 交給既有的本地模組執行（docs/adr/007）。
+"""智慧助理（統一入口）：System 1 判斷意圖與信心，System 2 交給既有的本地模組執行（docs/adr/011）。
 
 - entities：本機前處理，找出零件、倉庫、客戶、畫作、單號，送 Jev 前換成代號
 - jev：TypeSafe Jev（雲端 System 1，只收代號化文字）

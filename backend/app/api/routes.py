@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.agent import jev
 from app.api import schemas as S
@@ -31,6 +32,7 @@ from app.services import (
     cad_service,
     change_service,
     chat_service,
+    color_service,
     identity,
     memory_guard,
     schedule_service,
@@ -65,6 +67,16 @@ def get_image(image_id: str):
     if not path:
         raise AppError("IMAGE_NOT_FOUND", "找不到這張照片", 404)
     return FileResponse(get_settings().uploads_dir / path, media_type="image/jpeg")
+
+
+@router.get("/images/{image_id}/colors", response_model=S.ColorAnalysis, tags=["images"])
+def get_photo_colors(image_id: str):
+    return color_service.photo_colors(image_id)
+
+
+@router.get("/images/{image_id}/colormap.png", response_class=Response, tags=["images"])
+def get_photo_colormap(image_id: str):
+    return Response(color_service.photo_colormap(image_id), media_type="image/png")
 
 
 @router.post("/search/image", response_model=S.ImageSearchResponse, tags=["search"])
@@ -108,6 +120,20 @@ def get_artwork_image(artwork_id: str, size: str = "full"):
     return FileResponse(path, headers={"Cache-Control": "public, max-age=3600"})
 
 
+@router.get("/artworks/{artwork_id}/colors", response_model=S.ColorAnalysis, tags=["artworks"])
+def get_artwork_colors(artwork_id: str):
+    return color_service.artwork_colors(artwork_id)
+
+
+@router.get("/artworks/{artwork_id}/colormap.png", response_class=FileResponse, tags=["artworks"])
+def get_artwork_colormap(artwork_id: str):
+    return FileResponse(
+        color_service.artwork_colormap_path(artwork_id),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
 @router.post(
     "/chat",
     tags=["chat"],
@@ -129,6 +155,7 @@ async def chat(body: S.ChatRequest, request: Request):
         use_retrieval=body.use_retrieval,
         allow_fallback=body.allow_fallback,
         part_id=body.part_id,
+        rearrange=body.rearrange,
     )
     return StreamingResponse(
         stream,
@@ -193,6 +220,12 @@ def get_part_model(part_id: str, ext: str):
 @router.post("/search/drawing", response_model=S.DrawingSearchResponse, tags=["search"])
 def search_drawing(body: S.DrawingSearchRequest):
     return search_service.identify_drawing(body.image_id, body.top_k)
+
+
+@router.post("/search/any", response_model=S.AnySearchResponse, tags=["search"])
+def search_any(body: S.ImageSearchRequest):
+    """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。"""
+    return search_service.identify_any(body.image_id, body.top_k)
 
 
 @router.get("/search/parts", response_model=S.PartTextSearchResponse, tags=["search"])
@@ -452,7 +485,10 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        if not p.name.endswith(("-cad.json", "-sql.json", "-demo.json", "-route.json")):
+        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試與智慧助理路由（-route）的評估另有格式
+        if not p.name.endswith(
+            ("-cad.json", "-router.json", "-sql.json", "-color.json", "-demo.json", "-route.json")
+        ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
 
@@ -544,9 +580,12 @@ async def health():
             detail="已啟用" if s.lora_enabled else "選做：插槽已保留，未啟用",
         ),
     }
+    logs = get_logs_repo()
+    # PostgreSQL 容器停了也要回得出狀態頁：ping 放到執行緒（最多等 5 秒，不卡住其他請求），
+    # 失敗就不查最近紀錄
+    db_ok = await run_in_threadpool(logs.ping)
     inv = get_inventory_repo()
     inv_ok = inv.ping()
-    db_ok = get_logs_repo().ping()
     scheduler = await schedule_service.engine_status()
     memory = await asyncio.to_thread(memory_guard.guard.status)
     return S.HealthResponse(
@@ -562,19 +601,19 @@ async def health():
         allow_cloud=s.allow_cloud,
         outage_simulated=providers.OUTAGE["enabled"],
         demo_controls=s.demo_controls,
-        recent_chats=get_logs_repo().recent_chats(10),
-        recent_cad=get_logs_repo().recent_cad(10),
+        recent_chats=logs.recent_chats(10) if db_ok else [],
+        recent_cad=logs.recent_cad(10) if db_ok else [],
         inventory={
             "ok": inv_ok,
             "as_of": inv.as_of,
             "tables": inv.manifest.get("tables", {}),
             "problems": inv.problems,
         },
-        recent_sql=get_logs_repo().recent_sql(10),
+        recent_sql=logs.recent_sql(10) if db_ok else [],
         scheduler=scheduler,
         memory=memory,
         system1=_system1_status(),
-        recent_routes=get_logs_repo().recent_routes(10),
+        recent_routes=logs.recent_routes(10) if db_ok else [],
     )
 
 
@@ -601,7 +640,7 @@ def simulate_outage(body: S.OutageRequest):
     return S.OkResponse()
 
 
-# ---------------------------------------------------------------- 智慧助理（docs/adr/007）
+# ---------------------------------------------------------------- 智慧助理（docs/adr/011）
 def _accounts(account: identity.Account) -> dict:
     return {
         "current": account.public(),

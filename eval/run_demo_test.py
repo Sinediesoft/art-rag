@@ -139,7 +139,7 @@ def main() -> int:
     print(f"  {'●' if h['scheduler']['available'] else '○'} 生產排程：{h['scheduler']['detail']}")
 
     def as_account(account_id: str) -> None:
-        """展示身分（docs/adr/007）：開立工單、排程只有生管可以；急件要主管核准。"""
+        """展示身分（docs/adr/011）：開立工單、排程只有生管可以；急件要主管核准。"""
         client.post("/api/v1/auth/switch", json={"account_id": account_id}).raise_for_status()
 
     as_account("planner")

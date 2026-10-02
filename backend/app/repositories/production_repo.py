@@ -3,7 +3,7 @@
 - 使用者在圖紙頁開立的工單（既有工單在 kb/inventory 的 JSON，是唯讀的示範資料）
 - 每次排程的結果（schedule_runs）與各工序的機台、起訖（schedule_ops）；
   最新一次完成的排程就是「目前排程」
-- 智慧助理的修改資料（docs/adr/007）：已寫入的異動（data_changes，盤點 IC-、調撥 TR-、報廢 SC-…）、
+- 智慧助理的修改資料（docs/adr/011）：已寫入的異動（data_changes，盤點 IC-、調撥 TR-、報廢 SC-…）、
   超額送主管的待核准單（approvals，AP-）與稽核紀錄（audit_log，拒絕也記）
 
 這個檔案是寫入端；Text-to-SQL 查的工廠資料庫（inventory.sqlite3）在建庫時讀這裡的資料，

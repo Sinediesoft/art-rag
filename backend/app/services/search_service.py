@@ -10,6 +10,7 @@ from app.core.errors import AppError
 from app.rag import verify
 from app.rag.embedders import embed_image, embed_text, embed_text_clip
 from app.rag.preprocess import load_image
+from app.rag.router import route
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services.memory_guard import guarded
@@ -38,13 +39,20 @@ def load_upload(image_id: str) -> bytes:
 
 
 @guarded("search_image", {"clip"})
-def identify(image_id: str, top_k: int | None = None) -> dict:
-    """兩階段辨識：Chinese-CLIP 粗篩 → 前 N 名做 ORB 幾何驗證。"""
+def identify(
+    image_id: str,
+    top_k: int | None = None,
+    img: Image.Image | None = None,
+    vec: np.ndarray | None = None,
+) -> dict:
+    """兩階段辨識：Chinese-CLIP 粗篩 → 前 N 名做 ORB 幾何驗證。
+
+    img／vec 是領域路由已經算好的照片與 CLIP 向量，傳進來就不重算。"""
     cfg = get_models_config().retrieval
     k = top_k or int(cfg["top_k_search"])
     t0 = time.perf_counter()
-    img = load_image(load_upload(image_id))
-    hits = get_store().search_images(embed_image(img), k)
+    img = img or load_image(load_upload(image_id))
+    hits = get_store().search_images(embed_image(img) if vec is None else vec, k)
 
     threshold = float(cfg["image_threshold"])
     min_inliers = int(cfg["verify_min_inliers"])
@@ -89,6 +97,9 @@ def search_text(q: str, top_k: int | None = None) -> dict:
     chunk_sims = store.chunk_vecs @ embed_text([q])[0]
     text_best: dict[str, float] = {}
     for c, s in zip(store.chunks, chunk_sims, strict=True):
+        # 色彩段落只給問答用：依色彩找畫不在範圍內（ADR 010），不讓它影響以文搜圖的排名
+        if c["chunk_id"].endswith("#color"):
+            continue
         text_best[c["artwork_id"]] = max(text_best.get(c["artwork_id"], -1.0), float(s))
 
     ids = [a["id"] for a in store.artworks]
@@ -141,7 +152,10 @@ def _drawing_path(p: dict):
 
 @guarded("search_image", {"clip"})
 def identify_drawing(
-    image_id: str, top_k: int | None = None, img: Image.Image | None = None
+    image_id: str,
+    top_k: int | None = None,
+    img: Image.Image | None = None,
+    vec: np.ndarray | None = None,
 ) -> dict:
     """圖紙辨識三道關：Chinese-CLIP 粗篩 → ORB 幾何驗證（遮掉固定版面、排除退化 homography）
     → 拉正後比對線條重合度。三道都過才算辨識成功。"""
@@ -150,7 +164,8 @@ def identify_drawing(
     t0 = time.perf_counter()
     img = img or load_image(load_upload(image_id))
     mfg = get_store().mfg
-    hits = mfg.search_images(embed_image(img), max(k, int(cfg["verify_top_n"])))
+    qvec = embed_image(img) if vec is None else vec
+    hits = mfg.search_images(qvec, max(k, int(cfg["verify_top_n"])))
     threshold, min_inliers = float(cfg["image_threshold"]), int(cfg["verify_min_inliers"])
     min_overlap = float(cfg["verify_min_overlap"])
     query = verify.features(img)
@@ -184,6 +199,25 @@ def identify_drawing(
         "best_part_id": results[0]["part"]["id"] if matched else None,
         "latency_ms": round((time.perf_counter() - t0) * 1000),
         "results": results[:k],
+    }
+
+
+@guarded("search_image", {"clip"})
+def identify_any(image_id: str, top_k: int | None = None) -> dict:
+    """不指定領域的以圖搜圖：領域路由先判斷是畫作還是工廠圖紙，只跑該領域的辨識。
+    照片與 CLIP 向量只算一次，路由與辨識共用。"""
+    t0 = time.perf_counter()
+    img = load_image(load_upload(image_id))
+    vec = embed_image(img)
+    r = route(vec)
+    art = identify(image_id, top_k, img, vec) if r.domain == "art" else None
+    mfg = identify_drawing(image_id, top_k, img, vec) if r.domain == "mfg" else None
+    return {
+        "query_image_id": image_id,
+        "route": r.summary(),
+        "artwork_result": art,
+        "drawing_result": mfg,
+        "latency_ms": round((time.perf_counter() - t0) * 1000),
     }
 
 

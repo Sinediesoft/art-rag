@@ -33,6 +33,7 @@ export function HomePage() {
         </h1>
         <p className="mt-2 max-w-xl text-ink-soft">
           系統先辨識是哪一幅畫，再從畫作知識庫檢索資料，以繁體中文回答，每一句都標註出處。
+          拍到的是工廠圖紙也沒關係，會自動判斷並改用圖紙辨識。
         </p>
         <div className="mt-5 max-w-md">
           <ImageUploader onUploaded={(id) => navigate(`/search?image=${id}`)} />

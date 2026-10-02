@@ -1,8 +1,9 @@
 """智慧助理（統一入口）的路由：System 1 判斷意圖與信心 → 信心閘門 → 告訴前端交給哪個 System 2 模組。
 
-流程（docs/adr/007 主流程圖）：
+流程（docs/adr/011 主流程圖）：
 1. 本機前處理：帶入目前身分；找出零件、倉庫、客戶、畫作、單號並換成代號
-2. 有附照片：本機 Chinese-CLIP 辨識是畫作還是圖紙（照片不送 Jev）；只有照片沒打字就不呼叫 Jev
+2. 有附照片：本機領域路由（Chinese-CLIP，docs/adr/007）判斷是畫作還是圖紙，再辨識是哪一件
+   （照片不送 Jev）；只有照片沒打字就不呼叫 Jev
 3. System 1：有金鑰就問 Jev（只送代號化文字，記錄外送位元組）；沒金鑰或失敗改走本地路由
 4. 信心閘門：唯讀直接執行、耗時先確認、修改進入修改資料流程、不確定就出澄清按鈕
 5. 通知記憶體管理預估要用的模型；寫路由紀錄（eval-route 也用同一個端點）
@@ -28,16 +29,20 @@ PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 
 
 def _identify_photo(image_id: str) -> dict:
-    """照片是畫作還是圖紙：兩種辨識都跑，通過驗證的那一個；都沒過就是無法辨識。"""
-    art = search_service.identify(image_id)
-    if art["matched"]:
+    """照片是畫作還是圖紙：和以圖搜圖、問答同一個領域路由（docs/adr/007），只跑該領域的辨識。
+    路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。"""
+    found = search_service.identify_any(image_id)
+    if found["route"]["domain"] == "art":
+        art = found["artwork_result"]
+        if not art["matched"]:
+            return {"kind": "unknown", "id": None, "label": "知識庫中沒有這幅畫"}
         a = get_store().get_artwork(art["best_artwork_id"])
         return {"kind": "art", "id": a["id"], "label": a["title"]["zh"]}
-    drawing = search_service.identify_drawing(image_id)
-    if drawing["matched"]:
-        p = get_store().get_part(drawing["best_part_id"])
-        return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"]}
-    return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張照片的畫作或圖紙"}
+    drawing = found["drawing_result"]
+    if not drawing["matched"]:
+        return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張圖紙"}
+    p = get_store().get_part(drawing["best_part_id"])
+    return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"]}
 
 
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:

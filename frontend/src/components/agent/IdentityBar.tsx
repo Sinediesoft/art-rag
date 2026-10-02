@@ -1,8 +1,7 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type Account } from "../../api/client";
-import { useAccounts } from "../../api/hooks";
+import { type Account } from "../../api/client";
+import { useAccounts, useSwitchAccount } from "../../api/hooks";
 
 const ROLE_STYLE: Record<string, string> = {
   guest: "bg-paper-deep text-ink-soft",
@@ -27,7 +26,7 @@ export function scopeText(a: Account) {
  * 同一句話換個身分就會被拒絕——權限由後端判定，模型決定不了。
  */
 export function IdentityBar() {
-  const qc = useQueryClient();
+  const switchAccount = useSwitchAccount();
   const { data } = useAccounts();
   const [busy, setBusy] = useState(false);
   if (!data) return null;
@@ -36,8 +35,7 @@ export function IdentityBar() {
   const change = async (id: string) => {
     setBusy(true);
     try {
-      await api.switchAccount(id);
-      await qc.invalidateQueries();
+      await switchAccount(id);
     } finally {
       setBusy(false);
     }

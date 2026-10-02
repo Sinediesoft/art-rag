@@ -1,8 +1,7 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, type RouteResponse } from "../api/client";
-import { useAccounts, useHealth, usePartTextSearch, useTextSearch } from "../api/hooks";
+import { useAccounts, useHealth, usePartTextSearch, useSwitchAccount, useTextSearch } from "../api/hooks";
 import { ChangeCard } from "../components/agent/ChangeCard";
 import { RouteCard } from "../components/agent/RouteCard";
 import { ChatAnswer } from "../components/ChatAnswer";
@@ -49,7 +48,7 @@ interface Turn {
 }
 
 export function AssistantPage() {
-  const qc = useQueryClient();
+  const switchAccount = useSwitchAccount();
   const navigate = useNavigate();
   const [input, setInput] = useState("");
   const [imageId, setImageId] = useState<string | null>(null);
@@ -68,8 +67,7 @@ export function AssistantPage() {
 
   const runScript = async (step: (typeof SCRIPT)[number]) => {
     if (accounts?.current.id !== step.account) {
-      await api.switchAccount(step.account);
-      await qc.invalidateQueries();
+      await switchAccount(step.account);
     }
     if (step.to) navigate(step.to);
     else ask(step.q, null);

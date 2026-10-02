@@ -4,6 +4,7 @@ import type { components } from "./schema";
 export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
 export type ArtworkDetail = Schemas["ArtworkDetail"];
+export type ColorAnalysis = Schemas["ColorAnalysis"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
 export type HealthResponse = Schemas["HealthResponse"];
@@ -11,6 +12,8 @@ export type EvalRunsResponse = Schemas["EvalRunsResponse"];
 export type PartSummary = Schemas["PartSummary"];
 export type PartDetail = Schemas["PartDetail"];
 export type DrawingSearchResponse = Schemas["DrawingSearchResponse"];
+export type AnySearchResponse = Schemas["AnySearchResponse"];
+export type RouteInfo = Schemas["RouteInfo"];
 export type PartTextSearchResponse = Schemas["PartTextSearchResponse"];
 export type ReconstructRequest = Schemas["ReconstructRequest"];
 export type CadStrategy = NonNullable<ReconstructRequest["strategy"]>;
@@ -106,10 +109,17 @@ export const api = {
   uploadedImageUrl: (imageId: string) => `${API_BASE}/api/v1/images/${imageId}`,
   searchImage: (imageId: string) =>
     request<ImageSearchResponse>("/search/image", json({ image_id: imageId })),
+  /** 不指定領域：後端先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識 */
+  searchAny: (imageId: string) =>
+    request<AnySearchResponse>("/search/any", json({ image_id: imageId })),
   searchText: (q: string) =>
     request<TextSearchResponse>(`/search/text?q=${encodeURIComponent(q)}`),
   listArtworks: () => request<Schemas["ArtworkListResponse"]>("/artworks"),
   getArtwork: (id: string) => request<ArtworkDetail>(`/artworks/${encodeURIComponent(id)}`),
+  /** 色彩分析（docs/adr/010）：知識庫畫作讀索引算好的結果，上傳照片即時計算 */
+  artworkColors: (id: string) => request<ColorAnalysis>(`/artworks/${encodeURIComponent(id)}/colors`),
+  photoColors: (imageId: string) =>
+    request<ColorAnalysis>(`/images/${encodeURIComponent(imageId)}/colors`),
   health: () => request<HealthResponse>("/health"),
   evalRuns: () => request<EvalRunsResponse>("/eval/runs"),
   feedback: (body: Schemas["FeedbackRequest"]) => request<Schemas["OkResponse"]>("/feedback", json(body)),

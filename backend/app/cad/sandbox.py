@@ -3,13 +3,15 @@
 模型輸出的是 Python 程式碼，不能直接 exec。三層防護：
 1. AST 白名單（這支）：只准 import cadquery／math；不准底線開頭的屬性、eval/open 等內建函式、
    CadQuery 的匯出入（exporters、importers、export*）與底層 OCP 物件，也不准 class／global／with
-2. 子行程（runner.py）：只給安全的內建函式、限制 CPU 時間與輸出檔大小，不帶任何環境變數與金鑰
+2. 子行程（runner.py）：只給安全的內建函式、限制 CPU 時間與輸出檔大小，不帶任何環境變數與金鑰；
+   限制不了的平台（Windows 沒有 resource 模組）只執行知識庫自己的標準模型
 3. macOS 再包一層 sandbox-exec：禁止網路、只准寫入這次工作的暫存目錄
 逾時直接砍掉子行程。
 """
 
 import ast
 import asyncio
+import importlib.util
 import json
 import os
 import re
@@ -19,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+# 子行程能不能限制 CPU 時間與輸出檔大小：Windows 沒有 resource 模組
+LIMITS_AVAILABLE = importlib.util.find_spec("resource") is not None
 ALLOWED_MODULES = {"cadquery", "math"}
 FORBIDDEN_NAMES = {
     "__import__", "eval", "exec", "compile", "open", "input", "globals", "locals", "vars",
@@ -118,9 +122,17 @@ async def run_cad(
 ) -> RunResult:
     """在子行程執行 CadQuery 程式碼，輸出 model.stl／.step、reproj.png、result.json 到 job_dir。
 
-    trusted=True 只給知識庫自己的標準模型（kb/cad/*.py）用，仍走同一個子行程與限制。
+    trusted=True 只給知識庫自己的標準模型（kb/cad/*.py）用，仍走同一個子行程。沒有 resource 模組的
+    平台（Windows）上，子行程沒有 CPU 時間與檔案大小限制，只剩這裡的逾時（timeout_s + 15 秒）。
     """
     if not trusted:
+        if not LIMITS_AVAILABLE:
+            return RunResult(
+                False,
+                "這台電腦（Windows）限制不了子行程的 CPU 時間與檔案大小，不執行模型產生的程式碼；"
+                "3D 重建請在 macOS、Linux 或 WSL 執行",
+                {},
+            )
         try:
             check_code(code)
         except UnsafeCode as e:
@@ -133,6 +145,7 @@ async def run_cad(
         "scale_to": scale_to,
         "gt_step": str(gt_step.resolve()) if gt_step else None,
         "cpu_limit_s": int(timeout_s),
+        "trusted": trusted,
     }
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -141,6 +154,11 @@ async def run_cad(
         "HOME": str(job_dir.resolve()),
         "TMPDIR": str(job_dir.resolve()),
     }
+    if sys.platform == "win32":
+        # Windows 的 Python 用 USERPROFILE 找家目錄（不看 HOME），少了會報
+        # 「Could not determine home directory」；暫存檔比照 TMPDIR 留在工作目錄
+        work = str(job_dir.resolve())
+        env |= {"USERPROFILE": work, "TEMP": work, "TMP": work}
     proc = await asyncio.create_subprocess_exec(
         *_sandbox_prefix(job_dir),
         sys.executable,

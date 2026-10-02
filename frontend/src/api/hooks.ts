@@ -1,15 +1,41 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "./client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, type DrawingSearchResponse, type ImageSearchResponse } from "./client";
 
 export const useArtworks = () => useQuery({ queryKey: ["artworks"], queryFn: api.listArtworks });
 
 export const useArtwork = (id: string | undefined) =>
   useQuery({ queryKey: ["artwork", id], queryFn: () => api.getArtwork(id!), enabled: !!id });
 
+/** 色彩分析結果固定（同一張圖每次算出來都一樣），不必重抓 */
+export const useArtworkColors = (id: string | undefined) =>
+  useQuery({
+    queryKey: ["artwork-colors", id],
+    queryFn: () => api.artworkColors(id!),
+    enabled: !!id,
+    staleTime: Infinity,
+  });
+
+export const usePhotoColors = (imageId: string | null) =>
+  useQuery({
+    queryKey: ["photo-colors", imageId],
+    queryFn: () => api.photoColors(imageId!),
+    enabled: !!imageId,
+    staleTime: Infinity,
+  });
+
 export const useImageSearch = (imageId: string | null) =>
   useQuery({
     queryKey: ["search-image", imageId],
     queryFn: () => api.searchImage(imageId!),
+    enabled: !!imageId,
+    staleTime: Infinity,
+  });
+
+/** 領域路由＋辨識；畫作頁與圖紙頁共用同一個快取，被轉到另一頁時不會重算 */
+export const useAnySearch = (imageId: string | null) =>
+  useQuery({
+    queryKey: ["search-any", imageId],
+    queryFn: () => api.searchAny(imageId!),
     enabled: !!imageId,
     staleTime: Infinity,
   });
@@ -40,6 +66,34 @@ export const useDrawingSearch = (imageId: string | null) =>
     enabled: !!imageId,
     staleTime: Infinity,
   });
+
+const SEARCH_PAGE = { art: "/search", mfg: "/drawings/search" } as const;
+type DomainResult = { art: ImageSearchResponse; mfg: DrawingSearchResponse };
+
+/**
+ * 以圖搜圖（畫作頁、圖紙頁共用）：預設先經過領域路由；使用者在路由提示按「改用…辨識」
+ * （網址帶 domain=）時 forced，直接做這個領域的辨識。
+ * 路由判成另一個領域時 redirectTo 是那一頁的網址（結果已在 search-any 快取裡，轉過去不會重算）。
+ */
+export function useRoutedSearch<D extends keyof DomainResult>(domain: D, imageId: string, forced: boolean) {
+  const routed = useAnySearch(forced ? null : imageId);
+  const art = useImageSearch(forced && domain === "art" ? imageId : null);
+  const mfg = useDrawingSearch(forced && domain === "mfg" ? imageId : null);
+  const direct = domain === "art" ? art : mfg;
+  const { isLoading, error } = forced ? direct : routed;
+  const route = forced ? undefined : routed.data?.route;
+  const fromRoute = domain === "art" ? routed.data?.artwork_result : routed.data?.drawing_result;
+  const data = (forced ? direct.data : (fromRoute ?? undefined)) as DomainResult[D] | undefined;
+  const other = route && route.domain !== domain ? route.domain : null;
+  return {
+    data,
+    route,
+    isLoading,
+    error,
+    latencyMs: routed.data?.latency_ms ?? data?.latency_ms,
+    redirectTo: other ? `${SEARCH_PAGE[other]}?image=${imageId}&routed=1` : null,
+  };
+}
 
 export const usePartTextSearch = (q: string | null) =>
   useQuery({
@@ -80,6 +134,18 @@ export const usePartPlan = (id: string | undefined) =>
 // ---- 智慧助理（身分、核准、稽核）
 export const useAccounts = () =>
   useQuery({ queryKey: ["accounts"], queryFn: api.accounts, refetchInterval: 10_000 });
+
+/** 和身分無關、重算又慢（CLIP＋ORB 辨識、色彩分析）的查詢：切換身分時不重抓 */
+const IDENTITY_FREE = new Set(["search-image", "search-any", "search-drawing", "photo-colors", "artwork-colors"]);
+
+/** 切換展示身分，其他查詢（帳號、待核准、庫存、排程…）全部重抓 */
+export function useSwitchAccount() {
+  const qc = useQueryClient();
+  return async (accountId: string) => {
+    await api.switchAccount(accountId);
+    await qc.invalidateQueries({ predicate: (q) => !IDENTITY_FREE.has(String(q.queryKey[0])) });
+  };
+}
 
 export const useApprovals = () =>
   useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });

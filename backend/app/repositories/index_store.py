@@ -1,10 +1,11 @@
 """向量索引存取層。
 
-demo 版把索引存成 data/index/ 下的檔案（numpy + JSON），介面照正式版設計：
-之後換成 PostgreSQL + pgvector 時只改這一層，services 與 rag 不動。
+兩種存放方式，介面相同，services 與 rag 不必知道是哪一種（docs/adr/009）：
+- .env 設了 DATABASE_URL：PostgreSQL + pgvector（Docker），見 pg_index_store.py
+- 留空：data/index/ 下的檔案（numpy + JSON），給沒有 Docker 的電腦
 
 兩個領域各一個 Collection：畫作（data/index/*）與工廠圖紙（data/index/parts/*），
-共用同一份 manifest，一起建、一起換上。
+共用同一份 manifest，一起建、一起換上。縮圖與標準模型的 STL／STEP 兩種方式都放在 data/index/。
 """
 
 import json
@@ -66,10 +67,12 @@ class Collection:
 
 
 class IndexStore:
+    """檔案版。PostgreSQL 版（PgIndexStore）只覆寫 _version() 與 _read()。"""
+
     def __init__(self, index_dir: Path):
         self.dir = index_dir
         self._lock = threading.Lock()
-        self._mtime = 0.0
+        self._token: object = None
         self.manifest: dict = {}
         self.art = Collection("artwork_id")
         self.mfg = Collection("part_id")
@@ -126,6 +129,8 @@ class IndexStore:
             )
         if manifest.get("chunking") != cfg.chunking:
             problems.append("切塊規則與 models.yaml 不一致")
+        if manifest.get("color_analysis") != cfg.color_analysis.model_dump(mode="json"):
+            problems.append("色彩分析參數與 models.yaml 不一致")
         if manifest.get("kb_version") != kb_version():
             problems.append(
                 f"知識庫版本不一致：索引={manifest.get('kb_version')}，kb/VERSION={kb_version()}"
@@ -143,7 +148,14 @@ class IndexStore:
             np.load(d / "chunk_vecs.npy"),
         )
 
-    def load(self) -> None:
+    def _version(self) -> object:
+        """索引換過就會變的值（檔案版：manifest 的修改時間）；讀不到回 None。"""
+        try:
+            return self.manifest_path.stat().st_mtime
+        except FileNotFoundError:
+            return None
+
+    def _read(self) -> tuple[dict, Collection, Collection]:
         if not self.manifest_path.exists():
             raise IndexMismatch("找不到索引，請先執行 make index")
         manifest = json.loads(self.manifest_path.read_text(encoding="utf-8"))
@@ -152,24 +164,26 @@ class IndexStore:
             raise IndexMismatch("；".join(problems) + "。請執行 make index 重建索引")
         art = self._load_collection(self.dir, "artwork_id", "artworks.json")
         mfg = self._load_collection(self.parts_dir, "part_id", "parts.json")
+        return manifest, art, mfg
+
+    def load(self) -> None:
+        token = self._version()  # 先記版本再讀：讀到一半被重建，下一個請求還會再載一次
+        manifest, art, mfg = self._read()
         with self._lock:
             self.manifest = manifest
             self.art, self.mfg = art, mfg
-            self._mtime = self.manifest_path.stat().st_mtime
+            self._token = token
 
     def maybe_reload(self) -> bool:
         """make index 重建後自動載入新索引（不必重啟後端）；新索引不一致就維持舊的。"""
-        try:
-            mtime = self.manifest_path.stat().st_mtime
-        except FileNotFoundError:
-            return False
-        if mtime == self._mtime:
+        token = self._version()
+        if token is None or token == self._token:
             return False
         try:
             self.load()
             return True
         except IndexMismatch:
-            self._mtime = mtime
+            self._token = token
             return False
 
     # ---- 查詢（畫作；圖紙直接用 self.mfg）----
@@ -194,5 +208,11 @@ _store: IndexStore | None = None
 def get_store() -> IndexStore:
     global _store
     if _store is None:
-        _store = IndexStore(get_settings().index_dir)
+        s = get_settings()
+        if s.database_url:
+            from app.repositories.pg_index_store import PgIndexStore
+
+            _store = PgIndexStore(s.index_dir)
+        else:
+            _store = IndexStore(s.index_dir)
     return _store

@@ -23,7 +23,7 @@ export interface SourceItem {
   /** 畫作段落才有 */
   artwork_id?: string;
   artwork_title?: string;
-  /** 工廠圖紙段落才有；source_url 為 null，改顯示 source_label（內部文件名稱） */
+  /** 工廠圖紙段落與畫作的「色彩分析」段落（`<id>#color`）source_url 為 null，改顯示 source_label */
   part_id?: string;
   source_label?: string;
   title: string;
@@ -41,6 +41,8 @@ export interface SourcesEvent {
   strategy: string;
   use_retrieval: boolean;
   sources: SourceItem[];
+  /** 檢索段落篩選（MIRA 的 Rearrange）；沒有篩選時為 null。fallback 有值代表篩選失敗、用原本的段落 */
+  rearrange?: { candidates: number; kept: number; ms: number; fallback: string | null } | null;
 }
 
 export interface DoneEvent {

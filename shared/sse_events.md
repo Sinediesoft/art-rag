@@ -9,9 +9,23 @@
 | `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "use_retrieval", "latency_ms": {"retrieval", "first_token", "generation", "total"}, "tokens": {"input", "output"}, "cost_twd", "egress": {"images", "chunks", "bytes"}}` | 完成；`fallback` 為 true 時前端顯示「本地備援模型」（`strategy_used` 為 `hybrid_fallback`）；`egress` 是送出本機的資料量，本地策略恆為 0，前端顯示「資料外送」標示 |
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 
+`sources` 另帶 `part_id`、`identified`（有做以圖辨識時的辨識結果）與 `route`：只帶 `image_id`、
+沒指定 `artwork_id`／`part_id` 時，後端先用領域路由判斷是畫作還是工廠圖紙（`{"domain", "margin", "art_score",
+"mfg_score", "min_margin", "uncertain"}`，格式同 `/search/any` 的 `route`），判為圖紙就走下面的圖紙問答；沒經過路由時為 `null`。
+
+`sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008；請求的 `rearrange`、
+`.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，預設關）時為
+`{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`，
+失敗時 `sources` 是原本的全部段落）；沒開篩選（或關檢索）時為 `null`。候選只有 0～1 段時不呼叫模型，
+`candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
+`sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
+
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
 雲端策略一律回 `error`（`CLOUD_CONFIDENTIAL_FORBIDDEN`）。
+
+畫作的「色彩分析」段落（`chunk_id` 為 `<id>#color`，建索引時由系統計算，見 `docs/adr/010`）同樣 `source_url` 為 `null`，
+改帶 `source_label`（「系統計算：色彩分析（數位圖檔）」）；其他畫作段落不帶 `source_label`。
 
 ## `POST /api/v1/cad/reconstruct`（工廠圖紙 → 3D）
 

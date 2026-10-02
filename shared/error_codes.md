@@ -9,7 +9,7 @@
 | `IMAGE_TYPE_NOT_ALLOWED` | 415 | 只收 JPEG、PNG、WebP |
 | `IMAGE_NOT_FOUND` | 404 | `image_id` 不存在或已過期（7 天自動刪除） |
 | `ARTWORK_NOT_FOUND` | 404 | 畫作 ID 不存在 |
-| `NOT_IN_KB` | 200（SSE `error`） | 以圖辨識低於門檻：知識庫中沒有這幅畫 |
+| `NOT_IN_KB` | 200（SSE `error`） | 以圖辨識低於門檻：知識庫中沒有這幅畫（領域路由判為工廠圖紙時：知識庫中沒有這張圖紙） |
 | `STRATEGY_UNAVAILABLE` | 200（SSE `error`） | 指定的生成端無法使用，本地備援模型也失敗（服務暫停，不改走雲端）；或雲端對照組未開啟（`ALLOW_CLOUD=false`） |
 | `GENERATION_FAILED` | 200（SSE `error`） | 生成端逾時或錯誤，且本地備援也失敗 |
 | `CLOUD_UPLOAD_FORBIDDEN` | 200（SSE `error`） | 雲端對照組不接受使用者上傳的照片（使用者資料不出站） |
@@ -27,7 +27,7 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原也會回這個（ADR 007） |
+| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原也會回這個（ADR 011） |
 | `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
 | `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
 | `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |

@@ -1,0 +1,35 @@
+# 畫語 ArtRAG 的 Docker Compose（企劃書 §七：Ollama 原生安裝在主機上，其餘服務進 Docker）。
+# 目前只有資料庫 db：開發時每位組員本機只跑它，後端與前端在本機熱重載。
+# Nginx、後端容器之後補在同一份檔案（B）。
+#
+# 在專案根目錄執行（make db-up 相同）：
+#   docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait db
+# 帳號、密碼、port 讀 .env 的 POSTGRES_*；改了要一起改 DATABASE_URL。
+name: artrag
+
+services:
+  db:
+    # 版本固定：各組員與展示主機同一版 PostgreSQL 與 pgvector
+    image: pgvector/pgvector:0.8.6-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-artrag}
+      POSTGRES_USER: ${POSTGRES_USER:-artrag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-artrag}
+      TZ: UTC
+    # 只綁本機：資料庫不對區網、Tailscale 或公網開放，只有同一台的後端連得到
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # named volume：容器刪掉重建資料還在；要清空用 docker compose ... down -v
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # 資料只有幾十筆，用不到多少記憶體；12–16 GB 的筆電要把記憶體留給 Ollama 與 embedding 模型
+    mem_limit: 512m
+
+volumes:
+  pgdata:

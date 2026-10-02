@@ -10,7 +10,9 @@
 雲端對照組（api_nokb＝A1 無檢索、api_kb＝A2 有檢索）需要後端 ALLOW_CLOUD=true 與 API_KEY。
 
 用法：python eval/run_eval.py [--base http://localhost:8000]
-      [--strategies hybrid,hybrid_norag,api_nokb,api_kb,mock] [--split dev|test|all]
+      [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock]
+      [--split dev|test|all]
+      hybrid_plain／hybrid_rearrange：檢索段落篩選（MIRA 的 Rearrange）關／開的對照
 """
 
 import argparse
@@ -32,6 +34,9 @@ ROOT = EVAL.parent
 STRATEGY_BODY = {
     "hybrid": {"strategy": "hybrid"},
     "hybrid_norag": {"strategy": "hybrid", "use_retrieval": False},
+    # 檢索段落篩選（MIRA 的 Rearrange）開關對照：明確指定，不受伺服器預設影響（make eval-rearrange）
+    "hybrid_plain": {"strategy": "hybrid", "rearrange": False},
+    "hybrid_rearrange": {"strategy": "hybrid", "rearrange": True},
     "api_nokb": {"strategy": "api_nokb"},
     "api_kb": {"strategy": "api_kb"},
     "lora": {"strategy": "lora"},
@@ -83,7 +88,7 @@ def eval_images(client: httpx.Client, kb_ids: set[str]) -> dict:
 
 
 def run_chat(client: httpx.Client, body: dict) -> dict:
-    out = {"answer": "", "sources": [], "done": None, "error": None}
+    out = {"answer": "", "sources": [], "rearrange": None, "done": None, "error": None}
     with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
         event = None
         for line in resp.iter_lines():
@@ -93,6 +98,7 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
                 data = json.loads(line[5:])
                 if event == "sources":
                     out["sources"] = data["sources"]
+                    out["rearrange"] = data.get("rearrange")
                 elif event == "token":
                     out["answer"] += data["text"]
                 elif event == "done":
@@ -173,6 +179,7 @@ def main() -> int:
             if done.get("prompt_version"):
                 prompt_version = done["prompt_version"]
             egress = done.get("egress") or {}
+            ra = res["rearrange"] or {}
             row = {
                 "question_id": q["id"],
                 "split": q["split"],
@@ -185,6 +192,9 @@ def main() -> int:
                 "prompt_version": done.get("prompt_version", ""),
                 "answer_ok": answer_ok,
                 "citation_ok": citation_ok,
+                "n_sources": len(res["sources"]),
+                "rearrange_ms": ra.get("ms"),
+                "rearrange_fallback": ra.get("fallback") or "",
                 "first_token_ms": (done.get("latency_ms") or {}).get("first_token"),
                 "total_ms": (done.get("latency_ms") or {}).get("total")
                 or round((time.time() - t0) * 1000),
@@ -207,6 +217,8 @@ def main() -> int:
             "citation_ok": sum(r["citation_ok"] for r in results) / len(results)
             if results
             else None,
+            "mean_sources": statistics.mean([r["n_sources"] for r in ok]) if ok else None,
+            "rearrange_fallbacks": sum(1 for r in results if r["rearrange_fallback"]),
             "p95_first_token_ms": p95([r["first_token_ms"] for r in ok]),
             "p95_total_ms": p95([r["total_ms"] for r in ok]),
             "median_total_ms": statistics.median([r["total_ms"] for r in ok]) if ok else None,

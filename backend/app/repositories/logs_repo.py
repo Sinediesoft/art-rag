@@ -1,4 +1,5 @@
-"""使用紀錄與回饋（SQLite；正式版改 PostgreSQL，資料表欄位相同）。SQL 只寫在這層。
+"""使用紀錄與回饋（SQLite；.env 設了 DATABASE_URL 就改用 PostgreSQL 版 pg_logs_repo.py，
+資料表欄位相同、查詢語句共用）。SQL 只寫在這層。
 
 庫存資料（Text-to-SQL 查詢的對象）在另一個檔案，見 inventory_repo.py。
 """
@@ -146,8 +147,13 @@ class LogsRepo:
         """智慧助理的路由紀錄：誰判斷的（Jev／本地）、意圖、信心、閘門、外送位元組。"""
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)
+        # 同一個 request_id 再寫一次就覆蓋；用 ON CONFLICT 而不是 SQLite 專用的 INSERT OR REPLACE，
+        # PostgreSQL 版（pg_logs_repo）共用這段 SQL
+        updates = ", ".join(f"{c} = excluded.{c}" for c in row if c != "request_id")
         self._exec(
-            f"INSERT OR REPLACE INTO route_logs ({cols}) VALUES ({marks})", tuple(row.values())
+            f"INSERT INTO route_logs ({cols}) VALUES ({marks})"
+            f" ON CONFLICT (request_id) DO UPDATE SET {updates}",
+            tuple(row.values()),
         )
 
     def recent_routes(self, limit: int = 10) -> list[dict]:
@@ -175,5 +181,11 @@ _repo: LogsRepo | None = None
 def get_logs_repo() -> LogsRepo:
     global _repo
     if _repo is None:
-        _repo = LogsRepo(get_settings().data_dir / "artrag.sqlite3")
+        s = get_settings()
+        if s.database_url:
+            from app.repositories.pg_logs_repo import PgLogsRepo
+
+            _repo = PgLogsRepo()
+        else:
+            _repo = LogsRepo(s.data_dir / "artrag.sqlite3")
     return _repo

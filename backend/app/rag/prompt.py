@@ -77,8 +77,11 @@ def build_messages(
         .replace("{{context}}", format_context(sources) if use_retrieval else NO_CONTEXT)
         .replace("{{question}}", question)
     )
-    content: list[dict] = [{"type": "text", "text": user_text}]
+    # 圖放在文字前面：推論伺服器會沿用和前一個 prompt 開頭相同那段的計算，同一張圖的追問
+    # 只重算文字，不必每題重算約 1,070 token 的圖（GTX 1650 實測每題 22–29 秒 → 7–12 秒）
+    content: list[dict] = []
     if image_jpeg:
         b64 = base64.b64encode(image_jpeg).decode()
         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+    content.append({"type": "text", "text": user_text})
     return [{"role": "system", "content": system}, {"role": "user", "content": content}]

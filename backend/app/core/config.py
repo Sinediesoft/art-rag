@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     memory_high_pct: float = 80.0
     memory_check_interval_s: float = 5.0
 
-    # 智慧助理的 System 1（意圖判斷）：TypeSafe Jev（雲端，只收代號化文字，docs/adr/007）。
+    # 智慧助理的 System 1（意圖判斷）：TypeSafe Jev（雲端，只收代號化文字，docs/adr/011）。
     # 金鑰留空、JEV_ENABLED=false 或呼叫失敗時一律改走本地路由（關鍵字＋bge-m3），其他功能照常
     jev_enabled: bool = True
     jev_base_url: str = "https://api.typesafe.ai/v1"
@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     # 模型下載完成後設 true：embedding 模型只讀本機快取，不再連 Hugging Face（斷網可用）
     hf_offline: bool = False
 
+    # 檢索段落篩選（MIRA 的 Rearrange）：留空＝shared/models.yaml 的 rearrange.enabled；
+    # true／false 覆寫這台主機的設定（例如只在 5070 Ti 主機打開）
+    rearrange: str = ""
+
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
@@ -81,6 +85,11 @@ class Settings(BaseSettings):
     demo_controls: bool = True
 
     data_dir: Path = REPO_ROOT / "data"
+
+    # PostgreSQL + pgvector（Docker，見 deploy/docker-compose.yml 與 docs/adr/009）：
+    # 畫作、段落、向量、manifest 與使用紀錄都存這裡。
+    # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
+    database_url: str = ""
 
     @property
     def kb_dir(self) -> Path:
@@ -124,6 +133,31 @@ class StrategySpec(BaseModel):
     cost_per_1k_output_twd: float
 
 
+class RearrangeSpec(BaseModel):
+    """檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）"""
+
+    enabled: bool = False
+    prompt_version: str = "rearrange_v1"
+    max_candidates: int = 5
+    timeout_s: float = 30
+    max_tokens: int = 16
+
+
+class ColorAnalysisSpec(BaseModel):
+    """畫作色彩分析（docs/adr/010）；改了要重建索引（manifest 比對）"""
+
+    method: str = "lab-kmeans-v1"
+    n_colors: int = 6
+    fit_long_edge: int = 256  # k-means 分群用的圖（約 6 萬像素）
+    map_long_edge: int = 512  # 算占比、畫色塊分布圖用的圖
+    kmeans_max_iter: int = 30
+    seed: int = 0
+    neutral_chroma: float = 10  # C* 小於這個值算中性色（接近黑白灰）
+    warm_hue_deg: list[float] = [340, 110]  # 色相角落在這段（可跨 0°）為暖色，其餘有彩色為冷色
+    lightness_bands: list[float] = [30, 60]  # L*：暗調／中間調／亮調的分界
+    chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -139,6 +173,10 @@ class ModelsConfig(BaseModel):
     text2sql: dict[str, float] = {}
     # 生產排程（Timefold）：求解秒數、無改善提前結束秒數、進度更新間隔
     scheduling: dict[str, float] = {}
+    # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/007）
+    router: dict[str, float] = {}
+    rearrange: RearrangeSpec = RearrangeSpec()
+    color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
 
 
 @lru_cache

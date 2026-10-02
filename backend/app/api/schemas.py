@@ -110,6 +110,56 @@ class ArtworkListResponse(BaseModel):
     items: list[ArtworkSummary]
 
 
+# ---------------------------------------------------------------- 色彩分析（docs/adr/010）
+class PaletteColor(BaseModel):
+    hex: str = Field(description="#RRGGBB")
+    rgb: list[int]
+    lab: list[float]
+    share: float = Field(description="占畫面比例 0–1")
+    name: str = Field(description="最接近的基本色名（CIEDE2000）")
+    temperature: Literal["warm", "cool", "neutral"]
+    tone: Literal["dark", "mid", "light"]
+
+
+class TemperatureShare(BaseModel):
+    warm: float
+    cool: float
+    neutral: float
+
+
+class LightnessStats(BaseModel):
+    dark: float
+    mid: float
+    light: float
+    mean: float
+    p5: float
+    p95: float
+    histogram: list[float] = Field(description="L* 0–100 分 10 格的比例")
+
+
+class ChromaStats(BaseModel):
+    low: float
+    mid: float
+    high: float
+    median: float
+    histogram: list[float] = Field(description="C* 0–100 分 10 格的比例（≥100 算在最後一格）")
+
+
+class ColorAnalysis(BaseModel):
+    source: Literal["original", "photo"] = Field(
+        description="original＝知識庫原圖；photo＝上傳的照片"
+    )
+    method: str
+    palette: list[PaletteColor]
+    temperature: TemperatureShare
+    lightness: LightnessStats
+    chroma: ChromaStats
+    summary: str
+    notes: list[str]
+    map_url: str = Field(description="色塊分布圖 PNG（每個像素塗成所屬主色）")
+    latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None
@@ -118,6 +168,10 @@ class ChatRequest(BaseModel):
     strategy: Strategy = "hybrid"
     use_retrieval: bool = True
     allow_fallback: bool = True
+    rearrange: bool | None = Field(
+        default=None,
+        description="檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）",
+    )
 
 
 class FeedbackRequest(BaseModel):
@@ -259,6 +313,25 @@ class DrawingSearchResponse(BaseModel):
     best_part_id: str | None
     latency_ms: int
     results: list[DrawingSearchHit]
+
+
+class RouteInfo(BaseModel):
+    """領域路由（MMed-RAG 的領域辨識）：照片是畫作還是工廠圖紙"""
+
+    domain: Literal["art", "mfg"] = Field(description="art：畫作；mfg：工廠圖紙")
+    margin: float = Field(description="與圖紙原型的相似度 − 與畫作原型的相似度；> 0 偏向圖紙")
+    art_score: float | None = Field(description="與畫作原型（知識庫畫作 CLIP 向量的平均）的相似度")
+    mfg_score: float | None = Field(description="與圖紙原型的相似度")
+    min_margin: float = Field(description="|margin| 小於此值視為不確定")
+    uncertain: bool = Field(description="不確定時一律當圖紙（機密側）")
+
+
+class AnySearchResponse(BaseModel):
+    query_image_id: str
+    route: RouteInfo
+    artwork_result: ImageSearchResponse | None = Field(description="判定為畫作時的辨識結果")
+    drawing_result: DrawingSearchResponse | None = Field(description="判定為圖紙時的辨識結果")
+    latency_ms: int
 
 
 class PartTextSearchHit(BaseModel):
@@ -695,7 +768,7 @@ class ScheduleSolveRequest(BaseModel):
     )
 
 
-# ---------------------------------------------------------------- 智慧助理（docs/adr/007）
+# ---------------------------------------------------------------- 智慧助理（docs/adr/011）
 class Account(BaseModel):
     id: str
     label: str

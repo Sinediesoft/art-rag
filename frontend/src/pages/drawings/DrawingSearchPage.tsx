@@ -1,21 +1,41 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../../api/client";
-import { useDrawingSearch, usePartTextSearch } from "../../api/hooks";
+import { usePartTextSearch, useRoutedSearch } from "../../api/hooks";
 import { ErrorMessage, Loading } from "../../components/common/Feedback";
-import { NotInKbNotice, VerifiedBadge } from "../../components/common/StatusNotices";
+import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../../components/common/StatusNotices";
 import { PartCard } from "../../components/parts/PartCard";
 
 export function DrawingSearchPage() {
   const [params] = useSearchParams();
   const imageId = params.get("image");
-  return imageId ? <ImageResults imageId={imageId} /> : <TextResults q={params.get("q") ?? ""} />;
+  return imageId ? (
+    <ImageResults
+      imageId={imageId}
+      forced={params.get("domain") === "mfg"}
+      redirected={params.get("routed") === "1"}
+    />
+  ) : (
+    <TextResults q={params.get("q") ?? ""} />
+  );
 }
 
-function ImageResults({ imageId }: { imageId: string }) {
-  const { data, isLoading, error } = useDrawingSearch(imageId);
+function ImageResults({
+  imageId,
+  forced,
+  redirected,
+}: {
+  imageId: string;
+  forced: boolean;
+  redirected: boolean;
+}) {
+  // 預設先經過領域路由；使用者在路由提示按「改用工廠圖紙辨識」（domain=mfg）時直接做圖紙辨識
+  const { data, route, isLoading, error, latencyMs, redirectTo } = useRoutedSearch("mfg", imageId, forced);
   const best = data?.matched ? data.results[0] : null;
   const others = data ? data.results.filter((r) => r !== best) : [];
+
+  // 判定為畫作：轉到畫作辨識頁
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   return (
     <div className="flex flex-col gap-5">
@@ -30,13 +50,14 @@ function ImageResults({ imageId }: { imageId: string }) {
           <h1 className="text-2xl font-bold">辨識結果</h1>
           {data && (
             <p className="text-xs text-ink-faint">
-              Chinese-CLIP 粗篩 → ORB 幾何驗證 → 線條重合度 · {data.latency_ms} ms
+              {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 → 線條重合度 · {latencyMs} ms
             </p>
           )}
         </div>
       </div>
 
-      {isLoading && <Loading label="辨識中：比對特徵點並拉正圖紙…" />}
+      {route && <RouteNotice route={route} imageId={imageId} redirected={redirected} />}
+      {isLoading && <Loading label="辨識中：判斷畫作或圖紙、比對特徵點並拉正圖紙…" />}
       {error && <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />}
 
       {best && (

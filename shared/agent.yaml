@@ -1,4 +1,4 @@
-# 智慧助理（統一入口）的 System 1 設定：意圖、信心門檻、本地路由規則、別名（docs/adr/007，負責：C）
+# 智慧助理（統一入口）的 System 1 設定：意圖、信心門檻、本地路由規則、別名（docs/adr/011，負責：C）
 #
 # System 1 = 快速判斷「使用者想做什麼、有多確定」：雲端 TypeSafe Jev（只收代號化文字）或本地路由。
 # System 2 = 既有的本地模組實際執行（RAG 問答、Text-to-SQL、Ortho2CAD、Timefold、修改資料流程）。

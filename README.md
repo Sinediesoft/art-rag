@@ -9,14 +9,17 @@
 （來自圖紙的「加工製程」段落）排上機台、兼顧交期與換線 → 排程結果寫回資料庫，Text-to-SQL 查得到（ADR 005）。
 16 GB 展示機記憶體使用率超過 80% 時，自動釋放目前流程用不到的模型（ADR 006）。
 **智慧助理（統一入口）**：說一句話 → System 1（TypeSafe **Jev**，只收代號化文字；沒金鑰時走本地路由）判斷意圖與信心
-→ 信心閘門依風險分流 → 交給本機既有模組執行；**修改庫存、訂單、工單一律經過權限判定**，超過額度送主管核准（ADR 007）。
+→ 信心閘門依風險分流 → 交給本機既有模組執行；**修改庫存、訂單、工單一律經過權限判定**，超過額度送主管核准（ADR 011）。
 架構依《地端隱私多模態 RAG 專題開發企劃書》，主打**地端部署＋資料隱私**：**混合式為主**（本地 JSON 知識庫＋
 本地向量檢索＋本地 VLM，照片與知識全程不離開主機）、**雲端 API 只當對照組**（A1 無檢索、A2 有檢索，
 預設關閉）、**LoRA 保留插槽**。各策略共用同一個檢索層與 prompt，只換生成端。
 
 ```
+照片 ─► 領域路由（與畫作／圖紙原型比 CLIP 相似度，MMed-RAG 的領域辨識）─► 畫作走下一行、圖紙走「工廠圖紙」那行
 照片 ─► 前處理（EXIF 轉正、1024px）─► Chinese-CLIP 粗篩 ─► ORB 幾何驗證 ─► 辨識結果／「知識庫中沒有這幅畫」
-問題 ─► bge-m3 ─► 只取該畫作段落（門檻＋最多 5 段；比較／背景題才從全庫補足）─► 共用 prompt（answer_v1）
+照片／畫作 ─► 色彩分析（CIELAB k-means 主色、冷暖、明度／彩度、色塊分布圖；建索引時算好並寫成可引用的段落）
+問題 ─► bge-m3 ─► 只取該畫作段落（門檻＋最多 5 段；比較／背景題才從全庫補足）
+      ─►（選用，預設關）本地模型篩掉沒幫助的段落（MIRA 的 Rearrange）─► 共用 prompt（answer_v1）
       ─► strategy：hybrid（Ollama Qwen3-VL）｜lora（選做）｜api_nokb／api_kb（雲端對照組）─► OpenCC ─► SSE
             └─ 主推論伺服器連不上 → 改走本地備援模型，畫面標註「本地備援模型」；本地都失敗就暫停服務，不改走雲端
    本地生成端只准連本機／內網位址；每次回應記錄外送資料量（本地恆為 0）
@@ -34,7 +37,7 @@
          ─► 建構初始解 → 局部搜尋（硬：機型；中：交期延遲 × 急件權重；軟：換線＋完工時間）─► 串流最佳解、甘特圖
          ─► 寫回工廠資料庫（schedule_ops、v_wo_plan）─► Text-to-SQL 可查；排程服務沒啟動時改用簡易排程（交期優先派工）
 
-智慧助理 ─► 帶入身分、名稱換代號（[圖紙A]）、照片本機辨識 ─► System 1：Jev（雲端，只收代號化文字）｜本地路由（關鍵字＋bge-m3）
+智慧助理 ─► 帶入身分、名稱換代號（[圖紙A]）、照片本機辨識（同一個領域路由）─► System 1：Jev（雲端，只收代號化文字）｜本地路由（關鍵字＋bge-m3）
          ─► 信心閘門：唯讀 ≥ 0.60 直接執行｜3D、排程 ≥ 0.75 先確認｜修改 ≥ 0.85 走修改資料流程｜不確定就出澄清按鈕
          ─► 修改資料：參數抽取 ─► 權限判定（角色、範圍、欄位、上限）─► 交易內試算後回滾 ─► 額度內確認寫入／超額送主管核准
          ─► 寫入前再驗權限與資料指紋 ─► 異動單（IC-／TR-／SC-…）＋稽核紀錄 ─► 依資料庫讀回結果回覆；Text-to-SQL 查得到
@@ -45,11 +48,13 @@
 
 ## 快速開始（macOS／WSL2）
 
-需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Ollama](https://ollama.com)（沒有也能跑，見下方 mock 模式）
+需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Docker](https://docs.docker.com/get-docker/)（資料庫；沒有也能跑，見下方「資料庫」）、
+[Ollama](https://ollama.com)（沒有也能跑，見下方 mock 模式）
 
 ```bash
 make setup      # 安裝套件、建立 .env、下載 qwen3-vl:4b-instruct
-make index      # 驗證知識庫並建索引（第一次會下載 Chinese-CLIP 約 750 MB、bge-m3 約 2.2 GB）
+make db-up      # 啟動資料庫容器（PostgreSQL 17 + pgvector），等到可以連線才結束
+make index      # 驗證知識庫、建索引並寫進資料庫（第一次會下載 Chinese-CLIP 約 750 MB、bge-m3 約 2.2 GB）
 make demo       # 建置前端並啟動 http://localhost:8000
 ```
 
@@ -81,13 +86,81 @@ make scheduler                 # 另開終端機啟動 :8082（make demo-all 會
 **沒有 GPU／模型的電腦**：在 `.env` 設 `LLM_MODE=mock`（不呼叫生成模型）；
 再加 `EMBED_MODE=mock` 連 embedding 也不下載（只能測流程，辨識結果無意義），改完要 `make index`。
 
+### 資料庫（PostgreSQL 17 + pgvector，Docker）
+
+照企劃書 §七：資料庫進 Docker（`deploy/docker-compose.yml`），Ollama 原生安裝在主機上，後端與前端在本機熱重載。
+畫作、段落、向量、索引 manifest 與使用紀錄都存在資料庫；縮圖與標準模型的 STL／STEP 仍是 `data/index/` 下的檔案。
+資料庫只綁 `127.0.0.1`，不對區網或公網開放；資料放在 Docker volume `artrag_pgdata`，容器刪掉重建資料還在。
+
+| 指令 | 用途 |
+|---|---|
+| `make db-up` | 啟動資料庫，等到可以連線才結束 |
+| `make index` | 建索引；`.env` 設了 `DATABASE_URL` 會在同一個交易裡寫進資料庫，執行中的後端自動換上 |
+| `make index-db` | 不重算向量，把現有的 `data/index/` 寫進資料庫（剛裝好 Docker 時用） |
+| `make db-import-sqlite` | 把 `data/artrag.sqlite3` 的舊紀錄（上傳、問答、3D 重建、庫存查詢、智慧助理路由、回饋）搬進資料庫；重複執行不會重複寫入 |
+| `make db-psql` | 進資料庫下 SQL，例如 `SELECT id, title_zh, license FROM artworks;` |
+| `make db-stop` | 停止資料庫（資料保留） |
+
+Windows 沒有 `make` 時，在專案根目錄用 PowerShell：
+
+```powershell
+docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait db
+cd backend; uv run python ..\pipelines\build_index.py --db-only
+uv run python ..\pipelines\import_sqlite_logs.py
+```
+
+**沒有 Docker 的電腦**：`.env` 的 `DATABASE_URL` 留空，改用檔案索引（`data/index/`）＋SQLite（`data/artrag.sqlite3`），
+功能相同（見 ADR 001、009）。兩種方式的檢索結果由 `backend/tests/test_postgres.py` 比對一致；
+這個測試要 `TEST_DATABASE_URL` 指向一個可以清空的資料庫才會跑，CI 用 pgvector 容器跑。
+
+### 組員：建立自己的資料庫
+
+企劃書 §六：**不互傳資料庫**，每個人用同一個指令從 `kb/` 的 JSON 重建，manifest 一致才算通過。
+每人一個資料庫，誰重建索引都不會影響別人。在 `make setup` 之後：
+
+1. **安裝 Docker Desktop**。
+   - macOS：直接安裝。
+   - Windows 照《部署說明》在 WSL2 的 Ubuntu 裡開發：裝好後到 Docker Desktop 的
+     Settings → Resources → WSL integration 打開 Ubuntu，Ubuntu 裡才有 `docker` 指令。
+2. **確認 `.env` 有 `DATABASE_URL`**。`make setup` 由 `.env.example` 複製，預設已填好。
+   舊的 `.env` 不會被覆蓋，要自己從 `.env.example` 補上「資料庫」那一段。
+3. **`make db-up`，再 `make index`**。
+4. （選用）**`make db-import-sqlite`**：部署包附的預跑 3D 重建結果記在 `data/artrag.sqlite3`，
+   搬進資料庫後，圖紙頁的「最近的 3D 重建」才看得到（結果和上傳照片一樣只保留 7 天）。
+5. **確認建好**：開「系統狀態」頁，「索引一致」要打勾，知識庫版本要和其他人相同（例如 `2026.09.6`）。
+   模型版本鎖在 `shared/models.yaml`，embedding 一律用 CPU 算，所以各自建出來的內容相同。
+
+**直接在 Windows 執行（不在 WSL 裡）時**：`make index` 可以照常重建（Windows 沒有 `resource` 模組，
+知識庫自己的標準模型改成不限制 CPU 與檔案大小執行）；但 **Ortho2CAD 3D 重建不能用**——限制不了子行程，
+模型產生的程式碼一律拒絕執行，請在 macOS、Linux 或 WSL 上重建。沒有 `make` 時：
+`cd backend; uv run python ..\pipelines\build_index.py`。
+
+**要把使用紀錄給別人**（例如問答紀錄給 D 做評估）：只匯出紀錄表，對方還原到另一個資料庫，不會蓋掉自己的紀錄。
+紀錄裡有使用者的問題與回答，請私下傳，不要貼在群組。
+
+```powershell
+# 匯出：先寫在容器裡再複製出來（Windows PowerShell 用 > 轉存會把二進位檔改壞）
+docker exec artrag-db-1 pg_dump -U artrag -d artrag -Fc -t chat_logs -t cad_logs -t sql_logs -t route_logs -t feedback -f /tmp/artrag-logs.dump
+docker cp artrag-db-1:/tmp/artrag-logs.dump ./artrag-logs.dump
+
+# 對方還原到另一個資料庫
+docker exec artrag-db-1 createdb -U artrag artrag_logs_from_teammate
+docker cp ./artrag-logs.dump artrag-db-1:/tmp/
+docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/artrag-logs.dump
+```
+
+- **`.env` 不要傳給別人**：裡面是個人設定，填了雲端對照組的話還有 API 金鑰。組員照 `.env.example` 建自己的。
+- **不要讓組員直接連你的資料庫**：資料庫刻意只綁 `127.0.0.1`；共用一個的話，任何人重建索引都會改到所有人的資料。
+
 ## 展示腳本（約 8 分鐘）
 
 | # | 展示項目 | 操作 | 對應驗收目標 |
 |---|---|---|---|
 | 1 | 以圖搜圖 | 首頁「拍照辨識」，用手機拍螢幕上的〈谿山行旅圖〉 | Top-1 ≥ 90% |
 | 2 | 拒答 | 拍李唐〈萬壑松風圖〉（`eval/photos/unknown/unknown-05.jpg`）：CLIP 相似度 0.96 仍判定「知識庫中沒有這幅畫」 | 拒答率 ≥ 80% |
+| 2b | 沒收錄也能分析色彩 | 第 2 步的拒答頁往下捲：「色彩分析（依你的照片）」——色盤、冷暖、明度／彩度、色塊分布圖 | 對應圖紙的「沒收錄也能重建 3D」 |
 | 3 | 圖文問答 | 辨識成功 →「問問這幅畫」→ 點建議問題；點 [1] 標籤看出處；問「當年賣了多少錢？」看它說不知道 | 引用正確率、防幻覺 |
+| 3b | 色彩分析 | 〈谿山行旅圖〉畫作頁的「色彩分析」：點色票看色塊分布圖；再到問答頁問「這幅畫主要用了哪些顏色？」，[n] 的出處是「系統計算」 | 數字交給計算、不靠模型目測 |
 | 4 | 以文搜圖 | 首頁輸入「水邊草地上撐陽傘的人群」 | 中文以文搜圖 |
 | 5 | 策略比較 | 「策略比較」頁選〈谿山行旅圖〉，問簽名在哪：開檢索答對、關檢索亂編；A1（雲端無檢索）、A2（雲端＋檢索）欄顯示「外送」標示（需 `ALLOW_CLOUD=true`，否則顯示未開啟） | 可替換、檢索增益、零外送對比 |
 | 6 | 容錯 | 「系統狀態」按「模擬斷線」→ 回問答頁再問，回答標註「本地備援模型」；直接結束 Ollama 則顯示服務暫停，不改走雲端 | 5 秒內改走本地備援 |
@@ -192,6 +265,46 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 ⚠️ 這些只驗證架構能運作：資料只有 3 筆、評估題由開發者撰寫、實拍照是由數位原圖加工的**模擬照**
 （`eval/make_synthetic_photos.py`）。正式評估請 D 換成真實實拍照與兩人獨立評分。
 
+2026-10-01 起 `eval/qa.jsonl` 多了 3 題顏色題（已收錄的 3 幅畫從 16 題變成 19 題），所以上表（16 題）和之後
+`make eval` 的數字不能直接比較。
+
+### 色彩分析（`make eval-color`）
+
+不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
+（run_id `20261001T071333-6b5f`，細節見 ADR 010）：
+
+| 指標 | 結果 |
+|---|---|
+| 結果固定（5 幅原圖各算兩次） | 是（5/5 幅兩次完全相同） |
+| 照片 vs 原圖色盤色差（ΔE00 平均，25 張） | 6.12；依拍法：blur 7.94、crop 2.25、dim 8.91、glare 5.92、tilt 5.57 |
+| 冷暖比例差（平均） | 21.9 個百分點；依拍法：blur 37.3、crop 5.2、dim 27.8、glare 16.4、tilt 22.7 |
+| 顏色題取到色彩段落 | 3/3 |
+| 其他題混進色彩段落／段落被擠掉 | 2/16 題；有段落被擠掉 2 題（被擠掉的段落都不屬於該題主題，與主題相關 0 題） |
+| 延遲 P50／P95 | 248／326 ms（評估時 demo 後端也開著，P95 隨負載有出入：三次跑從 452 降到 326 ms，取收錄的那一次） |
+
+### 領域路由（`make eval-router`）
+
+需要後端在執行；約 1 分鐘。所有評估照片送 `/search/any`，先判斷是畫作還是工廠圖紙（見 ADR 007）。
+2026-09-30 在 Windows 筆電（GTX 1650）上的結果：
+
+| 指標 | 結果 |
+|---|---|
+| 路由正確率（30 張畫作＋65 張圖紙模擬照） | 100%，沒有一張落在不確定區 |
+| margin（與圖紙原型相似度 − 與畫作原型相似度） | 畫作 ≤ −0.288、圖紙 ≥ +0.140，間距 0.428 |
+| 端到端（路由＋辨識） | 94/95（唯一錯的是圖紙辨識本身誤收，與路由無關） |
+| 延遲中位數（含辨識） | 567 ms |
+
+### 檢索段落篩選（`make eval-rearrange`，預設關）
+
+回答前先請本地模型挑出有幫助的段落，只用挑中的（MIRA 的 Rearrange，見 ADR 008）。
+開關：請求的 `rearrange` ＞ `.env` 的 `REARRANGE` ＞ `shared/models.yaml` 的 `rearrange.enabled`（預設 false）。
+2026-09-30 在 Windows 筆電（GTX 1650）上的開關對照（16 題）：
+
+| | 問答／引用正確率 | 平均段數 | 首字 P95 | 總計中位數 |
+|---|---|---|---|---|
+| 篩選關 | 100%／100% | 4.31 | 20.8 秒 | 25.1 秒 |
+| 篩選開 | 100%／100% | 1.25 | 23.6 秒 | 25.8 秒 |
+
 ### 工廠機械加工圖（`make eval-cad`）
 
 需要後端與 Ortho2CAD 都在執行；約 20 分鐘。2026-09-30 在 MacBook Air M5 16 GB 上的結果：
@@ -252,7 +365,7 @@ MacBook Air 無風扇，連續運算數分鐘後降頻到約 15–18 token/s（�
 | 2026-10-01 | Jev | 未設定金鑰，略過 | | | | | |
 
 第一次跑是 93%（41/44），依錯的三題補關鍵字與「只有名稱就出澄清按鈕」規則後才到 100%，數字偏樂觀；需要再加沒看過的句子。
-填入 Jev 金鑰後重跑，比較兩者的中文表現再決定門檻（ADR 007）。
+填入 Jev 金鑰後重跑，比較兩者的中文表現再決定門檻（ADR 011）。
 
 ### 生產排程（Timefold Solver）
 
@@ -278,7 +391,8 @@ bge-m3、Qwen3-VL（73% → 49%），載入後 79%；進入 Text-to-SQL 時預�
 art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
 ├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
-│   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、verify（ORB＋線條重合）、prompt、providers、textproc
+│   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）
+│   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、router（領域路由）、verify（ORB＋線條重合）、prompt、providers、textproc
 │   ├── cad/           C  drawing（三視圖產生器）、sandbox／runner（CadQuery 沙箱）、metrics（IoU）、preprocess
 │   ├── rag/text2sql   C  庫存 Text-to-SQL：prompt、SQL 擷取與靜態檢查；執行在 repositories/inventory_repo（唯讀＋白名單）
 │   ├── scheduling/    C  生產排程：calendar（工作分鐘↔實際時間）、problem（工單×途程×機台）、solution（計分、簡易排程）、timefold_client
@@ -286,11 +400,11 @@ art-rag/
 │   ├── agent/         C  智慧助理 System 1：entities（代號化）、jev、local_router、gate（信心閘門）、extract（參數抽取）
 │   └── services/change_service  修改資料流程：權限判定、試算、額度、確認寫入、主管核准（repositories/data_changes 白名單操作）
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
-├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py
+├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_sql_eval.py、run_route_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
-├── deploy/            B  llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
+├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md
 ├── docs/adr/          技術決策紀錄
 └── .github/workflows/ CI：知識庫、lint、型別、單元測試、openapi 同步、前端建置
@@ -300,15 +414,15 @@ art-rag/
 
 | 項目 | 企劃書 | 目前 demo | 後續 |
 |---|---|---|---|
-| 資料庫 | PostgreSQL + pgvector | `data/index/` 檔案索引＋SQLite（`repositories/` 封裝） | B 換 pgvector，見 ADR 001 |
-| 部署 | Docker Compose + Nginx + Tailscale Funnel | 後端直接提供前端建置檔 | B 補 `deploy/` |
+| 資料庫 | PostgreSQL + pgvector | PostgreSQL 17 + pgvector 0.8.6 跑在 Docker（`.env` 設 `DATABASE_URL`）；留空時退回 `data/index/` 檔案索引＋SQLite。見 ADR 009 | B：Alembic、每日 `pg_dump` 使用紀錄 |
+| 部署 | Docker Compose + Nginx + Tailscale Funnel | `deploy/docker-compose.yml` 目前只有資料庫；後端直接提供前端建置檔 | B 在同一份 Compose 補 Nginx、後端容器、Funnel |
 | 以圖搜圖 | Chinese-CLIP 粗篩＋ORB 幾何驗證 | 相同 | 見 ADR 002；D 用真實實拍照校正 |
 | 本地生成 | Qwen3-VL 8B（5070 Ti） | Qwen3-VL 4B（Mac 備用機設定） | 5070 Ti 在 `.env` 改 `HYBRID_MODEL` |
 | 雲端 API | 只當對照組（A1／A2） | 介面已接好（OpenAI 相容），`ALLOW_CLOUD` 預設 false、**未設定金鑰** | 評估時在 `.env` 設 `ALLOW_CLOUD=true` 並填 `API_KEY`，跑 `make eval-cloud` |
 | 零外送 | 後端容器封鎖對外連線 | 程式層保護：本地生成端只准連本機／內網位址、雲端預設關閉、每次回應記錄 egress | B 補 `deploy/` 時用 Docker network 封鎖對外連線 |
 | 生產排程 | （企劃書未列） | Timefold Solver 2.7 Java 服務（:8082）＋`production.sqlite3`，結果同步到工廠資料庫 | 正式版放同一個 PostgreSQL 的 production schema，見 ADR 005 |
-| 統一入口 | （新增，ADR 007） | 智慧助理：TypeSafe Jev 當 System 1（只收代號化文字，每次顯示外送量）；**金鑰未填**，目前一律走本地路由 | 填入 `JEV_API_KEY` 後跑 `make eval-route` 比較 Jev 與本地路由，再調門檻 |
-| 身分與權限 | （新增，ADR 007） | 7 個展示帳號（`shared/access.yaml`），頁首切換、不用密碼；修改資料四項權限判定＋超額送主管核准，API 層同一套規則 | 正式版接公司 SSO，工作階段與稽核紀錄改存 PostgreSQL |
+| 統一入口 | （新增，ADR 011） | 智慧助理：TypeSafe Jev 當 System 1（只收代號化文字，每次顯示外送量）；**金鑰未填**，目前一律走本地路由 | 填入 `JEV_API_KEY` 後跑 `make eval-route` 比較 Jev 與本地路由，再調門檻 |
+| 身分與權限 | （新增，ADR 011） | 7 個展示帳號（`shared/access.yaml`），頁首切換、不用密碼；修改資料四項權限判定＋超額送主管核准，API 層同一套規則 | 正式版接公司 SSO，工作階段與稽核紀錄改存 PostgreSQL |
 | 記憶體 | 5070 Ti 主機 16 GB 顯示記憶體 | Mac 16 GB：超過 80% 時釋放目前流程用不到的模型 | 5070 Ti 上可調高 `MEMORY_HIGH_PCT` 或關閉，見 ADR 006 |
 | 評估題型 | 知識庫獨有題、無答案題、干擾段落題，每題標註類型 | `qa.jsonl` 只有 1 題標為 `no_answer`，其餘為 `untyped` | D 補題並標註 `type`；干擾段落題需 C 加注入機制 |
 | 故宮圖檔 | 故宮 Open Data | Wikimedia Commons 公有領域副本 | D 換成故宮 Open Data 並填 `source_id` |

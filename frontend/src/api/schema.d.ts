@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/colors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Photo Colors */
+        get: operations["get_photo_colors_api_v1_images__image_id__colors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{image_id}/colormap.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Photo Colormap */
+        get: operations["get_photo_colormap_api_v1_images__image_id__colormap_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/image": {
         parameters: {
             query?: never;
@@ -115,6 +149,40 @@ export interface paths {
         };
         /** Get Artwork Image */
         get: operations["get_artwork_image_api_v1_artworks__artwork_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artworks/{artwork_id}/colors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Artwork Colors */
+        get: operations["get_artwork_colors_api_v1_artworks__artwork_id__colors_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/artworks/{artwork_id}/colormap.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Artwork Colormap */
+        get: operations["get_artwork_colormap_api_v1_artworks__artwork_id__colormap_png_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -222,6 +290,26 @@ export interface paths {
         put?: never;
         /** Search Drawing */
         post: operations["search_drawing_api_v1_search_drawing_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/search/any": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Any
+         * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
+         */
+        post: operations["search_any_api_v1_search_any_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -965,6 +1053,18 @@ export interface components {
              */
             pending_approvals: number;
         };
+        /** AnySearchResponse */
+        AnySearchResponse: {
+            /** Query Image Id */
+            query_image_id: string;
+            route: components["schemas"]["RouteInfo"];
+            /** @description 判定為畫作時的辨識結果 */
+            artwork_result: components["schemas"]["ImageSearchResponse"] | null;
+            /** @description 判定為圖紙時的辨識結果 */
+            drawing_result: components["schemas"]["DrawingSearchResponse"] | null;
+            /** Latency Ms */
+            latency_ms: number;
+        };
         /** Approval */
         Approval: {
             /** Ap No */
@@ -1373,6 +1473,57 @@ export interface components {
              * @default true
              */
             allow_fallback: boolean;
+            /**
+             * Rearrange
+             * @description 檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）
+             */
+            rearrange?: boolean | null;
+        };
+        /** ChromaStats */
+        ChromaStats: {
+            /** Low */
+            low: number;
+            /** Mid */
+            mid: number;
+            /** High */
+            high: number;
+            /** Median */
+            median: number;
+            /**
+             * Histogram
+             * @description C* 0–100 分 10 格的比例（≥100 算在最後一格）
+             */
+            histogram: number[];
+        };
+        /** ColorAnalysis */
+        ColorAnalysis: {
+            /**
+             * Source
+             * @description original＝知識庫原圖；photo＝上傳的照片
+             * @enum {string}
+             */
+            source: "original" | "photo";
+            /** Method */
+            method: string;
+            /** Palette */
+            palette: components["schemas"]["PaletteColor"][];
+            temperature: components["schemas"]["TemperatureShare"];
+            lightness: components["schemas"]["LightnessStats"];
+            chroma: components["schemas"]["ChromaStats"];
+            /** Summary */
+            summary: string;
+            /** Notes */
+            notes: string[];
+            /**
+             * Map Url
+             * @description 色塊分布圖 PNG（每個像素塗成所屬主色）
+             */
+            map_url: string;
+            /**
+             * Latency Ms
+             * @description 計算耗時；知識庫畫作為建索引時算好的，回 0
+             */
+            latency_ms: number;
         };
         /** ConstraintScore */
         ConstraintScore: {
@@ -1743,6 +1894,26 @@ export interface components {
             /** Columns */
             columns: components["schemas"]["InventoryColumn"][];
         };
+        /** LightnessStats */
+        LightnessStats: {
+            /** Dark */
+            dark: number;
+            /** Mid */
+            mid: number;
+            /** Light */
+            light: number;
+            /** Mean */
+            mean: number;
+            /** P5 */
+            p5: number;
+            /** P95 */
+            p95: number;
+            /**
+             * Histogram
+             * @description L* 0–100 分 10 格的比例
+             */
+            histogram: number[];
+        };
         /** MachineInfo */
         MachineInfo: {
             /** Machine Id */
@@ -1902,6 +2073,38 @@ export interface components {
         OutageRequest: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** PaletteColor */
+        PaletteColor: {
+            /**
+             * Hex
+             * @description #RRGGBB
+             */
+            hex: string;
+            /** Rgb */
+            rgb: number[];
+            /** Lab */
+            lab: number[];
+            /**
+             * Share
+             * @description 占畫面比例 0–1
+             */
+            share: number;
+            /**
+             * Name
+             * @description 最接近的基本色名（CIEDE2000）
+             */
+            name: string;
+            /**
+             * Temperature
+             * @enum {string}
+             */
+            temperature: "warm" | "cool" | "neutral";
+            /**
+             * Tone
+             * @enum {string}
+             */
+            tone: "dark" | "mid" | "light";
         };
         /** PartDescription */
         PartDescription: {
@@ -2342,6 +2545,43 @@ export interface components {
             runs: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * RouteInfo
+         * @description 領域路由（MMed-RAG 的領域辨識）：照片是畫作還是工廠圖紙
+         */
+        RouteInfo: {
+            /**
+             * Domain
+             * @description art：畫作；mfg：工廠圖紙
+             * @enum {string}
+             */
+            domain: "art" | "mfg";
+            /**
+             * Margin
+             * @description 與圖紙原型的相似度 − 與畫作原型的相似度；> 0 偏向圖紙
+             */
+            margin: number;
+            /**
+             * Art Score
+             * @description 與畫作原型（知識庫畫作 CLIP 向量的平均）的相似度
+             */
+            art_score: number | null;
+            /**
+             * Mfg Score
+             * @description 與圖紙原型的相似度
+             */
+            mfg_score: number | null;
+            /**
+             * Min Margin
+             * @description |margin| 小於此值視為不確定
+             */
+            min_margin: number;
+            /**
+             * Uncertain
+             * @description 不確定時一律當圖紙（機密側）
+             */
+            uncertain: boolean;
         };
         /** RoutePhoto */
         RoutePhoto: {
@@ -2837,6 +3077,15 @@ export interface components {
             /** Clarify Margin */
             clarify_margin: number;
         };
+        /** TemperatureShare */
+        TemperatureShare: {
+            /** Warm */
+            warm: number;
+            /** Cool */
+            cool: number;
+            /** Neutral */
+            neutral: number;
+        };
         /** TextSearchHit */
         TextSearchHit: {
             artwork: components["schemas"]["ArtworkSummary"];
@@ -2960,6 +3209,66 @@ export interface operations {
         };
     };
     get_image_api_v1_images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_photo_colors_api_v1_images__image_id__colors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColorAnalysis"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_photo_colormap_api_v1_images__image_id__colormap_png_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3118,6 +3427,66 @@ export interface operations {
             query?: {
                 size?: string;
             };
+            header?: never;
+            path: {
+                artwork_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_artwork_colors_api_v1_artworks__artwork_id__colors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artwork_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ColorAnalysis"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_artwork_colormap_api_v1_artworks__artwork_id__colormap_png_get: {
+        parameters: {
+            query?: never;
             header?: never;
             path: {
                 artwork_id: string;
@@ -3318,6 +3687,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DrawingSearchResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_any_api_v1_search_any_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnySearchResponse"];
                 };
             };
             /** @description Client Error */

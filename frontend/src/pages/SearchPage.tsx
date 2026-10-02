@@ -1,22 +1,43 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import { useImageSearch, useTextSearch } from "../api/hooks";
+import { useRoutedSearch, useTextSearch } from "../api/hooks";
+import { PhotoColors } from "../components/color/ColorAnalysisCard";
 import { ArtworkCard } from "../components/common/ArtworkCard";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
-import { NotInKbNotice, VerifiedBadge } from "../components/common/StatusNotices";
+import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../components/common/StatusNotices";
 
 export function SearchPage() {
   const [params] = useSearchParams();
   const imageId = params.get("image");
   const q = params.get("q");
-  return imageId ? <ImageResults imageId={imageId} /> : <TextResults q={q ?? ""} />;
+  return imageId ? (
+    <ImageResults
+      imageId={imageId}
+      forced={params.get("domain") === "art"}
+      redirected={params.get("routed") === "1"}
+    />
+  ) : (
+    <TextResults q={q ?? ""} />
+  );
 }
 
-function ImageResults({ imageId }: { imageId: string }) {
-  const { data, isLoading, error } = useImageSearch(imageId);
+function ImageResults({
+  imageId,
+  forced,
+  redirected,
+}: {
+  imageId: string;
+  forced: boolean;
+  redirected: boolean;
+}) {
+  // 預設先經過領域路由；使用者在路由提示按「改用畫作辨識」（domain=art）時直接做畫作辨識
+  const { data, route, isLoading, error, latencyMs, redirectTo } = useRoutedSearch("art", imageId, forced);
   const best = data?.matched ? data.results[0] : null;
   const others = data ? data.results.filter((r) => r !== best) : [];
+
+  // 判定為工廠圖紙：轉到圖紙辨識頁
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   return (
     <div className="flex flex-col gap-5">
@@ -31,13 +52,14 @@ function ImageResults({ imageId }: { imageId: string }) {
           <h1 className="font-serif text-2xl font-bold">辨識結果</h1>
           {data && (
             <p className="text-xs text-ink-faint">
-              Chinese-CLIP 粗篩 → ORB 幾何驗證 · {data.latency_ms} ms
+              {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 · {latencyMs} ms
             </p>
           )}
         </div>
       </div>
 
-      {isLoading && <Loading label="辨識中：計算影像向量並比對特徵點…" />}
+      {route && <RouteNotice route={route} imageId={imageId} redirected={redirected} />}
+      {isLoading && <Loading label="辨識中：判斷畫作或圖紙、計算影像向量並比對特徵點…" />}
       {error && (
         <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />
       )}
@@ -78,6 +100,8 @@ function ImageResults({ imageId }: { imageId: string }) {
           detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
         />
       )}
+
+      {data && <PhotoColors imageId={imageId} matched={data.matched} />}
 
       {others.length > 0 && (
         <section>
