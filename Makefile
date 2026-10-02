@@ -43,7 +43,7 @@ help:
 	@echo "make scheduler-setup  建置排程服務（需 Java 21：brew install openjdk@21；Maven 會自動下載）"
 	@echo "make scheduler   啟動排程服務 http://localhost:$(SCHED_PORT)（另開一個終端機；沒啟動時排程頁改用簡易排程）"
 	@echo "--- 智慧助理（System 1：Jev／本地路由）---"
-	@echo "make eval-route  路由評估：Jev 與本地路由在 eval/route_qa.jsonl 的正確率（需後端在執行；沒金鑰只跑本地）"
+	@echo "make eval-route  智慧助理的意圖路由評估（不是 eval-router 的領域路由）：Jev 與本地路由在 eval/route_qa.jsonl 的正確率（需後端在執行；沒金鑰只跑本地）"
 	@echo "make ci          CI 會跑的檢查：知識庫、lint、型別、單元測試、openapi 同步"
 
 # --compile-bytecode：CadQuery 在 sandbox-exec 裡不能寫 .pyc，沒預先編譯時每次 import 要 14 秒，

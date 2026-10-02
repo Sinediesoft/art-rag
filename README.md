@@ -37,7 +37,7 @@
          ─► 建構初始解 → 局部搜尋（硬：機型；中：交期延遲 × 急件權重；軟：換線＋完工時間）─► 串流最佳解、甘特圖
          ─► 寫回工廠資料庫（schedule_ops、v_wo_plan）─► Text-to-SQL 可查；排程服務沒啟動時改用簡易排程（交期優先派工）
 
-智慧助理 ─► 帶入身分、名稱換代號（[圖紙A]）、照片本機辨識 ─► System 1：Jev（雲端，只收代號化文字）｜本地路由（關鍵字＋bge-m3）
+智慧助理 ─► 帶入身分、名稱換代號（[圖紙A]）、照片本機辨識（同一個領域路由）─► System 1：Jev（雲端，只收代號化文字）｜本地路由（關鍵字＋bge-m3）
          ─► 信心閘門：唯讀 ≥ 0.60 直接執行｜3D、排程 ≥ 0.75 先確認｜修改 ≥ 0.85 走修改資料流程｜不確定就出澄清按鈕
          ─► 修改資料：參數抽取 ─► 權限判定（角色、範圍、欄位、上限）─► 交易內試算後回滾 ─► 額度內確認寫入／超額送主管核准
          ─► 寫入前再驗權限與資料指紋 ─► 異動單（IC-／TR-／SC-…）＋稽核紀錄 ─► 依資料庫讀回結果回覆；Text-to-SQL 查得到
@@ -97,7 +97,7 @@ make scheduler                 # 另開終端機啟動 :8082（make demo-all 會
 | `make db-up` | 啟動資料庫，等到可以連線才結束 |
 | `make index` | 建索引；`.env` 設了 `DATABASE_URL` 會在同一個交易裡寫進資料庫，執行中的後端自動換上 |
 | `make index-db` | 不重算向量，把現有的 `data/index/` 寫進資料庫（剛裝好 Docker 時用） |
-| `make db-import-sqlite` | 把 `data/artrag.sqlite3` 的舊紀錄（問答、上傳、3D 重建）搬進資料庫；重複執行不會重複寫入 |
+| `make db-import-sqlite` | 把 `data/artrag.sqlite3` 的舊紀錄（上傳、問答、3D 重建、庫存查詢、智慧助理路由、回饋）搬進資料庫；重複執行不會重複寫入 |
 | `make db-psql` | 進資料庫下 SQL，例如 `SELECT id, title_zh, license FROM artworks;` |
 | `make db-stop` | 停止資料庫（資料保留） |
 
@@ -110,7 +110,7 @@ uv run python ..\pipelines\import_sqlite_logs.py
 ```
 
 **沒有 Docker 的電腦**：`.env` 的 `DATABASE_URL` 留空，改用檔案索引（`data/index/`）＋SQLite（`data/artrag.sqlite3`），
-功能相同（見 ADR 001、006）。兩種方式的檢索結果由 `backend/tests/test_postgres.py` 比對一致；
+功能相同（見 ADR 001、009）。兩種方式的檢索結果由 `backend/tests/test_postgres.py` 比對一致；
 這個測試要 `TEST_DATABASE_URL` 指向一個可以清空的資料庫才會跑，CI 用 pgvector 容器跑。
 
 ### 組員：建立自己的資料庫
@@ -140,7 +140,7 @@ uv run python ..\pipelines\import_sqlite_logs.py
 
 ```powershell
 # 匯出：先寫在容器裡再複製出來（Windows PowerShell 用 > 轉存會把二進位檔改壞）
-docker exec artrag-db-1 pg_dump -U artrag -d artrag -Fc -t chat_logs -t cad_logs -t feedback -f /tmp/artrag-logs.dump
+docker exec artrag-db-1 pg_dump -U artrag -d artrag -Fc -t chat_logs -t cad_logs -t sql_logs -t route_logs -t feedback -f /tmp/artrag-logs.dump
 docker cp artrag-db-1:/tmp/artrag-logs.dump ./artrag-logs.dump
 
 # 對方還原到另一個資料庫
@@ -404,9 +404,8 @@ art-rag/
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
 ├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
-├── deploy/            B  llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
+├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md
-├── deploy/        B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）
 ├── docs/adr/          技術決策紀錄
 └── .github/workflows/ CI：知識庫、lint、型別、單元測試、openapi 同步、前端建置
 ```

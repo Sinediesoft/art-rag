@@ -2,6 +2,7 @@
 
 - 日期：2026-10-01
 - 狀態：採用（取代 ADR 001 的 demo 暫行做法；檔案模式保留）
+- 更新：2026-10-02 使用紀錄加上 `sql_logs`、`route_logs`；SQLite 的舊紀錄可用 `make db-import-sqlite` 搬進來
 
 ## 背景
 企劃書 §六、§七：PostgreSQL 17 + pgvector 一個服務同時管畫作資料與向量；
@@ -13,7 +14,9 @@ demo 期間以檔案索引＋SQLite 暫代（ADR 001），存取已封裝在 `ba
    只綁 `127.0.0.1`、資料放 named volume（`artrag_pgdata`）、`mem_limit: 512m`。Nginx 與後端容器之後加在同一份檔案。
 2. **開關**：`.env` 的 `DATABASE_URL` 有值 → PostgreSQL；留空 → 檔案索引＋SQLite。
 3. **資料表**照企劃書 §六：`artworks`／`chunks`、`parts`／`part_chunks`、`index_manifest`，
-   以及使用紀錄 `uploads`、`chat_logs`、`cad_logs`、`feedback`。
+   以及使用紀錄 `uploads`、`chat_logs`、`cad_logs`、`sql_logs`（庫存 Text-to-SQL）、
+   `route_logs`（智慧助理，ADR 011）、`feedback`。工廠的 `production.sqlite3`、`inventory.sqlite3`
+   不搬，照舊是 SQLite（ADR 011「寫在哪裡」）。
    - 每筆完整內容存 `doc JSONB`；企劃書列的主要欄位（標題、畫家、授權、料號…）是由 `doc` 產生的欄位
      （`GENERATED ... STORED`），直接下 SQL 查得到，又不會跟 `doc` 對不上。程式一律讀 `doc`。
    - 向量 `vector(512)`（Chinese-CLIP）、`vector(1024)`（bge-m3），HNSW 索引（`vector_cosine_ops`）。
@@ -42,4 +45,5 @@ demo 期間以檔案索引＋SQLite 暫代（ADR 001），存取已封裝在 `ba
 - 資料庫停掉時，後端請求會等連線池逾時（5 秒）才失敗；後端啟動時連不上就拒絕啟動並提示 `make db-up`。
 - 資料量變大時：HNSW 是近似搜尋，加上 `WHERE`（只取某幅畫的段落）可能回不滿 k 筆，
   要設 pgvector 0.8 的 `hnsw.iterative_scan`；目前資料少，PostgreSQL 直接循序掃描，結果是精確的。
-- 待補：每天 `pg_dump` 使用紀錄四張表（索引可由 `make index` 重建）；SQLite 裡既有的使用紀錄不搬。
+- SQLite 裡既有的使用紀錄（`data/artrag.sqlite3` 的六張表）用 `make db-import-sqlite` 搬進來，重複執行不會重複寫入。
+- 待補：每天 `pg_dump` 使用紀錄（索引可由 `make index` 重建）。
