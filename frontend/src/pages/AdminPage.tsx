@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, type HealthResponse } from "../api/client";
-import { useCadEvalRuns, useEvalRuns, useHealth, useSqlEvalRuns } from "../api/hooks";
+import { useCadEvalRuns, useEvalRuns, useHealth, useRouteEvalRuns, useSqlEvalRuns } from "../api/hooks";
 import { Loading } from "../components/common/Feedback";
 import { formatTaipei, seconds, STRATEGY_LABEL } from "../lib/format";
 
@@ -133,6 +133,8 @@ export function AdminPage() {
           </div>
         </Card>
       )}
+
+      <System1Card h={h} />
 
       <MemoryCard h={h} />
 
@@ -596,6 +598,90 @@ function SchedulerCard({ h }: { h: HealthResponse }) {
           )}
         </div>
       </div>
+    </Card>
+  );
+}
+
+/** 智慧助理的 System 1：Jev 是否設定、門檻、最近的路由紀錄、路由評估（make eval-route） */
+function System1Card({ h }: { h: HealthResponse }) {
+  const s1 = h.system1;
+  const runs = useRouteEvalRuns();
+  if (!s1) return null;
+  const latest = runs.data?.runs[0] as
+    | { run_id: string; n_items: number; engines: { engine: string; skipped: string | null; accuracy?: number; write_misfires?: number; op_accuracy?: number | null; p50_ms?: number; egress_bytes?: number }[] }
+    | undefined;
+  return (
+    <Card title="智慧助理 · System 1 路由" id="system1">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Dot ok={s1.jev_configured} />
+        <span className="font-bold">{s1.jev_configured ? `Jev ${s1.model}` : "本地路由（Jev 未啟用）"}</span>
+        <span className="text-ink-faint">{s1.detail}</span>
+      </div>
+      <p className="mt-1 text-xs text-ink-faint">
+        門檻：唯讀 {s1.thresholds.read} · 耗時 {s1.thresholds.heavy} · 修改 {s1.thresholds.write}；前兩名差距小於{" "}
+        {s1.clarify_margin} 出澄清按鈕 · Jev 逾時 {s1.timeout_s} 秒改走本地路由 ·{" "}
+        <Link to="/assistant" className="font-bold text-steel underline">
+          智慧助理 →
+        </Link>
+      </p>
+      {latest && (
+        <div className="mt-3 rounded-lg bg-paper/70 p-2 text-xs">
+          <p className="font-bold text-ink-soft">
+            路由評估 {latest.run_id}（{latest.n_items} 題，make eval-route）
+          </p>
+          {latest.engines.map((e) => (
+            <p key={e.engine} className="mt-0.5">
+              <b className="font-mono">{e.engine}</b>{" "}
+              {e.skipped ? (
+                <span className="text-ink-faint">略過：{e.skipped}</span>
+              ) : (
+                <span>
+                  正確率 <b>{Math.round((e.accuracy ?? 0) * 100)}%</b> · 修改誤判 {e.write_misfires} 題 · 操作正確率{" "}
+                  {e.op_accuracy != null ? `${Math.round(e.op_accuracy * 100)}%` : "—"} · p50 {e.p50_ms} ms · 外送{" "}
+                  {e.egress_bytes} B
+                </span>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
+      {h.recent_routes.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-xs">
+            <thead className="text-ink-faint">
+              <tr>
+                <th className="py-1 font-medium">時間</th>
+                <th className="py-1 font-medium">身分</th>
+                <th className="py-1 font-medium">問題（代號化）</th>
+                <th className="py-1 font-medium">判斷</th>
+                <th className="py-1 font-medium">意圖</th>
+                <th className="py-1 text-right font-medium">信心</th>
+                <th className="py-1 font-medium">閘門</th>
+                <th className="py-1 text-right font-medium">外送</th>
+              </tr>
+            </thead>
+            <tbody>
+              {h.recent_routes.map((r) => (
+                <tr key={String(r.request_id)} className="border-t border-line">
+                  <td className="py-1 pr-2 text-ink-faint">{formatTaipei(String(r.created_at))}</td>
+                  <td className="py-1 pr-2">{String(r.account_id)}</td>
+                  <td className="max-w-[16em] truncate py-1 pr-2 font-mono" title={String(r.question)}>
+                    {String(r.masked_text)}
+                  </td>
+                  <td className="py-1 pr-2">{r.engine === "jev" ? "Jev" : r.engine === "user" ? "點選" : "本地"}</td>
+                  <td className="py-1 pr-2">
+                    {String(r.intent)}
+                    {r.modify_op ? `／${String(r.modify_op)}` : ""}
+                  </td>
+                  <td className="py-1 text-right font-mono">{Number(r.confidence).toFixed(2)}</td>
+                  <td className="py-1 pl-2">{String(r.gate)}</td>
+                  <td className="py-1 text-right font-mono">{Number(r.egress_bytes)} B</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Card>
   );
 }

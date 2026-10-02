@@ -6,7 +6,7 @@
   1. 以文字找圖紙（bge-m3）
   2. 製程問答（bge-m3＋Qwen3-VL）
   3. Ortho2CAD 3D 重建（Ortho2CAD 載入後記憶體通常超過 80%；沒啟動就略過）
-  4. 依搜尋結果在圖紙上開立工單（寫入生產資料庫，工廠資料庫同步）
+  4. 依搜尋結果在圖紙上開立工單（以「生管」身分；急件超過額度，送「主管」核准後才開立）
   5. 生產排程（Timefold；不用任何 AI 模型 → 記憶體超過門檻時釋放其他模型）
   6. Text-to-SQL 查排程結果（Qwen3-VL 重新載入）
 每一步都記錄耗時、前後記憶體使用率與釋放紀錄，最後印出摘要，存到 eval/runs/<id>-demo.json。
@@ -138,6 +138,11 @@ def main() -> int:
         print(f"  {'●' if s['available'] else '○'} {s['label']}：{s['model']}")
     print(f"  {'●' if h['scheduler']['available'] else '○'} 生產排程：{h['scheduler']['detail']}")
 
+    def as_account(account_id: str) -> None:
+        """展示身分（docs/adr/011）：開立工單、排程只有生管可以；急件要主管核准。"""
+        client.post("/api/v1/auth/switch", json={"account_id": account_id}).raise_for_status()
+
+    as_account("planner")
     rec = Recorder(client)
     state: dict = {"parts": [], "work_orders": []}
 
@@ -183,16 +188,30 @@ def main() -> int:
     def create_orders():
         made = []
         for (_, qty, due, priority), part in zip(ORDERS, state["parts"], strict=True):
-            r = client.post(
-                "/api/v1/production/work-orders",
-                json={
-                    "part_id": part["id"],
-                    "qty": qty,
-                    "due_on": due,
-                    "priority": priority,
-                    "note": "demo-test",
-                },
-            )
+            body = {
+                "part_id": part["id"],
+                "qty": qty,
+                "due_on": due,
+                "priority": priority,
+                "note": "demo-test",
+            }
+            r = client.post("/api/v1/production/work-orders", json=body)
+            if r.status_code == 409 and r.json()["error"]["code"] == "APPROVAL_REQUIRED":
+                # 急件超過額度：同一套修改資料流程送主管核准，主管核准後才開立
+                change = {"op": "wo_create", "params": body}
+                p = client.post("/api/v1/changes/preview", json=change).json()
+                url = f"/api/v1/changes/{p['pending_id']}/request-approval"
+                ap = client.post(url, json={"note": "demo-test"}).json()
+                as_account("manager")
+                d = client.post(f"/api/v1/approvals/{ap['ap_no']}/approve", json={}).json()
+                as_account("planner")
+                if d.get("status") != "已核准":
+                    raise RuntimeError(d.get("text") or str(d))
+                made.append(
+                    {"wo_no": d["change_no"], "part_name": part["name_zh"], "qty": qty,
+                     "priority": f"{priority}，{ap['ap_no']} 主管核准", "due_on": due}
+                )  # fmt: skip
+                continue
             r.raise_for_status()
             made.append(r.json())
         state["work_orders"] = made

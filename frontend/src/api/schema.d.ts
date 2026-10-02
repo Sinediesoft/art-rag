@@ -468,6 +468,8 @@ export interface paths {
         /**
          * Create Work Order
          * @description 從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
+         *
+         *     權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
          */
         post: operations["create_work_order_api_v1_production_work_orders_post"];
         delete?: never;
@@ -488,7 +490,7 @@ export interface paths {
         post?: never;
         /**
          * Cancel Work Order
-         * @description 取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。
+         * @description 取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。
          */
         delete: operations["cancel_work_order_api_v1_production_work_orders__wo_no__delete"];
         options?: never;
@@ -508,6 +510,8 @@ export interface paths {
         /**
          * Solve Schedule
          * @description 把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
+         *
+         *     只有生管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
          */
         post: operations["solve_schedule_api_v1_schedule_solve_post"];
         delete?: never;
@@ -564,7 +568,8 @@ export interface paths {
         put?: never;
         /**
          * Reset Production
-         * @description 展示還原：清掉圖紙頁開立的工單與所有排程結果（DEMO_CONTROLS=false 時停用）。
+         * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單與稽核紀錄
+         *     （DEMO_CONTROLS=false 時停用；生管或主管才可以）。
          */
         post: operations["reset_production_api_v1_admin_production_reset_post"];
         delete?: never;
@@ -687,6 +692,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eval/route-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Route Eval Runs
+         * @description 智慧助理路由評估（make eval-route）：Jev 與本地路由的正確率、修改誤判、延遲、外送量。
+         */
+        get: operations["route_eval_runs_api_v1_eval_route_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -724,10 +749,242 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Accounts
+         * @description 展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。
+         */
+        get: operations["list_accounts_api_v1_auth_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Account
+         * @description 展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。
+         */
+        post: operations["switch_account_api_v1_auth_switch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Agent Route
+         * @description System 1：判斷意圖與信心（Jev 或本地路由）→ 信心閘門 → 分派到哪個本地模組。
+         */
+        post: operations["agent_route_api_v1_agent_route_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changes/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Preview
+         * @description 修改資料流程 1～4：參數抽取 → 權限判定 → 試算（交易內套用後回滾）→ 額度判斷 → 確認卡。
+         */
+        post: operations["change_preview_api_v1_changes_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changes/{pending_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Commit
+         * @description 按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。
+         */
+        post: operations["change_commit_api_v1_changes__pending_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changes/{pending_id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Request Approval
+         * @description 超過額度：建立待核准單（AP-）送主管。
+         */
+        post: operations["change_request_approval_api_v1_changes__pending_id__request_approval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Approvals
+         * @description 待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。
+         */
+        get: operations["list_approvals_api_v1_approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{ap_no}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve
+         * @description 主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。
+         */
+        post: operations["approve_api_v1_approvals__ap_no__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/approvals/{ap_no}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return Approval
+         * @description 主管退回（要附理由，申請人在「我的申請」看得到）。
+         */
+        post: operations["return_approval_api_v1_approvals__ap_no__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit Log
+         * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+         */
+        get: operations["audit_log_api_v1_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Account */
+        Account: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Role */
+            role: string;
+            /** Role Label */
+            role_label: string;
+            /** Ops */
+            ops: string[];
+            /** Warehouses */
+            warehouses: string[];
+            /** Customers */
+            customers: string[];
+            /** Note */
+            note: string;
+        };
+        /** AccountsResponse */
+        AccountsResponse: {
+            current: components["schemas"]["Account"];
+            /** Accounts */
+            accounts: components["schemas"]["Account"][];
+            /** Demo Controls */
+            demo_controls: boolean;
+            /**
+             * Pending Approvals
+             * @description 待核准單數量（主管看得到要處理幾件）
+             */
+            pending_approvals: number;
+        };
         /** AnySearchResponse */
         AnySearchResponse: {
             /** Query Image Id */
@@ -739,6 +996,87 @@ export interface components {
             drawing_result: components["schemas"]["DrawingSearchResponse"] | null;
             /** Latency Ms */
             latency_ms: number;
+        };
+        /** Approval */
+        Approval: {
+            /** Ap No */
+            ap_no: string;
+            /** Op */
+            op: string;
+            /** Op Label */
+            op_label: string;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Param Labels */
+            param_labels: {
+                [key: string]: unknown;
+            };
+            /** Summary */
+            summary: string;
+            /** Reasons */
+            reasons: string[];
+            /** Diff */
+            diff: components["schemas"]["ChangeDiff"][];
+            /** Note */
+            note: string | null;
+            /** Requester Id */
+            requester_id: string;
+            /** Requester Label */
+            requester_label: string;
+            /** Created At */
+            created_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "待核准" | "已核准" | "已退回" | "已失效";
+            /** Decided Label */
+            decided_label: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            /** Change No */
+            change_no: string | null;
+        };
+        /** ApprovalDecision */
+        ApprovalDecision: {
+            /** Ap No */
+            ap_no: string;
+            /** Status */
+            status: string;
+            /** Text */
+            text: string;
+            /** Change No */
+            change_no?: string | null;
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["ChangeDiff"][];
+            /**
+             * Moves
+             * @default 0
+             */
+            moves: number;
+        };
+        /** ApprovalRequest */
+        ApprovalRequest: {
+            /** Note */
+            note?: string | null;
+        };
+        /** ApprovalsResponse */
+        ApprovalsResponse: {
+            /** Can Approve */
+            can_approve: boolean;
+            /** Pending */
+            pending: components["schemas"]["Approval"][];
+            /** Mine */
+            mine: components["schemas"]["Approval"][];
+            /** Recent */
+            recent: components["schemas"]["Approval"][];
         };
         /** ArtworkDetail */
         ArtworkDetail: {
@@ -821,6 +1159,43 @@ export interface components {
              */
             style_tags: string[];
         };
+        /** AuditResponse */
+        AuditResponse: {
+            /** Items */
+            items: components["schemas"]["AuditRow"][];
+            /**
+             * Changes
+             * @description 最近寫入的異動單
+             */
+            changes: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** AuditRow */
+        AuditRow: {
+            /** Id */
+            id: number;
+            /** At */
+            at: string;
+            /** Actor Id */
+            actor_id: string;
+            /** Actor Label */
+            actor_label: string;
+            /** Action */
+            action: string;
+            /** Op */
+            op: string | null;
+            /** Ref No */
+            ref_no: string | null;
+            /** Summary */
+            summary: string | null;
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            } | unknown[] | string | null;
+            /** Request Id */
+            request_id: string | null;
+        };
         /** AxisDay */
         AxisDay: {
             /** Date */
@@ -884,6 +1259,122 @@ export interface components {
             done: {
                 [key: string]: unknown;
             };
+        };
+        /** ChangeCheck */
+        ChangeCheck: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "role" | "scope" | "field" | "limit";
+            /** Label */
+            label: string;
+            /**
+             * Ok
+             * @description null＝前一項已不符，未檢查
+             */
+            ok: boolean | null;
+            /** Detail */
+            detail: string;
+        };
+        /** ChangeCommitted */
+        ChangeCommitted: {
+            /** Change No */
+            change_no: string;
+            /**
+             * Text
+             * @description 依資料庫讀回結果套固定模板的回覆
+             */
+            text: string;
+            /** Rows */
+            rows: components["schemas"]["ChangeDiff"][];
+            /** Moves */
+            moves: number;
+            /** Op */
+            op: string;
+            /** Summary */
+            summary: string;
+            account: components["schemas"]["Account"];
+        };
+        /** ChangeDiff */
+        ChangeDiff: {
+            /** Label */
+            label: string;
+            /** Field */
+            field: string;
+            /** Before */
+            before: string | number | null;
+            /** After */
+            after: string | number | null;
+        };
+        /** ChangePreview */
+        ChangePreview: {
+            /** Request Id */
+            request_id: string;
+            /** Op */
+            op: string;
+            /** Op Label */
+            op_label: string;
+            account: components["schemas"]["Account"];
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Param Labels */
+            param_labels: {
+                [key: string]: unknown;
+            };
+            /** Sources */
+            sources: {
+                [key: string]: string;
+            };
+            /** Notes */
+            notes: string[];
+            /** Llm */
+            llm: {
+                [key: string]: unknown;
+            } | null;
+            /** Missing */
+            missing: string[];
+            /** Checks */
+            checks: components["schemas"]["ChangeCheck"][];
+            /** Diff */
+            diff: components["schemas"]["ChangeDiff"][];
+            /**
+             * Reasons
+             * @description 超過額度的原因（非空＝要送主管核准）
+             */
+            reasons: string[];
+            /** Pending Id */
+            pending_id: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Next
+             * @enum {string}
+             */
+            next: "confirm" | "approval" | "rejected" | "need_info";
+            /** Message */
+            message: string;
+            /** Latency Ms */
+            latency_ms?: number | null;
+        };
+        /** ChangePreviewRequest */
+        ChangePreviewRequest: {
+            /** Question */
+            question?: string | null;
+            /**
+             * Op
+             * @description 路由判斷的操作；表單送出時必填
+             */
+            op?: string | null;
+            /**
+             * Params
+             * @description 表單送出時的參數（不經參數抽取）
+             */
+            params?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ChatRequest */
         ChatRequest: {
@@ -1108,6 +1599,14 @@ export interface components {
             }[];
             scheduler?: components["schemas"]["SchedulerEngine"] | null;
             memory?: components["schemas"]["MemoryStatus"] | null;
+            system1?: components["schemas"]["System1Status"] | null;
+            /**
+             * Recent Routes
+             * @default []
+             */
+            recent_routes: {
+                [key: string]: unknown;
+            }[];
         };
         /** ImageSearchHit */
         ImageSearchHit: {
@@ -1822,6 +2321,15 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** RankedIntent */
+        RankedIntent: {
+            /** Intent */
+            intent: string;
+            /** Label */
+            label: string;
+            /** Prob */
+            prob: number;
+        };
         /** ReconstructRequest */
         ReconstructRequest: {
             /**
@@ -1841,6 +2349,36 @@ export interface components {
              * @enum {string}
              */
             strategy: "ortho2cad" | "hybrid";
+        };
+        /** ReturnRequest */
+        ReturnRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /** RouteEgress */
+        RouteEgress: {
+            /**
+             * Bytes
+             * @description 送出本機的位元組數（Jev 請求本文）；本地路由為 0
+             */
+            bytes: number;
+            /** To */
+            to: string | null;
+            /**
+             * Images
+             * @default 0
+             */
+            images: number;
+        };
+        /** RouteEvalRunsResponse */
+        RouteEvalRunsResponse: {
+            /**
+             * Runs
+             * @description eval/runs/*-route.json 的摘要（新到舊）
+             */
+            runs: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * RouteInfo
@@ -1878,6 +2416,136 @@ export interface components {
              * @description 不確定時一律當圖紙（機密側）
              */
             uncertain: boolean;
+        };
+        /** RoutePhoto */
+        RoutePhoto: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "art" | "drawing" | "unknown";
+            /** Id */
+            id: string | null;
+            /** Label */
+            label: string;
+        };
+        /** RouteRequest */
+        RouteRequest: {
+            /**
+             * Question
+             * @default
+             */
+            question: string;
+            /** Image Id */
+            image_id?: string | null;
+            /**
+             * Forced Intent
+             * @description 使用者點澄清按鈕選的意圖
+             */
+            forced_intent?: string | null;
+            /**
+             * Engine
+             * @description auto：有金鑰用 Jev、否則本地；eval-route 用 jev／local 比較
+             * @default auto
+             * @enum {string}
+             */
+            engine: "auto" | "jev" | "local";
+        };
+        /** RouteResponse */
+        RouteResponse: {
+            /** Request Id */
+            request_id: string;
+            account: components["schemas"]["Account"];
+            /** Question */
+            question: string;
+            /**
+             * Masked Text
+             * @description 送 Jev 的代號化文字（本地路由時只在本機）
+             */
+            masked_text: string;
+            /**
+             * Mapping
+             * @description 代號 → 實體（只留在本機）
+             */
+            mapping: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Entities */
+            entities: {
+                [key: string]: unknown;
+            }[];
+            photo: components["schemas"]["RoutePhoto"] | null;
+            /**
+             * Engine
+             * @enum {string}
+             */
+            engine: "jev" | "local" | "user";
+            /** Engine Label */
+            engine_label: string;
+            /** Model */
+            model: string;
+            /** Fallback Reason */
+            fallback_reason: string | null;
+            /** Intent */
+            intent: string;
+            /** Intent Label */
+            intent_label: string;
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "read" | "heavy" | "write";
+            /** Confidence */
+            confidence: number;
+            /** Margin */
+            margin: number;
+            /** Jev Confidence */
+            jev_confidence: number | null;
+            /** Ranked */
+            ranked: components["schemas"]["RankedIntent"][];
+            /** Modify Op */
+            modify_op: string | null;
+            /** Flags */
+            flags: {
+                [key: string]: boolean;
+            };
+            /**
+             * Gate
+             * @enum {string}
+             */
+            gate: "direct" | "confirm" | "modify" | "clarify" | "out_of_scope";
+            /** Threshold */
+            threshold: number;
+            /** Gate Reason */
+            gate_reason: string;
+            /** Options */
+            options: components["schemas"]["RankedIntent"][];
+            /** Permitted */
+            permitted: boolean;
+            /** Permission Note */
+            permission_note: string;
+            /** Dispatch */
+            dispatch: {
+                [key: string]: unknown;
+            };
+            egress: components["schemas"]["RouteEgress"];
+            /** Latency Ms */
+            latency_ms: {
+                [key: string]: number;
+            };
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /**
+             * Jev Request
+             * @description 實際送給 Jev 的請求本文（畫面上可展開檢查）
+             */
+            jev_request: {
+                [key: string]: unknown;
+            } | null;
         };
         /** RoutingOp */
         RoutingOp: {
@@ -2220,6 +2888,28 @@ export interface components {
             available: boolean;
             /** Detail */
             detail: string;
+        };
+        /** SwitchAccountRequest */
+        SwitchAccountRequest: {
+            /** Account Id */
+            account_id: string;
+        };
+        /** System1Status */
+        System1Status: {
+            /** Jev Configured */
+            jev_configured: boolean;
+            /** Detail */
+            detail: string;
+            /** Model */
+            model: string;
+            /** Timeout S */
+            timeout_s: number;
+            /** Thresholds */
+            thresholds: {
+                [key: string]: number;
+            };
+            /** Clarify Margin */
+            clarify_margin: number;
         };
         /** TextSearchHit */
         TextSearchHit: {
@@ -3451,6 +4141,35 @@ export interface operations {
             };
         };
     };
+    route_eval_runs_api_v1_eval_route_runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteEvalRunsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     health_api_v1_health_get: {
         parameters: {
             query?: never;
@@ -3500,6 +4219,330 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_accounts_api_v1_auth_accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    switch_account_api_v1_auth_switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    agent_route_api_v1_agent_route_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RouteResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_preview_api_v1_changes_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangePreview"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_commit_api_v1_changes__pending_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pending_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeCommitted"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_request_approval_api_v1_changes__pending_id__request_approval_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pending_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Approval"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_approvals_api_v1_approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_api_v1_approvals__ap_no__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ap_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    return_approval_api_v1_approvals__ap_no__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ap_no: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    audit_log_api_v1_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditResponse"];
                 };
             };
             /** @description Client Error */

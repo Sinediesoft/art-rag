@@ -74,7 +74,7 @@ prompt:
   version: answer_v1          # 對應 shared/prompts/answer_v1.md
   drawing_version: drawing_v1 # 工廠圖紙問答，對應 shared/prompts/drawing_v1.md
   sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
-  sql_answer_version: sql_answer_v1  # 依查詢結果回答（sql_answer_v1.md）
+  sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）
 
 # 工廠庫存 Text-to-SQL：沿用 hybrid 生成端（本地 Qwen3-VL，失敗改走本地備援），不另外載入模型。
 # 庫存屬企業內部資料，雲端策略一律拒絕；SQL 只在唯讀連線＋白名單下執行（docs/adr/004）

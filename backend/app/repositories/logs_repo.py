@@ -36,6 +36,12 @@ CREATE TABLE IF NOT EXISTS sql_logs (
   attempts INTEGER, row_count INTEGER, sql_ms INTEGER, exec_ms INTEGER, total_ms INTEGER,
   input_tokens INTEGER, output_tokens INTEGER, answer TEXT
 );
+CREATE TABLE IF NOT EXISTS route_logs (
+  request_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, account_id TEXT, question TEXT,
+  masked_text TEXT, has_photo INTEGER, engine TEXT, model TEXT, fallback_reason TEXT, intent TEXT,
+  modify_op TEXT, confidence REAL, margin REAL, gate TEXT, overrides_rules INTEGER,
+  egress_bytes INTEGER, system1_ms INTEGER, total_ms INTEGER
+);
 CREATE TABLE IF NOT EXISTS feedback (
   id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL, rating TEXT NOT NULL,
   note TEXT, created_at TEXT NOT NULL
@@ -133,6 +139,28 @@ class LogsRepo:
         rows = self._exec(
             "SELECT request_id, created_at, question, strategy_used, model, sql, ok, error,"
             " attempts, row_count, total_ms FROM sql_logs ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        )
+        return [dict(r) for r in rows]
+
+    def add_route_log(self, row: dict) -> None:
+        """智慧助理的路由紀錄：誰判斷的（Jev／本地）、意圖、信心、閘門、外送位元組。"""
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        # 同一個 request_id 再寫一次就覆蓋；用 ON CONFLICT 而不是 SQLite 專用的 INSERT OR REPLACE，
+        # PostgreSQL 版（pg_logs_repo）共用這段 SQL
+        updates = ", ".join(f"{c} = excluded.{c}" for c in row if c != "request_id")
+        self._exec(
+            f"INSERT INTO route_logs ({cols}) VALUES ({marks})"
+            f" ON CONFLICT (request_id) DO UPDATE SET {updates}",
+            tuple(row.values()),
+        )
+
+    def recent_routes(self, limit: int = 10) -> list[dict]:
+        rows = self._exec(
+            "SELECT request_id, created_at, account_id, question, masked_text, engine, model,"
+            " fallback_reason, intent, modify_op, confidence, gate, egress_bytes, total_ms"
+            " FROM route_logs ORDER BY created_at DESC LIMIT ?",
             (limit,),
         )
         return [dict(r) for r in rows]

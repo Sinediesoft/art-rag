@@ -8,6 +8,7 @@ import re
 from datetime import date, datetime
 
 import pytest
+from conftest import as_account
 from test_api import parse_sse
 
 from app.rag.kb import validate_inventory, validate_parts, validate_production
@@ -114,14 +115,25 @@ def test_create_work_order_schedule_and_query_with_sql(client):
         60,
     ]
     assert plan["suggestion"]["qty"] >= 1 and plan["suggestion"]["due_on"] >= plan["plan_start"]
-    # 2. 開立工單：單號避開知識庫（含 kb_staging 的 WO-2610-03）
-    r = client.post(
-        "/api/v1/production/work-orders",
-        json={"part_id": "mfg-002", "qty": 80, "due_on": "2026-10-16", "priority": "急件"},
-    )
-    assert r.status_code == 201
-    wo = r.json()
-    assert wo["wo_no"] == "WO-2610-04" and wo["source"] == "系統開立"
+    # 2. 開立工單：只有生管可以；急件超過額度要主管核准（和智慧助理同一套規則）
+    body = {"part_id": "mfg-002", "qty": 80, "due_on": "2026-10-16", "priority": "急件"}
+    as_account(client, "guest")
+    r = client.post("/api/v1/production/work-orders", json=body)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED"
+    as_account(client, "planner")
+    r = client.post("/api/v1/production/work-orders", json=body)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "APPROVAL_REQUIRED"
+    change = {"op": "wo_create", "params": body}
+    preview = client.post("/api/v1/changes/preview", json=change).json()
+    assert preview["next"] == "approval" and preview["pending_id"]
+    ap = client.post(f"/api/v1/changes/{preview['pending_id']}/request-approval", json={}).json()
+    as_account(client, "manager")
+    decided = client.post(f"/api/v1/approvals/{ap['ap_no']}/approve", json={}).json()
+    assert decided["status"] == "已核准"
+    # 單號避開知識庫（含 kb_staging 的 WO-2610-03）；開立人是申請的生管
+    wo = get_production_repo().get_work_order(decided["change_no"])
+    assert wo["wo_no"] == "WO-2610-04" and wo["created_by"] == "planner"
+    as_account(client, "planner")
     # 工廠資料庫（Text-to-SQL 查的）立刻看得到，尚未排程
     repo = get_inventory_repo()
     row = repo.run_readonly(
@@ -170,6 +182,7 @@ def test_create_work_order_schedule_and_query_with_sql(client):
 
 
 def test_work_order_validation(client):
+    as_account(client, "planner")
     bad_due = {"part_id": "mfg-001", "qty": 10, "due_on": "2026-09-01"}
     assert client.post("/api/v1/production/work-orders", json=bad_due).status_code == 422
     unknown = {"part_id": "nope-1", "qty": 10, "due_on": "2026-10-20"}

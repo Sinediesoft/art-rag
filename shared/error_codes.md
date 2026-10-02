@@ -27,6 +27,14 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `FORBIDDEN` | 403 | 展示控制已停用（`DEMO_CONTROLS=false` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`） |
+| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原也會回這個（ADR 011） |
+| `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
+| `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
+| `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |
+| `APPROVAL_CLOSED` | 409 | 待核准單已經核准、退回或失效 |
+| `CHANGE_NOT_FOUND` | 404 | 確認卡已過期（15 分鐘）或已使用，請重新輸入 |
+| `CHANGE_STALE` | 409 | 從試算到按確認之間，受影響的資料已被修改（指紋不同），沒有寫入 |
+| `ACCOUNT_NOT_FOUND` | 404 | 切換身分時沒有這個展示帳號 |
+| `FORBIDDEN` | 403 | 展示控制已停用（`DEMO_CONTROLS=false` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
 | `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |

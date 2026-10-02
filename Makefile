@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -27,7 +27,7 @@ help:
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
 	@echo "make demo-add    展示用：加入第 4、5 筆畫作（早春圖、睡蓮）與第 7 張圖紙（治具定位板，含庫存與途程）並重建索引"
-	@echo "make demo-reset  展示用：移除上述展示資料、清掉圖紙頁開立的工單與排程結果，並重建索引"
+	@echo "make demo-reset  展示用：移除上述展示資料、清掉開立的工單、排程結果、智慧助理的異動與核准單，並重建索引"
 	@echo "make demo-test   展示前測試：查圖紙 → 開立工單 → 生產排程 → Text-to-SQL 查排程，逐步顯示記憶體與釋放的模型"
 	@echo "--- 工廠機械加工圖（Ortho2CAD）---"
 	@echo "make ortho2cad-setup  下載 Ortho2CAD 並轉成 GGUF（約 6.2 GB；需先 brew install llama.cpp）"
@@ -41,6 +41,8 @@ help:
 	@echo "--- 生產排程（Timefold Solver）---"
 	@echo "make scheduler-setup  建置排程服務（需 Java 21：brew install openjdk@21；Maven 會自動下載）"
 	@echo "make scheduler   啟動排程服務 http://localhost:$(SCHED_PORT)（另開一個終端機；沒啟動時排程頁改用簡易排程）"
+	@echo "--- 智慧助理（System 1：Jev／本地路由）---"
+	@echo "make eval-route  路由評估：Jev 與本地路由在 eval/route_qa.jsonl 的正確率（需後端在執行；沒金鑰只跑本地）"
 	@echo "make ci          CI 會跑的檢查：知識庫、lint、型別、單元測試、openapi 同步"
 
 # --compile-bytecode：CadQuery 在 sandbox-exec 裡不能寫 .pyc，沒預先編譯時每次 import 要 14 秒，
@@ -126,6 +128,9 @@ eval-cad:
 
 eval-sql:
 	$(PY) eval/run_sql_eval.py
+
+eval-route:
+	$(PY) eval/run_route_eval.py
 
 test:
 	cd backend && uv run pytest -q

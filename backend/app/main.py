@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from app.agent import local_router
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.errors import (
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:  # noqa: BLE001
         log.error(f"庫存資料庫建立失敗：{e}")
     warmup()
+    local_router.warmup()
     m = get_store().manifest
     where = f"PostgreSQL {db.describe(s.database_url)}" if s.database_url else "檔案索引＋SQLite"
     log.info(

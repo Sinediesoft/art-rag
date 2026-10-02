@@ -5,12 +5,19 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Query, Request, UploadFile
+from fastapi import APIRouter, File, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
+from app.agent import jev
 from app.api import schemas as S
-from app.core.config import REPO_ROOT, get_models_config, get_settings, kb_version
+from app.core.config import (
+    REPO_ROOT,
+    get_agent_config,
+    get_models_config,
+    get_settings,
+    kb_version,
+)
 from app.core.errors import AppError
 from app.rag import providers
 from app.rag.kb import current_kb_hash
@@ -19,9 +26,13 @@ from app.rag.text2sql import load_examples, prompt_versions
 from app.repositories.index_store import get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
+from app.repositories.production_repo import get_production_repo
 from app.services import (
+    agent_service,
     cad_service,
+    change_service,
     chat_service,
+    identity,
     memory_guard,
     schedule_service,
     search_service,
@@ -336,17 +347,40 @@ async def part_plan(part_id: str):
     status_code=201,
     tags=["production"],
 )
-def create_work_order(body: S.WorkOrderCreate):
-    """從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。"""
-    return schedule_service.create_work_order(
-        body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note
-    )
+def create_work_order(body: S.WorkOrderCreate, request: Request):
+    """從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
+
+    權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
+    """
+    account = identity.current(request)
+    params = body.model_dump()
+    change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
+    row = schedule_service.create_work_order(
+        body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note,
+        created_by=account.id,
+    )  # fmt: skip
+    get_production_repo().add_audit(
+        {"actor_id": account.id, "actor_label": account.label, "action": "寫入", "op": "wo_create",
+         "ref_no": row["wo_no"], "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉"
+         f"{row['qty']} 件", "detail": None, "request_id": request.state.request_id}
+    )  # fmt: skip
+    return row
 
 
 @router.delete("/production/work-orders/{wo_no}", response_model=S.OkResponse, tags=["production"])
-def cancel_work_order(wo_no: str):
-    """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。"""
+def cancel_work_order(wo_no: str, request: Request):
+    """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。"""
+    w = get_production_repo().get_work_order(wo_no)
+    if not w or w["status"] != "已開立":
+        schedule_service.cancel_work_order(wo_no)  # 回 404 WORK_ORDER_NOT_FOUND
+    account = identity.current(request)
+    change_service.direct("wo_cancel", {"wo_no": wo_no}, account, request.state.request_id, "API")
     schedule_service.cancel_work_order(wo_no)
+    get_production_repo().add_audit(
+        {"actor_id": account.id, "actor_label": account.label, "action": "寫入", "op": "wo_cancel",
+         "ref_no": wo_no, "summary": f"取消工單 {wo_no}", "detail": None,
+         "request_id": request.state.request_id}
+    )  # fmt: skip
     return S.OkResponse()
 
 
@@ -362,7 +396,11 @@ def cancel_work_order(wo_no: str):
     },
 )
 async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
-    """把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。"""
+    """把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
+
+    只有生管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
+    """
+    identity.require(identity.current(request), "schedule_run", "執行排程")
     stream = schedule_service.solve_stream(
         request_id=request.state.request_id, seconds=body.seconds, engine=body.engine
     )
@@ -385,10 +423,12 @@ def schedule_run(run_id: str):
 
 
 @router.post("/admin/production/reset", response_model=S.OkResponse, tags=["production"])
-def reset_production():
-    """展示還原：清掉圖紙頁開立的工單與所有排程結果（DEMO_CONTROLS=false 時停用）。"""
+def reset_production(request: Request):
+    """展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單與稽核紀錄
+    （DEMO_CONTROLS=false 時停用；生管或主管才可以）。"""
     if not get_settings().demo_controls:
         raise AppError("FORBIDDEN", "展示控制已停用", 403)
+    identity.require(identity.current(request), "demo_reset", "展示還原")
     schedule_service.reset()
     return S.OkResponse()
 
@@ -420,8 +460,10 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        # 圖紙、領域路由、Text-to-SQL 與展示測試的評估另有格式
-        if not p.name.endswith(("-cad.json", "-router.json", "-sql.json", "-demo.json")):
+        # 圖紙、領域路由、Text-to-SQL、展示測試與智慧助理路由（-route）的評估另有格式
+        if not p.name.endswith(
+            ("-cad.json", "-router.json", "-sql.json", "-demo.json", "-route.json")
+        ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))
     return {"runs": runs}
 
@@ -438,6 +480,17 @@ def sql_eval_runs():
     """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。"""
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-sql.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
+
+
+@router.get("/eval/route-runs", response_model=S.RouteEvalRunsResponse, tags=["eval"])
+def route_eval_runs():
+    """智慧助理路由評估（make eval-route）：Jev 與本地路由的正確率、修改誤判、延遲、外送量。"""
+    paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-route.json"), reverse=True)[:10]
+    runs = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    for r in runs:  # 清單只回摘要，逐題結果留在檔案
+        for e in r.get("engines", []):
+            e.pop("rows", None)
+    return {"runs": runs}
 
 
 @router.get("/health", response_model=S.HealthResponse, tags=["system"])
@@ -534,6 +587,22 @@ async def health():
         recent_sql=logs.recent_sql(10) if db_ok else [],
         scheduler=scheduler,
         memory=memory,
+        system1=_system1_status(),
+        recent_routes=get_logs_repo().recent_routes(10),
+    )
+
+
+def _system1_status() -> S.System1Status:
+    s = get_settings()
+    cfg = get_agent_config()
+    ok, detail = jev.status()
+    return S.System1Status(
+        jev_configured=ok,
+        detail=detail,
+        model=s.jev_model,
+        timeout_s=s.jev_timeout_s,
+        thresholds=cfg["thresholds"],
+        clarify_margin=cfg["clarify_margin"],
     )
 
 
@@ -544,3 +613,95 @@ def simulate_outage(body: S.OutageRequest):
         raise AppError("FORBIDDEN", "展示控制已停用", 403)
     providers.OUTAGE["enabled"] = body.enabled
     return S.OkResponse()
+
+
+# ---------------------------------------------------------------- 智慧助理（docs/adr/011）
+def _accounts(account: identity.Account) -> dict:
+    return {
+        "current": account.public(),
+        "accounts": [a.public() for a in identity.accounts().values()],
+        "demo_controls": get_settings().demo_controls,
+        "pending_approvals": len(get_production_repo().approvals(status="待核准")),
+    }
+
+
+@router.get("/auth/accounts", response_model=S.AccountsResponse, tags=["agent"])
+def list_accounts(request: Request):
+    """展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。"""
+    return _accounts(identity.current(request))
+
+
+@router.post("/auth/switch", response_model=S.AccountsResponse, tags=["agent"])
+def switch_account(body: S.SwitchAccountRequest, request: Request, response: Response):
+    """展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。"""
+    return _accounts(identity.switch(request, response, body.account_id))
+
+
+@router.post("/agent/route", response_model=S.RouteResponse, tags=["agent"])
+async def agent_route(body: S.RouteRequest, request: Request):
+    """System 1：判斷意圖與信心（Jev 或本地路由）→ 信心閘門 → 分派到哪個本地模組。"""
+    if not body.question.strip() and not body.image_id:
+        raise AppError("VALIDATION_ERROR", "請輸入一句話或附一張照片", 422)
+    return await agent_service.route(
+        body.question,
+        identity.current(request),
+        request.state.request_id,
+        image_id=body.image_id,
+        forced_intent=body.forced_intent,
+        engine=body.engine,
+    )
+
+
+@router.post("/changes/preview", response_model=S.ChangePreview, tags=["agent"])
+async def change_preview(body: S.ChangePreviewRequest, request: Request):
+    """修改資料流程 1～4：參數抽取 → 權限判定 → 試算（交易內套用後回滾）→ 額度判斷 → 確認卡。"""
+    return await change_service.preview(
+        identity.current(request),
+        request.state.request_id,
+        question=body.question,
+        op=body.op,
+        params=body.params,
+    )
+
+
+@router.post("/changes/{pending_id}/commit", response_model=S.ChangeCommitted, tags=["agent"])
+def change_commit(pending_id: str, request: Request):
+    """按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。"""
+    return change_service.commit(pending_id, identity.current(request), request.state.request_id)
+
+
+@router.post("/changes/{pending_id}/request-approval", response_model=S.Approval, tags=["agent"])
+def change_request_approval(pending_id: str, body: S.ApprovalRequest, request: Request):
+    """超過額度：建立待核准單（AP-）送主管。"""
+    return change_service.request_approval(
+        pending_id, identity.current(request), body.note, request.state.request_id
+    )
+
+
+@router.get("/approvals", response_model=S.ApprovalsResponse, tags=["agent"])
+def list_approvals(request: Request):
+    """待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。"""
+    return change_service.list_approvals(identity.current(request))
+
+
+@router.post("/approvals/{ap_no}/approve", response_model=S.ApprovalDecision, tags=["agent"])
+def approve(ap_no: str, body: S.ApprovalRequest, request: Request):
+    """主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。"""
+    return change_service.approve(
+        ap_no, identity.current(request), body.note, request.state.request_id
+    )
+
+
+@router.post("/approvals/{ap_no}/return", response_model=S.ApprovalDecision, tags=["agent"])
+def return_approval(ap_no: str, body: S.ReturnRequest, request: Request):
+    """主管退回（要附理由，申請人在「我的申請」看得到）。"""
+    return change_service.return_(
+        ap_no, identity.current(request), body.reason, request.state.request_id
+    )
+
+
+@router.get("/audit", response_model=S.AuditResponse, tags=["agent"])
+def audit_log(limit: int = Query(default=30, ge=1, le=200)):
+    """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。"""
+    prod = get_production_repo()
+    return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}

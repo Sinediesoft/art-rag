@@ -101,7 +101,7 @@ def test_logs_roundtrip(pool):
 
     repo = PgLogsRepo(pool)
     with pool.connection() as conn:
-        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, feedback")
+        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, route_logs, feedback")
     assert repo.ping()
 
     repo.add_upload("img-new", "img-new.jpg")
@@ -139,6 +139,12 @@ def test_logs_roundtrip(pool):
     )
     (sql,) = repo.recent_sql(5)  # 庫存 Text-to-SQL 的紀錄（系統狀態頁）
     assert sql["request_id"] == "req-3" and sql["sql"] == "SELECT 1"
+    # 智慧助理的路由紀錄（系統狀態頁）：同一個 request_id 再寫一次是覆蓋，不是報錯
+    route = {"request_id": "req-4", "created_at": repo.now(), "intent": "inventory", "gate": "run"}
+    repo.add_route_log(route)
+    repo.add_route_log({**route, "gate": "confirm", "confidence": 0.62})
+    (r,) = repo.recent_routes(5)
+    assert r["gate"] == "confirm" and r["confidence"] == 0.62 and r["intent"] == "inventory"
     repo.add_feedback("req-1", "up", None)
 
 
@@ -161,19 +167,24 @@ def test_import_sqlite_is_idempotent(pool, tmp_path):
         }
     )
     old.add_sql_log({"request_id": "req-c", "created_at": old.now(), "sql": "SELECT 1", "ok": 1})
+    route = {"request_id": "req-d", "created_at": old.now(), "intent": "inventory", "gate": "run"}
+    old.add_route_log(route)
+    old.add_route_log({**route, "gate": "confirm"})  # SQLite 版同樣是覆蓋
     old.add_feedback("req-a", "up", "答得好")
     old._conn.close()
 
     repo = PgLogsRepo(pool)
     with pool.connection() as conn:
-        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, feedback")
+        conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, route_logs, feedback")
     assert repo.import_sqlite(path) == {
         "uploads": (1, 1),
         "chat_logs": (1, 1),
         "cad_logs": (1, 1),
         "sql_logs": (1, 1),
+        "route_logs": (1, 1),
         "feedback": (1, 1),
     }
+    assert repo.recent_routes(5)[0]["gate"] == "confirm"
     # 再搬一次不會重複寫入（feedback 沒有主鍵，也要擋得住）
     assert all(added == 0 for _, added in repo.import_sqlite(path).values())
     (cad,) = repo.recent_cad_for_part("mfg-002")  # 圖紙頁「最近的 3D 重建」看得到

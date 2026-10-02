@@ -44,3 +44,10 @@ def client(mock_env):
 
     with TestClient(app) as c:
         yield c
+
+
+def as_account(client, account_id: str) -> dict:
+    """切換展示身分（工作階段 cookie 由 TestClient 保留）。"""
+    r = client.post("/api/v1/auth/switch", json={"account_id": account_id})
+    assert r.status_code == 200, r.text
+    return r.json()["current"]

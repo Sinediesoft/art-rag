@@ -1,8 +1,10 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import type { MemoryStatus } from "./api/client";
 import { useHealth } from "./api/hooks";
+import { IdentityBar } from "./components/agent/IdentityBar";
 
 const NAV = [
+  { to: "/assistant", label: "智慧助理", icon: "M4 5h16v11H8l-4 4zM8 10h.01M12 10h.01M16 10h.01" },
   { to: "/", label: "尋畫", icon: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zm9 16-4.3-4.3" },
   { to: "/drawings", label: "工廠圖紙", icon: "M3 21V9l6-4v4l6-4v4l6-4v16zM7 17h2m4 0h2" },
   { to: "/inventory", label: "庫存查詢", icon: "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9" },
@@ -57,13 +59,14 @@ export function Layout() {
           )}
           <MemoryChip memory={health?.memory} pushRight={!degraded} />
         </div>
+        <IdentityBar />
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-24 pt-5 sm:pb-10">
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         {NAV.map((n) => (
           <NavLink
             key={n.to}

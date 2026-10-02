@@ -38,6 +38,20 @@ export type SchedulerEngine = Schemas["SchedulerEngine"];
 export type ScheduleSolveRequest = Partial<Schemas["ScheduleSolveRequest"]>;
 export type MemoryStatus = Schemas["MemoryStatus"];
 export type MemoryEvent = Schemas["MemoryEvent"];
+// 智慧助理（System 1 路由、修改資料、主管核准）
+export type Account = Schemas["Account"];
+export type AccountsResponse = Schemas["AccountsResponse"];
+export type RouteRequest = Pick<Schemas["RouteRequest"], "question"> & Partial<Omit<Schemas["RouteRequest"], "question">>;
+export type RouteResponse = Schemas["RouteResponse"];
+export type ChangePreview = Schemas["ChangePreview"];
+export type ChangePreviewRequest = Schemas["ChangePreviewRequest"];
+export type ChangeCommitted = Schemas["ChangeCommitted"];
+export type ChangeCheck = Schemas["ChangeCheck"];
+export type ChangeDiff = Schemas["ChangeDiff"];
+export type Approval = Schemas["Approval"];
+export type ApprovalsResponse = Schemas["ApprovalsResponse"];
+export type ApprovalDecision = Schemas["ApprovalDecision"];
+export type AuditResponse = Schemas["AuditResponse"];
 type ChatDefaults = "strategy" | "use_retrieval" | "allow_fallback";
 /** 有預設值的欄位在請求時可省略 */
 export type ChatRequest = Omit<Schemas["ChatRequest"], ChatDefaults> &
@@ -131,4 +145,20 @@ export const api = {
   // 記憶體管理
   memory: () => request<MemoryStatus>("/memory"),
   releaseMemory: () => request<Schemas["MemoryReleaseResponse"]>("/admin/memory/release", { method: "POST" }),
+  // 智慧助理：身分（存在伺服器端的工作階段，cookie 由瀏覽器自動帶）、路由、修改資料、主管核准
+  accounts: () => request<AccountsResponse>("/auth/accounts"),
+  switchAccount: (accountId: string) => request<AccountsResponse>("/auth/switch", json({ account_id: accountId })),
+  route: (body: RouteRequest) => request<RouteResponse>("/agent/route", json(body)),
+  changePreview: (body: ChangePreviewRequest) => request<ChangePreview>("/changes/preview", json(body)),
+  changeCommit: (pendingId: string) =>
+    request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" }),
+  requestApproval: (pendingId: string, note?: string) =>
+    request<Approval>(`/changes/${encodeURIComponent(pendingId)}/request-approval`, json({ note: note || null })),
+  approvals: () => request<ApprovalsResponse>("/approvals"),
+  approve: (apNo: string, note?: string) =>
+    request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/approve`, json({ note: note || null })),
+  returnApproval: (apNo: string, reason: string) =>
+    request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason })),
+  audit: () => request<AuditResponse>("/audit"),
+  routeEvalRuns: () => request<Schemas["RouteEvalRunsResponse"]>("/eval/route-runs"),
 };
