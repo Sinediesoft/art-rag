@@ -70,7 +70,7 @@ const STALE = ["parts", "part", "artworks", "artwork", "health", "audit"];
 
 /**
  * 照片建檔（docs/adr/013）：拍照 → 擋模糊 → 確認知識庫還沒有 → 填欄位 → 主管收錄。
- * 圖紙由本地 Qwen3-VL 讀標題欄、在頁面上確認；畫作的資料在跳出的表單填。
+ * 欄位都在跳出的表單確認：圖紙由本地 Qwen3-VL 先填好，人對照照片確認、讀錯就直接改；畫作由人填。
  * 網址帶 ?draft= 就是那份草稿；帶 ?image=（從辨識失敗的頁面過來）就直接開始。
  */
 export function IntakePage({ domain }: { domain: Domain }) {
@@ -335,31 +335,36 @@ function FieldsForm({
   );
 }
 
-/** 畫作的資料：填完之後的摘要（依分區） */
-function FieldSummary({ fields }: { fields: IntakeField[] }) {
+/** 表單關掉之後的摘要；圖紙另外標每格的來源（模型讀的、規則校正的、人改的） */
+function FieldSummary({ fields, showSource }: { fields: IntakeField[]; showSource?: boolean }) {
   const filled = fields.filter((f) => f.value !== null && f.value !== "");
   return (
     <dl className="grid grid-cols-[6.5em_1fr] gap-x-3 gap-y-1 text-sm">
       {filled.map((f) => (
         <div key={f.key} className="contents">
           <dt className="text-ink-48">{f.label}</dt>
-          <dd className={`break-words ${f.status === "invalid" ? "text-danger" : ""}`}>{shown(f.value)}</dd>
+          <dd className={`flex flex-wrap items-center gap-1.5 break-words ${f.status === "invalid" ? "text-danger" : ""}`}>
+            <span className={f.kind === "number" || CODE_KEYS.includes(f.key) ? "font-mono" : ""}>{shown(f.value)}</span>
+            {showSource && <SourceChip f={f} />}
+          </dd>
         </div>
       ))}
     </dl>
   );
 }
 
-/** 跳出的表單（原生 <dialog>：Esc 可以關、背景不能點） */
+/** 跳出的表單（原生 <dialog>：Esc 可以關、背景不能點）；aside 放在表單旁邊（圖紙的照片，對照著確認） */
 function FormDialog({
   open,
   title,
   onClose,
+  aside,
   children,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -374,7 +379,7 @@ function FormDialog({
       ref={ref}
       onClose={onClose}
       aria-label={title}
-      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-hairline bg-card p-0 text-ink backdrop:bg-ink/40"
+      className={`m-auto w-[calc(100%-2rem)] ${aside ? "max-w-5xl" : "max-w-2xl"} rounded-2xl border border-hairline bg-card p-0 text-ink backdrop:bg-ink/40`}
     >
       <div className="flex max-h-[88vh] flex-col">
         <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
@@ -383,7 +388,14 @@ function FormDialog({
             ✕
           </button>
         </div>
-        <div className="overflow-y-auto px-4 py-3">{children}</div>
+        {aside ? (
+          <div className="grid gap-4 overflow-y-auto px-4 py-3 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+            <div className="md:sticky md:top-0 md:self-start">{aside}</div>
+            <div>{children}</div>
+          </div>
+        ) : (
+          <div className="overflow-y-auto px-4 py-3">{children}</div>
+        )}
       </div>
     </dialog>
   );
@@ -407,10 +419,10 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
     if (status === "done") STALE.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   }, [status, qc]);
 
-  // 畫作：草稿一建好就跳出表單填資料（只自動開一次）
+  // 草稿一建好就跳出表單（只自動開一次）：圖紙是模型填好的欄位，一律要人確認；畫作還有沒填的才開
   const isArt = d?.domain === "art";
   useEffect(() => {
-    if (isArt && d?.status === "draft" && d.blockers.length > 0 && !autoOpened.current) {
+    if (d?.status === "draft" && (!isArt || d.blockers.length > 0) && !autoOpened.current) {
       autoOpened.current = true;
       setFormOpen(true);
     }
@@ -434,6 +446,10 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
   const editable = d.status === "draft" || d.status === "failed";
   const dirty = Object.keys(edits).length > 0;
   const canCommit = me?.ops.includes("kb_intake") ?? false;
+  // 摘要要不要顯示：畫作看人填過沒（規則一開始就帶了 ID），圖紙看有沒有任何欄位有值
+  const filled = isArt
+    ? d.fields.some((f) => f.source === "人")
+    : d.fields.some((f) => f.value !== null && f.value !== "");
 
   const apply = (next: IntakeDraft) => {
     qc.setQueryData(["intake", draftId], next);
@@ -461,7 +477,6 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
     );
     return apply(await api.updateIntake(draftId, values));
   };
-  const save = () => run("save", async () => void (await saveEdits()));
   // 跳出的表單：存好且沒有要處理的欄位就關掉；還有沒過的就留著，紅字標在欄位下面
   const saveDialog = () =>
     run("save", async () => {
@@ -481,8 +496,7 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
     });
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (isArt) saveDialog();
-    else save();
+    saveDialog();
   };
 
   const form = (
@@ -490,14 +504,11 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
       <FieldsForm fields={d.fields} edits={edits} setEdits={setEdits} editable={editable} />
       {editable && (
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            disabled={(!dirty && !isArt) || !!busy}
-            className="btn-primary"
-          >
-            {busy === "save" ? "儲存中…" : isArt ? "儲存資料" : "儲存並重新驗證"}
+          <button disabled={!!busy} className="btn-primary">
+            {busy === "save" ? "儲存中…" : isArt ? "儲存資料" : dirty ? "儲存修改" : "確認無誤"}
           </button>
           {dirty && <span className="text-xs text-warning">有修改還沒儲存</span>}
-          {isArt && d.blockers.length > 0 && !dirty && (
+          {d.blockers.length > 0 && !dirty && (
             <span className="text-xs text-danger">還要處理：{d.blockers.join("、")}</span>
           )}
         </div>
@@ -561,46 +572,51 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
           ))}
         </ul>
 
-        {isArt ? (
-          <section className="card p-4">
-            <div className="mb-3 flex items-baseline justify-between gap-2">
-              <h2 className="font-semibold">
-                畫作資料 <span className="font-mono text-sm text-ink-48">{d.item_id}</span>
-              </h2>
-              {editable && (
-                <button
-                  type="button"
-                  onClick={() => setFormOpen(true)}
-                  className="btn-ghost px-4 py-1.5 text-sm"
-                >
-                  {d.fields.some((f) => f.source === "人") ? "編輯資料" : "填寫畫作資料"}
-                </button>
-              )}
-            </div>
-            {d.fields.some((f) => f.source === "人") ? (
-              <FieldSummary fields={d.fields} />
-            ) : (
-              <p className="text-sm text-ink-80">還沒填資料：按「填寫畫作資料」。</p>
+        <section className="card p-4">
+          <div className="mb-3 flex items-baseline justify-between gap-2">
+            <h2 className="font-semibold">
+              {isArt ? "畫作資料" : "圖紙資料"} <span className="font-mono text-sm text-ink-48">{d.item_id}</span>
+            </h2>
+            {editable && (
+              <button type="button" onClick={() => setFormOpen(true)} className="btn-ghost px-4 py-1.5 text-sm">
+                {!isArt ? "確認／修改資料" : filled ? "編輯資料" : "填寫畫作資料"}
+              </button>
             )}
-            {d.blockers.length > 0 && <p className="mt-2 text-sm text-danger">還要處理：{d.blockers.join("、")}</p>}
-            <FormDialog open={formOpen} title="畫作資料" onClose={() => setFormOpen(false)}>
-              <p className="mb-3 text-xs text-ink-48">
-                ＊必填。典藏單位是知識庫已有的，來源代碼會自動帶入；沒填介紹，系統會依這些欄位寫一段「基本資料」。
-              </p>
-              {form}
-            </FormDialog>
-          </section>
-        ) : (
-          <section className="card p-4">
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="font-semibold">
-                圖紙資料 <span className="font-mono text-sm text-ink-48">{d.item_id}</span>
-              </h2>
-              <span className="text-xs text-ink-48">＊必填</span>
-            </div>
+          </div>
+          {filled ? (
+            <FieldSummary fields={d.fields} showSource={!isArt} />
+          ) : (
+            <p className="text-sm text-ink-80">
+              還沒填資料：按「{isArt ? "填寫畫作資料" : "確認／修改資料"}」。
+            </p>
+          )}
+          {d.blockers.length > 0 && <p className="mt-2 text-sm text-danger">還要處理：{d.blockers.join("、")}</p>}
+          {dirty && !formOpen && (
+            <p className="mt-2 text-sm text-warning">表單裡有修改還沒儲存：按「{isArt ? "編輯資料" : "確認／修改資料"}」回去儲存</p>
+          )}
+          <FormDialog
+            open={formOpen}
+            title={isArt ? "畫作資料" : "圖紙資料"}
+            onClose={() => setFormOpen(false)}
+            aside={
+              isArt ? undefined : (
+                <figure className="flex flex-col gap-1">
+                  <a href={assetUrl(d.photo_url)} target="_blank" rel="noreferrer" title="開新分頁看原尺寸">
+                    <img src={assetUrl(d.photo_url)} alt="拍的照片" className="w-full rounded-lg object-contain" />
+                  </a>
+                  <figcaption className="text-xs text-ink-48">拍的照片（點一下開新分頁看原尺寸）</figcaption>
+                </figure>
+              )
+            }
+          >
+            <p className="mb-3 text-xs text-ink-48">
+              {isArt
+                ? "＊必填。典藏單位是知識庫已有的，來源代碼會自動帶入；沒填介紹，系統會依這些欄位寫一段「基本資料」。"
+                : "＊必填。欄位已由本地 Qwen3-VL 讀照片自動填好（藍）、系統依知識庫校正（灰）；對照左邊的照片確認，讀錯的直接改（改過標綠），照片上沒有的欄位請補上。"}
+            </p>
             {form}
-          </section>
-        )}
+          </FormDialog>
+        </section>
 
         <CommitBox
           d={d}

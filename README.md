@@ -198,7 +198,7 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 13 | 沒收錄也能建模 | 第 10 步的辨識細節頁按「沒收錄也能用 Ortho2CAD 重建 3D」 | Qwen3-VL 讀尺寸＋Ortho2CAD 建模 |
 | 14 | 製程問答 | 說「連接法蘭有哪些公差要求？」→ 點 [n] 看內部文件出處；「繼續問這張圖」再問「單價多少」看它說不知道 | 引用、防幻覺；機密圖紙不提供雲端生成端 |
 | 15 | 擴充 | `make demo-add` 同時加入第 7 張圖紙〈治具定位板〉，重新整理就辨識得出 | 新增圖紙不改程式 |
-| 15b | 照片建檔 | （身分切成「生管」）輸入框 📷 附 `eval/drawing_photos/unknown/unknown-03__glare.jpg`（〈皮帶輪輪轂〉，知識庫沒有）送出 → 辨識不到，回答下方「拍照建檔：這是一張圖紙」：看清晰度、拉正、Qwen3-VL 逐字抄標題欄 → 確認頁補「類別」「負責單位」→ 切到「主管」按「收錄」→ 約 2 分鐘後再上傳 `unknown-03__tilt.jpg` 就辨識得出 | 模型讀、規則驗、人確認；糊照（`*__blur.jpg`）直接請重拍；收錄只有主管能按（ADR 013）。展示完刪 `kb/parts`、`kb/drawings` 裡那一張再 `make index` |
+| 15b | 照片建檔 | （身分切成「生管」）輸入框 📷 附 `eval/drawing_photos/unknown/unknown-03__glare.jpg`（〈皮帶輪輪轂〉，知識庫沒有）送出 → 辨識不到，回答下方「拍照建檔：這是一張圖紙」：看清晰度、拉正、Qwen3-VL 逐字抄標題欄 → 跳出的表單對照照片確認（讀錯直接改）、補「類別」「負責單位」→ 切到「主管」按「收錄」→ 約 2 分鐘後再上傳 `unknown-03__tilt.jpg` 就辨識得出 | 模型讀、規則驗、人確認；糊照（`*__blur.jpg`）直接請重拍；收錄只有主管能按（ADR 013）。展示完刪 `kb/parts`、`kb/drawings` 裡那一張再 `make index` |
 | 15c | 畫作照片建檔 | 輸入框 📷 附 `eval/photos/unknown/unknown-01.jpg`（〈神奈川沖浪裏〉，知識庫沒有）送出 → 回答下方「拍照建檔：這是一幅畫」：表單自動跳出 → 填畫名、作者、年代、典藏單位（The Met → ID 自動帶 `met-…`）、典藏頁網址、授權 → 主管收錄 → 約 1.5 分鐘後換一張同一幅畫的照片就辨識得出；上傳 `eval/photos/known/*__blur.jpg` 直接被擋 | 畫作不讀展牌（館方著作）、資料由人填；圖紙與畫作同一個模糊門檻。展示完刪 `kb/artworks`、`kb/images` 裡那一筆再 `make index` |
 
 ### 工廠庫存 Text-to-SQL（約 3 分鐘）
