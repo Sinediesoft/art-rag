@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, type RouteResponse } from "../api/client";
@@ -29,6 +30,8 @@ const EXAMPLES = [
   "把法蘭轉成 3D",
   "法蘭還剩幾件可以出貨？",
   "記憶體狀況",
+  "比較有絲柏的麥田和谿山行旅圖",
+  "批次辨識一批照片",
   "法蘭",
   "今天天氣如何",
 ];
@@ -504,6 +507,8 @@ type Dispatched = {
   artwork_label?: string;
   path?: string;
   op?: string | null;
+  /** 並排比較的兩件（docs/adr/017）：句子裡只提到一件時 refs 只有一個 */
+  compare?: { kind: "artwork" | "part"; refs: string[]; labels: string[] } | null;
 };
 
 interface DeepAction {
@@ -596,6 +601,16 @@ function moduleActions(route: RouteResponse, imageId: string | null): DeepAction
     }
     case "system":
       return [{ label: "打開系統狀態", to: "/admin#memory", primary: true }];
+    case "batch_identify":
+      return [{ label: "打開批次辨識", to: "/batch", primary: true }];
+    case "compare":
+      return [
+        {
+          label: d.compare?.refs.length === 2 ? "看完整比較表、差異摘要與匯出" : "打開兩件並排比較",
+          to: d.path ?? "/compare-items",
+          primary: true,
+        },
+      ];
     default:
       return [];
   }
@@ -707,9 +722,68 @@ function Dispatch({
       );
     case "system":
       return <SystemBrief />;
+    case "batch_identify":
+      return (
+        <p className="text-sm text-ink-80">
+          批次辨識：一次選一批照片（最多 100 張），每張都用以圖搜圖同一套方法辨識，畫作做典藏盤點、工廠圖紙做舊圖紙歸檔；
+          太模糊的會標出來請你重拍，結果可以匯出 CSV，「不在知識庫」的那幾張可以直接拍照建檔。按下方按鈕選照片。
+        </p>
+      );
+    case "compare":
+      return d.compare?.refs.length === 2 ? (
+        <CompareBrief a={d.compare.refs[0]} b={d.compare.refs[1]} />
+      ) : (
+        <p className="text-sm text-ink-80">
+          {d.compare
+            ? `要拿〈${d.compare.labels[0]}〉和哪一件比？到比較頁選另一件。`
+            : "請說出兩幅畫或兩張圖紙的名稱（例如「比較連接法蘭和軸承座」），或到比較頁選。"}
+        </p>
+      );
     default:
       return null;
   }
+}
+
+const NAME_KEYS = new Set(["title", "title_en", "name", "part_no", "drawing_no", "topics"]);
+
+/** 並排比較：對話裡先列出不同的欄位（前 6 個，名稱與編號除外），完整表格、差異摘要與匯出在比較頁 */
+function CompareBrief({ a, b }: { a: string; b: string }) {
+  const query = useQuery({ queryKey: ["compare", a, b], queryFn: () => api.compareItems(a, b) });
+  const data = useFirst(query.data);
+  if (!data && query.isLoading) return <Loading label="讀取兩件的資料…" />;
+  if (query.error && !data)
+    return <ErrorMessage message={(query.error as Error).message} code={(query.error as ApiError).code} />;
+  if (!data) return null;
+  const name = (k: "a" | "b") => String(data.kind === "artwork" ? data[k].title_zh : data[k].name_zh);
+  // 名稱、編號本來就不同，對話裡先列其他欄位
+  const diffs = data.rows.filter((r) => !r.same && (r.a || r.b) && !NAME_KEYS.has(r.key));
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p>
+        〈{name("a")}〉和〈{name("b")}〉有 <b>{data.differences}</b> 個欄位不同
+        {diffs.length > 6 && "，先列前 6 個"}：
+      </p>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-ink-48">
+            <th className="py-1 font-normal">欄位</th>
+            <th className="py-1 font-normal">〈{name("a")}〉</th>
+            <th className="py-1 font-normal">〈{name("b")}〉</th>
+          </tr>
+        </thead>
+        <tbody>
+          {diffs.slice(0, 6).map((r) => (
+            <tr key={r.key} className="border-t border-hairline/60 align-top">
+              <td className="py-1 pr-2 text-ink-80">{r.label}</td>
+              <td className="py-1 pr-2">{r.a ?? "—"}</td>
+              <td className="py-1">{r.b ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-xs text-ink-48">直接讀知識庫，不經生成・每格出處在比較頁</p>
+    </div>
+  );
 }
 
 /**

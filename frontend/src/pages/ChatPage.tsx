@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api, assetUrl, type Strategy } from "../api/client";
 import { useArtwork } from "../api/hooks";
 import { ChatAnswer } from "../components/ChatAnswer";
+import { QaExport, subjectImage, type QaTurn } from "../components/common/QaExport";
 import { Loading } from "../components/common/Feedback";
 
 const SUGGESTIONS = [
@@ -34,6 +35,8 @@ export function ChatPage() {
   const [strategy, setStrategy] = useState<Strategy>("hybrid");
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  // 每一則的回答與出處（匯出整段問答用）
+  const [records, setRecords] = useState<Record<number, QaTurn>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,6 +112,16 @@ export function ChatPage() {
         </div>
       )}
 
+      {turns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <QaExport
+            subject={{ title: a.title.zh, kind: "artwork", id: a.id, imageUrl: subjectImage(a.thumb_url, imageId) }}
+            turns={turns.map((t) => records[t.id]).filter((x): x is QaTurn => !!x)}
+            label="匯出整段問答（導覽講稿）"
+          />
+        </div>
+      )}
+
       <div className="flex flex-col gap-5">
         {turns.map((t) => (
           <div key={t.id} className="flex flex-col gap-2">
@@ -121,6 +134,12 @@ export function ChatPage() {
                   image_id: imageId,
                   strategy: t.strategy,
                 }}
+                onProgress={(x) =>
+                  setRecords((r) => ({
+                    ...r,
+                    [t.id]: { question: t.question, text: x.text, sources: x.sources?.sources ?? [], done: x.done },
+                  }))
+                }
               />
             </div>
           </div>

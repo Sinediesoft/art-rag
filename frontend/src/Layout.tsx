@@ -19,6 +19,8 @@ const PAGES: [RegExp, string][] = [
   [/^\/inventory/, "庫存・訂單・工單查詢"],
   [/^\/schedule/, "生產排程"],
   [/^\/approvals/, "主管核准"],
+  [/^\/compare-items/, "兩件並排比較"],
+  [/^\/batch/, "批次辨識"],
   [/^\/compare/, "策略比較"],
   [/^\/admin/, "系統狀態"],
 ];

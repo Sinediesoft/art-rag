@@ -25,7 +25,7 @@ from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard, search_service
-from app.services.identity import Auth
+from app.services.identity import Auth, level_rank
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 
@@ -70,13 +70,52 @@ def _dispatch(intent: str, question: str, entities: list, photo: dict | None) ->
         d["path"] = f"/drawings/{part_id}"
     elif intent == "system":
         d["path"] = "/admin#memory"
+    elif intent == "batch_identify":
+        d["path"] = "/batch"
+    elif intent == "compare":
+        d.update(_compare_targets(entities, part_id, artwork_id))
     return d
+
+
+def _compare_targets(entities: list, part_id: str | None, artwork_id: str | None) -> dict:
+    """並排比較的兩件（docs/adr/017）：句子裡兩件同一類的作品；只提到一件（或附照片）就先帶那一件，
+    另一件在比較頁上選。"""
+    store = get_store()
+    found = local_router.pair(entities)
+    if found:
+        kind, ids = found[0], found[1][:2]
+    elif part_id:
+        kind, ids = "part", [part_id]
+    elif artwork_id:
+        kind, ids = "artwork", [artwork_id]
+    else:
+        return {"compare": None, "path": "/compare-items"}
+    get = store.get_part if kind == "part" else store.get_artwork
+    items = [x for x in (get(i) for i in ids) if x]
+    labels = [x["name"]["zh"] if kind == "part" else x["title"]["zh"] for x in items]
+    refs = [f"{kind}:{x['id']}" for x in items]
+    query = "&".join(f"{k}={r}" for k, r in zip("ab", refs, strict=False))
+    return {
+        "compare": {"kind": kind, "refs": refs, "labels": labels},
+        "path": "/compare-items" + (f"?{query}" if query else ""),
+    }
 
 
 def _target(dispatch: dict) -> dict | None:
     """已指定的對象（某張圖紙、某幅畫）與機密等級、部門：
-    第 1 段檢查功能授權、產生 Metadata Filter。"""
+    第 1 段檢查功能授權、產生 Metadata Filter。
+    並排比較兩張圖紙：取機密等級較高的那張（兩張都要看得到）。"""
     store = get_store()
+    cmp = dispatch.get("compare")
+    if cmp and cmp["kind"] == "part" and cmp["refs"]:
+        parts = [store.get_part(r.split(":", 1)[1]) for r in cmp["refs"]]
+        p = max(parts, key=lambda x: level_rank(x["confidentiality"]))
+        return {
+            "id": p["id"],
+            "label": p["name"]["zh"],
+            "level": p["confidentiality"],
+            "dept": p.get("owner", ""),
+        }
     if dispatch.get("part_id") and (p := store.get_part(dispatch["part_id"])):
         return {
             "id": p["id"],
@@ -146,8 +185,18 @@ async def route(
         dispatch["op_label"] = op_label
 
     # 1. 認證與授權：憑證已在閘道驗過；這裡用憑證的角色檢查功能與動作權限
+    cmp = dispatch.get("compare")
+    domain = ("mfg" if cmp["kind"] == "part" else "art") if intent == "compare" and cmp else None
     authz = guard.auth_check(
-        auth.checks, account, intent, decision.gate, op, op_label, _target(dispatch), entities
+        auth.checks,
+        account,
+        intent,
+        decision.gate,
+        op,
+        op_label,
+        _target(dispatch),
+        entities,
+        domain=domain,
     )
     logged_text = question if question or not photo else f"（只有照片：{photo['label']}）"
     guard_res = None

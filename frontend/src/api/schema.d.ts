@@ -405,6 +405,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/batch/identify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Identify
+         * @description 一次辨識一批照片（典藏盤點、舊圖紙歸檔）。每張照片照資料範圍處理：
+         *     看不到的圖紙那一列標「目前身分看不到」、不透露是哪一張，不讓整批失敗。
+         */
+        post: operations["batch_identify_api_v1_batch_identify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compare/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Items
+         * @description 兩幅畫或兩張圖紙並排比較：逐欄並排、標出不同、每格附出處；直接讀知識庫，不呼叫模型。
+         *     圖紙照資料範圍（訪客不能用工廠圖紙、業務看不到機密圖紙 → 403）。
+         */
+        get: operations["compare_items_api_v1_compare_items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compare/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare Summary
+         * @description 兩件並排比較的差異摘要：本地生成端依比較表與兩邊的知識段落寫一段，每句附 [編號]。
+         */
+        post: operations["compare_summary_api_v1_compare_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log Export
+         * @description 前端匯出 CSV、比較表或問答報告時記一筆稽核（action＝匯出）。
+         *     涉及的圖紙也要看得到：看不到的 id 不會出現在前端，出現了就是有人繞過畫面 → 403。
+         */
+        post: operations["log_export_api_v1_exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/intake": {
         parameters: {
             query?: never;
@@ -1571,6 +1654,19 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** BatchIdentifyRequest */
+        BatchIdentifyRequest: {
+            /**
+             * Image Ids
+             * @description 上傳的照片（POST /images），依序辨識；上限見 shared/models.yaml 的 batch.max_images
+             */
+            image_ids: string[];
+            /**
+             * Domain
+             * @description art／mfg＝只跑該領域的辨識；null＝每張先交給領域路由判斷
+             */
+            domain?: ("mfg" | "art") | null;
+        };
         /** BlockedInfo */
         BlockedInfo: {
             /**
@@ -1848,6 +1944,55 @@ export interface components {
              */
             latency_ms: number;
         };
+        /** CompareRow */
+        CompareRow: {
+            /** Key */
+            key: string;
+            /**
+             * Group
+             * @description 分區：基本資料、典藏與授權、色彩分析、材料與表面、外形…
+             */
+            group: string;
+            /** Label */
+            label: string;
+            /** A */
+            a: string | null;
+            /** B */
+            b: string | null;
+            /**
+             * Same
+             * @description 兩邊相同（都沒有資料也算相同）
+             */
+            same: boolean;
+            source_a: components["schemas"]["CompareSource"];
+            source_b: components["schemas"]["CompareSource"];
+        };
+        /** CompareSource */
+        CompareSource: {
+            /**
+             * Label
+             * @description 這一格的出處：知識庫 JSON、標準模型計算、色彩分析…
+             */
+            label: string;
+            /**
+             * Url
+             * @description 畫作的典藏頁（資料出處）
+             */
+            url?: string | null;
+        };
+        /** CompareSummaryRequest */
+        CompareSummaryRequest: {
+            /**
+             * A
+             * @example part:mfg-001
+             */
+            a: string;
+            /**
+             * B
+             * @example part:mfg-002
+             */
+            b: string;
+        };
         /** ConstraintScore */
         ConstraintScore: {
             /** Constraint */
@@ -1967,6 +2112,31 @@ export interface components {
         EvalRunsResponse: {
             /** Runs */
             runs: components["schemas"]["EvalRun"][];
+        };
+        /**
+         * ExportAuditRequest
+         * @description 前端匯出（CSV、比較表、問答報告）時記一筆稽核：檔案在瀏覽器裡產生，但匯出了哪些資料要留紀錄。
+         */
+        ExportAuditRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "batch_csv" | "compare" | "qa_report";
+            /**
+             * Refs
+             * @description 匯出內容涉及的畫作／圖紙 id（看得到的才會出現在前端）
+             * @default []
+             */
+            refs: string[];
+            /**
+             * Rows
+             * @description CSV 列數、比較欄位數或問答則數
+             * @default 0
+             */
+            rows: number;
+            /** Title */
+            title?: string | null;
         };
         /** FeedbackRequest */
         FeedbackRequest: {
@@ -2510,6 +2680,47 @@ export interface components {
             rows: number | null;
             /** Columns */
             columns: components["schemas"]["InventoryColumn"][];
+        };
+        /** ItemComparison */
+        ItemComparison: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "artwork" | "part";
+            /**
+             * A
+             * @description ArtworkSummary 或 PartSummary，加上 ref（artwork:<id>／part:<id>）
+             */
+            a: {
+                [key: string]: unknown;
+            };
+            /** B */
+            b: {
+                [key: string]: unknown;
+            };
+            /**
+             * Level
+             * @description 兩件裡最高的機密等級（匯出時印在頁首）
+             * @enum {string}
+             */
+            level: "公開" | "內部" | "機密";
+            /** Rows */
+            rows: components["schemas"]["CompareRow"][];
+            /**
+             * Differences
+             * @description 有資料、而且兩邊不同的欄位數
+             */
+            differences: number;
+            /** Latency Ms */
+            latency_ms: number;
+            /**
+             * Egress
+             * @description 外送資料量：表格直接讀知識庫，恆為 0
+             */
+            egress: {
+                [key: string]: number;
+            };
         };
         /** JevAnswerRow */
         JevAnswerRow: {
@@ -4734,6 +4945,137 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batch_identify_api_v1_batch_identify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchIdentifyRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE：每張照片一個 row，最後 done（見 shared/sse_events.md） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    compare_items_api_v1_compare_items_get: {
+        parameters: {
+            query: {
+                a: string;
+                b: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemComparison"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    compare_summary_api_v1_compare_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareSummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description SSE：sources／token／done／error（見 shared/sse_events.md） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    log_export_api_v1_exports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportAuditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Client Error */

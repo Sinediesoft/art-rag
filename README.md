@@ -201,6 +201,13 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 15b | 照片建檔 | （身分切成「生管」）輸入框 📷 附 `eval/drawing_photos/unknown/unknown-03__glare.jpg`（〈皮帶輪輪轂〉，知識庫沒有）送出 → 辨識不到，回答下方「拍照建檔：這是一張圖紙」：看清晰度、拉正、Qwen3-VL 逐字抄標題欄 → 跳出的表單對照照片確認（讀錯直接改）、補「類別」「負責單位」→ 切到「主管」按「收錄」→ 約 2 分鐘後再上傳 `unknown-03__tilt.jpg` 就辨識得出 | 模型讀、規則驗、人確認；糊照（`*__blur.jpg`）直接請重拍；收錄只有主管能按（ADR 013）。展示完刪 `kb/parts`、`kb/drawings` 裡那一張再 `make index` |
 | 15c | 畫作照片建檔 | 輸入框 📷 附 `eval/photos/unknown/unknown-01.jpg`（〈神奈川沖浪裏〉，知識庫沒有）送出 → 回答下方「拍照建檔：這是一幅畫」：表單自動跳出 → 填畫名、作者、年代、典藏單位（The Met → ID 自動帶 `met-…`）、典藏頁網址、授權 → 主管收錄 → 約 1.5 分鐘後換一張同一幅畫的照片就辨識得出；上傳 `eval/photos/known/*__blur.jpg` 直接被擋 | 畫作不讀展牌（館方著作）、資料由人填；圖紙與畫作同一個模糊門檻。展示完刪 `kb/artworks`、`kb/images` 裡那一筆再 `make index` |
 
+### 兩個領域共用的小工具：批次辨識、並排比較、匯出報告（約 4 分鐘，ADR 017）
+| # | 步驟 | 操作 | 看點 |
+|---|---|---|---|
+| 15d | 批次辨識 | （身分「主管」）說「批次辨識一批照片」→「打開批次辨識」→ 一次選 `eval/photos/known/aic-27992__glare.jpg`、`npm-000001__dim.jpg`、`met-436535__blur.jpg`、`eval/photos/unknown/unknown-01.jpg`、`eval/drawing_photos/known/mfg-002__glare.jpg`、`eval/drawing_photos/unknown/unknown-02__dim.jpg` → 結果一列一列出現 → 匯出 CSV | 畫作典藏盤點、圖紙歸檔同一個頁面；糊照標「太模糊」不硬判；「不在知識庫」那一列直接拍照建檔。切成「業務・甲」再跑一次：機密的〈連接法蘭〉只標「看不到」 |
+| 15e | 並排比較 | 說「比較連接法蘭和步進馬達安裝板」→ 對話裡先列不同的欄位 →「看完整比較表、差異摘要與匯出」→ 按「請本地模型寫一段」→ 匯出報告；再說「有絲柏的麥田跟谿山行旅圖有什麼不同」 | 每格附出處（知識庫、典藏頁、標準模型計算、色彩分析）；兩張圖紙有一張機密時報告頁首印「機密」；業務比較同一句 → 降級「查無資料」 |
+| 15f | 匯出報告 | 任一則問答下方「匯出報告」，或問答頁上方「匯出整段問答」（畫作是導覽講稿、圖紙是檢驗紀錄草稿）→「列印／存成 PDF」 | 單一 HTML 檔、圖片內嵌；[編號] 連到引用段落全文、授權、出處；三種匯出都記一筆稽核（系統狀態的稽核紀錄看得到「匯出」） |
+
 ### 工廠庫存 Text-to-SQL（約 3 分鐘）
 
 | # | 展示項目 | 操作 | 重點 |
@@ -437,7 +444,7 @@ MacBook Air 無風扇，連續運算數分鐘後降頻到約 15–18 token/s（�
 
 ### 智慧助理路由（`make eval-route`）
 
-`eval/route_qa.jsonl` 44 句中文（與 `shared/agent.yaml` 的範例句完全不重複），對執行中的後端呼叫 `/agent/route`。
+`eval/route_qa.jsonl` 51 句中文（與 `shared/agent.yaml` 的範例句完全不重複），對執行中的後端呼叫 `/agent/route`。
 2026-10-02 起要交給哪個模組一律由本地分流判斷（ADR 014、015），`--engines local,jev` 比較第 2 段由誰判斷；
 每題先切換成做得了這件事的身分，讓第 1 段角色授權不擋。
 指標：意圖正確率、直接處理率（不必再問）、修改誤判（查詢↔修改，代價最高）、修改操作正確率、第 2 段誤擋、
@@ -450,7 +457,10 @@ MacBook Air 無風扇，連續運算數分鐘後降頻到約 15–18 token/s（�
 | 2026-10-02 | Jev（jev-1.13.0） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0 | 73 ms | 303 ms | 53 KB（每句約 1.2 KB） |
 | 2026-10-03 | 地端規則（七段，ADR 015） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0（誤短路 0） | 65 ms | 0 ms | 0 B |
 | 2026-10-03 | Jev Choice（jev-1.13.0） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0（誤短路 0） | 73 ms | 260 ms | 53 KB |
+| 2026-10-04 | 地端規則（加批次辨識、並排比較，ADR 017） | 100%（51/51） | 96% | 0 | 100%（11/11） | 0（誤短路 0） | 149 ms | 0 ms | 0 B |
 
+10/4 加了兩個意圖與 7 句（r45–r51），第一次跑 98%（50/51）：「這幅畫和同時代的作品相比有什麼特色」判成並排比較；
+改成「比較的字眼要配上兩件同一類的作品（或說了兩張、兩幅、並排）才加分，否則只算 0.3 倍」後 100%。分流 p50 變慢是因為同時開了兩個後端、bge-m3 被記憶體管理釋放後重新載入。
 10/1 第一次跑是 93%（41/44），依錯的三題補關鍵字與「只有名稱就出澄清按鈕」規則後才到 100%，數字偏樂觀；需要再加沒看過的句子。
 10/2 套用五段防護時，第一次跑 Jev 把「工單都重新排一次」判成修改資料而誤擋 1 題，改成「耗時工作與修改資料之間不一致只提醒」後為 0。
 同日修了本地分流把畫名當成畫面描述的問題（「有絲柏的麥田收藏在哪裡？」原本判成以文搜畫）。
@@ -512,7 +522,9 @@ art-rag/
 │   ├── services/memory_guard  記憶體管理：超過 80% 時釋放目前流程用不到的模型
 │   ├── agent/         C  智慧助理：guard（七段權限控管：個資遮蔽、角色授權、Jev Choice、Jev Noul／Score、生成閘門、拒絕並記錄）、entities（代號化）、jev、local_router（本地分流）、gate（信心閘門）、extract（參數抽取）
 │   ├── services/change_service  修改資料流程：權限判定、試算、額度、確認寫入、主管核准（repositories/data_changes 白名單操作）
-│   └── services/intake_service  照片建檔：讀標題欄、規則驗證、草稿（data/intake/）、主管收錄寫 kb/ 並重建索引
+│   ├── services/intake_service  照片建檔：讀標題欄、規則驗證、草稿（data/intake/）、主管收錄寫 kb/ 並重建索引
+│   ├── services/batch_service   批次辨識：逐張擋模糊、領域路由＋辨識、依資料範圍標「看不到」（SSE）
+│   └── services/item_compare_service  兩件並排比較：逐欄並排與出處、本地模型的差異摘要（SSE）
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料

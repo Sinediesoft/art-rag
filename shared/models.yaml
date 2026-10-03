@@ -162,6 +162,17 @@ intake:
       id_code: {label: 來源代碼, read: false, pattern: '[a-z]+', group: 知識庫 ID, hint: 小寫英文；典藏單位是知識庫已有的就自動帶入（例如 npm）}
       id_no: {label: 編號, read: false, pattern: '[a-z0-9]+', group: 知識庫 ID, hint: 小寫英數字；預設取館藏編號}
 
+# 批次辨識、兩件並排比較、問答匯出報告（見 docs/adr/017）：三個工具都不加新模型。
+# - 批次辨識：每張照片走以圖搜圖同一套（領域路由＋該領域辨識），模糊門檻沿用 intake.max_blur；
+# - 兩件並排比較：表格直接讀知識庫，不呼叫模型；差異摘要（選用）只走本地生成端，每件放幾段知識段落；
+# - 問答匯出報告在前端組，不需要設定。不影響索引，改了不用重建。
+batch:
+  max_images: 100             # 一批最多幾張（每張約 0.6 秒）
+item_compare:
+  prompt_version: compare_v1  # 對應 shared/prompts/compare_v1.md
+  max_tokens: 400
+  chunks_per_item: 3
+
 # 檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）：依 retrieval 的規則取出候選段落後，
 # 再請本地生成端判斷哪幾段對回答有幫助，只留挑中的（至少 1 段）。只呼叫本地模型、不送雲端；
 # 逾時、連不上或輸出看不懂時退回原本的段落，不擋回答。

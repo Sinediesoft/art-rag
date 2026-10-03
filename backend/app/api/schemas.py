@@ -1315,3 +1315,64 @@ class IntakeUpdate(BaseModel):
 
 
 HealthResponse.model_rebuild()
+
+
+# ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）
+class BatchIdentifyRequest(BaseModel):
+    image_ids: list[str] = Field(
+        min_length=1,
+        description="上傳的照片（POST /images），依序辨識；"
+        "上限見 shared/models.yaml 的 batch.max_images",
+    )
+    domain: Literal["art", "mfg"] | None = Field(
+        default=None, description="art／mfg＝只跑該領域的辨識；null＝每張先交給領域路由判斷"
+    )
+
+
+class CompareSource(BaseModel):
+    label: str = Field(description="這一格的出處：知識庫 JSON、標準模型計算、色彩分析…")
+    url: str | None = Field(default=None, description="畫作的典藏頁（資料出處）")
+
+
+class CompareRow(BaseModel):
+    key: str
+    group: str = Field(description="分區：基本資料、典藏與授權、色彩分析、材料與表面、外形…")
+    label: str
+    a: str | None
+    b: str | None
+    same: bool = Field(description="兩邊相同（都沒有資料也算相同）")
+    source_a: CompareSource
+    source_b: CompareSource
+
+
+class ItemComparison(BaseModel):
+    kind: Literal["artwork", "part"]
+    a: dict = Field(
+        description="ArtworkSummary 或 PartSummary，加上 ref（artwork:<id>／part:<id>）"
+    )
+    b: dict
+    level: Literal["公開", "內部", "機密"] = Field(
+        description="兩件裡最高的機密等級（匯出時印在頁首）"
+    )
+    rows: list[CompareRow]
+    differences: int = Field(description="有資料、而且兩邊不同的欄位數")
+    latency_ms: int
+    egress: dict[str, int] = Field(description="外送資料量：表格直接讀知識庫，恆為 0")
+
+
+class CompareSummaryRequest(BaseModel):
+    a: str = Field(pattern=r"^(artwork|part):[a-z0-9][a-z0-9-]*$", examples=["part:mfg-001"])
+    b: str = Field(pattern=r"^(artwork|part):[a-z0-9][a-z0-9-]*$", examples=["part:mfg-002"])
+
+
+class ExportAuditRequest(BaseModel):
+    """前端匯出（CSV、比較表、問答報告）時記一筆稽核：檔案在瀏覽器裡產生，但匯出了哪些資料要留紀錄。"""
+
+    kind: Literal["batch_csv", "compare", "qa_report"]
+    refs: list[str] = Field(
+        default=[],
+        max_length=200,
+        description="匯出內容涉及的畫作／圖紙 id（看得到的才會出現在前端）",
+    )
+    rows: int = Field(default=0, ge=0, description="CSV 列數、比較欄位數或問答則數")
+    title: str | None = Field(default=None, max_length=200)

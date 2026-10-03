@@ -105,6 +105,28 @@
 圖紙的模型無法使用（主推論伺服器與本地備援都失敗）不算錯誤：照樣給 `draft`，欄位全空、`extraction.error` 說明原因，由人對照照片填。
 收錄（`POST /api/v1/intake/{draft_id}/commit`，只有主管）不是 SSE：回傳時 `status` 為 `indexing`，背景重建索引完成後 `GET` 會變成 `done`（失敗為 `failed`，寫進去的檔案與版本已還原）。
 
+## `POST /api/v1/batch/identify`（批次辨識，docs/adr/017）
+
+請求 `{"image_ids": [...], "domain"}`：`domain` 為 `art`／`mfg` 時只跑該領域的辨識，null 時每張先交給領域路由。一批上限 `batch.max_images`（100）。
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `row` | `{"index", "image_id", "domain", "route", "blur", "status", "item", "closest", "score", "inliers", "overlap", "note", "latency_ms"}` | 每張照片一列，依序送出。`status`：`matched`（認得，`item` 是那幅畫或那張圖紙 `{kind, id, label, detail, url, level}`）、`not_in_kb`（`closest` 是最相近但沒通過驗證的那一件）、`blurry`（模糊程度高於 `intake.max_blur`，不辨識）、`hidden`（目前身分看不到：不能用工廠圖紙，或辨識出的是看不到的圖紙，不回 id）、`error`（例如照片過期） |
+| `done` | `{"request_id", "total", "counts": {status: 張數}, "domains": {"art", "mfg"}, "latency_ms": {"total", "per_image"}, "egress"}` | 完成；`egress` 恆為 0 |
+
+張數超過上限回 422；指定 `domain: mfg` 但身分不能用工廠圖紙回 403（串流開始之前）。
+
+## `POST /api/v1/compare/summary`（兩件並排比較的差異摘要，docs/adr/017）
+
+請求 `{"a", "b"}`：`artwork:<id>` 或 `part:<id>`，兩件要同一類。權限、找不到、類別不同在串流開始前就回 4xx。
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `sources` | `{"request_id", "kind", "sources": [{"ref", "chunk_id", "side", "title", "topic", "text", "source_url", "source_label", "license"}], "dropped"}` | 放進上下文的段落（兩邊各最多 `item_compare.chunks_per_item` 段，`side` 是「甲」或「乙」）；`dropped`＝被地端洩密規則剔除的段數 |
+| `token` | `{"text"}` | 摘要的片段，引用段落的句子附 `[ref]` |
+| `done` | `{"request_id", "model", "strategy_used", "fallback", "prompt_version", "latency_ms": {"first_token", "total"}, "tokens", "egress"}` | 只走本地（`hybrid` → `hybrid_fallback`），`egress` 恆為 0 |
+| `error` | `{"code", "message", "request_id"}` | `STRATEGY_UNAVAILABLE`：本地模型都無法使用（表格仍可看） |
+
 ## 問答的 `strategy`
 
 `strategy` 可用值：`hybrid`（主架構）、`lora`（選做）、`api_nokb`／`api_kb`（雲端對照組 A1／A2，

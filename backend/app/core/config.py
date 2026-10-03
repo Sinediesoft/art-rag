@@ -235,6 +235,20 @@ class IntakeSpec(BaseModel):
     art: IntakeDomainSpec | None = None
 
 
+class BatchSpec(BaseModel):
+    """批次辨識（docs/adr/017）。模糊門檻沿用 intake.max_blur。不影響索引，改了不用重建。"""
+
+    max_images: int = 100  # 一批最多幾張（每張約 0.6 秒，100 張約 1 分鐘）
+
+
+class ItemCompareSpec(BaseModel):
+    """兩件並排比較的差異摘要（docs/adr/017）：只走本地生成端。不影響索引，改了不用重建。"""
+
+    prompt_version: str = "compare_v1"
+    max_tokens: int = 400
+    chunks_per_item: int = 3  # 每件作品放幾段知識段落進上下文
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -256,6 +270,8 @@ class ModelsConfig(BaseModel):
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
     intake: IntakeSpec = IntakeSpec()
+    batch: BatchSpec = BatchSpec()
+    item_compare: ItemCompareSpec = ItemCompareSpec()
 
 
 @lru_cache

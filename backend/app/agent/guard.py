@@ -43,6 +43,8 @@ INTENT_DOMAIN = {
     "data_query": "factory",
     "schedule": "factory",
     "modify": "factory",
+    # 並排比較：兩張圖紙是 mfg、兩幅畫是 art（agent_service 依句子裡的作品傳 domain 進來）
+    "compare": "art",
 }
 # 問答：文件看不看得到交給第 3 段 Metadata Filter 與第 6 段生成閘門（不在第 1 段透露）
 QA_INTENTS = {"art_qa", "drawing_qa"}
@@ -213,18 +215,25 @@ def auth_check(
     op_label: str | None,
     doc: dict | None,
     entities: list[Entity],
+    domain: str | None = None,
 ) -> AuthResult:
     """token_checks：閘道驗過的簽章、效期、角色（identity.verify）。
-    doc：已指定的對象 {id, label, level, dept}（某幅畫、某張圖紙），沒有就是 None。"""
+    doc：已指定的對象 {id, label, level, dept}（某幅畫、某張圖紙），沒有就是 None；
+    並排比較兩張圖紙時是兩張裡機密等級較高的那張。domain：覆寫意圖預設的資料領域。"""
     checks = [Check(c["key"], c["label"], "地端", c["ok"], c["detail"]) for c in token_checks]
     if gate == "clarify":
         checks.append(
             Check("function", "功能授權", "地端", None, "要做什麼還不確定，等你選擇後再檢查")
         )
         return AuthResult(True, True, checks)
-    domain = INTENT_DOMAIN.get(intent)
+    domain = domain or INTENT_DOMAIN.get(intent)
     if domain is None:
-        checks.append(Check("function", "功能授權", "地端", True, "不涉及地端資料，直接回覆"))
+        detail = (
+            "打開批次辨識頁：每張照片看得到什麼，由辨識 API 依你的資料範圍決定"
+            if intent == "batch_identify"
+            else "不涉及地端資料，直接回覆"
+        )
+        checks.append(Check("function", "功能授權", "地端", True, detail))
         return AuthResult(True, False, checks)
 
     tag = None
@@ -657,7 +666,9 @@ def _head(s: dict) -> str:
     return f"〈{s['title']}〉{s['topic']}："
 
 
-def _local_leak(text: str) -> str | None:
+def local_leak(text: str) -> str | None:
+    """地端的 security_leak_check：段落有洩密風險就回原因。
+    兩件並排比較的差異摘要也用（docs/adr/017）。"""
     r = _rules()
     if r["indirect"].search(text):
         return "夾帶要 AI 執行的指令"
@@ -690,7 +701,7 @@ async def process_passages(
     th = float(g["jev_threshold"])
     n = len(sources)
     pid = {s["chunk_id"]: f"p{i + 1}" for i, s in enumerate(sources)}
-    local_leak = {s["chunk_id"]: _local_leak(s["text"]) for s in sources}
+    leak_by_rule = {s["chunk_id"]: local_leak(s["text"]) for s in sources}
     use_jev = mode == "jev" and jev.status()[0]
     public = [s for s in sources if s.get("level") == "公開"] if mode == "jev" else []
 
@@ -757,7 +768,7 @@ async def process_passages(
     cloud_ids = set(jev_rel)
 
     def leaked(s: dict) -> bool:
-        return bool(local_leak[s["chunk_id"]]) or jev_leak.get(s["chunk_id"], 0.0) >= th
+        return bool(leak_by_rule[s["chunk_id"]]) or jev_leak.get(s["chunk_id"], 0.0) >= th
 
     clean = [s for s in sources if not leaked(s)]
     flagged = [s for s in sources if leaked(s)]
@@ -796,7 +807,7 @@ async def process_passages(
             if score is not None and score >= th:
                 why = f"security_leak_check 有洩密風險（{score:.2f}）"
             else:
-                by, why = "地端", f"地端規則：{local_leak[cid]}"
+                by, why = "地端", f"地端規則：{leak_by_rule[cid]}"
             verify.checks.append(Check(i, f"段落 {i[1:]}", by, False, f"{_head(s)}{why} → 剔除"))
             continue
         if mode == "scan":

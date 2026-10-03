@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatRequest } from "../api/client";
+import { api, assetUrl, type ChatRequest } from "../api/client";
 import type { DoneEvent, ErrorEvent, PostFilterInfo, SourcesEvent } from "../api/sse";
 import { useChatStream } from "../hooks/useChatStream";
 import { seconds, STRATEGY_LABEL, twd } from "../lib/format";
 import { AnswerText } from "./common/CitationTag";
 import { ErrorMessage, FeedbackButtons } from "./common/Feedback";
+import { QaExport } from "./common/QaExport";
 import { EgressBadge, FallbackBadge, NotInKbNotice } from "./common/StatusNotices";
 
 /** 一次問答：開始串流、顯示引用、來源、延遲與成本。問答頁、策略比較頁、智慧助理共用。
- * onProgress：智慧助理用來畫七段權限控管的第 3～7 段（檢索、驗證、重排、閘門、生成）。 */
+ * onProgress：智慧助理用來畫七段權限控管的第 3～7 段（檢索、驗證、重排、閘門、生成）；
+ * 問答頁用來收集整段問答匯出報告（text 在 done 時是完整的回答）。
+ * 不是 compact 時，回答完成後可以匯出這一則的報告（docs/adr/017）。 */
 export function ChatAnswer({
   request,
   compact = false,
@@ -18,7 +21,12 @@ export function ChatAnswer({
   request: ChatRequest;
   compact?: boolean;
   showSources?: boolean;
-  onProgress?: (p: { sources: SourcesEvent | null; done: DoneEvent | null; error: ErrorEvent | null }) => void;
+  onProgress?: (p: {
+    sources: SourcesEvent | null;
+    done: DoneEvent | null;
+    error: ErrorEvent | null;
+    text: string;
+  }) => void;
 }) {
   const { state, start } = useChatStream();
   const [activeRef, setActiveRef] = useState<number | null>(null);
@@ -41,8 +49,10 @@ export function ChatAnswer({
   const { status, text, done, error, sources } = state;
   const progress = useRef(onProgress);
   progress.current = onProgress;
+  const textRef = useRef(text);
+  textRef.current = text; // 不放進依賴：每個字都通知會讓整頁跟著重畫；done 時已是完整回答
   useEffect(() => {
-    progress.current?.({ sources, done, error });
+    progress.current?.({ sources, done, error, text: textRef.current });
   }, [sources, done, error]);
 
   if (error?.code === "NOT_IN_KB") return <NotInKbNotice />;
@@ -106,6 +116,18 @@ export function ChatAnswer({
           <span>{twd(done.cost_twd)}</span>
           {!compact && <span>prompt {done.prompt_version}</span>}
           {!compact && <FeedbackButtons requestId={done.request_id} />}
+          {!compact && (
+            <QaExport
+              compact
+              subject={{
+                title: sources?.sources[0]?.title ?? "智慧助理問答",
+                kind: request.part_id ? "part" : request.artwork_id ? "artwork" : null,
+                id: request.part_id ?? request.artwork_id ?? null,
+                imageUrl: subjectThumb(request),
+              }}
+              turns={[{ question: request.question, text, sources: sources?.sources ?? [], done }]}
+            />
+          )}
         </div>
       )}
 
@@ -189,4 +211,12 @@ function ContextNote({ pf, drawing }: { pf: PostFilterInfo; drawing: boolean }) 
       {parts.join("；")}
     </p>
   );
+}
+
+/** 報告封面：使用者附的照片，或知識庫的縮圖 */
+function subjectThumb(r: ChatRequest): string | null {
+  if (r.image_id) return api.uploadedImageUrl(r.image_id);
+  if (r.part_id) return assetUrl(`/api/v1/parts/${encodeURIComponent(r.part_id)}/drawing?size=thumb`);
+  if (r.artwork_id) return assetUrl(`/api/v1/artworks/${encodeURIComponent(r.artwork_id)}/image?size=thumb`);
+  return null;
 }

@@ -60,6 +60,11 @@ export type AuditResponse = Schemas["AuditResponse"];
 export type IntakeDraft = Schemas["IntakeDraft"];
 export type IntakeField = Schemas["IntakeField"];
 export type IntakeCheck = Schemas["IntakeCheck"];
+// 批次辨識、兩件並排比較、匯出（docs/adr/017）
+export type ItemComparison = Schemas["ItemComparison"];
+export type CompareRow = Schemas["CompareRow"];
+export type ExportAuditRequest = Pick<Schemas["ExportAuditRequest"], "kind"> &
+  Partial<Omit<Schemas["ExportAuditRequest"], "kind">>;
 type ChatDefaults = "strategy" | "use_retrieval" | "allow_fallback";
 /** 有預設值的欄位在請求時可省略 */
 export type ChatRequest = Omit<Schemas["ChatRequest"], ChatDefaults> &
@@ -224,4 +229,9 @@ export const api = {
     request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" }),
   discardIntake: (draftId: string) =>
     request<Schemas["OkResponse"]>(`/intake/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
+  // 批次辨識走 SSE（sse.ts 的 streamBatch）；兩件並排比較：a、b 是 artwork:<id> 或 part:<id>
+  compareItems: (a: string, b: string) =>
+    request<ItemComparison>(`/compare/items?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  /** 匯出 CSV、比較表、問答報告時記一筆稽核（檔案在瀏覽器裡產生） */
+  logExport: (body: ExportAuditRequest) => request<Schemas["OkResponse"]>("/exports", json(body)),
 };
