@@ -72,6 +72,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/align": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Photo Alignment
+         * @description 影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
+         *     畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
+         */
+        get: operations["get_photo_alignment_api_v1_images__image_id__align_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{image_id}/align.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Photo Alignment Overlay */
+        get: operations["get_photo_alignment_overlay_api_v1_images__image_id__align_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/image": {
         parameters: {
             query?: never;
@@ -1099,6 +1137,79 @@ export interface components {
              */
             pending_approvals: number;
         };
+        /** AlignDiff */
+        AlignDiff: {
+            /**
+             * Method
+             * @description ink：拉正後比對三視圖的線條（圖紙）；tone：比形狀與顏色（畫作：照片 vs 知識庫原圖，或兩張照片）
+             * @enum {string}
+             */
+            method: "ink" | "tone";
+            /**
+             * Status
+             * @description same：沒有差異；changed：列出差異；global_change：差異遍布整張，不列區塊（圖紙多半是改了外形尺寸；畫作多半是光線差太多、大片反光、照片太模糊，或拍的不是同一處）
+             * @enum {string}
+             */
+            status: "same" | "changed" | "global_change";
+            /**
+             * Regions
+             * @description 依差異大小排序；global_change 時是空的
+             */
+            regions: components["schemas"]["AlignRegion"][];
+            /**
+             * Changed Ratio
+             * @description 所有差異的大小：ink 占知識庫圖紙線條像素、tone 占比對範圍的比例
+             */
+            changed_ratio: number;
+        };
+        /** AlignLocation */
+        AlignLocation: {
+            /**
+             * Polygon
+             * @description 照片四個角（左上、右上、右下、左下）在參考圖上的位置，0–1；照片拍到參考圖外面時會超出 0–1
+             */
+            polygon: number[][];
+            /**
+             * Coverage
+             * @description 照片拍到參考圖面積的比例 0–1
+             */
+            coverage: number;
+            /**
+             * Center
+             * @description 拍到的範圍的中心 [x, y]，0–1
+             */
+            center: number[];
+        };
+        /** AlignRegion */
+        AlignRegion: {
+            /**
+             * Bbox
+             * @description [x0, y0, x1, y1]，0–1，參考圖座標
+             */
+            bbox: number[];
+            /**
+             * Kind
+             * @description ink（圖紙）：missing＝知識庫圖紙有、照片沒有，extra＝照片有、知識庫圖紙沒有；tone（畫作：照片 vs 原圖、兩張照片）：shape＝形狀不同，color＝顏色不同；both＝兩種都有
+             * @enum {string}
+             */
+            kind: "missing" | "extra" | "shape" | "color" | "both";
+            /**
+             * Area Ratio
+             * @description 這處差異的大小：ink 是占知識庫圖紙線條像素的比例，tone 是占比對範圍的比例
+             */
+            area_ratio: number;
+        };
+        /** AlignTarget */
+        AlignTarget: {
+            /**
+             * Kind
+             * @description artwork：知識庫畫作原圖；part：知識庫圖紙；image：另一張上傳照片（兩張照片互比）
+             * @enum {string}
+             */
+            kind: "artwork" | "part" | "image";
+            /** Id */
+            id: string;
+        };
         /** AnySearchResponse */
         AnySearchResponse: {
             /** Query Image Id */
@@ -1847,6 +1958,35 @@ export interface components {
             recent_routes: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ImageAlignment */
+        ImageAlignment: {
+            target: components["schemas"]["AlignTarget"];
+            /**
+             * Inliers
+             * @description 照片與參考圖對上的特徵點數（RANSAC inlier）
+             */
+            inliers: number;
+            location: components["schemas"]["AlignLocation"];
+            /** @description 知識庫畫作原圖、另一張照片為形狀與顏色差異（tone）；圖紙為線條差異（ink）；image_compare 設成 diff: none 的領域為 null（只標位置） */
+            diff: components["schemas"]["AlignDiff"] | null;
+            /**
+             * Reference Url
+             * @description 參考圖：知識庫畫作原圖或圖紙
+             */
+            reference_url: string;
+            /**
+             * Overlay Url
+             * @description 疊圖 PNG：參考圖上差異塗色並編號（畫作沒拍到的地方調暗）；只標位置時是框出拍到的範圍
+             */
+            overlay_url: string;
+            /** Notes */
+            notes: string[];
+            /**
+             * Latency Ms
+             * @description 對位與比對的計算時間（不含讀檔）
+             */
+            latency_ms: number;
         };
         /** ImageSearchHit */
         ImageSearchHit: {
@@ -3568,6 +3708,72 @@ export interface operations {
     get_photo_colormap_api_v1_images__image_id__colormap_png_get: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_photo_alignment_api_v1_images__image_id__align_get: {
+        parameters: {
+            query: {
+                /** @description 比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A） */
+                target: string;
+            };
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAlignment"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_photo_alignment_overlay_api_v1_images__image_id__align_png_get: {
+        parameters: {
+            query: {
+                /** @description 比對對象：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（照片 A） */
+                target: string;
+            };
             header?: never;
             path: {
                 image_id: string;

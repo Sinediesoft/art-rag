@@ -20,6 +20,8 @@
 照片 ─► 領域路由（與畫作／圖紙原型比 CLIP 相似度，MMed-RAG 的領域辨識）─► 畫作走下一行、圖紙走「工廠圖紙」那行
 照片 ─► 前處理（EXIF 轉正、1024px）─► Chinese-CLIP 粗篩 ─► ORB 幾何驗證 ─► 辨識結果／「知識庫中沒有這幅畫」
 照片／畫作 ─► 色彩分析（CIELAB k-means 主色、冷暖、明度／彩度、色塊分布圖；建索引時算好並寫成可引用的段落）
+辨識成功 ─► 影像對位（ORB 單應矩陣）─► 畫作：原圖上框出拍到的範圍，比形狀與顏色標出不同的地方｜圖紙：拉正後比三視圖線條，標出和知識庫圖紙不同的地方
+兩張照片（同一幅畫、同光線）─► 對齊 ─► 比形狀（SSIM）與顏色（Lab 色差）─► 標出修復前後、真跡與複製品不同的地方
 問題 ─► bge-m3 ─► 只取該畫作段落（門檻＋最多 5 段；比較／背景題才從全庫補足）
       ─►（選用，預設關）本地模型篩掉沒幫助的段落（MIRA 的 Rearrange）─► 共用 prompt（answer_v1）
       ─► strategy：hybrid（Ollama Qwen3-VL）｜lora（選做）｜api_nokb／api_kb（雲端對照組）─► OpenCC ─► SSE
@@ -162,6 +164,8 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | # | 展示項目 | 操作 | 對應驗收目標 |
 |---|---|---|---|
 | 1 | 以圖搜圖 | 首頁「拍照辨識」，用手機拍螢幕上的〈谿山行旅圖〉 | Top-1 ≥ 90% |
+| 1b | 和原圖比對 | 上傳 `eval/align_photos/art/npm-000001__crop50-1.jpg`（只拍到〈谿山行旅圖〉的一部分）：成功卡下面「和知識庫原圖比對」在原圖上框出拍到的範圍、「沒有找到不一樣的地方」；再上傳 `eval/align_photos/artedit/met-436535__strokes-crop50.jpg`（〈有絲柏的麥田〉的近照，照片上用黑筆加了幾筆）：框出 1 處「形狀不同」，也可以自己在照片上畫幾筆再上傳 | 兩個領域共用的影像對位（ADR 012；畫作找不同是第 4 步） |
+| 1c | 兩張照片互比 | 首頁「比對兩張照片」：照片 A 上傳 `eval/align_photos/pair/aic-27992__tint-1__A.jpg`、照片 B 上傳同名的 `__B.jpg`（中間一塊補了顏色）：標出 1 處「顏色不同」；換成 `__same-1__` 那組則是「形狀和顏色都一致」 | 修復前後、真跡與複製品（同光線各拍一張，ADR 012 第 3 步） |
 | 2 | 拒答 | 拍李唐〈萬壑松風圖〉（`eval/photos/unknown/unknown-05.jpg`）：CLIP 相似度 0.96 仍判定「知識庫中沒有這幅畫」 | 拒答率 ≥ 80% |
 | 2b | 沒收錄也能分析色彩 | 第 2 步的拒答頁往下捲：「色彩分析（依你的照片）」——色盤、冷暖、明度／彩度、色塊分布圖 | 對應圖紙的「沒收錄也能重建 3D」 |
 | 3 | 圖文問答 | 辨識成功 →「問問這幅畫」→ 點建議問題；點 [1] 標籤看出處；問「當年賣了多少錢？」看它說不知道 | 引用正確率、防幻覺 |
@@ -178,6 +182,7 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | # | 展示項目 | 操作 | 重點 |
 |---|---|---|---|
 | 9 | 圖紙辨識 | 「工廠圖紙」→「拍攝圖紙」，拍螢幕上的〈立式軸承座〉（或上傳 `eval/drawing_photos/known/mfg-006__tilt.jpg`） | 對應點＋線條重合度雙重驗證 |
+| 9b | 改版找不同 | 上傳 `eval/align_photos/mfg/mfg-001-revA__ptilt.jpg`（舊版 rev.A 圖紙的照片，底板只有 2 個孔）：辨識成 rev.B，下面「和知識庫圖紙的差異」標出 3 處；也可以把 `eval/align_photos/mfg-001-revA.png` 印出來用手機拍 | 和第 1b 步同一套工具：換領域只換設定 |
 | 10 | 拒答 | 上傳 `eval/drawing_photos/unknown/unknown-02__tilt.jpg`（版面、標題欄都一樣的未收錄圖紙） | 「知識庫中沒有這張圖紙」 |
 | 11 | Ortho2CAD 3D 重建 | 〈連接法蘭〉→「Ortho2CAD 3D 重建」：看 CadQuery 程式碼逐字產生 → 3D 模型、IoU、疊合比較、回投影三視圖、下載 STEP | 約 1 分鐘；外送 0 |
 | 12 | 微調的效果 | 同一頁切換「Qwen3-VL 4B 未微調」 | 領域微調 vs 一般 VLM |
@@ -293,6 +298,26 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 | 顏色題取到色彩段落 | 3/3 |
 | 其他題混進色彩段落／段落被擠掉 | 2/16 題；有段落被擠掉 2 題（被擠掉的段落都不屬於該題主題，與主題相關 0 題） |
 | 延遲 P50／P95 | 248／326 ms（評估時 demo 後端也開著，P95 隨負載有出入：三次跑從 452 降到 326 ms，取收錄的那一次） |
+
+### 影像對位與比對（`make eval-align`）
+
+不用開後端、不用索引；約 1 分鐘。照片由 `eval/make_align_photos.py` 產生（78 張單張照片＋35 組成對照片＋60 張動過手腳的畫作照片，每張附正確答案，在 `eval/align_photos/`）。
+2026-10-02 在學校電腦（CPU）上的結果（run_id `20261002T091426-aff6`，細節與校正過程見 ADR 012）：
+
+| 項目 | 結果 |
+|---|---|
+| 畫作・整幅斜拍／拍到長邊 50% | 5/5、10/10 位置正確（四角誤差 ≤ 原圖長邊 2%） |
+| 畫作・拍到長邊 30% | 4/10 對上且正確；其餘回 `ALIGN_FAILED`，不畫錯的框（知識庫原圖只有長邊 1024 px） |
+| 圖紙・沒改過（24 張） | 24/24 張 0 處差異 |
+| 圖紙・加一個孔／擦掉一段線（各 12 張） | 12/12、12/12 找到，假差異 0 |
+| 圖紙・真正改版 mfg-001 rev.A（5 張） | 15/15 處改動找到；1 處假差異（舊式雙線性 tilt） |
+| 壓力測試：舊模擬照（35 張，沒改過） | 32/35 張 0 處差異；其餘 3 張都是雙線性 tilt |
+| 延遲 P50／P95（位置＋圖紙找不同、畫作找不同） | 48／717 ms（畫作找不同 P50 293 ms） |
+| 畫作找不同・沒改過（art/ 對得上的 19 張） | 19/19 張 0 處差異 |
+| 畫作找不同・照片上加筆／換掉一塊／塗糊／小印章／褪色／補色（各 10 張） | 8/9、10/10、9/9、10/10、10/10、10/10 找到（對不上的 2 張不算）；別處多報 0 處 |
+| 畫作找不同・壓力測試（eval/photos/known，沒改過） | 模糊、偏暗、裁切 15/15 張 0 處；反光 5 張都標出反光處（顏色不同）；雙線性 tilt 0/5 |
+| 兩張照片互比・沒改過（10 組，同光線、不同角度） | 10/10 組 0 處差異 |
+| 兩張照片互比・換掉一塊／塗糊／小印章／褪色／補色（各 5 組） | 5/5、5/5、5/5、4/5、5/5 找到；別處多報 0 處；P50 288 ms |
 
 ### 領域路由（`make eval-router`）
 
@@ -419,7 +444,8 @@ bge-m3、Qwen3-VL（73% → 49%），載入後 79%；進入 Text-to-SQL 時預�
 art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
 ├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
-│   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）
+│   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）、
+│   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）
 │   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、router（領域路由）、verify（ORB＋線條重合）、prompt、providers、textproc
 │   ├── cad/           C  drawing（三視圖產生器）、sandbox／runner（CadQuery 沙箱）、metrics（IoU）、preprocess
 │   ├── rag/text2sql   C  庫存 Text-to-SQL：prompt、SQL 擷取與靜態檢查；執行在 repositories/inventory_repo（唯讀＋白名單）

@@ -5,6 +5,7 @@ export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
 export type ArtworkDetail = Schemas["ArtworkDetail"];
 export type ColorAnalysis = Schemas["ColorAnalysis"];
+export type ImageAlignment = Schemas["ImageAlignment"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
 export type HealthResponse = Schemas["HealthResponse"];
@@ -123,6 +124,11 @@ export const api = {
   artworkColors: (id: string) => request<ColorAnalysis>(`/artworks/${encodeURIComponent(id)}/colors`),
   photoColors: (imageId: string) =>
     request<ColorAnalysis>(`/images/${encodeURIComponent(imageId)}/colors`),
+  /** 影像對位與比對（docs/adr/012）：target 是 artwork:<畫作 id> 或 part:<圖紙 id> */
+  photoAlignment: (imageId: string, target: string) =>
+    request<ImageAlignment>(
+      `/images/${encodeURIComponent(imageId)}/align?target=${encodeURIComponent(target)}`,
+    ),
   health: () => request<HealthResponse>("/health"),
   evalRuns: () => request<EvalRunsResponse>("/eval/runs"),
   feedback: (body: Schemas["FeedbackRequest"]) => request<Schemas["OkResponse"]>("/feedback", json(body)),

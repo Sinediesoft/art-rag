@@ -10,7 +10,8 @@ export function ImageUploader({
 }: {
   onUploaded: (imageId: string) => void;
   tone?: "seal" | "steel";
-  labels?: { camera: string; file: string };
+  /** busy：處理中顯示的字（預設「辨識中…」） */
+  labels?: { camera: string; file: string; busy?: string };
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -49,7 +50,7 @@ export function ImageUploader({
             <path d="M4 8h3l2-3h6l2 3h3v11H4z" strokeLinejoin="round" />
             <circle cx="12" cy="13" r="3.5" />
           </svg>
-          {busy ? "辨識中…" : labels.camera}
+          {busy ? (labels.busy ?? "辨識中…") : labels.camera}
         </button>
         <button
           type="button"

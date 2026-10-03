@@ -31,6 +31,11 @@ _DRAWING_MASKED = [
 ]
 
 
+# 三視圖各自的方框（POSITIONS、VIEW，見 app/cad/drawing.py）：右視圖、前視圖、上視圖。
+# 影像比對（docs/adr/012）只比這三格，照片的紙張邊緣、頁面留白不會被當成差異
+_DRAWING_VIEWS = [(50, 100, 350, 400), (400, 100, 700, 400), (400, 450, 700, 750)]
+
+
 def _scale(img: Image.Image) -> float:
     return min(1.0, _EDGE / max(img.size))
 
@@ -108,29 +113,64 @@ def count_inliers(query, ref, strict: bool = False) -> int:
     return match(query, ref, strict)[0]
 
 
+def rectify(
+    gray: np.ndarray, h: np.ndarray, size: tuple[int, int]
+) -> tuple[np.ndarray, np.ndarray]:
+    """用 H 把照片（灰階）拉正到參考圖的座標，回傳 (拉正後的圖, 照片涵蓋的範圍)。
+
+    照片外面填白；涵蓋範圍往內縮 4 px，避開照片邊緣內插出來的灰邊。
+    """
+    warped = cv2.warpPerspective(gray, h, size, borderValue=255)
+    covered = cv2.warpPerspective(np.full(gray.shape, 255, np.uint8), h, size, borderValue=0)
+    return warped, cv2.erode(covered, np.ones((9, 9), np.uint8)).astype(bool)
+
+
+def drawing_region(ref_img: Image.Image) -> np.ndarray:
+    """知識庫圖紙（原始大小）上的幾何線條區：drawing_mask 遮掉標題、尺寸標註帶、標題欄。"""
+    ww, hh = ref_img.size
+    return cv2.resize(
+        (drawing_mask(ref_img) > 0).astype(np.uint8), (ww, hh), interpolation=cv2.INTER_NEAREST
+    ).astype(bool)
+
+
+def drawing_views(ref_img: Image.Image) -> list[tuple[int, int, int, int]]:
+    """三視圖的方框（x0, y0, x1, y1），換算到這張圖紙的像素座標。"""
+    s = ref_img.width / 800
+    return [tuple(round(v * s) for v in box) for box in _DRAWING_VIEWS]
+
+
+def photo_ink(warped: np.ndarray, c: int = 20) -> np.ndarray:
+    """拉正後照片的線條：照片受光線影響，用自適應門檻（比周圍 25 px 的平均暗 c 以上）。"""
+    return cv2.adaptiveThreshold(
+        warped, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 25, c
+    ).astype(bool)
+
+
+def ref_ink(gray: np.ndarray) -> np.ndarray:
+    """知識庫圖紙的線條：乾淨的白底黑線，固定門檻即可。"""
+    return gray < 160
+
+
+def ink_layers(
+    img: Image.Image, h: np.ndarray, ref_img: Image.Image
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """照片拉正到知識庫圖紙後，回傳 (照片的線條, 圖紙的線條, 比對範圍)，都是圖紙大小的布林陣列。
+
+    比對範圍＝照片涵蓋的地方 ∩ 三視圖的幾何線條區（drawing_region）。
+    """
+    ref = np.asarray(ref_img.convert("L"))
+    warped, covered = rectify(np.asarray(img.convert("L")), h, ref_img.size)
+    valid = covered & drawing_region(ref_img)
+    return photo_ink(warped) & valid, ref_ink(ref) & valid, valid
+
+
 def ink_overlap(img: Image.Image, h: np.ndarray, ref_path: Path) -> float:
     """圖紙第三道驗證：用 H 把照片拉正到知識庫圖紙，比對三視圖區的線條是否重合（F1，0–1）。
 
     幾何驗證只看特徵點；不同圖紙偶爾會有幾十個點碰巧對上，但線條整體不會重合。
     實測同一張圖紙的照片 ≥ 0.60，不同圖紙 ≤ 0.54（且其中 inlier ≥ 25 者 ≤ 0.48）。
     """
-    ref_img = Image.open(ref_path)
-    ref = np.asarray(ref_img.convert("L"))
-    hh, ww = ref.shape
-    region = cv2.resize(
-        (drawing_mask(ref_img) > 0).astype(np.uint8), (ww, hh), interpolation=cv2.INTER_NEAREST
-    ).astype(bool)
-    q = np.asarray(img.convert("L"))
-    warped = cv2.warpPerspective(q, h, (ww, hh), borderValue=255)
-    covered = cv2.warpPerspective(np.full(q.shape, 255, np.uint8), h, (ww, hh), borderValue=0)
-    valid = cv2.erode(covered, np.ones((9, 9), np.uint8)).astype(bool) & region
-    q_ink = (
-        cv2.adaptiveThreshold(
-            warped, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 25, 20
-        ).astype(bool)
-        & valid
-    )
-    r_ink = (ref < 160) & valid
+    q_ink, r_ink, _ = ink_layers(img, h, Image.open(ref_path))
     if r_ink.sum() < 200 or q_ink.sum() < 200:
         return 0.0
     k = np.ones((5, 5), np.uint8)

@@ -161,6 +161,66 @@ class ColorAnalysis(BaseModel):
     latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
 
 
+# ---------------------------------------------------------------- 影像對位與比對（docs/adr/012）
+class AlignTarget(BaseModel):
+    kind: Literal["artwork", "part", "image"] = Field(
+        description="artwork：知識庫畫作原圖；part：知識庫圖紙；image：另一張上傳照片（兩張照片互比）"
+    )
+    id: str
+
+
+class AlignLocation(BaseModel):
+    polygon: list[list[float]] = Field(
+        description="照片四個角（左上、右上、右下、左下）在參考圖上的位置，0–1；"
+        "照片拍到參考圖外面時會超出 0–1"
+    )
+    coverage: float = Field(description="照片拍到參考圖面積的比例 0–1")
+    center: list[float] = Field(description="拍到的範圍的中心 [x, y]，0–1")
+
+
+class AlignRegion(BaseModel):
+    bbox: list[float] = Field(description="[x0, y0, x1, y1]，0–1，參考圖座標")
+    kind: Literal["missing", "extra", "shape", "color", "both"] = Field(
+        description="ink（圖紙）：missing＝知識庫圖紙有、照片沒有，extra＝照片有、知識庫圖紙沒有；"
+        "tone（畫作：照片 vs 原圖、兩張照片）：shape＝形狀不同，color＝顏色不同；both＝兩種都有"
+    )
+    area_ratio: float = Field(
+        description="這處差異的大小：ink 是占知識庫圖紙線條像素的比例，tone 是占比對範圍的比例"
+    )
+
+
+class AlignDiff(BaseModel):
+    method: Literal["ink", "tone"] = Field(
+        description="ink：拉正後比對三視圖的線條（圖紙）；"
+        "tone：比形狀與顏色（畫作：照片 vs 知識庫原圖，或兩張照片）"
+    )
+    status: Literal["same", "changed", "global_change"] = Field(
+        description="same：沒有差異；changed：列出差異；global_change：差異遍布整張，不列區塊"
+        "（圖紙多半是改了外形尺寸；畫作多半是光線差太多、大片反光、照片太模糊，或拍的不是同一處）"
+    )
+    regions: list[AlignRegion] = Field(description="依差異大小排序；global_change 時是空的")
+    changed_ratio: float = Field(
+        description="所有差異的大小：ink 占知識庫圖紙線條像素、tone 占比對範圍的比例"
+    )
+
+
+class ImageAlignment(BaseModel):
+    target: AlignTarget
+    inliers: int = Field(description="照片與參考圖對上的特徵點數（RANSAC inlier）")
+    location: AlignLocation
+    diff: AlignDiff | None = Field(
+        description="知識庫畫作原圖、另一張照片為形狀與顏色差異（tone）；圖紙為線條差異（ink）；"
+        "image_compare 設成 diff: none 的領域為 null（只標位置）"
+    )
+    reference_url: str = Field(description="參考圖：知識庫畫作原圖或圖紙")
+    overlay_url: str = Field(
+        description="疊圖 PNG：參考圖上差異塗色並編號（畫作沒拍到的地方調暗）；"
+        "只標位置時是框出拍到的範圍"
+    )
+    notes: list[str]
+    latency_ms: int = Field(description="對位與比對的計算時間（不含讀檔）")
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None
