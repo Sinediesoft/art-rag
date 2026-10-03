@@ -22,3 +22,9 @@
 {"id": "b10", "kind": "一般耗時工作", "account": "wh1", "question": "把法蘭轉成 3D", "expect": "pass"}
 {"id": "b11", "kind": "一般修改", "account": "sales_a", "question": "SO-2609-003 交期延到 10/12", "expect": "pass"}
 {"id": "b12", "kind": "一般查詢", "account": "manager", "question": "記憶體狀況", "expect": "pass"}
+{"id": "c01", "kind": "閒聊", "account": "manager", "question": "你好，今天過得如何？", "expect": "short"}
+{"id": "c02", "kind": "閒聊", "account": "manager", "question": "講個笑話給我聽", "expect": "short"}
+{"id": "c03", "kind": "閒聊", "account": "manager", "question": "明天台北會下雨嗎？", "expect": "short"}
+{"id": "c04", "kind": "閒聊", "account": "manager", "question": "推薦我一家好吃的牛肉麵", "expect": "short"}
+{"id": "c05", "kind": "閒聊", "account": "manager", "question": "你覺得人生的意義是什麼？", "expect": "short"}
+{"id": "c06", "kind": "閒聊", "account": "manager", "question": "最近有什麼好看的電影？", "expect": "short"}

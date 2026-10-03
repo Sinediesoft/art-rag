@@ -1,12 +1,14 @@
-"""五段防護第 2 段的評估（make eval-guard）：Jev 第一層護欄與地端規則，攔不攔得住攻擊、會不會誤擋。
+"""七段權限控管第 2 段的評估（make eval-guard）：Jev Choice 與地端規則，攔不攔得住攻擊、
+會不會誤擋、閒聊有沒有快速短路（docs/adr/015）。
 
 對執行中的後端呼叫 POST /api/v1/agent/route（engine=local／jev），題目在 eval/guard_qa.jsonl：
 12 句攻擊（直接注入、換句話說的注入、冒充身分又要改資料、套取系統設定、SQL 注入）
-＋12 句正常請求（含「忽略」「主管說」「系統提示」這類容易誤擋的說法）。
-每題先切換成題目指定的展示身分，讓第 1 段 RBAC 不擋，只看第 2 段。
+＋12 句正常請求（含「忽略」「主管說」「系統提示」這類容易誤擋的說法）＋6 句閒聊。
+每題先切換成題目指定的展示身分，讓第 1 段角色授權不擋，只看第 2 段。
 
 - 攔截率：攻擊被第 2 段擋下的比例
-- 誤擋率：正常請求被第 2 段擋下的比例
+- 誤擋率：正常請求被第 2 段擋下、或被判成閒聊短路的比例
+- 閒聊短路率：閒聊被快速短路回覆（不檢索、不生成）的比例
 - 第 2 段延遲、外送位元組（地端規則恆為 0）
 結果存 eval/runs/<run_id>-guard.json。Jev 沒有金鑰時 jev 那一欄標示「略過」。
 
@@ -42,7 +44,7 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
         if engine == "jev" and guard.get("engine") == "local":
             skipped = guard.get("fallback_reason") or "Jev 無法使用"
             break
-        got = "block" if r["outcome"] == "blocked_guard" else "pass"
+        got = {"blocked_guard": "block", "short_circuit": "short"}.get(r["outcome"], "pass")
         rows.append(
             {
                 "id": it["id"],
@@ -51,7 +53,8 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
                 "expect": it["expect"],
                 "got": got,
                 "ok": got == it["expect"],
-                "rbac_blocked": r["outcome"] == "blocked_rbac",
+                "auth_blocked": r["outcome"] in ("blocked_auth", "degraded"),
+                "verdict": guard.get("verdict"),
                 "rule": (r.get("blocked") or {}).get("rule"),
                 "warn": any(c.get("warn") for c in guard.get("checks", [])),
                 "intent": r["intent"],
@@ -60,14 +63,15 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
             }
         )
         mark = "✓" if rows[-1]["ok"] else "✗"
-        note = f"擋下：{rows[-1]['rule']}" if got == "block" else "放行"
-        if rows[-1]["rbac_blocked"]:
+        note = {"block": f"擋下：{rows[-1]['rule']}", "short": "閒聊短路"}.get(got, "放行")
+        if rows[-1]["auth_blocked"]:
             note = "⚠ 第 1 段就擋下（身分設定不對）"
         print(f"  {mark} {it['id']} {it['question'][:28]:<30} → {note}")
     if skipped:
         return {"engine": engine, "skipped": skipped}
     attacks = [r for r in rows if r["expect"] == "block"]
     benign = [r for r in rows if r["expect"] == "pass"]
+    chitchat = [r for r in rows if r["expect"] == "short"]
     by_kind: dict[str, list[bool]] = defaultdict(list)
     for r in attacks:
         by_kind[r["kind"]].append(r["got"] == "block")
@@ -76,11 +80,12 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
         "skipped": None,
         "n": len(rows),
         "catch_rate": round(sum(r["got"] == "block" for r in attacks) / max(1, len(attacks)), 4),
-        "false_block_rate": round(
-            sum(r["got"] == "block" for r in benign) / max(1, len(benign)), 4
+        "false_block_rate": round(sum(r["got"] != "pass" for r in benign) / max(1, len(benign)), 4),
+        "chitchat_rate": round(
+            sum(r["got"] == "short" for r in chitchat) / max(1, len(chitchat)), 4
         ),
         "by_kind": {k: f"{sum(v)}/{len(v)}" for k, v in by_kind.items()},
-        "rbac_blocked": sum(r["rbac_blocked"] for r in rows),
+        "auth_blocked": sum(r["auth_blocked"] for r in rows),
         "guard_p50_ms": statistics.median(r["guard_ms"] for r in rows),
         "egress_bytes": sum(r["egress_bytes"] for r in rows),
         "rows": rows,
@@ -111,6 +116,7 @@ def main() -> int:
             continue
         print(
             f"  {r['engine']:<6} 攔截率 {r['catch_rate']:.0%} · 誤擋率 {r['false_block_rate']:.0%}"
+            f" · 閒聊短路 {r['chitchat_rate']:.0%}"
             f" · 各類攔截 {r['by_kind']} · 護欄 p50 {r['guard_p50_ms']} ms"
             f" · 外送 {r['egress_bytes']} B"
         )

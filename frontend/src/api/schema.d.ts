@@ -83,6 +83,7 @@ export interface paths {
          * Get Photo Alignment
          * @description 影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
          *     畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
+         *     圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。
          */
         get: operations["get_photo_alignment_api_v1_images__image_id__align_get"];
         put?: never;
@@ -240,8 +241,9 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description 圖文問答。工廠圖紙要看目前身分的資料範圍（看不到的回 403 DATA_SCOPE_DENIED）；
-         *     檢索只取看得到的段落（Metadata Filter），放進 prompt 前先過濾夾帶指令的段落（docs/adr/012）。
+         * @description 圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
+         *     智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
+         *     放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。
          */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
@@ -686,8 +688,8 @@ export interface paths {
         put?: never;
         /**
          * Reset Production
-         * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單與稽核紀錄
-         *     （DEMO_CONTROLS=false 時停用；生管或主管才可以）。
+         * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
+         *     與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。
          */
         post: operations["reset_production_api_v1_admin_production_reset_post"];
         delete?: never;
@@ -876,7 +878,8 @@ export interface paths {
         };
         /**
          * List Accounts
-         * @description 展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。
+         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，
+         *     放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。
          */
         get: operations["list_accounts_api_v1_auth_accounts_get"];
         put?: never;
@@ -898,7 +901,7 @@ export interface paths {
         put?: never;
         /**
          * Switch Account
-         * @description 展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。
+         * @description 展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。
          */
         post: operations["switch_account_api_v1_auth_switch_post"];
         delete?: never;
@@ -918,8 +921,10 @@ export interface paths {
         put?: never;
         /**
          * Agent Route
-         * @description 五段防護的第 1、2 段（docs/adr/012）：個資遮蔽 → 本地分流判斷意圖＋信心閘門 →
-         *     RBAC（身分、資料範圍、動作權限）→ Jev 第一層護欄 → 分派到哪個本地模組；擋下就拒絕並記錄。
+         * @description 七段權限控管的第 1、2 段（docs/adr/015）：JWT 已在閘道驗過 → 個資遮蔽 →
+         *     本地分流判斷要做什麼 →
+         *     角色授權（功能、動作權限）→ Jev Choice（正常查詢／Prompt 注入／無關閒聊）→ 分派到哪個本地模組；
+         *     擋下就拒絕並記錄、閒聊快速短路回覆。
          */
         post: operations["agent_route_api_v1_agent_route_post"];
         delete?: never;
@@ -1057,8 +1062,8 @@ export interface paths {
         };
         /**
          * Security Logs
-         * @description 五段防護的拒絕並記錄（docs/adr/012）：RBAC 與 Jev 護欄擋下的請求、Jev 過濾移除的段落。
-         *     只存遮蔽個資後的文字。
+         * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
+         *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。
          */
         get: operations["security_logs_api_v1_security_logs_get"];
         put?: never;
@@ -1113,7 +1118,7 @@ export interface components {
             note: string;
             /**
              * Domains
-             * @description 能讀的資料領域：art／mfg／factory（docs/adr/012）
+             * @description 能讀的資料領域：art／mfg／factory（docs/adr/014）
              */
             domains: string[];
             /**
@@ -1123,6 +1128,21 @@ export interface components {
             levels: string[];
             /** Scope Note */
             scope_note: string;
+            /**
+             * Dept
+             * @description 自己的部門（寫進 JWT）
+             */
+            dept: string;
+            /**
+             * Depts
+             * @description 讀得到哪些部門的文件（Metadata Filter 的 dept 條件）
+             */
+            depts: string[];
+            /**
+             * Clearance
+             * @description 機密等級：公開 0、內部 1、機密 2（寫進 JWT）
+             */
+            clearance: number;
         };
         /** AccountsResponse */
         AccountsResponse: {
@@ -1136,6 +1156,7 @@ export interface components {
              * @description 待核准單數量（主管看得到要處理幾件）
              */
             pending_approvals: number;
+            token: components["schemas"]["TokenInfo"];
         };
         /** AlignDiff */
         AlignDiff: {
@@ -1421,6 +1442,35 @@ export interface components {
             /** Request Id */
             request_id: string | null;
         };
+        /**
+         * AuthInfo
+         * @description 第 1 段：認證（JWT 簽章、效期，閘道已驗）與授權（角色能不能做這件事）。
+         */
+        AuthInfo: {
+            /** Passed */
+            passed: boolean;
+            /**
+             * Pending
+             * @description 要做什麼還不確定（等使用者選），功能與動作之後再檢查
+             */
+            pending: boolean;
+            /** Checks */
+            checks: components["schemas"]["GuardCheck"][];
+            /** Tag */
+            tag: string | null;
+            /** Reason */
+            reason: string | null;
+            /** @description 換成這個身分就可以（切換身分再試一次） */
+            retry: components["schemas"]["RetryAccount"] | null;
+            /** @description 第 3 段向量檢索的 Metadata Filter */
+            filter: components["schemas"]["MetaFilterInfo"] | null;
+            /**
+             * Degraded
+             * @description 指定了看不到的圖紙：回「查無資料」，不透露它存在
+             */
+            degraded: boolean;
+            token: components["schemas"]["TokenInfo"];
+        };
         /** AxisDay */
         AxisDay: {
             /** Date */
@@ -1452,6 +1502,11 @@ export interface components {
             judge: string;
             /** Reason */
             reason: string | null;
+            /**
+             * Degraded
+             * @description 降級回應（查無資料），不是權限不足的拒絕
+             */
+            degraded: boolean;
         };
         /** Body_upload_image_api_v1_images_post */
         Body_upload_image_api_v1_images_post: {
@@ -1656,7 +1711,7 @@ export interface components {
             rearrange?: boolean | null;
             /**
              * Post Filter
-             * @description 五段防護第 4 段（docs/adr/012）：jev＝公開段落送 Jev 判斷注入與關聯性、local＝全在地端；兩者都最多留 3 段。null＝只用地端規則移除夾帶指令的段落（其他頁面）
+             * @description 七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）
              */
             post_filter?: ("jev" | "local") | null;
         };
@@ -1864,7 +1919,7 @@ export interface components {
         };
         /**
          * GuardInfo
-         * @description 第 2 段：Jev 第一層護欄（或地端規則）。
+         * @description 第 2 段：Jev 意圖路由／防護欄（Jev Choice；叫不到 Jev 時是地端規則）。
          */
         GuardInfo: {
             /** Passed */
@@ -1874,6 +1929,12 @@ export interface components {
              * @enum {string}
              */
             engine: "jev" | "local" | "skip";
+            /**
+             * Verdict
+             * @description 正常查詢／Prompt 注入或越權／無關閒聊（閒聊 → 快速短路回覆）
+             * @enum {string}
+             */
+            verdict: "query" | "attack" | "chitchat";
             /** Checks */
             checks: components["schemas"]["GuardCheck"][];
             /** Tag */
@@ -2172,13 +2233,14 @@ export interface components {
         /**
          * JevCallInfo
          * @description 一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。
+         *     第 2 段 Choice、第 4 段 Noul（雙重驗證）、第 5 段 Score（重排）、第 6 段 Noul（生成閘門）。
          */
         JevCallInfo: {
             /**
              * Stage
              * @enum {integer}
              */
-            stage: 2 | 4;
+            stage: 2 | 4 | 5 | 6;
             /** Model */
             model: string;
             /** Latency Ms */
@@ -2331,7 +2393,10 @@ export interface components {
             /** Events */
             events: components["schemas"]["MemoryEvent"][];
         };
-        /** MetaFilterInfo */
+        /**
+         * MetaFilterInfo
+         * @description 第 3 段的 Metadata Filter：只照 JWT 的 clearance 與 depts 產生。
+         */
         MetaFilterInfo: {
             /**
              * Domain
@@ -2340,7 +2405,14 @@ export interface components {
             domain: "art" | "mfg";
             /** Domain Label */
             domain_label: string;
-            /** Levels */
+            /** Clearance */
+            clearance: number;
+            /** Depts */
+            depts: string[];
+            /**
+             * Levels
+             * @description clearance 換算成看得到的機密等級
+             */
             levels: string[];
             /** Doc Id */
             doc_id: string | null;
@@ -2846,29 +2918,6 @@ export interface components {
             /** Prob */
             prob: number;
         };
-        /**
-         * RbacInfo
-         * @description 第 1 段：身分、資料範圍、動作權限（後端硬性檢查）。
-         */
-        RbacInfo: {
-            /** Passed */
-            passed: boolean;
-            /**
-             * Pending
-             * @description 要做什麼還不確定（等使用者選），範圍與動作之後再檢查
-             */
-            pending: boolean;
-            /** Checks */
-            checks: components["schemas"]["GuardCheck"][];
-            /** Tag */
-            tag: string | null;
-            /** Reason */
-            reason: string | null;
-            /** @description 換成這個身分就可以（切換身分再試一次） */
-            retry: components["schemas"]["RetryAccount"] | null;
-            /** @description 第 3 段向量檢索的 Metadata Filter */
-            filter: components["schemas"]["MetaFilterInfo"] | null;
-        };
         /** ReconstructRequest */
         ReconstructRequest: {
             /**
@@ -2905,7 +2954,7 @@ export interface components {
         RouteEgress: {
             /**
              * Bytes
-             * @description 送出本機的位元組數（第 2 段 Jev 請求本文）；地端規則為 0
+             * @description 送出本機的位元組數（第 2 段 Jev Choice 請求本文）；地端規則為 0
              */
             bytes: number;
             /** To */
@@ -2991,7 +3040,7 @@ export interface components {
             forced_intent?: string | null;
             /**
              * Engine
-             * @description 第 2、4 段由誰判斷：auto／jev＝有金鑰用 Jev（失敗改地端規則），local＝只用地端規則
+             * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則（前端不提供，給 make eval-guard 對照用）
              * @default auto
              * @enum {string}
              */
@@ -3064,22 +3113,23 @@ export interface components {
             gate_reason: string;
             /** Options */
             options: components["schemas"]["RankedIntent"][];
-            rbac: components["schemas"]["RbacInfo"];
+            auth: components["schemas"]["AuthInfo"];
             /** @description 第 1 段沒過就沒有執行（null） */
             guard: components["schemas"]["GuardInfo"] | null;
             /**
              * Outcome
              * @enum {string}
              */
-            outcome: "pass" | "blocked_rbac" | "blocked_guard";
+            outcome: "pass" | "blocked_auth" | "blocked_guard" | "short_circuit" | "degraded";
             blocked: components["schemas"]["BlockedInfo"] | null;
+            short_circuit: components["schemas"]["ShortCircuitInfo"] | null;
             /** Dispatch */
             dispatch: {
                 [key: string]: unknown;
             };
             /**
              * Post Filter
-             * @description 分派到 /chat 時帶的第 4 段判斷者
+             * @description 分派到 /chat 時帶的第 4～6 段判斷者
              * @enum {string}
              */
             post_filter: "jev" | "local";
@@ -3091,7 +3141,7 @@ export interface components {
         };
         /**
          * RouterInfo
-         * @description 第 1 段的本地分流：誰判斷意圖（本地分流、使用者點選、照片辨識）。
+         * @description 本地分流：誰判斷要交給哪個模組（本地分流、使用者點選、照片辨識）。
          */
         RouterInfo: {
             /**
@@ -3415,7 +3465,8 @@ export interface components {
         };
         /**
          * SecurityLogsResponse
-         * @description 五段防護的拒絕並記錄：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，第 4 段移除的段落。
+         * @description 七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求，
+         *     第 4 段剔除的洩密段落。
          */
         SecurityLogsResponse: {
             /** Items */
@@ -3427,6 +3478,24 @@ export interface components {
             today: {
                 [key: string]: number;
             };
+        };
+        /**
+         * ShortCircuitInfo
+         * @description 第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。
+         */
+        ShortCircuitInfo: {
+            /**
+             * Stage
+             * @constant
+             */
+            stage: 2;
+            /**
+             * By
+             * @enum {string}
+             */
+            by: "Jev" | "地端";
+            /** Reply */
+            reply: string;
         };
         /** SkippedWorkOrder */
         SkippedWorkOrder: {
@@ -3496,7 +3565,7 @@ export interface components {
         };
         /**
          * System1Status
-         * @description Jev 的設定狀態（2026-10-02 起用在五段防護的第 2、4 段，不再判斷意圖）與信心閘門門檻。
+         * @description Jev 的設定狀態（2026-10-03 起用在七段權限控管的第 2、4、5、6 段）與信心閘門門檻。
          */
         System1Status: {
             /** Jev Configured */
@@ -3541,6 +3610,49 @@ export interface components {
             latency_ms: number;
             /** Results */
             results: components["schemas"]["TextSearchHit"][];
+        };
+        /** TokenCheck */
+        TokenCheck: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Ok */
+            ok: boolean;
+            /** Detail */
+            detail: string;
+        };
+        /**
+         * TokenInfo
+         * @description 第 1 段的身分憑證（JWT，HS256）：內容、到期時間、從哪裡帶來。簽章不回傳。
+         */
+        TokenInfo: {
+            /**
+             * Claims
+             * @description JWT payload：iss、sub、name、roles、dept、depts、clearance、iat、exp
+             */
+            claims: {
+                [key: string]: unknown;
+            };
+            /** Expires At */
+            expires_at: string;
+            /**
+             * Via
+             * @enum {string}
+             */
+            via: "cookie" | "header";
+            /** Alg */
+            alg: string;
+            /**
+             * Unsigned
+             * @description header.payload（不含簽章；前端示範竄改憑證用）
+             */
+            unsigned: string;
+            /**
+             * Checks
+             * @description 閘道驗了什麼：簽章、效期、角色
+             */
+            checks: components["schemas"]["TokenCheck"][];
         };
         /** WorkOrderCreate */
         WorkOrderCreate: {

@@ -1,12 +1,13 @@
 # 展示帳號、角色權限、硬性上限與核准額度（docs/adr/011，負責：B）
 #
-# - 展示版不用密碼：頁首切換身分（DEMO_CONTROLS=true 才顯示），身分存在伺服器端的工作階段。
-#   Jev 與 Qwen3-VL 都看不到、也決定不了權限；使用者打「我是主管」不會有任何效果。
+# - 展示版不用密碼：頁首切換身分（DEMO_CONTROLS=true 才顯示），後端簽發 JWT（HS256，docs/adr/015 第 1 段），
+#   內容是 roles、部門（dept／depts）、機密等級（clearance）與效期；所有 /api/v1 請求都驗簽章與效期，
+#   不符就 401。Jev 與 Qwen3-VL 都看不到、也決定不了權限；使用者打「我是主管」不會有任何效果。
 # - 預設不允許：沒列在角色 ops 裡的操作一律拒絕。零件主檔、機台資料不開放用對話修改。
 # - 權限在 API 層檢查：智慧助理、圖紙頁「開立工單」、取消工單、開始排程、展示還原都走同一套規則。
-# - 資料範圍（2026-10-02 起，docs/adr/012 五段防護的第 1 段）：每個角色能讀哪些資料領域、哪些機密等級，
+# - 資料範圍（2026-10-02 起）：每個角色能讀哪些資料領域、哪些機密等級與部門，
 #   所有讀取 API 都檢查（圖紙清單只列看得到的、看不到的圖紙回 403 DATA_SCOPE_DENIED），
-#   智慧助理的向量檢索也照這裡產生 Metadata Filter。之前是「查詢不限範圍」。
+#   智慧助理的向量檢索照 JWT 產生 Metadata Filter（docs/adr/015 第 3 段）。之前是「查詢不限範圍」。
 
 default_account: guest
 
@@ -27,14 +28,18 @@ roles:
   manager:   {label: 主管, ops: [approve, demo_reset], note: 核准所有人的超額申請；不能核准自己的申請}
 
 # 資料範圍：domains＝能讀的資料領域（art 畫作知識庫、mfg 工廠圖紙與製程文件、factory 工廠資料庫：庫存／訂單／工單／排程），
-# levels＝看得到的機密等級（畫作都是「公開」；圖紙是「內部」或「機密」，見 kb/parts/*.json 的 confidentiality）。
+# levels＝看得到的機密等級（畫作都是「公開」；圖紙是「內部」或「機密」，見 kb/parts/*.json 的 confidentiality）；
+# JWT 的 clearance＝levels 的最高一級（公開 0、內部 1、機密 2）。
+# dept＝自己的部門（寫進 JWT）；depts＝讀得到哪些部門的文件（圖紙的部門＝kb/parts/*.json 的 owner）。
+# 第 3 段的 Metadata Filter 只照 JWT 產生：clearance <= 自己的等級 AND dept IN (公開＋depts)。
 # 沒列在這裡的角色一律只能讀公開畫作。
+levels: [公開, 內部, 機密]
 clearance:
-  guest:     {domains: [art], levels: [公開], note: 美術館訪客：只查公開的畫作知識庫}
-  warehouse: {domains: [art, mfg, factory], levels: [公開, 內部, 機密], note: 現場人員：可看機密圖紙}
-  sales:     {domains: [art, mfg, factory], levels: [公開, 內部], note: 業務：看不到機密圖紙}
-  planner:   {domains: [art, mfg, factory], levels: [公開, 內部, 機密], note: 生管：全廠}
-  manager:   {domains: [art, mfg, factory], levels: [公開, 內部, 機密], note: 主管：全廠}
+  guest:     {domains: [art], levels: [公開], dept: 訪客, depts: [], note: 美術館訪客：只查公開的畫作知識庫}
+  warehouse: {domains: [art, mfg, factory], levels: [公開, 內部, 機密], dept: 倉儲課, depts: [生產技術課, 機械設計課, 自動化設備課], note: 現場人員：可看機密圖紙}
+  sales:     {domains: [art, mfg, factory], levels: [公開, 內部], dept: 業務課, depts: [生產技術課, 機械設計課, 自動化設備課], note: 業務：看不到機密圖紙}
+  planner:   {domains: [art, mfg, factory], levels: [公開, 內部, 機密], dept: 生產管理課, depts: [生產技術課, 機械設計課, 自動化設備課], note: 生管：全廠}
+  manager:   {domains: [art, mfg, factory], levels: [公開, 內部, 機密], dept: 廠長室, depts: [生產技術課, 機械設計課, 自動化設備課], note: 主管：全廠}
 
 domains:
   art: 畫作

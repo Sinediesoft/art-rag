@@ -3,6 +3,7 @@
 import io
 
 import pytest
+from conftest import DEFAULT_ACCOUNT, as_account
 from PIL import Image, ImageDraw
 
 from app.core.config import REPO_ROOT
@@ -148,3 +149,26 @@ def test_photo_pair_unknown_photo_is_404(client, painting_dim):
         f"/api/v1/images/{painting_dim}/align", params={"target": "image:img_doesnotexist0"}
     )
     assert r.status_code == 404 and r.json()["error"]["code"] == "IMAGE_NOT_FOUND"
+
+
+def test_drawing_alignment_follows_data_scope(client, drawing_photo):
+    """和圖紙比對也是讀圖紙（docs/adr/014 的資料範圍）：訪客不能用工廠圖紙、業務看不到機密圖紙，
+    疊圖 PNG 一樣；看得到的圖紙照常比對。"""
+    try:
+        as_account(client, "guest")
+        for path in ("align", "align.png"):
+            r = client.get(
+                f"/api/v1/images/{drawing_photo}/{path}", params={"target": "part:mfg-002"}
+            )
+            assert r.status_code == 403 and r.json()["error"]["code"] == "DATA_SCOPE_DENIED", path
+
+        as_account(client, "sales_a")  # mfg-002 是機密、mfg-004 是內部
+        for path in ("align", "align.png"):
+            r = client.get(
+                f"/api/v1/images/{drawing_photo}/{path}", params={"target": "part:mfg-002"}
+            )
+            assert r.status_code == 403 and r.json()["error"]["code"] == "DATA_SCOPE_DENIED", path
+        r = client.get(f"/api/v1/images/{drawing_photo}/align", params={"target": "part:mfg-004"})
+        assert r.status_code != 403  # 看得到：照常比對（這張照片是 mfg-002，對不上回 ALIGN_FAILED）
+    finally:
+        as_account(client, DEFAULT_ACCOUNT)

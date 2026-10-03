@@ -5,7 +5,7 @@ import { ErrorMessage, Loading } from "../common/Feedback";
 
 type Segment = { key: string; label: string; color: string; value: number };
 
-// 比例條配色（docs/adr/010）：已用 dataviz 的 validate_palette.js 對卡片底色 #fffdf8 驗過。
+// 比例條配色（docs/adr/010）：已用 dataviz 的 validate_palette.js 對舊卡片底色 #fffdf8 驗過（現在卡片底色 #ffffff，差異極小）。
 // 冷暖：暖、冷兩極＋中性灰居中；明度：暗→亮單一色相；彩度：灰→鮮單一色相
 const TEMPERATURE = [
   ["warm", "暖色", "#eb6834"],
@@ -22,7 +22,7 @@ const CHROMA = [
   ["mid", "中彩度", "#d67a48"],
   ["high", "高彩度", "#a33c13"],
 ] as const;
-const CARD_BG = [255, 253, 248]; // --color-card：沒選到的色塊混向卡片底色
+const CARD_BG = [255, 255, 255]; // --color-card：沒選到的色塊混向卡片底色
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -38,7 +38,7 @@ function ShareBar({ title, items }: { title: string; items: Segment[] }) {
   const [hover, setHover] = useState<string | null>(null);
   return (
     <div>
-      <p className="mb-1 text-xs font-bold text-ink-soft">{title}</p>
+      <p className="mb-1 text-xs font-semibold text-ink-80">{title}</p>
       <div className="flex h-2.5 gap-[2px]" aria-hidden>
         {items
           .filter((s) => s.value > 0)
@@ -56,9 +56,9 @@ function ShareBar({ title, items }: { title: string; items: Segment[] }) {
             />
           ))}
       </div>
-      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-soft">
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-80">
         {items.map((s) => (
-          <li key={s.key} className={`flex items-center gap-1 ${hover === s.key ? "font-bold text-ink" : ""}`}>
+          <li key={s.key} className={`flex items-center gap-1 ${hover === s.key ? "font-semibold text-ink" : ""}`}>
             <span className="h-2 w-2 rounded-[2px]" style={{ background: s.color }} />
             {s.label}
             <span className="tabular-nums text-ink">{pct(s.value)}</span>
@@ -84,13 +84,13 @@ function Histogram({ bins, axis }: { bins: number[]; axis: string }) {
             onPointerLeave={() => setHover(null)}
           >
             <span
-              className={`w-full rounded-t-[4px] ${hover === i ? "bg-ink" : "bg-ink-soft/60"}`}
+              className={`w-full rounded-t-[4px] ${hover === i ? "bg-ink" : "bg-ink-80/60"}`}
               style={{ height: b > 0 ? `${Math.max(8, (b / max) * 100)}%` : 0 }}
             />
           </div>
         ))}
       </div>
-      <figcaption className="mt-0.5 flex justify-between text-[10px] tabular-nums text-ink-faint">
+      <figcaption className="mt-0.5 flex justify-between text-[10px] tabular-nums text-ink-48">
         <span>0</span>
         <span>{hover === null ? `${axis} 分布` : `${axis} ${hover * 10}–${hover * 10 + 10}：${pct(bins[hover])}`}</span>
         <span>100</span>
@@ -150,14 +150,14 @@ function ColorMap({ src, palette, selected }: { src: string; palette: number[][]
     ctx.putImageData(img, 0, 0);
   }, [bitmap, selected, palette]);
 
-  if (failed) return <p className="text-xs text-ink-faint">色塊分布圖載入失敗</p>;
+  if (failed) return <p className="text-xs text-ink-48">色塊分布圖載入失敗</p>;
   // 圖還沒載好時先留一塊空間（canvas 沒設尺寸會是 300×150，載好後卡片高度會跳一下）；
   // 還不知道直幅或橫幅，高度取橫幅（約 300 px）與直幅（512 px）之間，且不超過 70vh
   if (!bitmap)
     return (
       <div
         role="status"
-        className="flex h-[min(24rem,70vh)] items-center justify-center rounded-lg border border-line bg-paper-deep text-xs text-ink-faint"
+        className="flex h-[min(24rem,70vh)] items-center justify-center rounded-lg border border-hairline bg-parchment-deep text-xs text-ink-48"
       >
         載入色塊分布圖…
       </div>
@@ -169,7 +169,7 @@ function ColorMap({ src, palette, selected }: { src: string; palette: number[][]
       ref={canvas}
       role="img"
       aria-label="色塊分布圖：每個像素塗成所屬的主色"
-      className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded-lg border border-line bg-paper-deep"
+      className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded-lg border border-hairline bg-parchment-deep"
     />
   );
 }
@@ -183,11 +183,11 @@ export function ColorAnalysisCard({ data, title, hint }: { data: ColorAnalysis; 
   const { temperature: t, lightness: l, chroma: c } = data;
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-line bg-card p-4">
+    <section className="card flex flex-col gap-4 p-5">
       <header>
-        <h2 className="font-serif text-lg font-bold">{title}</h2>
-        <p className="text-sm text-ink-soft">{data.summary}</p>
-        {hint && <p className="mt-1 text-xs text-ink-faint">{hint}</p>}
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="text-sm text-ink-80">{data.summary}</p>
+        {hint && <p className="mt-1 text-xs text-ink-48">{hint}</p>}
       </header>
 
       <div>
@@ -205,7 +205,7 @@ export function ColorAnalysisCard({ data, title, hint }: { data: ColorAnalysis; 
               aria-label={`${p.name} ${p.hex} ${pct(p.share)}：在色塊分布圖只顯示這一色`}
               className={`h-full min-w-[6px] transition first:rounded-l-[4px] last:rounded-r-[4px] ${
                 focus !== null && focus !== i ? "opacity-40" : ""
-              } ${selected === i ? "ring-2 ring-ink ring-offset-1 ring-offset-card" : ""}`}
+              } ${selected === i ? "ring-2 ring-accent-focus ring-offset-1 ring-offset-card" : ""}`}
               style={{ flex: `${p.share} 1 0`, background: p.hex }}
             />
           ))}
@@ -219,14 +219,14 @@ export function ColorAnalysisCard({ data, title, hint }: { data: ColorAnalysis; 
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover(null)}
                 aria-pressed={selected === i}
-                className={`flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs transition hover:bg-paper-deep ${
-                  selected === i ? "bg-paper-deep" : ""
+                className={`flex w-full items-center gap-2 rounded-md px-1 py-0.5 text-left text-xs transition hover:bg-parchment-deep ${
+                  selected === i ? "bg-accent-soft" : ""
                 }`}
               >
                 <span className="h-4 w-4 shrink-0 rounded-[4px] border border-ink/10" style={{ background: p.hex }} />
-                <span className="font-bold text-ink">{p.name}</span>
-                <span className="font-mono text-ink-faint">{p.hex}</span>
-                <span className="ml-auto tabular-nums text-ink-soft">{pct(p.share)}</span>
+                <span className="font-semibold text-ink">{p.name}</span>
+                <span className="font-mono text-ink-48">{p.hex}</span>
+                <span className="ml-auto tabular-nums text-ink-80">{pct(p.share)}</span>
               </button>
             </li>
           ))}
@@ -235,7 +235,7 @@ export function ColorAnalysisCard({ data, title, hint }: { data: ColorAnalysis; 
 
       <div>
         <ColorMap src={assetUrl(data.map_url)} palette={palette} selected={selected} />
-        <p className="mt-1 text-xs text-ink-faint">
+        <p className="mt-1 text-xs text-ink-48">
           {selected === null
             ? "點色盤上的顏色，色塊分布圖就只亮那一色"
             : `只顯示「${data.palette[selected].name} ${data.palette[selected].hex}」，再點一次取消`}
@@ -260,54 +260,54 @@ export function ColorAnalysisCard({ data, title, hint }: { data: ColorAnalysis; 
         </div>
       </div>
 
-      <details className="text-xs text-ink-soft">
-        <summary className="cursor-pointer text-ink-faint">數值表</summary>
+      <details className="text-xs text-ink-80">
+        <summary className="cursor-pointer text-accent">數值表</summary>
         <table className="mt-2 w-full text-left tabular-nums">
           <tbody>
             {data.palette.map((p, i) => (
-              <tr key={`${p.hex}-${i}`} className="border-t border-line">
-                <th className="py-1 pr-2 font-normal text-ink-faint">主色 {i + 1}</th>
+              <tr key={`${p.hex}-${i}`} className="border-t border-hairline">
+                <th className="py-1 pr-2 font-normal text-ink-48">主色 {i + 1}</th>
                 <td>
                   {p.name} {p.hex} · {pct(p.share)} · L* {p.lab[0]}
                 </td>
               </tr>
             ))}
-            <tr className="border-t border-line">
-              <th className="py-1 pr-2 font-normal text-ink-faint">冷暖</th>
+            <tr className="border-t border-hairline">
+              <th className="py-1 pr-2 font-normal text-ink-48">冷暖</th>
               <td>
                 暖 {pct(t.warm)} · 冷 {pct(t.cool)} · 中性 {pct(t.neutral)}
               </td>
             </tr>
-            <tr className="border-t border-line">
-              <th className="py-1 pr-2 font-normal text-ink-faint">明度</th>
+            <tr className="border-t border-hairline">
+              <th className="py-1 pr-2 font-normal text-ink-48">明度</th>
               <td>
                 暗 {pct(l.dark)} · 中 {pct(l.mid)} · 亮 {pct(l.light)} · 平均 {l.mean} · P5–P95 {l.p5}–{l.p95}
               </td>
             </tr>
-            <tr className="border-t border-line">
-              <th className="py-1 pr-2 font-normal text-ink-faint">彩度</th>
+            <tr className="border-t border-hairline">
+              <th className="py-1 pr-2 font-normal text-ink-48">彩度</th>
               <td>
                 低 {pct(c.low)} · 中 {pct(c.mid)} · 高 {pct(c.high)} · 中位數 {c.median}
               </td>
             </tr>
-            <tr className="border-t border-line">
-              <th className="py-1 pr-2 font-normal text-ink-faint">L* 分布</th>
+            <tr className="border-t border-hairline">
+              <th className="py-1 pr-2 font-normal text-ink-48">L* 分布</th>
               <td>{l.histogram.map(pct).join(" / ")}</td>
             </tr>
-            <tr className="border-t border-line">
-              <th className="py-1 pr-2 font-normal text-ink-faint">C* 分布</th>
+            <tr className="border-t border-hairline">
+              <th className="py-1 pr-2 font-normal text-ink-48">C* 分布</th>
               <td>{c.histogram.map(pct).join(" / ")}</td>
             </tr>
           </tbody>
         </table>
       </details>
 
-      <ul className="flex flex-col gap-0.5 text-xs text-ink-faint">
+      <ul className="flex flex-col gap-0.5 text-xs text-ink-48">
         {data.notes.map((n) => (
           <li key={n}>※ {n}</li>
         ))}
       </ul>
-      <p className="text-[11px] text-ink-faint">
+      <p className="text-[11px] text-ink-48">
         {data.source === "original" ? "依數位原圖" : "依你的照片"}計算 · CIELAB k-means（{data.method}）
         {data.latency_ms > 0 && ` · ${data.latency_ms} ms`} · 系統計算，不經過生成模型
       </p>

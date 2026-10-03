@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { api, ApiError } from "../api/client";
+import { api, ApiError, assetUrl } from "../api/client";
 import { useRoutedSearch, useTextSearch } from "../api/hooks";
 import { PhotoLocation } from "../components/align/AlignmentCards";
 import { PhotoColors } from "../components/color/ColorAnalysisCard";
@@ -46,13 +46,13 @@ function ImageResults({
         <img
           src={api.uploadedImageUrl(imageId)}
           alt="你上傳的照片"
-          className="h-20 w-20 rounded-lg border border-line object-cover shadow-sm"
+          className="h-20 w-20 rounded-lg border border-hairline object-cover"
         />
         <div>
-          <p className="text-xs text-ink-faint">以圖搜圖</p>
-          <h1 className="font-serif text-2xl font-bold">辨識結果</h1>
+          <p className="t-eyebrow">以圖搜圖</p>
+          <h1 className="t-display">辨識結果</h1>
           {data && (
-            <p className="text-xs text-ink-faint">
+            <p className="text-xs text-ink-48">
               {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 · {latencyMs} ms
             </p>
           )}
@@ -66,28 +66,38 @@ function ImageResults({
       )}
 
       {best && (
-        <section className="grid gap-4 rounded-2xl border border-jade/30 bg-jade-soft/40 p-4 sm:grid-cols-[240px_1fr]">
-          <ArtworkCard artwork={best.artwork} to={`/artworks/${best.artwork.id}`} />
+        <section className="card grid gap-6 p-6 sm:grid-cols-[240px_1fr] sm:p-8">
+          <Link
+            to={`/artworks/${best.artwork.id}`}
+            className="block self-start overflow-hidden rounded-lg bg-parchment-deep product-shadow"
+          >
+            <img
+              src={assetUrl(best.artwork.thumb_url)}
+              alt={best.artwork.title_zh}
+              className="aspect-[4/3] w-full object-cover object-[center_20%]"
+            />
+          </Link>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <VerifiedBadge ok>辨識成功</VerifiedBadge>
               <VerifiedBadge ok>相似度 {best.score.toFixed(3)}</VerifiedBadge>
               <VerifiedBadge ok>幾何驗證 {best.inliers} 個對應點</VerifiedBadge>
             </div>
-            <h2 className="font-serif text-2xl font-black">〈{best.artwork.title_zh}〉</h2>
-            <p className="text-ink-soft">
+            <h2 className="t-display">〈{best.artwork.title_zh}〉</h2>
+            <p className="text-ink-80">
               {best.artwork.artist_zh}（{best.artwork.artist_en}）· {best.artwork.date_text}
             </p>
+            <p className="-mt-2 text-sm text-ink-48">{best.artwork.collection}</p>
             <div className="mt-auto flex flex-wrap gap-2">
               <Link
                 to={`/artworks/${best.artwork.id}/chat?image=${imageId}`}
-                className="rounded-xl bg-seal px-4 py-2.5 font-bold text-white transition hover:bg-seal-deep"
+                className="btn-primary"
               >
                 問問這幅畫
               </Link>
               <Link
                 to={`/artworks/${best.artwork.id}`}
-                className="rounded-xl border border-ink/15 bg-card px-4 py-2.5 font-bold transition hover:border-ink/40"
+                className="btn-ghost"
               >
                 畫作介紹
               </Link>
@@ -108,7 +118,7 @@ function ImageResults({
 
       {others.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-bold text-ink-soft">
+          <h2 className="t-caption-strong mb-2 text-ink-80">
             {data?.matched ? "其他候選" : "最接近的畫作（未通過驗證，僅供參考）"}
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -119,7 +129,7 @@ function ImageResults({
                 to={`/artworks/${r.artwork.id}`}
                 dim
                 footer={
-                  <p className="text-xs text-ink-faint">
+                  <p className="text-xs text-ink-48">
                     相似度 {r.score.toFixed(3)} · 對應點 {r.inliers ?? "—"}
                   </p>
                 }
@@ -146,16 +156,16 @@ function TextResults({ q }: { q: string }) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-card px-4 py-3 outline-none focus:border-seal"
+          className="field min-w-0 flex-1"
           placeholder="用文字描述畫面"
         />
-        <button className="shrink-0 rounded-xl bg-ink px-4 py-3 font-bold text-paper">搜尋</button>
+        <button className="btn-primary shrink-0">搜尋</button>
       </form>
       <div>
-        <p className="text-xs text-ink-faint">以文搜圖</p>
-        <h1 className="font-serif text-2xl font-bold">「{q}」</h1>
+        <p className="t-eyebrow">以文搜圖</p>
+        <h1 className="t-display">「{q}」</h1>
         {data && (
-          <p className="text-xs text-ink-faint">
+          <p className="text-xs text-ink-48">
             Chinese-CLIP（文字→畫面）＋ bge-m3（文字→知識段落）以 RRF 融合排序 · {data.latency_ms} ms
           </p>
         )}
@@ -172,7 +182,7 @@ function TextResults({ q }: { q: string }) {
             to={`/artworks/${r.artwork.id}`}
             badge={
               i === 0 ? (
-                <span className="rounded-full bg-seal px-2 py-0.5 text-xs font-bold text-white">最相符</span>
+                <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">最相符</span>
               ) : undefined
             }
             footer={
@@ -191,10 +201,10 @@ function TextResults({ q }: { q: string }) {
 function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
   const pct = Math.max(4, Math.min(100, (value / max) * 100));
   return (
-    <div className="flex items-center gap-2 text-[11px] text-ink-faint">
+    <div className="flex items-center gap-2 text-[11px] text-ink-48">
       <span className="w-6 shrink-0">{label}</span>
-      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper-deep">
-        <span className="block h-full rounded-full bg-seal/70" style={{ width: `${pct}%` }} />
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-parchment-deep">
+        <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </span>
       <span className="w-9 shrink-0 text-right tabular-nums">{value.toFixed(2)}</span>
     </div>

@@ -31,7 +31,7 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f99, 1.6));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x86868b, 1.6));
     const sun = new THREE.DirectionalLight(0xffffff, 1.8);
     sun.position.set(1.5, -2, 3);
     scene.add(sun);
@@ -76,11 +76,11 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
           scene.add(new THREE.Mesh(g, mat));
           const edges = new THREE.LineSegments(
             new THREE.EdgesGeometry(g, 25),
-            new THREE.LineBasicMaterial({ color: layer.ghost ? layer.color : 0x1f2933 }),
+            new THREE.LineBasicMaterial({ color: layer.ghost ? layer.color : 0x1d1d1f }),
           );
           scene.add(edges);
         });
-        const grid = new THREE.GridHelper(radius * 4, 20, 0xc9ccd1, 0xe3e5e8);
+        const grid = new THREE.GridHelper(radius * 4, 20, 0xd2d2d7, 0xe8e8ed);
         grid.rotation.x = Math.PI / 2;
         grid.position.z = -radius * 0.75;
         scene.add(grid);
@@ -124,13 +124,13 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
   }, [key, height]);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-line bg-gradient-to-b from-white to-steel-soft/60">
+    <div className="relative overflow-hidden rounded-xl border border-hairline bg-canvas">
       <div ref={mountRef} style={{ height }} className="w-full cursor-grab active:cursor-grabbing" />
       {loading && !error && (
-        <div className="absolute inset-0 grid place-items-center text-sm text-ink-faint">載入 3D 模型…</div>
+        <div className="absolute inset-0 grid place-items-center text-sm text-ink-48">載入 3D 模型…</div>
       )}
-      {error && <div className="absolute inset-0 grid place-items-center text-sm text-seal">{error}</div>}
-      <p className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-ink-faint">拖曳旋轉 · 滾輪縮放</p>
+      {error && <div className="absolute inset-0 grid place-items-center text-sm text-danger">{error}</div>}
+      <p className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-ink-48">拖曳旋轉 · 滾輪縮放</p>
     </div>
   );
 }

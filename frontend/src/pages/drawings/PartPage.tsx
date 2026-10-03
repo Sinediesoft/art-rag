@@ -39,7 +39,7 @@ export function PartPage() {
   return (
     <article className="grid gap-6 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)]">
       <div className="flex flex-col gap-2 lg:sticky lg:top-20 lg:self-start">
-        <div className="flex rounded-xl border border-line bg-card p-1 text-sm font-medium">
+        <div className="flex rounded-full border border-hairline bg-card p-1 text-sm font-normal">
           {(
             [
               ["drawing", "加工圖"],
@@ -50,8 +50,8 @@ export function PartPage() {
               key={k}
               type="button"
               onClick={() => setView(k)}
-              className={`flex-1 rounded-lg px-3 py-1.5 transition ${
-                view === k ? "bg-steel text-white" : "text-ink-soft hover:bg-paper-deep"
+              className={`flex-1 rounded-full px-3 py-1.5 transition ${
+                view === k ? "bg-accent text-white" : "text-ink-80 hover:bg-parchment-deep"
               }`}
             >
               {label}
@@ -59,18 +59,18 @@ export function PartPage() {
           ))}
         </div>
         {view === "drawing" ? (
-          <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
-            <img src={assetUrl(p.drawing_url)} alt={p.name.zh} className="w-full object-contain" />
+          <div className="card overflow-hidden p-2">
+            <img src={assetUrl(p.drawing_url)} alt={p.name.zh} className="w-full rounded-lg object-contain" />
           </div>
         ) : (
           <ModelViewer layers={[{ url: p.model_url, color: "#9fb6cc" }]} height={420} />
         )}
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           {view === "drawing"
             ? "第一角法三視圖，由標準 CadQuery 模型自動產生（格式與 Ortho2CAD 訓練資料相同）"
             : "標準 3D 模型（kb/cad 的 CadQuery 程式碼）：用來和 Ortho2CAD 的重建結果比 IoU"}
           {" · "}
-          <a href={assetUrl(p.step_url)} className="text-steel underline">
+          <a href={assetUrl(p.step_url)} className="link">
             下載 STEP
           </a>
         </p>
@@ -78,15 +78,15 @@ export function PartPage() {
 
       <div className="flex flex-col gap-5">
         <header>
-          <p className="font-mono text-sm text-steel">
+          <p className="font-mono text-sm text-ink-48">
             {p.part_no} · {p.name.en}
           </p>
-          <h1 className="flex flex-wrap items-center gap-2 text-3xl font-black">
+          <h1 className="t-display mt-1 flex flex-wrap items-center gap-2">
             {p.name.zh} <ConfidentialityBadge level={p.confidentiality} />
           </h1>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {p.tags.map((t) => (
-              <span key={t} className="rounded-full bg-steel-soft px-2.5 py-0.5 text-xs text-steel-deep">
+              <span key={t} className="rounded-full bg-parchment-deep px-2.5 py-0.5 text-xs text-ink-80">
                 {t}
               </span>
             ))}
@@ -96,14 +96,14 @@ export function PartPage() {
         <div className="grid gap-2 sm:grid-cols-2">
           <Link
             to={`/drawings/${p.id}/reconstruct`}
-            className="flex items-center justify-between rounded-xl bg-steel px-4 py-3 font-bold text-white shadow-sm transition hover:bg-steel-deep"
+            className="btn-primary w-full justify-between"
           >
             <span>Ortho2CAD 3D 重建</span>
             <span aria-hidden>→</span>
           </Link>
           <Link
             to={`/drawings/${p.id}/chat`}
-            className="flex items-center justify-between rounded-xl bg-ink px-4 py-3 font-bold text-paper shadow-sm transition hover:bg-ink/85"
+            className="btn-ghost w-full justify-between"
           >
             <span>問問這張圖</span>
             <span aria-hidden>→</span>
@@ -111,20 +111,20 @@ export function PartPage() {
         </div>
 
         {done.length > 0 && (
-          <div className="rounded-xl border border-line bg-card p-3 text-sm">
-            <p className="mb-1 text-xs font-bold text-ink-faint">最近的 3D 重建（不必重跑，直接看結果）</p>
+          <div className="card p-4 text-sm">
+            <p className="mb-2 text-xs font-semibold text-ink-48">最近的 3D 重建（不必重跑，直接看結果）</p>
             <ul className="flex flex-col gap-1">
               {done.slice(0, 3).map((r) => (
                 <li key={r.job_id}>
                   <Link
                     to={`/drawings/${p.id}/reconstruct?job=${r.job_id}`}
-                    className="flex flex-wrap items-center gap-x-3 rounded-md px-2 py-1 hover:bg-paper-deep"
+                    className="flex flex-wrap items-center gap-x-3 rounded-md px-2 py-1 hover:bg-parchment-deep"
                   >
-                    <span className="font-mono text-xs text-ink-faint">{formatTaipei(r.created_at)}</span>
-                    <span className="font-medium">{r.strategy === "ortho2cad" ? "Ortho2CAD" : "Qwen3-VL 對照組"}</span>
+                    <span className="font-mono text-xs text-ink-48">{formatTaipei(r.created_at)}</span>
+                    <span className="font-normal">{r.strategy === "ortho2cad" ? "Ortho2CAD" : "Qwen3-VL 對照組"}</span>
                     <span>IoU {r.iou != null ? r.iou.toFixed(3) : "—"}</span>
-                    {r.iou_bbox != null && <span className="text-ink-faint">外框對齊 {r.iou_bbox.toFixed(3)}</span>}
-                    <span className="text-ink-faint">{seconds(r.total_ms)}</span>
+                    {r.iou_bbox != null && <span className="text-ink-48">外框對齊 {r.iou_bbox.toFixed(3)}</span>}
+                    <span className="text-ink-48">{seconds(r.total_ms)}</span>
                   </Link>
                 </li>
               ))}
@@ -136,12 +136,12 @@ export function PartPage() {
 
         <PartProductionCard partId={p.id} />
 
-        <dl className="grid grid-cols-[5.5em_1fr] gap-x-3 gap-y-1.5 rounded-xl border border-line bg-card p-4 text-sm">
+        <dl className="card grid grid-cols-[5.5em_1fr] gap-x-3 gap-y-1.5 p-5 text-sm">
           {meta
             .filter(([, v]) => v)
             .map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="text-ink-faint">{k}</dt>
+                <dt className="text-ink-48">{k}</dt>
                 <dd>{v}</dd>
               </div>
             ))}
@@ -149,15 +149,15 @@ export function PartPage() {
 
         <section className="flex flex-col gap-4">
           {p.descriptions.map((d, i) => (
-            <div key={i} className="border-l-2 border-steel/40 pl-4">
-              <h2 className="mb-1 text-lg font-bold">{d.topic}</h2>
-              <p className="leading-relaxed text-ink-soft">{d.text}</p>
-              <p className="mt-0.5 text-xs text-ink-faint">出處：{d.source}</p>
+            <div key={i} className="border-l-2 border-hairline pl-4">
+              <h2 className="mb-1 text-lg font-semibold">{d.topic}</h2>
+              <p className="leading-relaxed text-ink-80">{d.text}</p>
+              <p className="mt-0.5 text-xs text-ink-48">出處：{d.source}</p>
             </div>
           ))}
         </section>
 
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           圖紙 ID <code className="font-mono">{p.id}</code> · 示範資料（虛構工廠），非真實企業文件
         </p>
       </div>

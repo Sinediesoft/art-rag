@@ -61,6 +61,7 @@ def test_none_helpful_still_keeps_one(monkeypatch):
     monkeypatch.setattr(rearrange, "get_provider", fake_provider("無"))
     kept, info = run()
     assert [s["chunk_id"] for s in kept] == ["c0"] and info["kept"] == 1
+    assert info["none"] is True  # 七段權限控管第 4 段照這個把保底的那段也剔除
 
 
 @pytest.mark.parametrize(
@@ -99,14 +100,15 @@ def test_single_candidate_skips_the_model(monkeypatch):
     """只有 1 段可篩時不呼叫模型，ms 為 0（前端據此不顯示「由模型篩選」）。"""
     monkeypatch.setattr(rearrange, "get_provider", fake_provider(error=AssertionError("不該呼叫")))
     kept, info = asyncio.run(rearrange.rearrange("簽名在哪？", SOURCES[:1]))
-    assert kept == SOURCES[:1] and info == {"candidates": 1, "kept": 1, "ms": 0, "fallback": None}
+    assert kept == SOURCES[:1]
+    assert info == {"candidates": 1, "kept": 1, "ms": 0, "fallback": None, "none": False}
 
 
 def test_switch_priority(monkeypatch):
-    """請求 ＞ .env 的 REARRANGE ＞ models.yaml（預設關）。"""
+    """請求 ＞ .env 的 REARRANGE ＞ models.yaml（2026-10-03 起預設開）。"""
     env = SimpleNamespace(rearrange="")
     monkeypatch.setattr(rearrange, "get_settings", lambda: env)
-    assert rearrange.enabled() is False  # models.yaml 預設關
-    env.rearrange = "true"
-    assert rearrange.enabled() is True
-    assert rearrange.enabled(requested=False) is False
+    assert rearrange.enabled() is True  # models.yaml 預設開
+    env.rearrange = "false"
+    assert rearrange.enabled() is False
+    assert rearrange.enabled(requested=True) is True

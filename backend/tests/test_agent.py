@@ -1,5 +1,5 @@
 """智慧助理（docs/adr/011）：代號化、本地分流、信心閘門、權限判定、修改資料流程、主管核准。
-五段防護（RBAC、Jev 護欄與過濾、Metadata Filter、拒絕並記錄，docs/adr/012）在 test_guard.py。
+五段防護（RBAC、Jev 護欄與過濾、Metadata Filter、拒絕並記錄，docs/adr/014）在 test_guard.py。
 全部用 mock 模型，不連真的 Jev。"""
 
 from datetime import UTC, datetime, timedelta

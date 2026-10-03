@@ -94,7 +94,7 @@ export function GanttChart({
   const height = HEAD_H + rows.length * ROW_H + 8;
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-line bg-card">
+    <div className="card overflow-x-auto">
       <svg width={width} height={height} className="block text-[11px]" role="img" aria-label="生產排程甘特圖">
         <defs>
           <pattern id="setup-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -115,14 +115,14 @@ export function GanttChart({
                 x2={left}
                 y1={HEAD_H - 6}
                 y2={height}
-                stroke={d.holidays_before.length ? "#b3261e" : weekStart ? "#8a7f72" : "#e2d8c6"}
+                stroke={d.holidays_before.length || weekStart ? "#7a7a7a" : "#e0e0e0"}
                 strokeWidth={weekStart || d.holidays_before.length ? 1.5 : 1}
                 strokeDasharray={d.holidays_before.length ? "3 3" : undefined}
               />
-              <text x={left + 4} y={14} className="fill-ink-soft font-mono" fontSize="11">
+              <text x={left + 4} y={14} className="fill-ink-80 font-mono" fontSize="11">
                 {d.date.slice(5).replace("-", "/")}
               </text>
-              <text x={left + 4} y={27} className="fill-ink-faint" fontSize="10">
+              <text x={left + 4} y={27} className="fill-ink-48" fontSize="10">
                 {d.weekday}
                 {d.holidays_before.length > 0 &&
                   ` ・${d.holidays_before.map((h) => `${String(h.date).slice(5).replace("-", "/")}${h.name}`).join("、")}`}
@@ -135,11 +135,11 @@ export function GanttChart({
           const y = HEAD_H + ri * ROW_H;
           return (
             <g key={r.key}>
-              <line x1={0} x2={width} y1={y + ROW_H} y2={y + ROW_H} stroke="#e2d8c6" />
-              <text x={8} y={y + 13} className="fill-ink font-mono" fontSize="11" fontWeight={700}>
+              <line x1={0} x2={width} y1={y + ROW_H} y2={y + ROW_H} stroke="#e0e0e0" />
+              <text x={8} y={y + 13} className="fill-ink font-mono" fontSize="11" fontWeight={600}>
                 {r.label}
               </text>
-              <text x={8} y={y + 25} className="fill-ink-faint" fontSize="10">
+              <text x={8} y={y + 25} className="fill-ink-48" fontSize="10">
                 {r.sub.length > 12 ? `${r.sub.slice(0, 12)}…` : r.sub}
               </text>
 
@@ -206,7 +206,7 @@ export function GanttChart({
                     x2={x(r.due)}
                     y1={y + 2}
                     y2={y + ROW_H - 2}
-                    stroke={r.late ? "#b3261e" : "#2f6b57"}
+                    stroke={r.late ? "#d70015" : "#248a3d"}
                     strokeWidth={2.5}
                   />
                   <title>交期（當天下班）</title>
@@ -215,7 +215,7 @@ export function GanttChart({
             </g>
           );
         })}
-        <line x1={LABEL_W} x2={LABEL_W} y1={0} y2={height} stroke="#8a7f72" />
+        <line x1={LABEL_W} x2={LABEL_W} y1={0} y2={height} stroke="#e0e0e0" />
       </svg>
     </div>
   );
@@ -223,14 +223,17 @@ export function GanttChart({
 
 export function GanttLegend({ view }: { view: "machine" | "order" }) {
   return (
-    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-faint">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-48">
       <span className="inline-flex items-center gap-1">
-        <span className="inline-block h-3 w-5 rounded-sm bg-steel" /> 加工
+        <span className="inline-block h-3 w-5 rounded-sm" style={{ backgroundColor: ORDER_COLORS[0] }} /> 加工
       </span>
       <span className="inline-flex items-center gap-1">
         <span
-          className="inline-block h-3 w-5 rounded-sm bg-steel"
-          style={{ backgroundImage: "repeating-linear-gradient(45deg, #ffffff99 0 2px, transparent 2px 5px)" }}
+          className="inline-block h-3 w-5 rounded-sm"
+          style={{
+            backgroundColor: ORDER_COLORS[0],
+            backgroundImage: "repeating-linear-gradient(45deg, #ffffff99 0 2px, transparent 2px 5px)",
+          }}
         />
         換線準備
       </span>
@@ -238,13 +241,13 @@ export function GanttLegend({ view }: { view: "machine" | "order" }) {
       {view === "order" && (
         <>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-5 rounded-sm border border-dashed border-steel" /> 委外
+            <span className="inline-block h-3 w-5 rounded-sm border border-dashed" style={{ borderColor: ORDER_COLORS[0] }} /> 委外
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-0.5 bg-jade" /> 交期（準時）
+            <span className="inline-block h-3 w-0.5 bg-success" /> 交期（準時）
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-3 w-0.5 bg-seal" /> 交期（延遲）
+            <span className="inline-block h-3 w-0.5 bg-danger" /> 交期（延遲）
           </span>
         </>
       )}

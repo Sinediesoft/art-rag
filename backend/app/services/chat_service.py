@@ -7,11 +7,15 @@
 工廠圖紙（part_id）走同一條流程，只換知識庫領域與 prompt 模板（drawing_v1）；
 圖紙屬企業機密，雲端對照組一律不接受。
 
-五段防護的第 3～5 段（docs/adr/012）也在這裡：
-3. 檢索帶 Metadata Filter：只取目前身分看得到的圖紙（機密等級）的段落，看不到的在檢索時就濾掉
-4. 後置過濾：每段都用地端規則掃描夾帶指令（間接注入），命中就移除並記錄；智慧助理（post_filter）
-   再做完整的第 4 段：公開段落代號化後送 Jev 判斷注入與關聯性、內部與機密段落留在地端，最多留 3 段
-5. 地端 LLM 只依留下的段落回答
+七段權限控管的第 3～7 段（docs/adr/015）也在這裡：
+3. 權限感知檢索：Metadata Filter 只照 JWT 產生（clearance <= 憑證等級 AND dept IN 公開＋憑證部門），
+   過濾在資料庫查詢階段執行，看不到的圖紙段落不會進候選
+4. Jev Noul 雙重驗證：每段 is_relevant＋security_leak_check，任一不通過就剔除並記錄
+5. Jev Score 評分重排：取前 3 段
+6. 生成閘門：權限內沒有可答內容 → 降級回「查無資料」，不呼叫 LLM、不透露有文件但沒有權限
+7. 地端 LLM 只依留下的段落回答
+第 4～6 段只把公開段落代號化後送 Jev，內部與機密段落留在地端判斷。
+其他頁面的問答（沒帶 post_filter）只做第 4 段的地端洩密掃描，段落數照原本規則。
 """
 
 import json
@@ -25,7 +29,7 @@ from app.core.logging import log
 from app.rag import rearrange as rearrange_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
-from app.rag.prompt import build_messages, prompt_version
+from app.rag.prompt import artwork_card, build_messages, part_card, prompt_version
 from app.rag.providers import (
     CLOUD_STRATEGIES,
     ProviderUnavailable,
@@ -82,28 +86,30 @@ def _source(i: int, h, store) -> dict:
     }
 
 
-def visible_parts(levels: list[str] | tuple[str, ...] | None) -> set[str] | None:
-    """Metadata Filter：看得到的圖紙（機密等級在 levels 裡）；levels 為 None＝不限。"""
-    if levels is None:
+def visible_parts(scope: guard.MetaFilter | None) -> set[str] | None:
+    """Metadata Filter：看得到的圖紙（文件的機密等級與部門都在憑證範圍內）；None＝不限。"""
+    if scope is None:
         return None
-    return {p["id"] for p in get_store().parts if p["confidentiality"] in levels}
+    return {
+        p["id"] for p in get_store().parts if scope.allows(p["confidentiality"], p.get("owner", ""))
+    }
 
 
 def retrieve(
     question: str,
     artwork_id: str | None,
     part_id: str | None = None,
-    levels: list[str] | tuple[str, ...] | None = None,
+    scope: guard.MetaFilter | None = None,
 ) -> list[dict]:
     """檢索段落規則（共用層 §三）：已指定畫作（或圖紙）只取它的段落；相似度門檻＋最多 k 段，
     不硬湊滿；只有比較、背景類問題（或未指定）才從同一領域的全庫補足。
 
-    levels：目前身分看得到的機密等級（第 3 段的 Metadata Filter）。工廠圖紙從全庫補足時
-    只取看得到的圖紙；畫作都是公開的，不受影響。"""
+    scope：第 3 段的 Metadata Filter（照 JWT 產生）。工廠圖紙只取看得到的圖紙，
+    連已指定的圖紙也一樣（看不到就沒有候選，第 6 段降級）；畫作都是公開的，不受影響。"""
     store = get_store()
     cfg = get_models_config()
     coll, owner = (store.mfg, part_id) if part_id else (store.art, artwork_id)
-    owners = visible_parts(levels) if part_id else None
+    owners = visible_parts(scope) if part_id else None
     k = int(cfg.retrieval["top_k_chunks"])
     qvec = embed_text([question])[0]
     wide = not owner or any(w in question for w in cfg.global_fill_keywords)
@@ -133,8 +139,9 @@ async def chat_stream(
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
     記憶體吃緊時先釋放其他模型（services/memory_guard.py）。
-    account：目前身分（資料範圍與 Metadata Filter）；None＝不限（評估腳本、單元測試直接呼叫時）。
-    post_filter：第 4 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描夾帶指令。
+    account：目前身分（JWT 的資料範圍與 Metadata Filter）；
+    None＝不限（評估腳本、單元測試直接呼叫時）。
+    post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -253,37 +260,50 @@ async def _chat_stream(
             )
             return
 
-    # 第 1 段的資料範圍在 API 層也檢查一次：照片辨識出的圖紙、直接指定的圖紙都一樣
-    if account is not None and domain == "mfg":
+    # 資料範圍：其他頁面直接指定看不到的圖紙 → 403（和 /parts/{id} 一樣）。
+    # 智慧助理（post_filter）不在這裡透露：
+    # 交給第 3 段 Metadata Filter 濾掉、第 6 段降級成「查無資料」
+    doc = None
+    if artwork:
+        doc = {
+            "id": artwork["id"],
+            "label": artwork["name"]["zh"] if domain == "mfg" else artwork["title"]["zh"],
+            "level": artwork.get("confidentiality", "公開") if domain == "mfg" else "公開",
+            "dept": artwork.get("owner", "") if domain == "mfg" else "公開",
+        }
+    seen = account is None or doc is None or domain == "art" or guard.visible(account, doc)
+    if not seen and post_filter is None:
         try:
             require_part(account, artwork)
         except AppError as e:
             yield sse("error", {"code": e.code, "request_id": request_id, "message": e.message})
             return
 
-    # 2. 檢索（第 3 段，帶 Metadata Filter；關檢索時仍算一次，供前端比較用，但不放進 prompt）
-    levels = list(account.levels) if account is not None else None
-    meta = guard.MetaFilter(
-        domain,
-        ["公開"] if domain == "art" else [x for x in (levels or ["內部", "機密"]) if x != "公開"],
-        part_id or artwork_id,
-        (artwork or {}).get("name", {}).get("zh") or (artwork or {}).get("title", {}).get("zh"),
-        artwork.get("confidentiality", "公開") if artwork else None,
-    )
-    sources = retrieve(question, artwork_id, part_id, levels)
+    # 2. 檢索（第 3 段，Metadata Filter 照 JWT 產生；
+    #    關檢索時仍算一次，供前端比較用，但不放進 prompt）
+    meta = guard.MetaFilter.of(account, domain, doc) if account is not None else None
+    sources = retrieve(question, artwork_id, part_id, meta)
     candidates = len(sources)
-    # 第 4 段：要放進 prompt 的段落先過濾。每段都用地端規則掃描夾帶指令；
-    # 智慧助理（post_filter）再做注入＋關聯性重排（公開段落送 Jev、其他留地端），最多 3 段。
+    # 第 4～6 段：要放進 prompt 的段落先驗證。每段都用地端規則掃描洩密風險；
+    # 智慧助理（post_filter）再做 Jev Noul 雙重驗證 → Jev Score 重排（最多 3 段）→ 生成閘門。
     # 其他頁面沿用段落篩選（MIRA 的 Rearrange）開關，篩選時間算在 retrieval 裡
     post = None
     rearrange_info = None
-    if use_retrieval and sources:
-        post = await guard.filter_passages(question, sources, post_filter or "scan", strategy)
+    card = None
+    if seen and artwork:
+        card = {
+            "level": doc["level"],
+            "text": part_card(artwork) if domain == "mfg" else artwork_card(artwork),
+        }
+    if use_retrieval and (sources or post_filter):
+        post = await guard.process_passages(
+            question, sources, post_filter or "scan", strategy, card
+        )
         sources = post.kept
-        for s in post.injected:
+        for s in post.flagged:
             guard.log_block(
                 4,
-                "間接注入（段落已移除）",
+                "洩密風險（段落已剔除）",
                 account,
                 guard.mask_pii(f"〈{s['title']}〉{s['topic']}：{s['text'][:80]}")[0],
                 request_id,
@@ -305,11 +325,70 @@ async def _chat_stream(
             "rearrange": rearrange_info,
             "use_retrieval": use_retrieval,
             "sources": sources if use_retrieval else [],
-            "filter": meta.public(),
+            "filter": meta.public() if meta else None,
             "candidates": candidates,
             "post_filter": post.public() if post else None,
         },
     )
+
+    # 第 6 段生成閘門沒過：降級回應，不呼叫 LLM（不讓模型臆測，也不透露有文件但沒有權限）
+    if post and post.degraded:
+        total_ms = round((time.perf_counter() - t0) * 1000)
+        message = post.gate.message or ""
+        yield sse("token", {"text": message})
+        jev_bytes = post.egress_bytes
+        done = {
+            "request_id": request_id,
+            "strategy_requested": strategy,
+            "strategy_used": strategy,
+            "model": "生成閘門（未呼叫 LLM）",
+            "fallback": False,
+            "fallback_reason": None,
+            "prompt_version": prompt_version(domain),
+            "use_retrieval": use_retrieval,
+            "latency_ms": {
+                "retrieval": retrieval_ms,
+                "first_token": None,
+                "generation": 0,
+                "total": total_ms,
+            },
+            "tokens": {"input": 0, "output": 0},
+            "cost_twd": 0.0,
+            "egress": {
+                **NO_EGRESS,
+                "chunks": post.cloud if post.calls else 0,
+                "bytes": jev_bytes,
+                "jev_bytes": jev_bytes,
+            },
+            "degraded": True,
+        }
+        yield sse("done", done)
+        get_logs_repo().add_chat_log(
+            {
+                "request_id": request_id,
+                "created_at": get_logs_repo().now(),
+                "artwork_id": artwork_id,
+                "part_id": part_id,
+                "question": question,
+                "strategy_requested": strategy,
+                "strategy_used": "gate",
+                "model": done["model"],
+                "prompt_version": done["prompt_version"],
+                "use_retrieval": int(use_retrieval),
+                "fallback": 0,
+                "retrieval_ms": retrieval_ms,
+                "first_token_ms": None,
+                "total_ms": total_ms,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_twd": 0.0,
+                "egress_images": 0,
+                "egress_chunks": done["egress"]["chunks"],
+                "egress_bytes": jev_bytes,
+                "answer": message,
+            }
+        )
+        return
 
     # 3. 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
     #    Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
@@ -381,11 +460,11 @@ async def _chat_stream(
             "chunks": len(sources) if use_retrieval else 0,
             "bytes": len(json.dumps(messages, ensure_ascii=False).encode("utf-8")),
         }
-    # 第 4 段送 Jev 的代號化公開段落也算外送（只判斷、不生成）
+    # 第 4～6 段送 Jev 的代號化公開段落也算外送（只判斷、不生成）
     jev_bytes = post.egress_bytes if post else 0
     egress = {
         **egress,
-        "chunks": egress["chunks"] + (post.cloud if post and post.call else 0),
+        "chunks": egress["chunks"] + (post.cloud if post and post.calls else 0),
         "bytes": egress["bytes"] + jev_bytes,
         "jev_bytes": jev_bytes,
     }
@@ -407,6 +486,7 @@ async def _chat_stream(
         "tokens": {"input": provider.usage.input_tokens, "output": provider.usage.output_tokens},
         "cost_twd": estimate_cost_twd(used, provider.usage),
         "egress": egress,
+        "degraded": False,
     }
     yield sse("done", done)
     get_logs_repo().add_chat_log(

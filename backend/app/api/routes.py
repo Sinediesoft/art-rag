@@ -88,15 +88,26 @@ _TARGET = Query(
 )
 
 
+def _align_scope(target: str, request: Request) -> None:
+    """和圖紙比對也是讀圖紙（docs/adr/014 的資料範圍）：回應與疊圖都含圖紙內容，
+    看不到的圖紙 → 403。"""
+    kind, _, tid = target.partition(":")
+    if kind == "part":
+        _visible_part(tid, request)
+
+
 @router.get("/images/{image_id}/align", response_model=S.ImageAlignment, tags=["images"])
-def get_photo_alignment(image_id: str, target: str = _TARGET):
+def get_photo_alignment(image_id: str, request: Request, target: str = _TARGET):
     """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
-    畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。"""
+    畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
+    圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。"""
+    _align_scope(target, request)
     return compare_service.align_photo(image_id, target)
 
 
 @router.get("/images/{image_id}/align.png", response_class=Response, tags=["images"])
-def get_photo_alignment_overlay(image_id: str, target: str = _TARGET):
+def get_photo_alignment_overlay(image_id: str, request: Request, target: str = _TARGET):
+    _align_scope(target, request)
     return Response(compare_service.align_overlay(image_id, target), media_type="image/png")
 
 
@@ -167,11 +178,14 @@ def get_artwork_colormap(artwork_id: str):
     },
 )
 async def chat(body: S.ChatRequest, request: Request):
-    """圖文問答。工廠圖紙要看目前身分的資料範圍（看不到的回 403 DATA_SCOPE_DENIED）；
-    檢索只取看得到的段落（Metadata Filter），放進 prompt 前先過濾夾帶指令的段落（docs/adr/012）。"""
+    """圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
+    智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
+    放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。"""
     account = identity.current(request)
     if body.part_id:
-        identity.require_part(account, _part_or_404(body.part_id))
+        part = _part_or_404(body.part_id)
+        if body.post_filter is None:
+            identity.require_part(account, part)
     stream = chat_service.chat_stream(
         question=body.question,
         request_id=request.state.request_id,
@@ -743,37 +757,41 @@ def simulate_outage(body: S.OutageRequest):
     return S.OkResponse()
 
 
-# ---------------------------------------------------------------- 智慧助理（docs/adr/011）
-def _accounts(account: identity.Account) -> dict:
+# ---------------------------------------------------------------- 智慧助理（docs/adr/011、015）
+def _accounts(auth: identity.Auth) -> dict:
     return {
-        "current": account.public(),
+        "current": auth.account.public(),
         "accounts": [a.public() for a in identity.accounts().values()],
         "demo_controls": get_settings().demo_controls,
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
+        "token": auth.public(),
     }
 
 
 @router.get("/auth/accounts", response_model=S.AccountsResponse, tags=["agent"])
-def list_accounts(request: Request):
-    """展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。"""
-    return _accounts(identity.current(request))
+def list_accounts(request: Request, response: Response):
+    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，
+    放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。"""
+    return _accounts(identity.ensure(request, response))
 
 
 @router.post("/auth/switch", response_model=S.AccountsResponse, tags=["agent"])
 def switch_account(body: S.SwitchAccountRequest, request: Request, response: Response):
-    """展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。"""
+    """展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。"""
     return _accounts(identity.switch(request, response, body.account_id))
 
 
 @router.post("/agent/route", response_model=S.RouteResponse, tags=["agent"])
 async def agent_route(body: S.RouteRequest, request: Request):
-    """五段防護的第 1、2 段（docs/adr/012）：個資遮蔽 → 本地分流判斷意圖＋信心閘門 →
-    RBAC（身分、資料範圍、動作權限）→ Jev 第一層護欄 → 分派到哪個本地模組；擋下就拒絕並記錄。"""
+    """七段權限控管的第 1、2 段（docs/adr/015）：JWT 已在閘道驗過 → 個資遮蔽 →
+    本地分流判斷要做什麼 →
+    角色授權（功能、動作權限）→ Jev Choice（正常查詢／Prompt 注入／無關閒聊）→ 分派到哪個本地模組；
+    擋下就拒絕並記錄、閒聊快速短路回覆。"""
     if not body.question.strip() and not body.image_id:
         raise AppError("VALIDATION_ERROR", "請輸入一句話或附一張照片", 422)
     return await agent_service.route(
         body.question,
-        identity.current(request),
+        identity.auth_of(request),
         request.state.request_id,
         image_id=body.image_id,
         forced_intent=body.forced_intent,
@@ -831,8 +849,8 @@ def return_approval(ap_no: str, body: S.ReturnRequest, request: Request):
 
 @router.get("/security/logs", response_model=S.SecurityLogsResponse, tags=["agent"])
 def security_logs(limit: int = Query(default=20, ge=1, le=200)):
-    """五段防護的拒絕並記錄（docs/adr/012）：RBAC 與 Jev 護欄擋下的請求、Jev 過濾移除的段落。
-    只存遮蔽個資後的文字。"""
+    """七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
+    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。"""
     repo = get_logs_repo()
     tz = timezone(timedelta(hours=8))
     midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)

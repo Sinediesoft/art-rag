@@ -77,10 +77,10 @@ export function PartProductionCard({ partId }: { partId: string }) {
 
 
   return (
-    <section className="rounded-xl border border-steel/25 bg-card p-4 text-sm">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="font-bold">生產工單與排程</h2>
-        <Link to="/schedule" className="text-xs font-bold text-steel hover:underline">
+    <section className="card p-5 text-sm">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="text-lg font-semibold">生產工單與排程</h2>
+        <Link to="/schedule" className="link text-sm">
           生產排程 →
         </Link>
       </div>
@@ -89,40 +89,40 @@ export function PartProductionCard({ partId }: { partId: string }) {
         <button
           type="button"
           onClick={() => setShowRouting((v) => !v)}
-          className="mb-2 flex w-full flex-wrap items-center gap-1 text-left text-xs text-ink-soft"
+          className="mb-2 flex w-full flex-wrap items-center gap-1 text-left text-xs text-ink-80"
         >
-          <span className="font-bold text-ink-faint">途程</span>
+          <span className="font-semibold text-ink-48">途程</span>
           {plan.routing.map((o, i) => (
             <span key={o.op_seq} className="inline-flex items-center gap-1">
-              {i > 0 && <span className="text-ink-faint">→</span>}
+              {i > 0 && <span className="text-ink-48">→</span>}
               <span
-                className={`rounded px-1.5 py-0.5 ${o.kind === "委外" ? "border border-dashed border-steel/40 text-steel" : "bg-steel-soft text-steel-deep"}`}
+                className={`rounded px-1.5 py-0.5 ${o.kind === "委外" ? "border border-dashed border-ink-48 text-ink-80" : "bg-parchment text-ink-80"}`}
               >
                 {o.kind === "委外" ? `${o.name.slice(0, 6)}（委外）` : o.machine_type}
               </span>
             </span>
           ))}
-          <span className="ml-1 text-steel underline">{showRouting ? "收合" : "明細"}</span>
+          <span className="ml-1 text-accent">{showRouting ? "收合" : "明細"}</span>
         </button>
       ) : (
-        <p className="mb-2 text-xs text-amber">這張圖紙還沒有製程途程（kb/production/routings/），無法排程。</p>
+        <p className="mb-2 text-xs text-warning">這張圖紙還沒有製程途程（kb/production/routings/），無法排程。</p>
       )}
       {showRouting && (
-        <ol className="mb-3 flex flex-col gap-1 rounded-lg bg-paper-deep/50 p-2 text-xs">
+        <ol className="mb-3 flex flex-col gap-1 rounded-lg bg-parchment p-3 text-xs">
           {plan.routing.map((o) => (
             <li key={o.op_seq} className="flex flex-wrap gap-x-2">
-              <span className="font-mono text-ink-faint">{o.op_seq}</span>
-              <span className="font-medium">{o.name}</span>
+              <span className="font-mono text-ink-48">{o.op_seq}</span>
+              <span className="font-normal">{o.name}</span>
               {o.kind === "委外" ? (
-                <span className="text-steel">委外 {o.outsource_days} 個工作天</span>
+                <span className="text-ink-80">委外 {o.outsource_days} 個工作天</span>
               ) : (
-                <span className="text-ink-faint">
+                <span className="text-ink-48">
                   {o.machine_type}（{o.machines.join("、")}）· 準備 {o.setup_min} 分＋每件 {o.run_min_per_pc} 分
                 </span>
               )}
             </li>
           ))}
-          <li className="text-ink-faint">工序與「加工製程」段落一一對應；工時為示範估計值</li>
+          <li className="text-ink-48">工序與「加工製程」段落一一對應；工時為示範估計值</li>
         </ol>
       )}
 
@@ -131,24 +131,24 @@ export function PartProductionCard({ partId }: { partId: string }) {
           {plan.work_orders.map((w) => (
             <li key={w.wo_no} className="flex flex-wrap items-baseline gap-x-2">
               <span className="font-mono text-xs">{w.wo_no}</span>
-              <span className="text-xs text-ink-soft">
+              <span className="text-xs text-ink-80">
                 {w.status}・{w.source === "系統開立" ? "圖紙頁開立" : "既有"}
                 {w.priority === "急件" && "・急件"}
               </span>
               <span>{w.qty} 件</span>
-              <span className="text-xs text-ink-faint">交期 {fmt(w.due_on)}</span>
+              <span className="text-xs text-ink-48">交期 {fmt(w.due_on)}</span>
               {w.plan ? (
-                <span className={`text-xs ${w.plan.late_min ? "font-bold text-seal" : "text-jade"}`}>
+                <span className={`text-xs ${w.plan.late_min ? "font-semibold text-danger" : "text-success"}`}>
                   排程完工 {fmt(w.plan.end_at)}
                   {w.plan.late_min ? `・延遲 ${(w.plan.late_min / 60).toFixed(1)} 小時` : "・準時"}
                 </span>
               ) : (
-                <span className="text-xs text-amber">尚未排程</span>
+                <span className="text-xs text-warning">尚未排程</span>
               )}
             </li>
           ))}
           {plan.skipped.map((s) => (
-            <li key={s.wo_no} className="text-xs text-ink-faint">
+            <li key={s.wo_no} className="text-xs text-ink-48">
               <span className="font-mono">{s.wo_no}</span> {s.reason}（不佔機台）
             </li>
           ))}
@@ -156,12 +156,12 @@ export function PartProductionCard({ partId }: { partId: string }) {
       )}
 
       {plan.has_routing && (
-        <form onSubmit={submit} className="rounded-lg border border-line bg-paper/60 p-3">
-          <p className="mb-2 text-xs text-ink-soft">
-            <b className="text-ink">建議</b>：{plan.suggestion.reason}
+        <form onSubmit={submit} className="rounded-lg bg-parchment p-3">
+          <p className="mb-2 text-xs text-ink-80">
+            <b className="font-semibold text-ink">建議</b>：{plan.suggestion.reason}
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="flex flex-col gap-0.5 text-xs text-ink-faint">
+            <label className="flex flex-col gap-0.5 text-xs text-ink-48">
               數量（件）
               <input
                 type="number"
@@ -169,79 +169,79 @@ export function PartProductionCard({ partId }: { partId: string }) {
                 max={5000}
                 value={qty || ""}
                 onChange={(e) => setQty(Number(e.target.value))}
-                className="rounded-lg border border-line bg-white px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-steel"
+                className="rounded-lg border border-hairline bg-canvas px-2 py-1.5 text-sm tabular-nums text-ink outline-none focus:border-accent-focus"
                 required
               />
             </label>
-            <label className="flex flex-col gap-0.5 text-xs text-ink-faint">
+            <label className="flex flex-col gap-0.5 text-xs text-ink-48">
               交期
               <input
                 type="date"
                 min={plan.plan_start}
                 value={due}
                 onChange={(e) => setDue(e.target.value)}
-                className="rounded-lg border border-line bg-white px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-steel"
+                className="rounded-lg border border-hairline bg-canvas px-2 py-1.5 text-sm tabular-nums text-ink outline-none focus:border-accent-focus"
                 required
               />
             </label>
-            <label className="flex flex-col gap-0.5 text-xs text-ink-faint">
+            <label className="flex flex-col gap-0.5 text-xs text-ink-48">
               優先
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as "一般" | "急件")}
-                className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-steel"
+                className="rounded-lg border border-hairline bg-canvas px-2 py-1.5 text-sm text-ink outline-none focus:border-accent-focus"
               >
                 <option value="一般">一般</option>
                 <option value="急件">急件</option>
               </select>
             </label>
-            <label className="flex flex-col gap-0.5 text-xs text-ink-faint">
+            <label className="flex flex-col gap-0.5 text-xs text-ink-48">
               備註
               <input
                 value={note}
                 maxLength={200}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="選填"
-                className="rounded-lg border border-line bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-steel"
+                className="rounded-lg border border-hairline bg-canvas px-2 py-1.5 text-sm text-ink outline-none focus:border-accent-focus"
               />
             </label>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               disabled={busy || !qty || !due}
-              className="rounded-lg bg-steel px-4 py-2 font-bold text-white transition hover:bg-steel-deep disabled:opacity-50"
+              className="btn-primary"
             >
               {busy ? "開立中…" : "開立工單"}
             </button>
             {created && (
-              <span className="text-jade">
-                已開立 <b className="font-mono">{created.wo_no}</b>（{created.qty} 件，交期 {fmt(created.due_on)}）·{" "}
-                <Link to="/schedule" className="font-bold underline">
+              <span className="text-success">
+                已開立 <b className="font-mono font-semibold">{created.wo_no}</b>（{created.qty} 件，交期 {fmt(created.due_on)}）·{" "}
+                <Link to="/schedule" className="link">
                   前往排程
                 </Link>
               </span>
             )}
-            {failure && <span className="text-seal">{failure.message}</span>}
+            {failure && <span className="text-danger">{failure.message}</span>}
             {failure?.code === "APPROVAL_REQUIRED" && (
               <button
                 type="button"
                 onClick={() => void requestApproval()}
                 disabled={busy}
-                className="rounded-lg bg-amber px-3 py-1.5 font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+                className="btn-ghost"
               >
                 送主管核准
               </button>
             )}
             {approvalNo && (
-              <span className="text-amber">
-                已建立待核准單 <b className="font-mono">{approvalNo}</b> ·{" "}
-                <Link to="/approvals" className="font-bold underline">
+              <span className="text-warning">
+                已建立待核准單 <b className="font-mono font-semibold">{approvalNo}</b> ·{" "}
+                <Link to="/approvals" className="link">
                   待核准清單
                 </Link>
               </span>
             )}
           </div>
-          <p className="mt-2 text-[11px] text-ink-faint">
+          <p className="mt-2 text-[11px] text-ink-48">
             工單寫入生產資料庫，工廠資料庫同步更新（庫存查詢頁的「生產中」、Text-to-SQL 都看得到）；排程時從 {plan.plan_start} 起排。
           </p>
         </form>

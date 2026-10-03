@@ -76,7 +76,14 @@ async def rearrange(
     篩選失敗（fallback 有值）時原封不動回傳全部段落。"""
     cfg = get_models_config().rearrange
     candidates = sources[: cfg.max_candidates]
-    info = {"candidates": len(candidates), "kept": len(sources), "ms": 0, "fallback": None}
+    # none：模型判斷沒有任何一段有幫助（仍保底留 1 段；七段權限控管的第 4 段會照這個剔除）
+    info = {
+        "candidates": len(candidates),
+        "kept": len(sources),
+        "ms": 0,
+        "fallback": None,
+        "none": False,
+    }
     if len(candidates) <= 1:  # 沒有東西可以篩
         return sources, info
     t0 = time.perf_counter()
@@ -88,6 +95,7 @@ async def rearrange(
             info["fallback"] = f"模型輸出看不懂：{text.strip()[:40]}"
         else:
             kept = [candidates[i] for i in picked] or candidates[:1]
+            info["none"] = not picked
     except TimeoutError:
         info["fallback"] = f"篩選逾時（>{cfg.timeout_s:.0f} 秒）"
     except (ProviderUnavailable, httpx.HTTPError) as e:

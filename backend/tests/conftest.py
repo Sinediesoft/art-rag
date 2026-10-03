@@ -49,7 +49,7 @@ def client(mock_env):
         yield c
 
 
-# 預設用主管測試：資料範圍是全部（docs/adr/012：訪客只能讀公開畫作），但沒有修改資料的權限。
+# 預設用主管測試：資料範圍是全部（docs/adr/014：訪客只能讀公開畫作），但沒有修改資料的權限。
 # 測權限的測試自己切換身分
 DEFAULT_ACCOUNT = "manager"
 

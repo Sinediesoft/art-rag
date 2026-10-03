@@ -110,10 +110,10 @@ image_compare:
 # 檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）：依 retrieval 的規則取出候選段落後，
 # 再請本地生成端判斷哪幾段對回答有幫助，只留挑中的（至少 1 段）。只呼叫本地模型、不送雲端；
 # 逾時、連不上或輸出看不懂時退回原本的段落，不擋回答。
-# 預設關：現行規則的問答正確率已達目標，篩選的效果要等開關對照評估（make eval-rearrange）確認；
-# 這台 GTX 1650 每題約多 6 秒。各主機可用 .env 的 REARRANGE 覆寫，請求也可用 rearrange 指定。
+# 2026-10-03 起預設開（五段防護第 4 段：不送 Jev 的內部、機密段落由本地 Qwen3-VL 挑，其他頁面的問答也一起）；
+# GTX 1650 每題約多 3–6 秒。各主機可用 .env 的 REARRANGE 覆寫，請求也可用 rearrange 指定。
 rearrange:
-  enabled: false
+  enabled: true
   prompt_version: rearrange_v1  # 對應 shared/prompts/rearrange_v1.md
   max_candidates: 5             # 最多交給模型判斷幾段
   timeout_s: 30                 # 篩選整體的時間上限，超過就用原本的段落

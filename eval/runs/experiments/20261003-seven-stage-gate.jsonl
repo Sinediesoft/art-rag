@@ -1,0 +1,19 @@
+{"id": "q-npm1-01", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.96）", "kept": ["落款與發現"], "topic_hit": true, "cand_hit": true, "ms": 748, "engines": ["jev", "jev", "jev"]}
+{"id": "q-npm1-02", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.95）", "kept": ["落款與發現"], "topic_hit": true, "cand_hit": true, "ms": 838, "engines": ["jev", "jev", "jev"]}
+{"id": "q-npm1-03", "refuse": false, "degraded": false, "ans": "只依作品資料與 2 段參考資料能回答（0.97）", "kept": ["技法", "基本資料"], "topic_hit": true, "cand_hit": true, "ms": 794, "engines": ["jev", "jev", "jev"]}
+{"id": "q-npm1-04", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.93）", "kept": ["構圖"], "topic_hit": true, "cand_hit": true, "ms": 784, "engines": ["jev", "jev", "jev"]}
+{"id": "q-npm1-05", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["地位"], "topic_hit": true, "cand_hit": true, "ms": 906, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-01", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.91）", "kept": ["創作背景"], "topic_hit": true, "cand_hit": true, "ms": 797, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-02", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["技法與絲柏"], "topic_hit": true, "cand_hit": true, "ms": 850, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-03", "refuse": false, "degraded": false, "ans": "只依作品資料與 2 段參考資料能回答（0.91）", "kept": ["其他版本", "收藏"], "topic_hit": true, "cand_hit": true, "ms": 937, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-04", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["收藏"], "topic_hit": true, "cand_hit": true, "ms": 877, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-05", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.91）", "kept": ["畫面"], "topic_hit": true, "cand_hit": true, "ms": 1138, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-01", "refuse": false, "degraded": false, "ans": "只依作品資料與 3 段參考資料能回答（0.99）", "kept": ["技法", "基本資料", "外框與收藏"], "topic_hit": true, "cand_hit": true, "ms": 900, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-02", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["畫面"], "topic_hit": true, "cand_hit": true, "ms": 988, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-03", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["創作與展出"], "topic_hit": true, "cand_hit": true, "ms": 775, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-04", "refuse": false, "degraded": false, "ans": "只依作品資料與 2 段參考資料能回答（0.97）", "kept": ["外框與收藏", "基本資料"], "topic_hit": true, "cand_hit": true, "ms": 783, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-05", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.97）", "kept": ["畫面"], "topic_hit": true, "cand_hit": true, "ms": 822, "engines": ["jev", "jev", "jev"]}
+{"id": "q-refuse-01", "refuse": true, "degraded": true, "ans": "只依作品資料與 0 段參考資料不能回答（0.03）", "kept": [], "topic_hit": false, "cand_hit": false, "ms": 503, "engines": ["jev", "local", "jev"]}
+{"id": "q-npm1-06", "refuse": false, "degraded": false, "ans": "只依作品資料與 3 段參考資料能回答（0.93）", "kept": ["色彩分析", "技法", "基本資料"], "topic_hit": true, "cand_hit": true, "ms": 795, "engines": ["jev", "jev", "jev"]}
+{"id": "q-aic-06", "refuse": false, "degraded": false, "ans": "只依作品資料與 1 段參考資料能回答（0.81）", "kept": ["色彩分析"], "topic_hit": true, "cand_hit": true, "ms": 804, "engines": ["jev", "jev", "jev"]}
+{"id": "q-met-06", "refuse": false, "degraded": false, "ans": "只依作品資料與 2 段參考資料能回答（0.90）", "kept": ["色彩分析", "畫面"], "topic_hit": true, "cand_hit": true, "ms": 814, "engines": ["jev", "jev", "jev"]}

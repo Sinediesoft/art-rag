@@ -1,14 +1,15 @@
-"""智慧助理（統一入口）：使用者輸入的五段防護裡，路由這一步負責第 1、2 段（docs/adr/012）。
+"""智慧助理（統一入口）：七段權限控管裡，路由這一步負責第 1、2 段（docs/adr/015）。
 
 0. 個資遮蔽：一收到就把手機、Email、身分證換成代號，原值不保留
    （之後的紀錄與分派都用遮蔽後的文字）
-1. 接收輸入・RBAC：照片在本機辨識（Chinese-CLIP 領域路由，照片不送 Jev）；
-   本地分流（關鍵字＋bge-m3）判斷要做什麼、信心閘門；再用伺服器端身分硬性檢查資料範圍與動作權限，
-   產生第 3 段的 Metadata Filter。沒過 → 拒絕並記錄，不送 Jev、不碰資料
-2. 前置防禦・Jev 第一層護欄：只送代號化文字；沒金鑰、逾時或選了地端規則就用地端規則。
-   擋下 → 拒絕並記錄
-3～5 由分派到的模組執行（/chat 做 Metadata Filter 檢索、第 4 段過濾與地端生成；
-   /inventory/ask 唯讀 SQL…），那些 API 自己也檢查身分與資料範圍，
+1. 認證與授權：JWT 的簽章與效期在 API 閘道就驗過（沒過是 401，根本到不了這裡）；
+   這裡用憑證裡的角色檢查「要做的事」能不能做（功能、動作權限），並產生第 3 段的 Metadata Filter。
+   要做什麼由本地分流判斷（照片在本機用 Chinese-CLIP 辨識，不送 Jev；文字用關鍵字＋bge-m3）。
+   沒過 → 拒絕並記錄，不送 Jev、不碰資料；指定了看不到的圖紙只回「查無資料」（不透露它存在）
+2. Jev 意圖路由／防護欄（Jev Choice）：只送代號化文字，判斷正常查詢／Prompt 注入／無關閒聊；
+   注入 → 拒絕並記錄；閒聊 → 快速短路回覆（不檢索、不生成）。叫不到 Jev 才改地端規則
+3～7 由分派到的模組執行（/chat 做 Metadata Filter 檢索、Jev Noul 雙重驗證、Jev Score 重排、
+   生成閘門與地端生成；/inventory/ask 唯讀 SQL…），那些 API 自己也驗 JWT 與資料範圍，
    所以前端分派錯了或直接打 API 也繞不過權限。
 最後通知記憶體管理預估要用的模型、寫路由紀錄（eval-route 也用同一個端點）。
 """
@@ -24,7 +25,7 @@ from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard, search_service
-from app.services.identity import Account
+from app.services.identity import Auth
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 
@@ -73,26 +74,33 @@ def _dispatch(intent: str, question: str, entities: list, photo: dict | None) ->
 
 
 def _target(dispatch: dict) -> dict | None:
-    """已指定的對象（某張圖紙、某幅畫）與機密等級：第 1 段檢查資料範圍、產生 Metadata Filter。"""
+    """已指定的對象（某張圖紙、某幅畫）與機密等級、部門：
+    第 1 段檢查功能授權、產生 Metadata Filter。"""
     store = get_store()
     if dispatch.get("part_id") and (p := store.get_part(dispatch["part_id"])):
-        return {"id": p["id"], "label": p["name"]["zh"], "level": p["confidentiality"]}
+        return {
+            "id": p["id"],
+            "label": p["name"]["zh"],
+            "level": p["confidentiality"],
+            "dept": p.get("owner", ""),
+        }
     if dispatch.get("artwork_id") and (a := store.get_artwork(dispatch["artwork_id"])):
-        return {"id": a["id"], "label": a["title"]["zh"], "level": "公開"}
+        return {"id": a["id"], "label": a["title"]["zh"], "level": "公開", "dept": "公開"}
     return None
 
 
 async def route(
     question: str,
-    account: Account,
+    auth: Auth,
     request_id: str,
     image_id: str | None = None,
     forced_intent: str | None = None,
     engine: str = "auto",
 ) -> dict:
-    """engine：第 2、4 段由誰判斷。
-    auto／jev＝有金鑰用 Jev（失敗改地端規則），local＝只用地端規則。"""
+    """auth：閘道驗證過的 JWT（帳號＋憑證內容）。engine：第 2、4～6 段由誰判斷。
+    auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用，前端不提供）。"""
     t0 = time.perf_counter()
+    account = auth.account
     cfg = get_agent_config()
     # 0. 個資遮蔽：之後只看遮蔽後的文字
     question, pii = guard.mask_pii(question.strip())
@@ -102,7 +110,7 @@ async def route(
     entities = index.find(question)
     masked = index.pseudonymize(question, entities)
 
-    # 1. 本地分流：判斷要做什麼（Jev 不判斷意圖）
+    # 本地分流：判斷要交給哪個模組（第 1 段授權要知道要做什麼；Jev 只判斷是不是查詢）
     t1 = time.perf_counter()
     if forced_intent:
         if forced_intent not in cfg["intents"]:
@@ -137,30 +145,33 @@ async def route(
         dispatch["op"] = op
         dispatch["op_label"] = op_label
 
-    # 1. RBAC：身分＋資料範圍＋動作權限（後端硬性檢查）
-    rbac = guard.rbac_check(
-        account, intent, decision.gate, op, op_label, _target(dispatch), entities
+    # 1. 認證與授權：憑證已在閘道驗過；這裡用憑證的角色檢查功能與動作權限
+    authz = guard.auth_check(
+        auth.checks, account, intent, decision.gate, op, op_label, _target(dispatch), entities
     )
     logged_text = question if question or not photo else f"（只有照片：{photo['label']}）"
     guard_res = None
     blocked = None
+    short = None
     outcome = "pass"
-    if not rbac.passed:
-        tag = rbac.tag or "權限不符"
-        no = guard.log_block(1, tag, account, logged_text, request_id, "後端硬性檢查")
+    if not authz.passed:
+        tag = authz.tag or "權限不符"
+        no = guard.log_block(1, tag, account, logged_text, request_id, "後端硬性檢查（JWT 角色）")
         blocked = {
             "stage": 1,
-            "rule": tag,
+            "rule": "查無資料" if authz.degraded else tag,
             "log_no": no,
-            "judge": "後端硬性檢查（RBAC）",
-            "reason": rbac.reason,
+            "judge": "後端硬性檢查（JWT 角色）",
+            "reason": authz.reason,
+            "degraded": authz.degraded,
         }
-        outcome = "blocked_rbac"
+        outcome = "degraded" if authz.degraded else "blocked_auth"
     else:
-        # 2. Jev 第一層護欄：第 1 段還沒確定要做什麼、或不碰資料時，Jev 的動作類別只記錄
+        # 2. Jev 意圖路由／防護欄：正常查詢／Prompt 注入／無關閒聊
         decided = decision.gate != "clarify" and intent not in ("system", "out_of_scope")
         risk = cfg["intents"][intent]["risk"] if decided else None
-        # 還不確定時，冒充身分照候選意圖裡最危險的那個判斷（「我是主管…改成 0」信心不夠也要擋）
+        # 還不確定時，地端備援照候選意圖裡最危險的那個判斷冒充身分
+        # （「我是主管…改成 0」信心不夠也要擋）
         hint = max(
             (cfg["intents"][k]["risk"] for k, _ in decision.options),
             key=guard.RISK_RANK.__getitem__,
@@ -175,6 +186,7 @@ async def route(
             engine != "local",
             photo_kind,
             risk_hint=hint if decision.gate == "clarify" else None,
+            local_intent=intent,
         )
         guard_ms = round((time.perf_counter() - g0) * 1000)
         if not guard_res.passed:
@@ -187,8 +199,17 @@ async def route(
                 "log_no": no,
                 "judge": judge,
                 "reason": guard_res.reason,
+                "degraded": False,
             }
             outcome = "blocked_guard"
+        elif guard_res.verdict == "chitchat":
+            # 快速短路回覆：不檢索、不生成、不載入模型
+            short = {
+                "stage": 2,
+                "by": "Jev" if guard_res.engine == "jev" else "地端",
+                "reply": cfg["guard"]["chitchat_reply"],
+            }
+            outcome = "short_circuit"
 
     if outcome == "pass":
         # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
@@ -232,12 +253,13 @@ async def route(
         "options": [
             {"intent": k, "label": labels[k], "prob": round(p, 4)} for k, p in decision.options
         ],
-        "rbac": rbac.public(),
+        "auth": {**authz.public(), "token": auth.public()},
         "guard": guard_res.public() if guard_res else None,
         "outcome": outcome,
         "blocked": blocked,
+        "short_circuit": short,
         "dispatch": dispatch,
-        # 第 4 段由誰判斷：分派到 /chat 時照這個帶 post_filter
+        # 第 4～6 段由誰判斷：分派到 /chat 時照這個帶 post_filter
         "post_filter": "local" if engine == "local" else "jev",
         "egress": {
             "bytes": egress,

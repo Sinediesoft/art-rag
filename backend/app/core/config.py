@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     hf_offline: bool = False
 
     # 檢索段落篩選（MIRA 的 Rearrange）：留空＝shared/models.yaml 的 rearrange.enabled；
-    # true／false 覆寫這台主機的設定（例如只在 5070 Ti 主機打開）
+    # true／false 覆寫這台主機的設定（例如沒有 GPU 的電腦關掉）
     rearrange: str = ""
 
     upload_max_mb: int = 10
@@ -83,6 +83,11 @@ class Settings(BaseSettings):
 
     # 展示用：在 /admin 模擬主推論伺服器斷線，正式上線請關閉
     demo_controls: bool = True
+
+    # 身分憑證（JWT，HS256，docs/adr/015 第 1 段）：留空＝每次啟動隨機產生
+    # （後端重啟後舊憑證全部失效，前端自動改回訪客）；多台後端共用時要填同一組
+    jwt_secret: str = ""
+    jwt_ttl_min: int = 480
 
     data_dir: Path = REPO_ROOT / "data"
 

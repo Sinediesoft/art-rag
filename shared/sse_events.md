@@ -14,24 +14,30 @@
 "mfg_score", "min_margin", "uncertain"}`，格式同 `/search/any` 的 `route`），判為圖紙就走下面的圖紙問答；沒經過路由時為 `null`。
 
 `sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008；請求的 `rearrange`、
-`.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，預設關）時為
+`.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，2026-10-03 起預設開）時為
 `{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`，
 失敗時 `sources` 是原本的全部段落）；沒開篩選（或關檢索）時為 `null`。候選只有 0～1 段時不呼叫模型，
 `candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
 `sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
 
-`sources` 另帶五段防護（docs/adr/012）的第 3、4 段：
-- `filter`：Metadata Filter `{"domain", "domain_label", "levels", "doc_id", "doc_label", "doc_level", "text"}`，
-  依目前身分的資料範圍產生（工廠圖紙從全庫補足時只取看得到的圖紙）
-- `candidates`：第 3 段檢索出的候選段落數（第 4 段過濾前）
-- `post_filter`：第 4 段 `{"mode", "engine", "candidates", "kept", "injected", "dropped", "checks", "cloud", "local",
-  "call", "fallback_reason", "ms"}`。`mode` 為 `jev`／`local`（請求帶 `post_filter`，智慧助理用：注入＋關聯性重排，
-  最多 3 段）或 `scan`（沒帶，其他頁面：只用地端規則移除夾帶指令的段落，段落數照原本規則）；
-  `injected`／`dropped` 是被移除、沒放進上下文的段落 `{"chunk_id", "title", "topic"}`；`checks` 是每段的判斷；
-  `cloud` 是送 Jev 的段落數（只有公開段落）、`call` 是 Jev 請求的紀錄（送出的代號化內容、代號對照、回答、請求本文）。
-  關檢索或沒有段落時為 `null`。
-每段多一個 `level`（畫作「公開」，圖紙「內部」或「機密」）。`done.egress` 多 `jev_bytes`（第 4 段送 Jev 的位元組），
+`sources` 另帶七段權限控管（docs/adr/015）的第 3～6 段：
+- `filter`：Metadata Filter `{"domain", "domain_label", "clearance", "depts", "levels", "doc_id", "doc_label", "doc_level", "text"}`，
+  只照 JWT 的 `clearance` 與 `depts` 產生（`text` 例：`domain = "工廠圖紙" AND clearance <= 1 AND dept IN ("公開", …) AND doc_id = "mfg-002"`）；
+  看不到的文件 `doc_level` 為 `null`（不透露它的等級）
+- `candidates`：第 3 段檢索出的候選段落數（第 4 段驗證前）
+- `post_filter`：`{"mode", "engine", "candidates", "kept", "flagged", "dropped", "cloud", "local", "verify", "rerank", "gate",
+  "rearrange", "egress_bytes", "ms"}`。`mode` 為 `jev`／`local`（請求帶 `post_filter`，智慧助理用：第 4～6 段）或
+  `scan`（沒帶，其他頁面：只用地端規則剔除有洩密風險的段落，段落數照原本規則，`rerank`、`gate` 為 `null`）。
+  `flagged` 是第 4 段 security_leak_check 剔除的段落（`by`＝Jev／地端），`dropped` 是與提問無關、分數太低或超過 3 段的段落。
+  `verify`（第 4 段 Jev Noul）、`rerank`（第 5 段 Jev Score）、`gate`（第 6 段生成閘門）都是
+  `{"engine", "checks", "call", "fallback_reason", "ms"}`，`gate` 另有 `passed`、`message`；`call` 是那一次 Jev 請求的紀錄
+  （送出的代號化內容、代號對照、回答、請求本文）。`cloud` 是送 Jev 的段落數（只有公開段落）。關檢索、其他頁面又沒有段落時為 `null`。
+每段多一個 `level`（畫作「公開」，圖紙「內部」或「機密」）。`done.egress` 多 `jev_bytes`（第 4～6 段送 Jev 的位元組合計），
 `bytes`／`chunks` 也算進去；本地策略只有這一項外送。
+
+**生成閘門沒過**（`post_filter.gate.passed=false`）：`sources.sources` 是空的，接著只送一個 `token`（降級訊息「查無資料：…」）
+和 `done`，`done.degraded=true`、`model` 為「生成閘門（未呼叫 LLM）」、`tokens` 為 0、`latency_ms.first_token` 為 `null`。
+其他情況 `done.degraded=false`。
 
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，

@@ -6,16 +6,18 @@ from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from app.agent import local_router
+from app.agent import guard, local_router
 from app.api.routes import router
+from app.core import jwt
 from app.core.config import get_settings
 from app.core.errors import (
     AppError,
     app_error_handler,
+    error_body,
     unhandled_error_handler,
     validation_error_handler,
 )
@@ -25,7 +27,7 @@ from app.repositories import db
 from app.repositories.index_store import IndexMismatch, get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
-from app.services import memory_guard
+from app.services import identity, memory_guard
 from app.services.cad_service import purge_jobs
 
 
@@ -84,10 +86,40 @@ app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
 
+def _reject(request: Request, code: str, message: str) -> JSONResponse:
+    """七段權限控管第 1 段（docs/adr/015）：憑證不對就在閘道直接拒絕，請求碰不到任何模型與資料。
+    簽章不符（竄改或偽造）寫進拒絕並記錄；沒帶、過期、舊金鑰簽發（後端重啟）是正常狀況
+    （前端會重新取得），不記。"""
+    rid = request.state.request_id
+    if code == "TOKEN_INVALID":
+        got = identity.token_of(request)
+        claimed = jwt.peek(got[0]) if got else {}
+        who = (
+            f"憑證聲稱〈{claimed.get('name', '?')}〉clearance={claimed.get('clearance', '?')}："
+            if claimed
+            else ""
+        )
+        guard.log_block(
+            1,
+            "憑證無效",
+            None,
+            f"{who}{message} → {request.method} {request.url.path}",
+            rid,
+            "API 閘道（JWT）",
+        )
+    response = JSONResponse(error_body(code, message, rid), status_code=401)
+    response.headers["WWW-Authenticate"] = 'Bearer realm="art-rag"'
+    response.headers["X-Request-ID"] = rid
+    return response
+
+
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request.state.request_id = request.headers.get("X-Request-ID") or new_request_id()
     if request.url.path.startswith("/api/"):
+        # 第 1 段：API 閘道驗 JWT（簽章、效期）；不符就 401，後面的檢索、模型都不會執行
+        if denied := identity.gateway(request):
+            return _reject(request, *denied)
         # make index 後自動換上新索引。PostgreSQL 版要查資料庫，放到執行緒：
         # 資料庫停掉時最多等 5 秒，不能卡住其他正在串流的請求
         await run_in_threadpool(get_store().maybe_reload)

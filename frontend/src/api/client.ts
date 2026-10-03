@@ -43,11 +43,10 @@ export type MemoryEvent = Schemas["MemoryEvent"];
 // 智慧助理（System 1 路由、修改資料、主管核准）
 export type Account = Schemas["Account"];
 export type AccountsResponse = Schemas["AccountsResponse"];
+export type TokenInfo = Schemas["TokenInfo"];
 export type RouteRequest = Pick<Schemas["RouteRequest"], "question"> & Partial<Omit<Schemas["RouteRequest"], "question">>;
 export type RouteResponse = Schemas["RouteResponse"];
 export type SecurityLogsResponse = Schemas["SecurityLogsResponse"];
-/** 第 2、4 段由誰判斷：雲端 Jev（只收代號化文字）或地端規則 */
-export type GuardEngine = "jev" | "local";
 export type ChangePreview = Schemas["ChangePreview"];
 export type ChangePreviewRequest = Schemas["ChangePreviewRequest"];
 export type ChangeCommitted = Schemas["ChangeCommitted"];
@@ -76,12 +75,44 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * 七段權限控管第 1 段（docs/adr/015）：所有 /api/v1 請求都要 JWT（HttpOnly cookie，瀏覽器自動帶）。
+ * 沒有憑證、過期或舊金鑰簽發（後端重啟）時閘道回 401：向 /auth/accounts 重新取得憑證（預設是訪客）
+ * 再重送一次，並通知頁首「憑證已更新」。簽章不符（TOKEN_INVALID）不重送：那是被竄改的憑證。
+ */
+const RENEWABLE = new Set(["UNAUTHENTICATED", "TOKEN_EXPIRED", "TOKEN_STALE"]);
+let renewing: Promise<void> | null = null;
+
+export async function renewToken(reason: string) {
+  renewing ??= fetch(`${API_BASE}/api/v1/auth/accounts`)
+    .then(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: reason }));
+    })
+    .finally(() => {
+      renewing = null;
+    });
+  return renewing;
+}
+
+/** 401 的回應：要不要重新取得憑證後重送 */
+export async function renewIfExpired(res: Response): Promise<boolean> {
+  if (res.status !== 401) return false;
+  const body = await res.clone().json().catch(() => null);
+  const code = body?.error?.code;
+  if (!RENEWABLE.has(code)) return false;
+  await renewToken(code);
+  return true;
+}
+
+async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/v1${path}`, init);
   } catch {
     throw new ApiError("NETWORK_ERROR", "連不上伺服器，請確認網路或後端是否啟動", "", 0);
+  }
+  if (!retried && !path.startsWith("/auth/") && (await renewIfExpired(res))) {
+    return request<T>(path, init, true);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -159,10 +190,15 @@ export const api = {
   // 記憶體管理
   memory: () => request<MemoryStatus>("/memory"),
   releaseMemory: () => request<Schemas["MemoryReleaseResponse"]>("/admin/memory/release", { method: "POST" }),
-  // 智慧助理：身分（存在伺服器端的工作階段，cookie 由瀏覽器自動帶）、路由、修改資料、主管核准
+  // 智慧助理：身分（JWT，放在 HttpOnly cookie，瀏覽器自動帶）、路由、修改資料、主管核准
   accounts: () => request<AccountsResponse>("/auth/accounts"),
   switchAccount: (accountId: string) => request<AccountsResponse>("/auth/switch", json({ account_id: accountId })),
-  route: (body: RouteRequest) => request<RouteResponse>("/agent/route", json(body)),
+  /** token：示範「竄改過的憑證」時才給（放在 Authorization 標頭，閘道優先看它） */
+  route: (body: RouteRequest, token?: string) => {
+    const init = json(body);
+    if (token) init.headers = { ...init.headers, Authorization: `Bearer ${token}` };
+    return request<RouteResponse>("/agent/route", init, !!token);
+  },
   changePreview: (body: ChangePreviewRequest) => request<ChangePreview>("/changes/preview", json(body)),
   changeCommit: (pendingId: string) =>
     request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" }),

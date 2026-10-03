@@ -3,8 +3,8 @@ import { api } from "../../api/client";
 
 export function Loading({ label = "載入中…" }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 py-6 text-sm text-ink-soft" role="status">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-seal" />
+    <div className="flex items-center gap-2 py-6 text-sm text-ink-80" role="status">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-hairline border-t-accent" />
       {label}
     </div>
   );
@@ -37,11 +37,11 @@ export function ErrorMessage({
   code?: string;
 }) {
   return (
-    <div className="rounded-xl border border-seal/30 bg-seal-soft/60 p-3 text-sm">
-      <p className="font-bold text-seal-deep">{title}</p>
-      <p className="text-ink-soft">{message}</p>
+    <div className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm">
+      <p className="font-semibold text-danger">{title}</p>
+      <p className="text-ink-80">{message}</p>
       {(code || requestId) && (
-        <p className="mt-1 font-mono text-[11px] text-ink-faint">
+        <p className="mt-1 font-mono text-[11px] text-ink-48">
           {code} {requestId && `· request_id: ${requestId}`}
         </p>
       )}
@@ -64,7 +64,7 @@ export function FeedbackButtons({ requestId }: { requestId: string }) {
           disabled={!!sent}
           onClick={() => send(r)}
           className={`rounded-md px-1.5 py-0.5 text-sm transition ${
-            sent === r ? "bg-ink text-white" : "text-ink-faint hover:bg-paper-deep disabled:opacity-40"
+            sent === r ? "bg-accent text-white" : "text-ink-48 hover:bg-parchment-deep disabled:opacity-40"
           }`}
           aria-label={r === "up" ? "回答有幫助" : "回答沒幫助"}
         >
@@ -85,13 +85,13 @@ export function LicenseLabel({
   sourceUrl?: string | null;
 }) {
   return (
-    <span className="text-xs text-ink-faint">
+    <span className="text-xs text-ink-48">
       授權：{license}
       {license === "CC BY 4.0" && attribution && <>（{attribution}）</>}
       {sourceUrl && (
         <>
           {" · "}
-          <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-seal">
+          <a href={sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-accent">
             出處
           </a>
         </>

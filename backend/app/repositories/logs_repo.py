@@ -173,7 +173,7 @@ class LogsRepo:
         return [dict(r) for r in rows]
 
     def add_security_log(self, row: dict) -> str:
-        """五段防護的「拒絕並記錄」（docs/adr/012）：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，
+        """五段防護的「拒絕並記錄」（docs/adr/014）：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，
         第 4 段移除的夾帶指令段落。text 只存遮蔽個資後的文字。回傳紀錄編號（SEC-0001）。"""
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)

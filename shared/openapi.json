@@ -165,7 +165,7 @@
           "images"
         ],
         "summary": "Get Photo Alignment",
-        "description": "影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——\n畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。",
+        "description": "影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——\n畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。\n圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。",
         "operationId": "get_photo_alignment_api_v1_images__image_id__align_get",
         "parameters": [
           {
@@ -569,7 +569,7 @@
           "chat"
         ],
         "summary": "Chat",
-        "description": "圖文問答。工廠圖紙要看目前身分的資料範圍（看不到的回 403 DATA_SCOPE_DENIED）；\n檢索只取看得到的段落（Metadata Filter），放進 prompt 前先過濾夾帶指令的段落（docs/adr/012）。",
+        "description": "圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；\n智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。\n放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。",
         "operationId": "chat_api_v1_chat_post",
         "requestBody": {
           "content": {
@@ -1498,7 +1498,7 @@
           "production"
         ],
         "summary": "Reset Production",
-        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單與稽核紀錄\n（DEMO_CONTROLS=false 時停用；生管或主管才可以）。",
+        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄\n與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。",
         "operationId": "reset_production_api_v1_admin_production_reset_post",
         "responses": {
           "200": {
@@ -1835,7 +1835,7 @@
           "agent"
         ],
         "summary": "List Accounts",
-        "description": "展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。",
+        "description": "展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，\n放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。",
         "operationId": "list_accounts_api_v1_auth_accounts_get",
         "responses": {
           "200": {
@@ -1867,7 +1867,7 @@
           "agent"
         ],
         "summary": "Switch Account",
-        "description": "展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。",
+        "description": "展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。",
         "operationId": "switch_account_api_v1_auth_switch_post",
         "requestBody": {
           "content": {
@@ -1909,7 +1909,7 @@
           "agent"
         ],
         "summary": "Agent Route",
-        "description": "五段防護的第 1、2 段（docs/adr/012）：個資遮蔽 → 本地分流判斷意圖＋信心閘門 →\nRBAC（身分、資料範圍、動作權限）→ Jev 第一層護欄 → 分派到哪個本地模組；擋下就拒絕並記錄。",
+        "description": "七段權限控管的第 1、2 段（docs/adr/015）：JWT 已在閘道驗過 → 個資遮蔽 →\n本地分流判斷要做什麼 →\n角色授權（功能、動作權限）→ Jev Choice（正常查詢／Prompt 注入／無關閒聊）→ 分派到哪個本地模組；\n擋下就拒絕並記錄、閒聊快速短路回覆。",
         "operationId": "agent_route_api_v1_agent_route_post",
         "requestBody": {
           "content": {
@@ -2227,7 +2227,7 @@
           "agent"
         ],
         "summary": "Security Logs",
-        "description": "五段防護的拒絕並記錄（docs/adr/012）：RBAC 與 Jev 護欄擋下的請求、Jev 過濾移除的段落。\n只存遮蔽個資後的文字。",
+        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。",
         "operationId": "security_logs_api_v1_security_logs_get",
         "parameters": [
           {
@@ -2365,7 +2365,7 @@
             },
             "type": "array",
             "title": "Domains",
-            "description": "能讀的資料領域：art／mfg／factory（docs/adr/012）"
+            "description": "能讀的資料領域：art／mfg／factory（docs/adr/014）"
           },
           "levels": {
             "items": {
@@ -2378,6 +2378,24 @@
           "scope_note": {
             "type": "string",
             "title": "Scope Note"
+          },
+          "dept": {
+            "type": "string",
+            "title": "Dept",
+            "description": "自己的部門（寫進 JWT）"
+          },
+          "depts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depts",
+            "description": "讀得到哪些部門的文件（Metadata Filter 的 dept 條件）"
+          },
+          "clearance": {
+            "type": "integer",
+            "title": "Clearance",
+            "description": "機密等級：公開 0、內部 1、機密 2（寫進 JWT）"
           }
         },
         "type": "object",
@@ -2392,7 +2410,10 @@
           "note",
           "domains",
           "levels",
-          "scope_note"
+          "scope_note",
+          "dept",
+          "depts",
+          "clearance"
         ],
         "title": "Account"
       },
@@ -2416,6 +2437,9 @@
             "type": "integer",
             "title": "Pending Approvals",
             "description": "待核准單數量（主管看得到要處理幾件）"
+          },
+          "token": {
+            "$ref": "#/components/schemas/TokenInfo"
           }
         },
         "type": "object",
@@ -2423,7 +2447,8 @@
           "current",
           "accounts",
           "demo_controls",
-          "pending_approvals"
+          "pending_approvals",
+          "token"
         ],
         "title": "AccountsResponse"
       },
@@ -3224,6 +3249,92 @@
         ],
         "title": "AuditRow"
       },
+      "AuthInfo": {
+        "properties": {
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending",
+            "description": "要做什麼還不確定（等使用者選），功能與動作之後再檢查"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/GuardCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "retry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetryAccount"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "換成這個身分就可以（切換身分再試一次）"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetaFilterInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "第 3 段向量檢索的 Metadata Filter"
+          },
+          "degraded": {
+            "type": "boolean",
+            "title": "Degraded",
+            "description": "指定了看不到的圖紙：回「查無資料」，不透露它存在"
+          },
+          "token": {
+            "$ref": "#/components/schemas/TokenInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "passed",
+          "pending",
+          "checks",
+          "tag",
+          "reason",
+          "retry",
+          "filter",
+          "degraded",
+          "token"
+        ],
+        "title": "AuthInfo",
+        "description": "第 1 段：認證（JWT 簽章、效期，閘道已驗）與授權（角色能不能做這件事）。"
+      },
       "AxisDay": {
         "properties": {
           "date": {
@@ -3289,6 +3400,11 @@
               }
             ],
             "title": "Reason"
+          },
+          "degraded": {
+            "type": "boolean",
+            "title": "Degraded",
+            "description": "降級回應（查無資料），不是權限不足的拒絕"
           }
         },
         "type": "object",
@@ -3297,7 +3413,8 @@
           "rule",
           "log_no",
           "judge",
-          "reason"
+          "reason",
+          "degraded"
         ],
         "title": "BlockedInfo"
       },
@@ -3860,7 +3977,7 @@
               }
             ],
             "title": "Post Filter",
-            "description": "五段防護第 4 段（docs/adr/012）：jev＝公開段落送 Jev 判斷注入與關聯性、local＝全在地端；兩者都最多留 3 段。null＝只用地端規則移除夾帶指令的段落（其他頁面）"
+            "description": "七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）"
           }
         },
         "type": "object",
@@ -4403,6 +4520,16 @@
             ],
             "title": "Engine"
           },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "query",
+              "attack",
+              "chitchat"
+            ],
+            "title": "Verdict",
+            "description": "正常查詢／Prompt 注入或越權／無關閒聊（閒聊 → 快速短路回覆）"
+          },
           "checks": {
             "items": {
               "$ref": "#/components/schemas/GuardCheck"
@@ -4470,6 +4597,7 @@
         "required": [
           "passed",
           "engine",
+          "verdict",
           "checks",
           "tag",
           "reason",
@@ -4478,7 +4606,7 @@
           "call"
         ],
         "title": "GuardInfo",
-        "description": "第 2 段：Jev 第一層護欄（或地端規則）。"
+        "description": "第 2 段：Jev 意圖路由／防護欄（Jev Choice；叫不到 Jev 時是地端規則）。"
       },
       "HealthResponse": {
         "properties": {
@@ -5128,7 +5256,9 @@
             "type": "integer",
             "enum": [
               2,
-              4
+              4,
+              5,
+              6
             ],
             "title": "Stage"
           },
@@ -5184,7 +5314,7 @@
           "answers"
         ],
         "title": "JevCallInfo",
-        "description": "一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。"
+        "description": "一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。\n第 2 段 Choice、第 4 段 Noul（雙重驗證）、第 5 段 Score（重排）、第 6 段 Noul（生成閘門）。"
       },
       "LightnessStats": {
         "properties": {
@@ -5548,12 +5678,24 @@
             "type": "string",
             "title": "Domain Label"
           },
+          "clearance": {
+            "type": "integer",
+            "title": "Clearance"
+          },
+          "depts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depts"
+          },
           "levels": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Levels"
+            "title": "Levels",
+            "description": "clearance 換算成看得到的機密等級"
           },
           "doc_id": {
             "anyOf": [
@@ -5597,13 +5739,16 @@
         "required": [
           "domain",
           "domain_label",
+          "clearance",
+          "depts",
           "levels",
           "doc_id",
           "doc_label",
           "doc_level",
           "text"
         ],
-        "title": "MetaFilterInfo"
+        "title": "MetaFilterInfo",
+        "description": "第 3 段的 Metadata Filter：只照 JWT 的 clearance 與 depts 產生。"
       },
       "OkResponse": {
         "properties": {
@@ -6826,82 +6971,6 @@
         ],
         "title": "RankedIntent"
       },
-      "RbacInfo": {
-        "properties": {
-          "passed": {
-            "type": "boolean",
-            "title": "Passed"
-          },
-          "pending": {
-            "type": "boolean",
-            "title": "Pending",
-            "description": "要做什麼還不確定（等使用者選），範圍與動作之後再檢查"
-          },
-          "checks": {
-            "items": {
-              "$ref": "#/components/schemas/GuardCheck"
-            },
-            "type": "array",
-            "title": "Checks"
-          },
-          "tag": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tag"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "retry": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RetryAccount"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "換成這個身分就可以（切換身分再試一次）"
-          },
-          "filter": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MetaFilterInfo"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "第 3 段向量檢索的 Metadata Filter"
-          }
-        },
-        "type": "object",
-        "required": [
-          "passed",
-          "pending",
-          "checks",
-          "tag",
-          "reason",
-          "retry",
-          "filter"
-        ],
-        "title": "RbacInfo",
-        "description": "第 1 段：身分、資料範圍、動作權限（後端硬性檢查）。"
-      },
       "ReconstructRequest": {
         "properties": {
           "part_id": {
@@ -6980,7 +7049,7 @@
           "bytes": {
             "type": "integer",
             "title": "Bytes",
-            "description": "送出本機的位元組數（第 2 段 Jev 請求本文）；地端規則為 0"
+            "description": "送出本機的位元組數（第 2 段 Jev Choice 請求本文）；地端規則為 0"
           },
           "to": {
             "anyOf": [
@@ -7161,7 +7230,7 @@
               "local"
             ],
             "title": "Engine",
-            "description": "第 2、4 段由誰判斷：auto／jev＝有金鑰用 Jev（失敗改地端規則），local＝只用地端規則",
+            "description": "第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則（前端不提供，給 make eval-guard 對照用）",
             "default": "auto"
           }
         },
@@ -7301,8 +7370,8 @@
             "type": "array",
             "title": "Options"
           },
-          "rbac": {
-            "$ref": "#/components/schemas/RbacInfo"
+          "auth": {
+            "$ref": "#/components/schemas/AuthInfo"
           },
           "guard": {
             "anyOf": [
@@ -7319,8 +7388,10 @@
             "type": "string",
             "enum": [
               "pass",
-              "blocked_rbac",
-              "blocked_guard"
+              "blocked_auth",
+              "blocked_guard",
+              "short_circuit",
+              "degraded"
             ],
             "title": "Outcome"
           },
@@ -7328,6 +7399,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BlockedInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "short_circuit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShortCircuitInfo"
               },
               {
                 "type": "null"
@@ -7346,7 +7427,7 @@
               "local"
             ],
             "title": "Post Filter",
-            "description": "分派到 /chat 時帶的第 4 段判斷者"
+            "description": "分派到 /chat 時帶的第 4～6 段判斷者"
           },
           "egress": {
             "$ref": "#/components/schemas/RouteEgress"
@@ -7382,10 +7463,11 @@
           "threshold",
           "gate_reason",
           "options",
-          "rbac",
+          "auth",
           "guard",
           "outcome",
           "blocked",
+          "short_circuit",
           "dispatch",
           "post_filter",
           "egress",
@@ -7425,7 +7507,7 @@
           "detail"
         ],
         "title": "RouterInfo",
-        "description": "第 1 段的本地分流：誰判斷意圖（本地分流、使用者點選、照片辨識）。"
+        "description": "本地分流：誰判斷要交給哪個模組（本地分流、使用者點選、照片辨識）。"
       },
       "RoutingOp": {
         "properties": {
@@ -8418,7 +8500,36 @@
           "today"
         ],
         "title": "SecurityLogsResponse",
-        "description": "五段防護的拒絕並記錄：第 1 段 RBAC、第 2 段 Jev 護欄擋下的請求，第 4 段移除的段落。"
+        "description": "七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求，\n第 4 段剔除的洩密段落。"
+      },
+      "ShortCircuitInfo": {
+        "properties": {
+          "stage": {
+            "type": "integer",
+            "const": 2,
+            "title": "Stage"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "Jev",
+              "地端"
+            ],
+            "title": "By"
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "by",
+          "reply"
+        ],
+        "title": "ShortCircuitInfo",
+        "description": "第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"
       },
       "SkippedWorkOrder": {
         "properties": {
@@ -8645,7 +8756,7 @@
           "clarify_margin"
         ],
         "title": "System1Status",
-        "description": "Jev 的設定狀態（2026-10-02 起用在五段防護的第 2、4 段，不再判斷意圖）與信心閘門門檻。"
+        "description": "Jev 的設定狀態（2026-10-03 起用在七段權限控管的第 2、4、5、6 段）與信心閘門門檻。"
       },
       "TemperatureShare": {
         "properties": {
@@ -8722,6 +8833,84 @@
           "results"
         ],
         "title": "TextSearchResponse"
+      },
+      "TokenCheck": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "ok",
+          "detail"
+        ],
+        "title": "TokenCheck"
+      },
+      "TokenInfo": {
+        "properties": {
+          "claims": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Claims",
+            "description": "JWT payload：iss、sub、name、roles、dept、depts、clearance、iat、exp"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "cookie",
+              "header"
+            ],
+            "title": "Via"
+          },
+          "alg": {
+            "type": "string",
+            "title": "Alg"
+          },
+          "unsigned": {
+            "type": "string",
+            "title": "Unsigned",
+            "description": "header.payload（不含簽章；前端示範竄改憑證用）"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/TokenCheck"
+            },
+            "type": "array",
+            "title": "Checks",
+            "description": "閘道驗了什麼：簽章、效期、角色"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claims",
+          "expires_at",
+          "via",
+          "alg",
+          "unsigned",
+          "checks"
+        ],
+        "title": "TokenInfo",
+        "description": "第 1 段的身分憑證（JWT，HS256）：內容、到期時間、從哪裡帶來。簽章不回傳。"
       },
       "WorkOrderCreate": {
         "properties": {

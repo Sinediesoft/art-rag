@@ -22,8 +22,8 @@ export function PhotoDiffPage() {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <h1 className="font-serif text-2xl font-black">比對兩張照片</h1>
-        <p className="text-sm text-ink-soft">
+        <h1 className="t-display">比對兩張照片</h1>
+        <p className="text-sm text-ink-80">
           同一幅畫拍兩張（修復前後、真跡與複製品），系統把照片 B 對齊到照片 A，標出形狀或顏色不一樣的地方。
           兩張請在同樣的光線、差不多的距離下拍；反光、陰影不同的地方也會被標出來。照片只在本機處理，不會送出去。
         </p>
@@ -33,22 +33,22 @@ export function PhotoDiffPage() {
         {SLOTS.map((s) => {
           const id = ids[s.key];
           return (
-            <section key={s.key} className="flex flex-col gap-3 rounded-xl border border-line bg-card p-4">
+            <section key={s.key} className="card flex flex-col gap-3 p-5">
               <div>
-                <h2 className="font-bold">{s.title}</h2>
-                <p className="text-xs text-ink-faint">{s.hint}</p>
+                <h2 className="font-semibold">{s.title}</h2>
+                <p className="text-xs text-ink-48">{s.hint}</p>
               </div>
               {id ? (
                 <>
                   <img
                     src={api.uploadedImageUrl(id)}
                     alt={s.title}
-                    className="max-h-64 w-full rounded-md border border-line object-contain"
+                    className="max-h-64 w-full rounded-md border border-hairline object-contain"
                   />
                   <button
                     type="button"
                     onClick={() => set(s.key, null)}
-                    className="self-start text-sm font-bold text-ink-soft underline-offset-2 hover:text-ink hover:underline"
+                    className="self-start text-sm font-semibold text-ink-80 underline-offset-2 hover:text-ink hover:underline"
                   >
                     換一張
                   </button>
@@ -67,7 +67,7 @@ export function PhotoDiffPage() {
       {ids.a && ids.b ? (
         <PairDiff a={ids.a} b={ids.b} />
       ) : (
-        <p className="text-sm text-ink-faint">兩張都放好之後就會開始比對。</p>
+        <p className="text-sm text-ink-48">兩張都放好之後就會開始比對。</p>
       )}
     </div>
   );
