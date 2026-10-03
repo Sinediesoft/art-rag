@@ -24,15 +24,15 @@ export function RouteNotice({
     other === "art" ? `/search?image=${imageId}&domain=art` : `/drawings/search?image=${imageId}&domain=mfg`;
   const fmt = (x: number | null) => (x == null ? "—" : x.toFixed(2));
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber/30 bg-amber-soft/60 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3">
       <div className="min-w-0 flex-1">
-        <p className="font-bold">{title}</p>
-        <p className="text-xs text-ink-soft">
+        <p className="font-semibold">{title}</p>
+        <p className="text-xs text-ink-80">
           與畫作的相似度 {fmt(route.art_score)} · 與圖紙的相似度 {fmt(route.mfg_score)}
           {route.uncertain && "；圖紙屬機密，不確定時走圖紙流程，不會送往任何雲端"}
         </p>
       </div>
-      <Link to={to} className="shrink-0 text-sm font-bold text-ink underline-offset-2 hover:underline">
+      <Link to={to} className="link shrink-0 text-sm underline-offset-2">
         不對？改用{DOMAIN_LABEL[other]}辨識 →
       </Link>
     </div>
@@ -42,13 +42,13 @@ export function RouteNotice({
 /** 「知識庫中沒有這幅畫」固定樣式，所有頁面共用 */
 export function NotInKbNotice({ detail, title = "知識庫中沒有這幅畫" }: { detail?: string; title?: string }) {
   return (
-    <div className="flex gap-3 rounded-xl border border-dashed border-ink-faint/50 bg-paper-deep/60 p-4">
-      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-card font-serif text-lg text-ink-soft">
+    <div className="flex gap-3 rounded-xl border border-hairline bg-parchment-deep/60 p-4">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-card font-display text-lg text-ink-80">
         ？
       </div>
       <div>
-        <p className="font-serif text-lg font-bold">{title}</p>
-        <p className="text-sm text-ink-soft">
+        <p className="text-lg font-semibold">{title}</p>
+        <p className="text-sm text-ink-80">
           {detail ?? "系統不會硬湊答案。可以換個角度重拍、減少反光，或改用文字描述搜尋。"}
         </p>
       </div>
@@ -63,9 +63,9 @@ export function FallbackBadge({ done }: { done: DoneEvent }) {
   return (
     <span
       title={done.fallback_reason ?? ""}
-      className="inline-flex items-center gap-1 rounded-full bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber"
+      className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning"
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+      <span className="h-1.5 w-1.5 rounded-full bg-warning" />
       {label}
     </span>
   );
@@ -75,11 +75,21 @@ export function FallbackBadge({ done }: { done: DoneEvent }) {
 export function EgressBadge({ egress }: { egress: DoneEvent["egress"] }) {
   const out = egress.images > 0 || egress.chunks > 0 || egress.bytes > 0;
   const kb = (egress.bytes / 1024).toFixed(egress.bytes < 10240 ? 1 : 0);
+  // 只有第 4 段送 Jev（代號化公開段落，只判斷、不生成）：生成仍全在本機
+  if (out && egress.jev_bytes && egress.jev_bytes === egress.bytes)
+    return (
+      <span
+        title="只送代號化的公開段落讓 Jev 判斷夾帶指令與關聯性；照片、機密段落與生成都在本機"
+        className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning"
+      >
+        外送 {kb} KB → Jev（公開段落 {egress.chunks} 段，只判斷）
+      </span>
+    );
   return (
     <span
       title={out ? `共 ${kb} KB 送往第三方雲端` : "照片、問題與知識庫全程留在本機"}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-        out ? "bg-seal-soft text-seal" : "bg-jade-soft text-jade"
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+        out ? "bg-danger-soft text-danger" : "bg-success-soft text-success"
       }`}
     >
       {out ? `外送：照片 ${egress.images} 張、段落 ${egress.chunks} 段 → 第三方` : "外送 0 · 全在本地"}
@@ -90,8 +100,8 @@ export function EgressBadge({ egress }: { egress: DoneEvent["egress"] }) {
 export function VerifiedBadge({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-        ok ? "bg-jade-soft text-jade" : "bg-paper-deep text-ink-soft"
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+        ok ? "bg-success-soft text-success" : "bg-parchment-deep text-ink-80"
       }`}
     >
       {ok ? "✓" : "·"} {children}

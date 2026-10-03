@@ -124,6 +124,8 @@ def main() -> int:
     args = parser.parse_args()
     api = args.base.rstrip("/") + "/api/v1"
     client = httpx.Client(timeout=120)
+    # 資料範圍（docs/adr/014）：訪客不能讀工廠圖紙與工廠資料庫，用看得到全部資料的主管身分評估
+    client.post(f"{api}/auth/switch", json={"account_id": "manager"}).raise_for_status()
     parts = client.get(f"{api}/parts").json()
     kb_version, items = parts["kb_version"], parts["items"]
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]

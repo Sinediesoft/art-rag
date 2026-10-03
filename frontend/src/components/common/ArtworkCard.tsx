@@ -17,9 +17,9 @@ export function ArtworkCard({
 }) {
   const body = (
     <div
-      className={`group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dim ? "opacity-70" : ""}`}
+      className={`card group flex h-full flex-col overflow-hidden transition hover:border-ink-48 ${dim ? "opacity-70" : ""}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-paper-deep">
+      <div className="relative aspect-[4/3] overflow-hidden bg-parchment-deep">
         <img
           src={assetUrl(artwork.thumb_url)}
           alt={artwork.title_zh}
@@ -28,18 +28,18 @@ export function ArtworkCard({
         />
         {badge && <div className="absolute left-2 top-2">{badge}</div>}
       </div>
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        <h3 className="font-serif text-lg font-bold leading-snug">〈{artwork.title_zh}〉</h3>
-        <p className="text-sm text-ink-soft">
+      <div className="flex flex-1 flex-col gap-1 p-4">
+        <h3 className="text-lg font-semibold leading-snug text-ink">〈{artwork.title_zh}〉</h3>
+        <p className="text-sm text-ink-80">
           {artwork.artist_zh} · {artwork.date_text}
         </p>
-        <p className="text-xs text-ink-faint">{artwork.collection}</p>
+        <p className="text-xs text-ink-48">{artwork.collection}</p>
         {footer && <div className="mt-auto pt-2">{footer}</div>}
       </div>
     </div>
   );
   return to ? (
-    <Link to={to} className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-seal">
+    <Link to={to} className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus">
       {body}
     </Link>
   ) : (

@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { api, ApiError } from "../../api/client";
+import { api } from "../../api/client";
 import { usePartTextSearch, useRoutedSearch } from "../../api/hooks";
 import { DrawingDiff } from "../../components/align/AlignmentCards";
-import { ErrorMessage, Loading } from "../../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../../components/common/StatusNotices";
 import { PartCard } from "../../components/parts/PartCard";
 
@@ -44,13 +44,13 @@ function ImageResults({
         <img
           src={api.uploadedImageUrl(imageId)}
           alt="你上傳的圖紙"
-          className="h-20 w-20 rounded-lg border border-line bg-white object-cover shadow-sm"
+          className="h-20 w-20 rounded-lg border border-hairline bg-canvas object-cover"
         />
         <div>
-          <p className="text-xs text-ink-faint">以圖搜圖紙</p>
-          <h1 className="text-2xl font-bold">辨識結果</h1>
+          <p className="t-eyebrow">以圖搜圖紙</p>
+          <h1 className="t-display">辨識結果</h1>
           {data && (
-            <p className="text-xs text-ink-faint">
+            <p className="text-xs text-ink-48">
               {route && "領域路由 → "}Chinese-CLIP 粗篩 → ORB 幾何驗證 → 線條重合度 · {latencyMs} ms
             </p>
           )}
@@ -59,10 +59,10 @@ function ImageResults({
 
       {route && <RouteNotice route={route} imageId={imageId} redirected={redirected} />}
       {isLoading && <Loading label="辨識中：判斷畫作或圖紙、比對特徵點並拉正圖紙…" />}
-      {error && <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />}
+      {error && <ApiErrorMessage error={error} />}
 
       {best && (
-        <section className="grid gap-4 rounded-2xl border border-steel/30 bg-steel-soft/50 p-4 sm:grid-cols-[240px_1fr]">
+        <section className="card grid gap-6 p-6 sm:grid-cols-[240px_1fr] sm:p-8">
           <PartCard part={best.part} to={`/drawings/${best.part.id}`} />
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
@@ -70,26 +70,26 @@ function ImageResults({
               <VerifiedBadge ok>對應點 {best.inliers}</VerifiedBadge>
               <VerifiedBadge ok>線條重合 {Math.round((best.overlap ?? 0) * 100)}%</VerifiedBadge>
             </div>
-            <h2 className="text-2xl font-black">{best.part.name_zh}</h2>
-            <p className="text-ink-soft">
+            <h2 className="t-display">{best.part.name_zh}</h2>
+            <p className="text-ink-80">
               料號 {best.part.part_no} · 圖號 {best.part.drawing_no} rev.{best.part.revision} · {best.part.material}
             </p>
             <div className="mt-auto flex flex-wrap gap-2">
               <Link
                 to={`/drawings/${best.part.id}/reconstruct?image=${imageId}`}
-                className="rounded-xl bg-steel px-4 py-2.5 font-bold text-white transition hover:bg-steel-deep"
+                className="btn-primary"
               >
                 Ortho2CAD 3D 重建
               </Link>
               <Link
                 to={`/drawings/${best.part.id}/chat?image=${imageId}`}
-                className="rounded-xl bg-ink px-4 py-2.5 font-bold text-paper transition hover:bg-ink/85"
+                className="btn-ghost"
               >
                 問問這張圖
               </Link>
               <Link
                 to={`/drawings/${best.part.id}`}
-                className="rounded-xl border border-ink/15 bg-card px-4 py-2.5 font-bold transition hover:border-ink/40"
+                className="btn-ghost"
               >
                 圖紙資料
               </Link>
@@ -110,23 +110,23 @@ function ImageResults({
           />
           <Link
             to={`/reconstruct?image=${imageId}`}
-            className="flex items-center justify-between rounded-xl border border-steel/30 bg-steel-soft/60 px-4 py-3 font-bold text-steel-deep transition hover:border-steel"
+            className="card flex items-center justify-between gap-3 px-5 py-4 font-semibold text-ink transition hover:border-ink-48"
           >
             <span>
               沒收錄也能用 Ortho2CAD 重建 3D
-              <span className="block text-xs font-normal text-ink-soft">
+              <span className="block text-xs font-normal text-ink-80">
                 由本地 Qwen3-VL 讀取圖上的尺寸標註，Ortho2CAD 建模
               </span>
             </span>
-            <span aria-hidden>→</span>
+            <span aria-hidden className="text-xl text-accent">→</span>
           </Link>
           <Link
             to={`/drawings/intake?image=${imageId}`}
-            className="flex items-center justify-between rounded-xl border border-jade/30 bg-jade-soft/60 px-4 py-3 font-bold text-jade transition hover:border-jade"
+            className="card flex items-center justify-between px-4 py-3 font-semibold text-accent transition hover:border-accent"
           >
             <span>
               把這張圖紙建進知識庫
-              <span className="block text-xs font-normal text-ink-soft">
+              <span className="block text-xs font-normal text-ink-80">
                 本地 Qwen3-VL 讀標題欄，你確認後由主管收錄；之後拍同一張就認得出來
               </span>
             </span>
@@ -137,7 +137,7 @@ function ImageResults({
 
       {others.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-bold text-ink-soft">
+          <h2 className="t-caption-strong mb-2 text-ink-80">
             {data?.matched ? "其他候選" : "最接近的圖紙（未通過驗證，僅供參考）"}
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -148,7 +148,7 @@ function ImageResults({
                 to={`/drawings/${r.part.id}`}
                 dim
                 footer={
-                  <p className="text-xs text-ink-faint">
+                  <p className="text-xs text-ink-48">
                     相似度 {r.score.toFixed(2)} · 對應點 {r.inliers ?? "—"}
                     {r.overlap != null && ` · 重合 ${Math.round(r.overlap * 100)}%`}
                   </p>
@@ -176,18 +176,18 @@ function TextResults({ q }: { q: string }) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          className="min-w-0 flex-1 rounded-xl border border-line bg-card px-4 py-3 outline-none focus:border-steel"
+          className="field min-w-0 flex-1"
           placeholder="用文字找圖紙：材料、工序、用途…"
         />
-        <button className="shrink-0 rounded-xl bg-ink px-4 py-3 font-bold text-paper">搜尋</button>
+        <button className="btn-primary shrink-0">搜尋</button>
       </form>
       <div>
-        <p className="text-xs text-ink-faint">以文字找圖紙</p>
-        <h1 className="text-2xl font-bold">「{q}」</h1>
-        {data && <p className="text-xs text-ink-faint">bge-m3（文字→製程與檢驗段落） · {data.latency_ms} ms</p>}
+        <p className="t-eyebrow">以文字找圖紙</p>
+        <h1 className="t-display">「{q}」</h1>
+        {data && <p className="text-xs text-ink-48">bge-m3（文字→製程與檢驗段落） · {data.latency_ms} ms</p>}
       </div>
       {isLoading && <Loading label="搜尋中…" />}
-      {error && <ErrorMessage message={(error as Error).message} requestId={(error as ApiError).requestId} />}
+      {error && <ApiErrorMessage error={error} />}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {data?.results.map((r, i) => (
           <PartCard
@@ -196,12 +196,12 @@ function TextResults({ q }: { q: string }) {
             to={`/drawings/${r.part.id}`}
             badge={
               i === 0 ? (
-                <span className="rounded bg-steel px-1.5 py-0.5 text-[11px] font-bold text-white">最相符</span>
+                <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-white">最相符</span>
               ) : undefined
             }
             footer={
-              <p className="line-clamp-3 text-xs text-ink-soft">
-                <span className="font-bold text-steel">{r.topic}</span> · {r.snippet}…
+              <p className="line-clamp-3 text-xs text-ink-80">
+                <span className="font-semibold text-ink">{r.topic}</span> · {r.snippet}…
               </p>
             }
           />

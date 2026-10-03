@@ -138,6 +138,8 @@ def main() -> int:
         print(f"連不上後端 {args.base}，請先執行 make dev 或 make demo")
         return 1
     manifest = health["manifest"]
+    # 所有 /api/v1 請求都要 JWT（docs/adr/015）：先取一張訪客憑證（存在 client 的 cookie）
+    client.get("/api/v1/auth/accounts").raise_for_status()
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
     source_lang = {
         i: "+".join(

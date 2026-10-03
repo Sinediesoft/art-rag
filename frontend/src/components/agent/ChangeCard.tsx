@@ -13,10 +13,10 @@ import {
 } from "../../api/client";
 
 const SOURCE_STYLE: Record<string, string> = {
-  規則: "bg-paper-deep text-ink-soft",
-  推定: "bg-amber-soft text-amber",
-  "Qwen3-VL": "bg-steel-soft text-steel-deep",
-  表單: "bg-paper-deep text-ink-soft",
+  規則: "bg-parchment-deep text-ink-80",
+  推定: "bg-warning-soft text-warning",
+  "Qwen3-VL": "bg-accent-soft text-ink-80",
+  表單: "bg-parchment-deep text-ink-80",
 };
 
 const val = (v: ChangeDiff["before"]) => (v === null || v === undefined ? "（無）" : String(v));
@@ -31,18 +31,18 @@ export function CheckList({ checks }: { checks: ChangeCheck[] }) {
         <li
           key={c.key}
           className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${
-            c.ok === false ? "bg-seal-soft/70" : c.ok ? "bg-jade-soft/60" : "bg-paper-deep/60"
+            c.ok === false ? "bg-danger-soft" : c.ok ? "bg-success-soft/60" : "bg-parchment-deep/60"
           }`}
         >
           <span
-            className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-black text-white ${
-              c.ok === false ? "bg-seal" : c.ok ? "bg-jade" : "bg-ink-faint/50"
+            className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white ${
+              c.ok === false ? "bg-danger" : c.ok ? "bg-success" : "bg-ink-48/50"
             }`}
           >
             {c.ok === false ? "✕" : c.ok ? "✓" : "–"}
           </span>
           <span>
-            <b className="text-ink">{c.label}</b> <span className="text-ink-soft">{c.detail}</span>
+            <b className="text-ink">{c.label}</b> <span className="text-ink-80">{c.detail}</span>
           </span>
         </li>
       ))}
@@ -54,21 +54,21 @@ export function DiffTable({ rows }: { rows: ChangeDiff[] }) {
   if (!rows.length) return null;
   return (
     <table className="w-full text-left text-xs">
-      <thead className="text-ink-faint">
+      <thead className="text-ink-48">
         <tr>
-          <th className="py-1 font-medium">資料</th>
-          <th className="py-1 font-medium">欄位</th>
-          <th className="py-1 text-right font-medium">修改前</th>
-          <th className="py-1 text-right font-medium">修改後</th>
+          <th className="py-1 font-normal">資料</th>
+          <th className="py-1 font-normal">欄位</th>
+          <th className="py-1 text-right font-normal">修改前</th>
+          <th className="py-1 text-right font-normal">修改後</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r, i) => (
-          <tr key={i} className="border-t border-line">
+          <tr key={i} className="border-t border-hairline">
             <td className="py-1 pr-2">{r.label}</td>
-            <td className="py-1 pr-2 text-ink-soft">{r.field}</td>
-            <td className="py-1 text-right font-mono text-ink-faint">{val(r.before)}</td>
-            <td className="py-1 text-right font-mono font-bold">{val(r.after)}</td>
+            <td className="py-1 pr-2 text-ink-80">{r.field}</td>
+            <td className="py-1 text-right font-mono text-ink-48">{val(r.before)}</td>
+            <td className="py-1 text-right font-mono font-semibold">{val(r.after)}</td>
           </tr>
         ))}
       </tbody>
@@ -128,10 +128,10 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
 
   if (!preview)
     return error ? (
-      <p className="text-sm text-seal">{error}</p>
+      <p className="text-sm text-danger">{error}</p>
     ) : (
-      <p className="flex items-center gap-2 text-sm text-ink-soft">
-        <span className="h-3 w-3 animate-spin rounded-full border-2 border-line border-t-seal" />
+      <p className="flex items-center gap-2 text-sm text-ink-80">
+        <span className="h-3 w-3 animate-spin rounded-full border-2 border-hairline border-t-accent" />
         抽取參數、權限判定、試算中…
       </p>
     );
@@ -141,8 +141,8 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-seal-soft px-2 py-0.5 text-xs font-bold text-seal-deep">修改資料 · {p.op_label}</span>
-        <span className="text-xs text-ink-faint">
+        <span className="rounded-full bg-parchment-deep px-2 py-0.5 text-xs font-semibold text-ink-80">修改資料 · {p.op_label}</span>
+        <span className="text-xs text-ink-48">
           以「{p.account.label}」身分 · {p.latency_ms ?? 0} ms
         </span>
       </div>
@@ -150,14 +150,14 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
       {Object.keys(p.param_labels).length > 0 && (
         <div className="flex flex-wrap gap-1.5 text-xs">
           {Object.entries(p.param_labels).map(([k, v]) => (
-            <span key={k} className="rounded-lg bg-card px-2 py-1 ring-1 ring-line">
-              <span className="text-ink-faint">{k}</span> <b>{String(v)}</b>
+            <span key={k} className="rounded-lg bg-card px-2 py-1 ring-1 ring-hairline">
+              <span className="text-ink-48">{k}</span> <b>{String(v)}</b>
             </span>
           ))}
         </div>
       )}
       {Object.keys(p.sources).length > 0 && (
-        <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-faint">
+        <p className="flex flex-wrap items-center gap-1 text-[11px] text-ink-48">
           參數來源：
           {[...new Set(Object.values(p.sources))].map((s) => (
             <span key={s} className={`rounded px-1.5 py-0.5 ${SOURCE_STYLE[s] ?? ""}`}>
@@ -166,7 +166,7 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
           ))}
           {p.llm && <span>（Qwen3-VL {String((p.llm as { ms?: number }).ms ?? "")} ms）</span>}
           {p.notes.map((n) => (
-            <span key={n} className="text-amber">
+            <span key={n} className="text-warning">
               · {n}
             </span>
           ))}
@@ -175,36 +175,36 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
 
       {p.checks.length > 0 && (
         <div>
-          <p className="mb-1 text-xs font-bold tracking-wide text-ink-faint">權限判定（預設不允許，依序檢查）</p>
+          <p className="mb-1 text-xs font-semibold text-ink-48">權限判定（預設不允許，依序檢查）</p>
           <CheckList checks={p.checks} />
         </div>
       )}
 
       {p.diff.length > 0 && (
-        <div className="rounded-lg border border-line bg-card px-3 py-2">
-          <p className="mb-1 text-xs font-bold tracking-wide text-ink-faint">試算結果（交易內套用後已回滾，尚未寫入）</p>
+        <div className="rounded-lg border border-hairline bg-card px-3 py-2">
+          <p className="mb-1 text-xs font-semibold text-ink-48">試算結果（交易內套用後已回滾，尚未寫入）</p>
           <DiffTable rows={p.diff} />
         </div>
       )}
 
       {p.next === "rejected" && (
-        <div className="rounded-lg border border-seal/30 bg-seal-soft/60 p-3">
-          <p className="font-bold text-seal-deep">已拒絕，沒有任何資料被修改</p>
-          <p className="text-ink-soft">{p.message}</p>
-          <p className="mt-1 text-[11px] text-ink-faint">這次嘗試已記進稽核紀錄。</p>
+        <div className="rounded-lg border border-danger/30 bg-danger-soft p-3">
+          <p className="font-semibold text-danger">已拒絕，沒有任何資料被修改</p>
+          <p className="text-ink-80">{p.message}</p>
+          <p className="mt-1 text-[11px] text-ink-48">這次嘗試已記進稽核紀錄。</p>
         </div>
       )}
       {p.next === "need_info" && (
-        <div className="rounded-lg border border-amber/30 bg-amber-soft/60 p-3 text-amber">{p.message}</div>
+        <div className="rounded-lg border border-warning/30 bg-warning-soft/60 p-3 text-warning">{p.message}</div>
       )}
 
       {p.next === "confirm" && !finished && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-jade/30 bg-jade-soft/40 p-3">
-          <span className="text-jade">{p.message}</span>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-success/30 bg-success-soft/40 p-3">
+          <span className="text-success">{p.message}</span>
           <button
             onClick={() => void commit()}
             disabled={busy}
-            className="ml-auto rounded-lg bg-jade px-4 py-2 font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+            className="btn-primary ml-auto"
           >
             {busy ? "寫入中…" : "確認寫入"}
           </button>
@@ -212,9 +212,9 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
       )}
 
       {p.next === "approval" && !finished && (
-        <div className="flex flex-col gap-2 rounded-lg border border-amber/40 bg-amber-soft/50 p-3">
-          <p className="font-bold text-amber">超過額度，需要主管核准</p>
-          <ul className="list-disc pl-5 text-ink-soft">
+        <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning-soft/50 p-3">
+          <p className="font-semibold text-warning">超過額度，需要主管核准</p>
+          <ul className="list-disc pl-5 text-ink-80">
             {p.reasons.map((r) => (
               <li key={r}>{r}</li>
             ))}
@@ -225,12 +225,12 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
               onChange={(e) => setNote(e.target.value)}
               maxLength={200}
               placeholder="申請說明（選填，例如原因）"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-amber"
+              className="field min-w-0 flex-1"
             />
             <button
               onClick={() => void submitApproval()}
               disabled={busy}
-              className="rounded-lg bg-amber px-4 py-2 font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="btn-primary"
             >
               {busy ? "送出中…" : "送主管核准"}
             </button>
@@ -239,26 +239,26 @@ export function ChangeCard({ request }: { request: ChangePreviewRequest }) {
       )}
 
       {done && (
-        <div className="rounded-lg border border-jade/30 bg-jade-soft/60 p-3">
-          <p className="font-bold text-jade">✓ {done.text}</p>
-          <p className="mt-1 text-[11px] text-ink-faint">
+        <div className="rounded-lg border border-success/30 bg-success-soft/60 p-3">
+          <p className="font-semibold text-success">✓ {done.text}</p>
+          <p className="mt-1 text-[11px] text-ink-48">
             回覆依資料庫讀回的實際結果產生；異動單與稽核紀錄已寫入，工廠資料庫已同步（Text-to-SQL 查得到）。
           </p>
         </div>
       )}
       {approval && (
-        <div className="rounded-lg border border-amber/30 bg-amber-soft/60 p-3">
-          <p className="font-bold text-amber">已建立待核准單 {approval.ap_no}，等主管核准</p>
-          <p className="text-ink-soft">
+        <div className="rounded-lg border border-warning/30 bg-warning-soft/60 p-3">
+          <p className="font-semibold text-warning">已建立待核准單 {approval.ap_no}，等主管核准</p>
+          <p className="text-ink-80">
             切換成「主管」到{" "}
-            <Link to="/approvals" className="font-bold underline">
+            <Link to="/approvals" className="link font-semibold">
               待核准清單
             </Link>{" "}
             處理；核准時會重新試算，資料若已變動申請會失效。
           </p>
         </div>
       )}
-      {error && <p className="rounded-lg bg-seal-soft/60 p-2 text-seal">{error}</p>}
+      {error && <p className="rounded-lg bg-danger-soft p-2 text-danger">{error}</p>}
     </div>
   );
 }

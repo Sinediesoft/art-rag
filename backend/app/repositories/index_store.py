@@ -48,8 +48,14 @@ class Collection:
         return [Hit(self.items[i], float(sims[i])) for i in np.argsort(-sims)[:k]]
 
     def search_chunks(
-        self, query: np.ndarray, k: int, owner_id: str | None = None, exclude: set | None = None
+        self,
+        query: np.ndarray,
+        k: int,
+        owner_id: str | None = None,
+        exclude: set | None = None,
+        owners: set | None = None,
     ) -> list[Hit]:
+        """owners：Metadata Filter 允許的項目（例如看得到的圖紙）；None＝不限。"""
         if not self.chunks:
             return []
         sims = self.chunk_vecs @ query
@@ -57,6 +63,8 @@ class Collection:
         for i in np.argsort(-sims):
             c = self.chunks[i]
             if owner_id and c[self.owner_key] != owner_id:
+                continue
+            if owners is not None and c[self.owner_key] not in owners:
                 continue
             if exclude and c["chunk_id"] in exclude:
                 continue

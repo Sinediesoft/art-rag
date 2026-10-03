@@ -240,20 +240,31 @@ def rectify_to_part(img: Image.Image, part: dict) -> Image.Image | None:
 
 
 @guarded("search_text", {"bge"})
-def search_parts_text(q: str, top_k: int | None = None) -> dict:
-    """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數。"""
+def search_parts_text(
+    q: str, top_k: int | None = None, levels: tuple[str, ...] | list[str] | None = None
+) -> dict:
+    """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數。
+
+    levels：目前身分看得到的機密等級（Metadata Filter，看不到的圖紙在檢索時就濾掉）；None＝不限。"""
     mfg = get_store().mfg
     k = top_k or int(get_models_config().drawing_retrieval["top_k_search"])
     t0 = time.perf_counter()
+    visible = {p["id"] for p in mfg.items if levels is None or p["confidentiality"] in levels}
     best: dict[str, tuple[float, dict]] = {}
     if mfg.chunks:
         sims = mfg.chunk_vecs @ embed_text([q])[0]
         for c, s in zip(mfg.chunks, sims, strict=True):
+            if c["part_id"] not in visible:
+                continue
             if c["part_id"] not in best or s > best[c["part_id"]][0]:
                 best[c["part_id"]] = (float(s), c)
     order = sorted(best, key=lambda pid: -best[pid][0])[:k]
     return {
         "query": q,
+        "hidden": len(mfg.items) - len(visible),
+        "filter": None
+        if levels is None
+        else "level IN (" + ", ".join(f'"{x}"' for x in levels if x != "公開") + ")",
         "latency_ms": round((time.perf_counter() - t0) * 1000),
         "results": [
             {

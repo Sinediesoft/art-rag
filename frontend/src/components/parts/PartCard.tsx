@@ -19,9 +19,9 @@ export function PartCard({
   const g = part.geometry;
   const body = (
     <div
-      className={`group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${dim ? "opacity-70" : ""}`}
+      className={`card group flex h-full flex-col overflow-hidden transition hover:border-ink-48 ${dim ? "opacity-70" : ""}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-white">
+      <div className="relative aspect-[4/3] overflow-hidden bg-canvas">
         <img
           src={assetUrl(part.thumb_url)}
           alt={part.name_zh}
@@ -34,12 +34,12 @@ export function PartCard({
         </div>
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <p className="font-mono text-[11px] tracking-wide text-steel">
+        <p className="font-mono text-[11px] text-ink-48">
           {part.part_no} · {part.drawing_no} rev.{part.revision}
         </p>
-        <h3 className="text-lg font-bold leading-snug">{part.name_zh}</h3>
-        <p className="text-sm text-ink-soft">{part.material}</p>
-        <p className="text-xs text-ink-faint">
+        <h3 className="text-lg font-semibold leading-snug">{part.name_zh}</h3>
+        <p className="text-sm text-ink-80">{part.material}</p>
+        <p className="text-xs text-ink-48">
           {g.width}×{g.depth}×{g.height} mm ·{" "}
           {g.weight_kg != null ? `${g.weight_kg.toFixed(3)} kg` : "照片建檔（沒有標準模型）"}
         </p>
@@ -48,7 +48,7 @@ export function PartCard({
     </div>
   );
   return to ? (
-    <Link to={to} className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-steel">
+    <Link to={to} className="block h-full rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-focus">
       {body}
     </Link>
   ) : (

@@ -3,7 +3,9 @@
 // 瀏覽器內建 EventSource 只支援 GET，所以用 fetch 讀取串流。事件格式見 shared/sse_events.md。
 import {
   API_BASE,
+  renewIfExpired,
   type ArtworkSummary,
+  type Schemas,
   type AxisDay,
   type ChatRequest,
   type ConstraintScore,
@@ -22,6 +24,8 @@ import {
 export interface SourceItem {
   ref: number;
   chunk_id: string;
+  /** 機密等級：畫作「公開」，圖紙「內部」或「機密」（第 4 段只把公開段落送 Jev） */
+  level?: string;
   /** 畫作段落才有 */
   artwork_id?: string;
   artwork_title?: string;
@@ -45,6 +49,57 @@ export interface SourcesEvent {
   sources: SourceItem[];
   /** 檢索段落篩選（MIRA 的 Rearrange）；沒有篩選時為 null。fallback 有值代表篩選失敗、用原本的段落 */
   rearrange?: { candidates: number; kept: number; ms: number; fallback: string | null } | null;
+  /** 第 3 段：Metadata Filter（依目前身分的資料範圍產生） */
+  filter?: MetaFilterInfo;
+  /** 第 3 段檢索出的候選段落數（第 4 段過濾前） */
+  candidates?: number;
+  /** 第 4～6 段：雙重驗證、評分重排、生成閘門（docs/adr/015）；關檢索時為 null */
+  post_filter?: PostFilterInfo | null;
+}
+
+export type MetaFilterInfo = Schemas["MetaFilterInfo"];
+export type GuardCheck = Schemas["GuardCheck"];
+export type JevCallInfo = Schemas["JevCallInfo"];
+
+/** 第 4～6 段裡的一段：誰判斷的、逐段的結果、送給 Jev 的內容（只有公開段落才會送） */
+export interface StageInfo {
+  engine: "jev" | "local";
+  checks: GuardCheck[];
+  call: JevCallInfo | null;
+  fallback_reason: string | null;
+  ms: number;
+}
+
+export interface GateInfo extends StageInfo {
+  /** false＝降級回應「查無資料」，不呼叫 LLM */
+  passed: boolean;
+  message: string | null;
+}
+
+export interface PostFilterInfo {
+  /** jev／local：智慧助理的第 4～6 段；scan：其他頁面，只用地端規則剔除有洩密風險的段落 */
+  mode: "jev" | "local" | "scan";
+  engine: "jev" | "local";
+  candidates: number;
+  kept: number;
+  /** 第 4 段 security_leak_check 剔除的段落；by＝誰抓到的（Jev 或地端規則） */
+  flagged: { chunk_id: string; title: string; topic: string; by?: "Jev" | "地端" }[];
+  /** 與提問無關、分數太低或超過 3 段上限，沒放進上下文的段落 */
+  dropped: { chunk_id: string; title: string; topic: string }[];
+  /** 送 Jev 的段落數（只有公開段落）／留在地端判斷的段落數 */
+  cloud: number;
+  local: number;
+  /** 第 4 段 Jev Noul 雙重驗證（is_relevant／security_leak_check） */
+  verify: StageInfo;
+  /** 第 5 段 Jev Score 評分重排（scan 模式沒有） */
+  rerank: StageInfo | null;
+  /** 第 6 段生成閘門（scan 模式沒有） */
+  gate: GateInfo | null;
+  /** 不送 Jev 的段落由本地 Qwen3-VL 判斷 is_relevant（段落篩選開著才有；candidates ≤ 1 時沒有呼叫模型） */
+  rearrange?: SourcesEvent["rearrange"];
+  /** 第 4～6 段送 Jev 的位元組數合計 */
+  egress_bytes: number;
+  ms: number;
 }
 
 export interface DoneEvent {
@@ -59,8 +114,10 @@ export interface DoneEvent {
   latency_ms: { retrieval: number; first_token: number | null; generation: number; total: number };
   tokens: { input: number; output: number };
   cost_twd: number;
-  /** 送出本機的資料量；本地策略恆為 0 */
-  egress: { images: number; chunks: number; bytes: number };
+  /** 送出本機的資料量；本地策略只有第 4～6 段送 Jev 的代號化公開段落（jev_bytes） */
+  egress: { images: number; chunks: number; bytes: number; jev_bytes?: number };
+  /** 第 6 段生成閘門沒過：回的是「查無資料」，沒有呼叫 LLM */
+  degraded?: boolean;
 }
 
 export interface ErrorEvent {
@@ -76,13 +133,17 @@ type Handlers = Record<string, ((data: any) => void) | undefined> & {
 /** POST 一個 JSON body，依事件名稱分派 SSE 事件 */
 export async function streamSSE(path: string, body: unknown, handlers: Handlers, signal?: AbortSignal) {
   let res: Response;
-  try {
-    res = await fetch(`${API_BASE}/api/v1${path}`, {
+  const send = () =>
+    fetch(`${API_BASE}/api/v1${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify(body),
       signal,
     });
+  try {
+    res = await send();
+    // 憑證沒有或過期：重新取得（預設訪客）再送一次（client.ts 的 renewIfExpired）
+    if (await renewIfExpired(res)) res = await send();
   } catch (err) {
     if ((err as Error).name === "AbortError") return;
     handlers.error?.({ code: "NETWORK_ERROR", message: "連不上伺服器", request_id: "" });

@@ -16,6 +16,8 @@ from app.repositories.inventory_repo import get_inventory_repo
 DOC_NO = re.compile(r"\b(SO|WO)-\d{4}-\d{2,3}\b", re.I)
 SITE = re.compile(r"一廠|二廠")
 STATUS = re.compile(r"可用|保留|待檢|不良")
+# 多段文字接在一起代號化時的分隔字元（不會出現在名稱裡）
+SEP = "\u0001"
 
 # 代號前綴：零件用字母（圖紙A），其他用數字
 CODE_PREFIX = {
@@ -139,6 +141,12 @@ class EntityIndex:
         out.append(text[pos:])
         masked.text = "".join(out)
         return masked
+
+    def pseudonymize_many(self, texts: list[str]) -> tuple[list[str], dict[str, dict]]:
+        """多段文字一起代號化：同一個名稱在問題與各段落用同一個代號（第 4 段送 Jev 用）。"""
+        joined = SEP.join(texts)
+        masked = self.pseudonymize(joined, self.find(joined))
+        return masked.text.split(SEP), masked.mapping
 
 
 _index: EntityIndex | None = None

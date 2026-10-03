@@ -110,7 +110,7 @@ def test_chat_rearrange_is_off_by_default_and_reported_when_on(client, monkeypat
 
     # mock 向量是雜湊亂數，相似度都在門檻以下：已指定畫作時檢索只留最相關的 1 段，
     # 只有 1 段時篩選直接跳過。這裡改成不設門檻、取這幅畫的前 3 段，篩選才會交給生成端判斷
-    def top3(question, artwork_id, part_id=None):
+    def top3(question, artwork_id, part_id=None, levels=None):
         store = chat_service.get_store()
         qvec = chat_service.embed_text([question])[0]
         hits = store.art.search_chunks(qvec, 3, owner_id=artwork_id)

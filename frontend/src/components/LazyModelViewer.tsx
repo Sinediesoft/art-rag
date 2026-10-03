@@ -11,7 +11,7 @@ export function ModelViewer(props: ComponentProps<typeof Viewer>) {
       fallback={
         <div
           style={{ height: props.height ?? 360 }}
-          className="grid place-items-center rounded-xl border border-line bg-white text-sm text-ink-faint"
+          className="grid place-items-center rounded-xl border border-hairline bg-canvas text-sm text-ink-48"
         >
           載入 3D 檢視器…
         </div>

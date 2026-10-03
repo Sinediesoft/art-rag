@@ -88,6 +88,7 @@ image_compare:
   - target 格式不對 → `VALIDATION_ERROR`；
   - 找不到 → 沿用 `IMAGE_NOT_FOUND`、`ARTWORK_NOT_FOUND`、`PART_NOT_FOUND`；
   - 新增 **`ALIGN_FAILED`**（422）：對應點不夠或位置框不合理，不硬畫。
+  - 2026-10-03 合併進 `d-rag` 後：`target=part:<id>` 照資料範圍（`docs/adr/014-five-stage-input-guard.md`），訪客不能用工廠圖紙、業務看不到機密圖紙 → 403 `DATA_SCOPE_DENIED`（回應與疊圖都含圖紙內容）；畫作、另一張照片不限。
 
 ### 前端（`frontend/src/components/align/AlignmentCards.tsx`）
 - 以圖搜圖頁：成功卡下面「你拍到的位置」。

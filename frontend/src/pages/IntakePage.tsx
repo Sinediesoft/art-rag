@@ -17,8 +17,7 @@ const DOMAIN = {
     intro:
       "本地 Qwen3-VL 讀標題欄與外形尺寸，系統檢查格式、和知識庫有沒有重複、材料依既有零件校正；你對照照片確認、補上照片沒有的欄位，" +
       "主管按「收錄」後寫進知識庫並重建索引，之後拍同一張圖紙就認得出來。圖紙屬企業機密，全程只在本機處理、不送雲端。",
-    heading: "text-3xl font-black",
-    kickerClass: "text-steel",
+    heading: "t-display",
     tone: "steel" as const,
     labels: { camera: "拍攝圖紙", file: "上傳圖紙", busy: "上傳中…" },
     tips: [
@@ -34,7 +33,7 @@ const DOMAIN = {
       ["validate", "驗證"],
     ] as [IntakeStage, string][],
     views: ["拍的照片", "要存進知識庫的圖"],
-    other: { label: "工廠圖紙", path: "/drawings/intake" },
+    other: { label: "圖紙", path: "/drawings/intake" },
   },
   art: {
     kicker: "畫作 · 照片建檔",
@@ -42,8 +41,7 @@ const DOMAIN = {
     intro:
       "拍畫作本身就好（不用拍展牌）：系統先擋掉太模糊的照片、確認知識庫還沒有這幅畫，畫名、作者、年代、典藏與授權等資料在跳出的表單填。" +
       "主管按「收錄」後寫進知識庫並重建索引，之後拍同一幅畫就認得出來。",
-    heading: "font-serif text-3xl font-black",
-    kickerClass: "text-seal",
+    heading: "t-display",
     tone: "seal" as const,
     labels: { camera: "拍攝畫作", file: "上傳照片", busy: "上傳中…" },
     tips: [
@@ -57,14 +55,14 @@ const DOMAIN = {
       ["validate", "建立草稿"],
     ] as [IntakeStage, string][],
     views: ["拍的照片", "要存進知識庫的圖"],
-    other: { label: "尋畫", path: "/artworks/intake" },
+    other: { label: "畫作", path: "/artworks/intake" },
   },
 };
 
 const SOURCE_STYLE: Record<string, string> = {
-  "Qwen3-VL": "bg-steel-soft text-steel-deep",
-  規則: "bg-paper-deep text-ink-soft",
-  人: "bg-jade-soft text-jade",
+  "Qwen3-VL": "bg-accent-soft text-accent",
+  規則: "bg-parchment-deep text-ink-80",
+  人: "bg-success-soft text-success",
 };
 
 /** 收錄後要重新抓的資料：清單、單筆、狀態頁（知識庫版本）、稽核紀錄 */
@@ -123,9 +121,9 @@ export function IntakePage({ domain }: { domain: Domain }) {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <p className={`text-sm font-bold tracking-widest ${cfg.kickerClass}`}>{cfg.kicker}</p>
-        <h1 className={cfg.heading}>{cfg.title}</h1>
-        <p className="mt-1 max-w-3xl text-sm text-ink-soft">{cfg.intro}</p>
+        <p className="t-eyebrow">{cfg.kicker}</p>
+        <h1 className={`${cfg.heading} mt-1`}>{cfg.title}</h1>
+        <p className="mt-1 max-w-3xl text-sm text-ink-80">{cfg.intro}</p>
       </header>
 
       {draftId ? (
@@ -134,13 +132,13 @@ export function IntakePage({ domain }: { domain: Domain }) {
         <section className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           <div className="flex flex-col gap-3">
             {imageId ? (
-              <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
-                <img src={api.uploadedImageUrl(imageId)} alt="拍的照片" className="w-full object-contain" />
+              <div className="card overflow-hidden p-2">
+                <img src={api.uploadedImageUrl(imageId)} alt="拍的照片" className="w-full rounded-lg object-contain" />
               </div>
             ) : (
-              <div className="rounded-xl border border-line bg-card p-4">
+              <div className="card p-4">
                 <ImageUploader tone={cfg.tone} labels={cfg.labels} onUploaded={start} />
-                <ul className="mt-3 list-disc pl-5 text-xs text-ink-faint">
+                <ul className="mt-3 list-disc pl-5 text-xs text-ink-48">
                   {cfg.tips.map((t) => (
                     <li key={t}>{t}</li>
                   ))}
@@ -151,7 +149,7 @@ export function IntakePage({ domain }: { domain: Domain }) {
               <button
                 type="button"
                 onClick={reset}
-                className="self-start rounded-xl border border-ink/15 bg-card px-4 py-2.5 font-bold transition hover:border-ink/40"
+                className="btn-ghost self-start"
               >
                 換一張
               </button>
@@ -160,9 +158,9 @@ export function IntakePage({ domain }: { domain: Domain }) {
           <div className="flex flex-col gap-3">
             {imageId && <StageList stages={cfg.stages} current={stage} failed={!!failure} />}
             {stage === "read" && (
-              <div className="rounded-xl border border-steel/25 bg-card p-3">
-                <p className="mb-1 text-xs font-bold text-ink-faint">本地 Qwen3-VL 正在抄寫（這台約 40 秒）</p>
-                <pre className="min-h-12 whitespace-pre-wrap break-all font-mono text-xs text-steel-deep">{raw || "…"}</pre>
+              <div className="card p-3">
+                <p className="mb-1 text-xs font-semibold text-ink-48">本地 Qwen3-VL 正在抄寫（這台約 40 秒）</p>
+                <pre className="min-h-12 whitespace-pre-wrap break-all font-mono text-xs text-accent">{raw || "…"}</pre>
               </div>
             )}
             {failure && <FailureBox e={failure} imageId={imageId} />}
@@ -190,14 +188,14 @@ function StageList({
         return (
           <li
             key={k}
-            className={`rounded-full px-2.5 py-1 font-bold ${
+            className={`rounded-full px-2.5 py-1 font-semibold ${
               state === "done"
-                ? "bg-jade-soft text-jade"
+                ? "bg-success-soft text-success"
                 : state === "now"
-                  ? "animate-pulse bg-ink text-paper"
+                  ? "animate-pulse bg-ink text-white"
                   : state === "fail"
-                    ? "bg-seal-soft text-seal"
-                    : "bg-paper-deep text-ink-faint"
+                    ? "bg-danger-soft text-danger"
+                    : "bg-parchment-deep text-ink-48"
             }`}
           >
             {state === "done" ? "✓ " : ""}
@@ -214,9 +212,9 @@ function FailureBox({ e, imageId }: { e: IntakeErrorEvent; imageId: string | nul
     const to = e.part ? `/drawings/${e.part.id}` : `/artworks/${e.artwork!.id}`;
     const name = e.part ? e.part.name_zh : e.artwork!.title_zh;
     return (
-      <div className="rounded-xl border border-jade/30 bg-jade-soft/60 p-3 text-sm">
-        <p className="font-bold text-jade">{e.message}</p>
-        <Link to={to} className="mt-1 inline-block font-bold underline">
+      <div className="rounded-xl bg-success-soft p-3 text-sm">
+        <p className="font-semibold text-success">{e.message}</p>
+        <Link to={to} className="link mt-1 inline-block">
           去看〈{name}〉→
         </Link>
       </div>
@@ -225,9 +223,9 @@ function FailureBox({ e, imageId }: { e: IntakeErrorEvent; imageId: string | nul
   if (e.code === "INTAKE_WRONG_DOMAIN" && imageId) {
     const other = e.route?.domain === "mfg" ? DOMAIN.mfg.other : DOMAIN.art.other;
     return (
-      <div className="rounded-xl border border-amber/30 bg-amber-soft/60 p-3 text-sm text-amber">
-        <p className="font-bold">{e.message}</p>
-        <Link to={`${other.path}?image=${imageId}`} className="mt-1 inline-block font-bold underline">
+      <div className="rounded-xl bg-warning-soft p-3 text-sm text-warning">
+        <p className="font-semibold">{e.message}</p>
+        <Link to={`${other.path}?image=${imageId}`} className="link mt-1 inline-block">
           改用「{other.label}」的拍照建檔 →
         </Link>
       </div>
@@ -239,7 +237,7 @@ function FailureBox({ e, imageId }: { e: IntakeErrorEvent; imageId: string | nul
 function SourceChip({ f }: { f: IntakeField }) {
   if (!f.source) return null;
   return (
-    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${SOURCE_STYLE[f.source] ?? ""}`}>
+    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${SOURCE_STYLE[f.source] ?? ""}`}>
       {f.source}
     </span>
   );
@@ -270,20 +268,20 @@ function FieldsForm({
     <div className="flex flex-col gap-4">
       {groups.map(([group, fs]) => (
         <fieldset key={group ?? "fields"} className="flex flex-col gap-2">
-          {group && <legend className="mb-1 text-sm font-bold text-ink">{group}</legend>}
+          {group && <legend className="mb-1 text-sm font-semibold text-ink">{group}</legend>}
           <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-2">
             {fs.map((f) => {
               const value = edits[f.key] ?? shown(f.value);
               const bad = (f.status === "invalid" || f.status === "missing") && !(f.key in edits);
               const listId = f.suggestions.length ? `intake-${f.key}` : undefined;
               const set = (v: string) => setEdits((e) => ({ ...e, [f.key]: v }));
-              const cls = `w-full rounded-lg border bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-steel disabled:bg-paper-deep ${
-                bad ? "border-seal" : "border-line"
+              const cls = `w-full rounded-lg border bg-white px-2 py-1.5 text-sm text-ink outline-none focus:border-accent disabled:bg-parchment-deep ${
+                bad ? "border-danger" : "border-hairline"
               } ${f.kind === "number" || CODE_KEYS.includes(f.key) ? "font-mono" : ""}`;
               return (
                 <label
                   key={f.key}
-                  className={`flex flex-col gap-0.5 text-xs text-ink-faint ${f.kind === "longtext" ? "sm:col-span-2" : ""}`}
+                  className={`flex flex-col gap-0.5 text-xs text-ink-48 ${f.kind === "longtext" ? "sm:col-span-2" : ""}`}
                 >
                   <span className="flex items-center gap-1.5">
                     {f.label}
@@ -325,8 +323,8 @@ function FieldsForm({
                       ))}
                     </datalist>
                   )}
-                  {f.message && !(f.key in edits) && <span className="text-seal">{f.message}</span>}
-                  {f.note && !(f.key in edits) && <span className="text-amber">{f.note}</span>}
+                  {f.message && !(f.key in edits) && <span className="text-danger">{f.message}</span>}
+                  {f.note && !(f.key in edits) && <span className="text-warning">{f.note}</span>}
                 </label>
               );
             })}
@@ -344,8 +342,8 @@ function FieldSummary({ fields }: { fields: IntakeField[] }) {
     <dl className="grid grid-cols-[6.5em_1fr] gap-x-3 gap-y-1 text-sm">
       {filled.map((f) => (
         <div key={f.key} className="contents">
-          <dt className="text-ink-faint">{f.label}</dt>
-          <dd className={`break-words ${f.status === "invalid" ? "text-seal" : ""}`}>{shown(f.value)}</dd>
+          <dt className="text-ink-48">{f.label}</dt>
+          <dd className={`break-words ${f.status === "invalid" ? "text-danger" : ""}`}>{shown(f.value)}</dd>
         </div>
       ))}
     </dl>
@@ -376,12 +374,12 @@ function FormDialog({
       ref={ref}
       onClose={onClose}
       aria-label={title}
-      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-line bg-card p-0 text-ink shadow-xl backdrop:bg-ink/40"
+      className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl border border-hairline bg-card p-0 text-ink backdrop:bg-ink/40"
     >
       <div className="flex max-h-[88vh] flex-col">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="font-serif text-lg font-black">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="關閉" className="rounded-lg px-2 py-1 text-ink-faint hover:bg-paper-deep">
+        <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
+          <h2 className="t-tagline">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="關閉" className="rounded-lg px-2 py-1 text-ink-48 hover:bg-parchment-deep">
             ✕
           </button>
         </div>
@@ -427,7 +425,7 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
           message={(error as Error)?.message ?? ""}
           requestId={(error as ApiError)?.requestId}
         />
-        <button type="button" onClick={onRestart} className="font-bold underline">
+        <button type="button" onClick={onRestart} className="link">
           重新拍一張 →
         </button>
       </div>
@@ -494,15 +492,13 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
         <div className="flex flex-wrap items-center gap-2">
           <button
             disabled={(!dirty && !isArt) || !!busy}
-            className={`rounded-lg px-4 py-2 font-bold text-white transition disabled:opacity-50 ${
-              isArt ? "bg-seal hover:bg-seal-deep" : "bg-steel hover:bg-steel-deep"
-            }`}
+            className="btn-primary"
           >
             {busy === "save" ? "儲存中…" : isArt ? "儲存資料" : "儲存並重新驗證"}
           </button>
-          {dirty && <span className="text-xs text-amber">有修改還沒儲存</span>}
+          {dirty && <span className="text-xs text-warning">有修改還沒儲存</span>}
           {isArt && d.blockers.length > 0 && !dirty && (
-            <span className="text-xs text-seal">還要處理：{d.blockers.join("、")}</span>
+            <span className="text-xs text-danger">還要處理：{d.blockers.join("、")}</span>
           )}
         </div>
       )}
@@ -513,14 +509,14 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
     <article className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="flex flex-col gap-2 lg:sticky lg:top-20 lg:self-start">
         {domain === "mfg" && (
-          <div className="flex rounded-xl border border-line bg-card p-1 text-sm font-medium">
+          <div className="flex rounded-full border border-hairline bg-card p-1 text-sm font-normal">
             {cfg.views.map((label, k) => (
               <button
                 key={label}
                 type="button"
                 onClick={() => setView(k as 0 | 1)}
-                className={`flex-1 rounded-lg px-3 py-1.5 transition ${
-                  view === k ? "bg-steel text-white" : "text-ink-soft hover:bg-paper-deep"
+                className={`flex-1 rounded-full px-3 py-1.5 transition ${
+                  view === k ? "bg-accent text-white" : "text-ink-80 hover:bg-parchment-deep"
                 }`}
               >
                 {label}
@@ -528,14 +524,14 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
             ))}
           </div>
         )}
-        <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+        <div className="card overflow-hidden p-2">
           <img
             src={assetUrl(view === 0 ? d.photo_url : d.kb_image_url)}
             alt={cfg.views[view]}
-            className="w-full object-contain"
+            className="w-full rounded-lg object-contain"
           />
         </div>
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           {domain === "art"
             ? "這張照片會存成知識庫的原圖（長邊 1024 px），之後辨識、色彩分析都用它"
             : view === 0
@@ -549,33 +545,33 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
           {d.checks.map((c) => (
             <li
               key={c.label}
-              className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${c.ok ? "bg-jade-soft/60" : "bg-seal-soft/70"}`}
+              className={`flex items-start gap-2 rounded-lg px-2 py-1.5 ${c.ok ? "bg-success-soft" : "bg-danger-soft"}`}
             >
               <span
-                className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-black text-white ${
-                  c.ok ? "bg-jade" : "bg-seal"
+                className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full text-[10px] font-semibold text-white ${
+                  c.ok ? "bg-success" : "bg-danger"
                 }`}
               >
                 {c.ok ? "✓" : "✕"}
               </span>
               <span>
-                <b>{c.label}</b> <span className="text-ink-soft">{c.detail}</span>
+                <b className="font-semibold">{c.label}</b> <span className="text-ink-80">{c.detail}</span>
               </span>
             </li>
           ))}
         </ul>
 
         {isArt ? (
-          <section className="rounded-xl border border-seal/25 bg-card p-4">
+          <section className="card p-4">
             <div className="mb-3 flex items-baseline justify-between gap-2">
-              <h2 className="font-bold">
-                畫作資料 <span className="font-mono text-sm text-seal">{d.item_id}</span>
+              <h2 className="font-semibold">
+                畫作資料 <span className="font-mono text-sm text-ink-48">{d.item_id}</span>
               </h2>
               {editable && (
                 <button
                   type="button"
                   onClick={() => setFormOpen(true)}
-                  className="rounded-lg border border-seal/40 px-3 py-1.5 text-sm font-bold text-seal transition hover:bg-seal-soft"
+                  className="btn-ghost px-4 py-1.5 text-sm"
                 >
                   {d.fields.some((f) => f.source === "人") ? "編輯資料" : "填寫畫作資料"}
                 </button>
@@ -584,23 +580,23 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
             {d.fields.some((f) => f.source === "人") ? (
               <FieldSummary fields={d.fields} />
             ) : (
-              <p className="text-sm text-ink-soft">還沒填資料：按「填寫畫作資料」。</p>
+              <p className="text-sm text-ink-80">還沒填資料：按「填寫畫作資料」。</p>
             )}
-            {d.blockers.length > 0 && <p className="mt-2 text-sm text-seal">還要處理：{d.blockers.join("、")}</p>}
+            {d.blockers.length > 0 && <p className="mt-2 text-sm text-danger">還要處理：{d.blockers.join("、")}</p>}
             <FormDialog open={formOpen} title="畫作資料" onClose={() => setFormOpen(false)}>
-              <p className="mb-3 text-xs text-ink-faint">
+              <p className="mb-3 text-xs text-ink-48">
                 ＊必填。典藏單位是知識庫已有的，來源代碼會自動帶入；沒填介紹，系統會依這些欄位寫一段「基本資料」。
               </p>
               {form}
             </FormDialog>
           </section>
         ) : (
-          <section className="rounded-xl border border-steel/25 bg-card p-4">
+          <section className="card p-4">
             <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="font-bold">
-                圖紙資料 <span className="font-mono text-sm text-steel">{d.item_id}</span>
+              <h2 className="font-semibold">
+                圖紙資料 <span className="font-mono text-sm text-ink-48">{d.item_id}</span>
               </h2>
-              <span className="text-xs text-ink-faint">＊必填</span>
+              <span className="text-xs text-ink-48">＊必填</span>
             </div>
             {form}
           </section>
@@ -615,15 +611,15 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
           onDiscard={discard}
           onRestart={onRestart}
         />
-        {actionError && <p className="rounded-lg bg-seal-soft/60 p-2 text-sm text-seal">{actionError}</p>}
+        {actionError && <p className="rounded-lg bg-danger-soft p-2 text-sm text-danger">{actionError}</p>}
 
         {d.extraction.raw && (
-          <details className="text-xs text-ink-faint">
+          <details className="text-xs text-ink-48">
             <summary className="cursor-pointer">模型原始輸出（{d.extraction.model}）</summary>
-            <pre className="mt-1 whitespace-pre-wrap break-all rounded-lg bg-paper-deep p-2 font-mono">{d.extraction.raw}</pre>
+            <pre className="mt-1 whitespace-pre-wrap break-all rounded-lg bg-parchment-deep p-2 font-mono">{d.extraction.raw}</pre>
           </details>
         )}
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           草稿 <code className="font-mono">{d.draft_id}</code> · 保存 7 天 · 外送 {d.egress.images} 張圖、
           {d.egress.bytes} bytes
         </p>
@@ -652,25 +648,25 @@ function CommitBox({
   const noun = d.domain === "art" ? "這幅畫" : "這張圖紙";
   if (d.status === "indexing")
     return (
-      <div className="rounded-xl border border-steel/30 bg-steel-soft/60 p-3 text-sm text-steel-deep">
-        <p className="animate-pulse font-bold">已寫進知識庫，正在重建索引…</p>
+      <div className="rounded-xl bg-accent-soft p-3 text-sm text-accent">
+        <p className="animate-pulse font-semibold">已寫進知識庫，正在重建索引…</p>
         <p className="text-xs">知識庫版本 {d.commit?.kb_version}；重建完成前，以圖搜圖還認不出{noun}</p>
       </div>
     );
   if (d.status === "done")
     return (
-      <div className="rounded-xl border border-jade/30 bg-jade-soft/60 p-3 text-sm">
-        <p className="font-bold text-jade">
+      <div className="rounded-xl bg-success-soft p-3 text-sm">
+        <p className="font-semibold text-success">
           ✓ 已收錄為 {d.item_id}（知識庫版本 {d.commit?.kb_version}，索引 {((d.commit?.index_ms ?? 0) / 1000).toFixed(0)}{" "}
           秒）
         </p>
         <div className="mt-1 flex flex-wrap gap-x-4">
           {d.item_url && (
-            <Link to={d.item_url} className="font-bold underline">
+            <Link to={d.item_url} className="link">
               去看{noun} →
             </Link>
           )}
-          <button type="button" onClick={onRestart} className="font-bold underline">
+          <button type="button" onClick={onRestart} className="link">
             再建一筆 →
           </button>
         </div>
@@ -682,7 +678,7 @@ function CommitBox({
         <ErrorMessage title="收錄失敗，寫進去的檔案與版本已還原" message={d.commit.error} />
       )}
       {!canCommit && (
-        <div className="rounded-xl border border-amber/30 bg-amber-soft/60 p-3 text-sm text-amber">
+        <div className="rounded-xl bg-warning-soft p-3 text-sm text-warning">
           目前身分「{meLabel ?? "訪客"}」不能收錄，請在頁首切換成「主管」。草稿會保留，切換後回到這頁即可。
         </div>
       )}
@@ -691,7 +687,7 @@ function CommitBox({
           type="button"
           disabled={!canCommit || !d.can_commit || !!busy}
           onClick={onCommit}
-          className="rounded-lg bg-jade px-4 py-2 font-bold text-white transition hover:bg-jade/85 disabled:opacity-50"
+          className="btn-primary"
         >
           {busy === "commit" ? "收錄中…" : `收錄進知識庫（${d.item_id}）`}
         </button>
@@ -699,7 +695,7 @@ function CommitBox({
           type="button"
           disabled={!!busy}
           onClick={onDiscard}
-          className="rounded-lg border border-ink/15 bg-card px-4 py-2 font-bold transition hover:border-ink/40 disabled:opacity-50"
+          className="btn-ghost"
         >
           {busy === "discard" ? "捨棄中…" : "捨棄草稿"}
         </button>

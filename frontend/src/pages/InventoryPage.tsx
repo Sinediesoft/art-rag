@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { ApiError, InventoryOverviewRow } from "../api/client";
+import type { InventoryOverviewRow } from "../api/client";
 import { useHealth, useInventoryOverview, useInventorySchema } from "../api/hooks";
-import { ErrorMessage, Loading } from "../components/common/Feedback";
+import { ApiErrorMessage, Loading } from "../components/common/Feedback";
 import { SqlAnswer } from "../components/inventory/SqlAnswer";
 
 const SUGGESTIONS = [
@@ -62,28 +62,28 @@ export function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="blueprint relative overflow-hidden rounded-2xl border border-steel/20 p-5 shadow-sm sm:p-8">
-        <p className="text-sm font-bold tracking-widest text-steel">工廠庫存 · Text-to-SQL · 地端</p>
-        <h1 className="mt-1 text-3xl font-black leading-tight sm:text-4xl">
+      <section className="card p-6 sm:p-10">
+        <p className="t-eyebrow">工廠庫存 · Text-to-SQL · 地端</p>
+        <h1 className="t-display mt-2">
           用中文問庫存，
           <br className="sm:hidden" />
           系統自己寫 SQL
         </h1>
-        <p className="mt-2 max-w-2xl text-ink-soft">
+        <p className="t-body mt-3 max-w-2xl text-ink-80">
           六張圖紙的庫存、工單與客戶訂單存在本機的關聯式資料庫。問題由本地模型轉成 SQL、在唯讀連線上執行，
-          再依查詢結果回答——製程文件走 RAG，<b className="text-steel-deep">數字與明細走資料庫</b>，資料全程不出本機。
+          再依查詢結果回答——製程文件走 RAG，<b className="font-semibold text-ink">數字與明細走資料庫</b>，資料全程不出本機。
         </p>
 
-        <form onSubmit={submit} className="mt-5 flex max-w-2xl gap-2">
+        <form onSubmit={submit} className="mt-6 flex max-w-2xl gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="例如「連接法蘭還有幾件可以出貨？」"
             maxLength={300}
-            className="min-w-0 flex-1 rounded-xl border border-steel/20 bg-white/90 px-4 py-3 outline-none transition focus:border-steel"
+            className="field min-w-0 flex-1"
           />
           <button
-            className="shrink-0 rounded-xl bg-steel px-4 py-3 font-bold text-white transition hover:bg-steel-deep disabled:opacity-50"
+            className="btn-primary shrink-0"
             disabled={!input.trim()}
           >
             查詢
@@ -95,7 +95,7 @@ export function InventoryPage() {
               key={s}
               type="button"
               onClick={() => ask(s)}
-              className="rounded-full border border-steel/20 bg-white/80 px-3 py-1 text-sm text-ink-soft transition hover:border-steel hover:text-steel"
+              className="chip text-ink-80 hover:border-accent hover:text-accent"
             >
               {s}
             </button>
@@ -104,7 +104,7 @@ export function InventoryPage() {
       </section>
 
       {hybrid && !hybrid.available && (
-        <div className="rounded-xl border border-amber/30 bg-amber-soft/60 p-3 text-sm text-amber">
+        <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
           本地推論伺服器目前無法使用（{hybrid.detail}），查詢會改走本地備援模型；都失敗時服務暫停，不改走雲端。
         </div>
       )}
@@ -113,8 +113,8 @@ export function InventoryPage() {
         <section className="flex flex-col gap-5">
           {turns.map((t) => (
             <article key={t.id} className="flex flex-col gap-2">
-              <div className="self-end rounded-2xl rounded-br-sm bg-ink px-4 py-2 text-paper">{t.question}</div>
-              <div className="rounded-2xl rounded-bl-sm border border-line bg-card p-4 shadow-sm">
+              <div className="self-end rounded-2xl rounded-br-sm bg-ink px-4 py-2 text-parchment">{t.question}</div>
+              <div className="rounded-2xl rounded-bl-sm border border-hairline bg-card p-4">
                 <SqlAnswer question={t.question} />
               </div>
             </article>
@@ -124,10 +124,10 @@ export function InventoryPage() {
 
       <section className="grid gap-3 sm:grid-cols-3">
         {STEPS.map((s, i) => (
-          <div key={s.title} className="rounded-xl border border-line bg-card p-4">
-            <p className="font-mono text-xs font-bold text-steel">0{i + 1}</p>
-            <p className="font-bold">{s.title}</p>
-            <p className="mt-1 text-sm text-ink-soft">{s.body}</p>
+          <div key={s.title} className="card p-5">
+            <p className="font-mono text-xs font-semibold text-ink-48">0{i + 1}</p>
+            <p className="font-semibold">{s.title}</p>
+            <p className="mt-1 text-sm text-ink-80">{s.body}</p>
           </div>
         ))}
       </section>
@@ -142,7 +142,7 @@ function OverviewTable() {
   const { data, isLoading, error } = useInventoryOverview();
   if (isLoading) return <Loading />;
   if (error || !data)
-    return <ErrorMessage message={(error as Error)?.message ?? ""} requestId={(error as ApiError)?.requestId} />;
+    return <ApiErrorMessage error={error} />;
   const cols: [keyof InventoryOverviewRow, string][] = [
     ["available", "可用"],
     ["reserved", "保留"],
@@ -155,22 +155,22 @@ function OverviewTable() {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-xl font-bold">{data.items.length} 張圖紙的庫存</h2>
-        <span className="text-xs text-ink-faint">
+        <h2 className="t-tagline">{data.items.length} 張圖紙的庫存</h2>
+        <span className="text-xs text-ink-48">
           資料日期 {data.as_of} · {data.company}
         </span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-line bg-card">
+      <div className="card overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
-          <thead className="whitespace-nowrap text-left text-xs text-ink-faint">
+          <thead className="t-caption-strong whitespace-nowrap text-left text-ink-48">
             <tr>
-              <th className="px-3 py-2 font-medium">品名</th>
+              <th className="px-4 py-2.5 font-semibold">品名</th>
               {cols.map(([, label]) => (
-                <th key={label} className="px-3 py-2 text-right font-medium">
+                <th key={label} className="px-3 py-2.5 text-right font-semibold">
                   {label}
                 </th>
               ))}
-              <th className="px-3 py-2 font-medium">狀態</th>
+              <th className="px-4 py-2.5 font-semibold">狀態</th>
             </tr>
           </thead>
           <tbody>
@@ -178,36 +178,36 @@ function OverviewTable() {
               const low = r.safety_stock != null && r.available < r.safety_stock;
               const short = r.open_demand > r.available;
               return (
-                <tr key={r.part_id} className="border-t border-line">
-                  <td className="px-3 py-2">
-                    <Link to={`/drawings/${r.part_id}`} className="font-medium hover:text-steel hover:underline">
+                <tr key={r.part_id} className="border-t border-hairline">
+                  <td className="px-4 py-2.5">
+                    <Link to={`/drawings/${r.part_id}`} className="hover:text-accent hover:underline">
                       {r.name}
                     </Link>
-                    <span className="ml-1.5 whitespace-nowrap font-mono text-xs text-ink-faint">{r.part_no}</span>
+                    <span className="ml-1.5 whitespace-nowrap font-mono text-xs text-ink-48">{r.part_no}</span>
                   </td>
                   {cols.map(([k]) => (
                     <td
                       key={k}
-                      className={`px-3 py-2 text-right font-mono tabular-nums ${
-                        k === "available" && low ? "font-bold text-seal" : ""
-                      } ${k === "defective" && r.defective ? "text-amber" : ""}`}
+                      className={`px-3 py-2.5 text-right tabular-nums ${
+                        k === "available" && low ? "font-semibold text-danger" : ""
+                      } ${k === "defective" && r.defective ? "text-warning" : ""}`}
                     >
                       {(r[k] as number | null)?.toLocaleString() ?? "—"}
                     </td>
                   ))}
-                  <td className="px-3 py-2">
+                  <td className="px-4 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {low && (
-                        <span className="rounded-full bg-seal-soft px-2 py-0.5 text-xs font-bold text-seal">
+                        <span className="rounded-full bg-danger-soft px-2 py-0.5 text-xs font-semibold text-danger">
                           低於安全庫存
                         </span>
                       )}
                       {short && (
-                        <span className="rounded-full bg-amber-soft px-2 py-0.5 text-xs font-bold text-amber">
+                        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs font-semibold text-warning">
                           需求 &gt; 可用
                         </span>
                       )}
-                      {!low && !short && <span className="text-xs text-jade">正常</span>}
+                      {!low && !short && <span className="text-xs text-success">正常</span>}
                     </div>
                   </td>
                 </tr>
@@ -216,7 +216,7 @@ function OverviewTable() {
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-ink-faint">
+      <p className="mt-2 text-xs text-ink-48">
         這張表是固定查詢（不經模型）。「需求 &gt; 可用」：未出貨訂單的總需求大於可用庫存，需要趕工或調撥。
       </p>
     </section>
@@ -229,31 +229,31 @@ function SchemaExplorer() {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-xl font-bold">資料庫結構</h2>
-        <span className="text-xs text-ink-faint">模型看到的就是這份 schema（prompt {data.prompt_version}）</span>
+        <h2 className="t-tagline">資料庫結構</h2>
+        <span className="text-xs text-ink-48">模型看到的就是這份 schema（prompt {data.prompt_version}）</span>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {data.tables.map((t) => (
-          <details key={t.name} className="rounded-xl border border-line bg-card px-4 py-2.5">
+          <details key={t.name} className="rounded-lg border border-hairline bg-card px-4 py-2.5">
             <summary className="cursor-pointer">
-              <span className="font-mono text-sm font-bold text-steel-deep">{t.name}</span>
-              <span className="ml-2 text-sm text-ink-soft">{t.description}</span>
-              <span className="ml-2 text-xs text-ink-faint">{t.rows != null ? `${t.rows} 筆` : "檢視表"}</span>
+              <span className="font-mono text-sm font-semibold text-ink">{t.name}</span>
+              <span className="ml-2 text-sm text-ink-80">{t.description}</span>
+              <span className="ml-2 text-xs text-ink-48">{t.rows != null ? `${t.rows} 筆` : "檢視表"}</span>
             </summary>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
               {t.columns.map((c) => (
                 <div key={c.name} className="contents">
                   <dt className="font-mono text-ink">
-                    {c.name} <span className="text-ink-faint">{c.type}</span>
+                    {c.name} <span className="text-ink-48">{c.type}</span>
                   </dt>
-                  <dd className="text-ink-soft">{c.description}</dd>
+                  <dd className="text-ink-80">{c.description}</dd>
                 </div>
               ))}
             </dl>
           </details>
         ))}
       </div>
-      <p className="mt-2 text-xs text-ink-faint">
+      <p className="mt-2 text-xs text-ink-48">
         示範資料：虛構工廠「示範精密機械」，客戶、單號與數量皆為虛構。資料來源為 <code className="font-mono">kb/inventory/</code>{" "}
         的 JSON（一張圖紙一個檔），改了會自動重建資料庫；模型產生的 SQL 只能讀取上列資料表。
       </p>

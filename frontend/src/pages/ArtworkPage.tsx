@@ -29,21 +29,25 @@ export function ArtworkPage() {
   return (
     <article className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
       <div className="lg:sticky lg:top-20 lg:self-start">
-        <div className="overflow-hidden rounded-2xl border border-line bg-paper-deep shadow-sm">
-          <img src={assetUrl(a.image_url)} alt={a.title.zh} className="max-h-[70vh] w-full object-contain" />
+        <div className="flex justify-center rounded-2xl bg-parchment-deep p-6 sm:p-10">
+          <img
+            src={assetUrl(a.image_url)}
+            alt={a.title.zh}
+            className="product-shadow max-h-[64vh] w-auto max-w-full object-contain"
+          />
         </div>
-        <div className="mt-2">
+        <div className="mt-3">
           <LicenseLabel license={a.image.license} attribution={a.image.attribution} sourceUrl={a.image.source_url} />
         </div>
       </div>
 
       <div className="flex flex-col gap-5">
         <header>
-          <p className="text-sm text-ink-faint">{a.title.en}</p>
-          <h1 className="font-serif text-3xl font-black">〈{a.title.zh}〉</h1>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <p className="t-eyebrow">{a.title.en}</p>
+          <h1 className="t-display mt-1">〈{a.title.zh}〉</h1>
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {a.style_tags.map((t) => (
-              <span key={t} className="rounded-full bg-paper-deep px-2.5 py-0.5 text-xs text-ink-soft">
+              <span key={t} className="rounded-full bg-parchment-deep px-2.5 py-0.5 text-xs text-ink-80">
                 {t}
               </span>
             ))}
@@ -52,18 +56,18 @@ export function ArtworkPage() {
 
         <Link
           to={`/artworks/${a.id}/chat`}
-          className="flex items-center justify-between rounded-xl bg-seal px-4 py-3 font-bold text-white shadow-sm transition hover:bg-seal-deep"
+          className="btn-primary w-full justify-between"
         >
           <span>問問這幅畫</span>
           <span aria-hidden>→</span>
         </Link>
 
-        <dl className="grid grid-cols-[5em_1fr] gap-x-3 gap-y-1.5 rounded-xl border border-line bg-card p-4 text-sm">
+        <dl className="card grid grid-cols-[5em_1fr] gap-x-3 gap-y-1.5 p-5 text-sm">
           {meta
             .filter(([, v]) => v)
             .map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="text-ink-faint">{k}</dt>
+                <dt className="text-ink-48">{k}</dt>
                 <dd>{v}</dd>
               </div>
             ))}
@@ -73,17 +77,17 @@ export function ArtworkPage() {
 
         <section className="flex flex-col gap-4">
           {a.descriptions.map((d, i) => (
-            <div key={i} className="border-l-2 border-seal/40 pl-4">
-              {d.topic && <h2 className="mb-1 font-serif text-lg font-bold">{d.topic}</h2>}
-              <p className="leading-relaxed text-ink-soft">{d.text}</p>
+            <div key={i} className="border-l-2 border-hairline pl-4">
+              {d.topic && <h2 className="mb-1 text-lg font-semibold">{d.topic}</h2>}
+              <p className="leading-relaxed text-ink-80">{d.text}</p>
               <LicenseLabel license={d.license} attribution={d.attribution} sourceUrl={d.source_url} />
             </div>
           ))}
         </section>
 
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           畫作 ID <code className="font-mono">{a.id}</code> · 資料來源{" "}
-          <a href={a.source_url} target="_blank" rel="noreferrer" className="underline">
+          <a href={a.source_url} target="_blank" rel="noreferrer" className="link">
             {new URL(a.source_url).hostname}
           </a>
         </p>

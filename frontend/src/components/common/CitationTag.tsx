@@ -12,7 +12,7 @@ export function CitationTag({
 }) {
   if (refNo === 0) {
     return (
-      <span className="mx-0.5 inline-flex items-center rounded bg-amber-soft px-1.5 align-[1px] text-[11px] font-medium text-amber">
+      <span className="mx-0.5 inline-flex items-center rounded bg-warning-soft px-1.5 align-[1px] text-[11px] font-normal text-warning">
         無來源
       </span>
     );
@@ -21,8 +21,8 @@ export function CitationTag({
     <button
       type="button"
       onClick={() => onClick?.(refNo)}
-      className={`mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 align-[1px] text-[11px] font-bold transition ${
-        active ? "bg-seal text-white" : "bg-seal-soft text-seal hover:bg-seal hover:text-white"
+      className={`mx-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 align-[1px] text-[11px] font-semibold transition ${
+        active ? "bg-accent text-white" : "bg-accent-soft text-accent hover:bg-accent hover:text-white"
       }`}
       aria-label={`來源 ${refNo}`}
     >

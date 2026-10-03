@@ -22,13 +22,13 @@ function whereOnPainting([x, y]: number[]): string {
 function AlignError({ error, what }: { error: unknown; what: string }) {
   const e = error as ApiError | null;
   if (e?.code === "ALIGN_FAILED")
-    return <p className="text-xs text-ink-faint">照片和{what}對不上（對應的特徵點不夠），無法標出位置。</p>;
+    return <p className="text-xs text-ink-48">照片和{what}對不上（對應的特徵點不夠），無法標出位置。</p>;
   return <ErrorMessage title="影像比對失敗" message={e?.message ?? ""} requestId={e?.requestId} code={e?.code} />;
 }
 
 function Footer({ data }: { data: ImageAlignment }) {
   return (
-    <footer className="flex flex-col gap-0.5 text-xs text-ink-faint">
+    <footer className="flex flex-col gap-0.5 text-xs text-ink-48">
       {data.notes.map((n) => (
         <p key={n}>{n}</p>
       ))}
@@ -58,13 +58,13 @@ function CoverageOutline({ polygon, masked }: { polygon: number[][]; masked: boo
               <polygon points={points} fill="black" />
             </mask>
           </defs>
-          <rect width="1" height="1" fill="rgb(31 27 22 / 0.55)" mask={`url(#${maskId})`} />
+          <rect width="1" height="1" fill="rgb(29 29 31 / 0.55)" mask={`url(#${maskId})`} />
         </>
       )}
       <polygon
         points={points}
         fill="none"
-        stroke="var(--color-amber-soft)"
+        stroke="var(--color-warning-soft)"
         strokeWidth={3}
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
@@ -90,13 +90,13 @@ export function PhotoLocation({ imageId, artworkId }: { imageId: string; artwork
   }[diff.status];
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-4">
+    <section className="card flex flex-col gap-3 p-5">
       <header>
-        <h2 className="font-serif text-lg font-bold">{diff ? "和知識庫原圖比對" : "你拍到的位置"}</h2>
-        <p className="text-sm text-ink-soft">
+        <h2 className="text-lg font-semibold">{diff ? "和知識庫原圖比對" : "你拍到的位置"}</h2>
+        <p className="text-sm text-ink-80">
           {whole ? "照片拍到整幅畫。" : `照片拍到原畫約 ${pct(coverage)} 的範圍，在畫面的${whereOnPainting(center)}。`}
         </p>
-        {summary && <p className={`text-sm ${diff.status === "same" ? "text-jade" : "text-ink-soft"}`}>{summary}</p>}
+        {summary && <p className={`text-sm ${diff.status === "same" ? "text-success" : "text-ink-80"}`}>{summary}</p>}
       </header>
       <div className={showDiff && regions.length > 0 ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]" : ""}>
         <div className="relative mx-auto w-fit max-w-full">
@@ -136,31 +136,31 @@ export function DrawingDiff({ imageId, partId, revision }: { imageId: string; pa
   }[diff.status];
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-4">
+    <section className="card flex flex-col gap-3 p-5">
       <header>
-        <h2 className="text-lg font-bold">和知識庫圖紙（rev.{revision}）的差異</h2>
-        <p className={`text-sm ${diff.status === "same" ? "text-jade" : "text-ink-soft"}`}>{summary}</p>
+        <h2 className="text-lg font-semibold">和知識庫圖紙（rev.{revision}）的差異</h2>
+        <p className={`text-sm ${diff.status === "same" ? "text-success" : "text-ink-80"}`}>{summary}</p>
       </header>
       {diff.status !== "global_change" && (
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">
           <img
             src={assetUrl(data.overlay_url)}
             alt="照片拉正後和知識庫圖紙的差異疊圖"
-            className="mx-auto block max-h-[70vh] w-auto max-w-full rounded-md border border-line bg-white"
+            className="mx-auto block max-h-[70vh] w-auto max-w-full rounded-md border border-hairline bg-white"
           />
           {n > 0 && (
             <ol className="flex flex-col gap-2 text-sm">
               {regions.map((r, i) => (
                 <li key={r.bbox.join(",")} className="flex items-start gap-2">
                   <span
-                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
                     style={{ background: KIND[r.kind].color }}
                   >
                     {i + 1}
                   </span>
                   <span>
                     {KIND[r.kind].label}
-                    <span className="ml-1 text-xs text-ink-faint">· 占圖紙線條 {pct(r.area_ratio)}</span>
+                    <span className="ml-1 text-xs text-ink-48">· 占圖紙線條 {pct(r.area_ratio)}</span>
                   </span>
                 </li>
               ))}
@@ -194,14 +194,14 @@ function ToneRegionList({ regions }: { regions: ToneRegion[] }) {
       {regions.map((r, i) => (
         <li key={r.bbox.join(",")} className="flex items-start gap-2">
           <span
-            className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+            className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
             style={{ background: TONE_KIND[r.kind].color }}
           >
             {i + 1}
           </span>
           <span>
             {TONE_KIND[r.kind].label}
-            <span className="ml-1 text-xs text-ink-faint">· 占比對範圍 {pct(r.area_ratio)}</span>
+            <span className="ml-1 text-xs text-ink-48">· 占比對範圍 {pct(r.area_ratio)}</span>
           </span>
         </li>
       ))}
@@ -235,11 +235,11 @@ export function PairDiff({ a, b }: { a: string; b: string }) {
   }[diff.status];
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line bg-card p-4">
+    <section className="card flex flex-col gap-3 p-5">
       <header>
-        <h2 className="font-serif text-lg font-bold">比對結果</h2>
-        <p className={`text-sm ${diff.status === "same" ? "text-jade" : "text-ink-soft"}`}>{summary}</p>
-        <p className="text-xs text-ink-faint">照片 B 拍到照片 A 的 {pct(data.location.coverage)}，只比重疊的地方；結果畫在照片 A 上。</p>
+        <h2 className="text-lg font-semibold">比對結果</h2>
+        <p className={`text-sm ${diff.status === "same" ? "text-success" : "text-ink-80"}`}>{summary}</p>
+        <p className="text-xs text-ink-48">照片 B 拍到照片 A 的 {pct(data.location.coverage)}，只比重疊的地方；結果畫在照片 A 上。</p>
       </header>
       {diff.status !== "global_change" && (
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_16rem]">

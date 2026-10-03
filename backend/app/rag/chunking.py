@@ -76,17 +76,18 @@ def build_chunks(a: dict) -> list[dict]:
     ]
     for i, d in enumerate(a["descriptions"]):
         for j, piece in enumerate(split_paragraph(d["text"])):
-            chunks.append(
-                {
-                    "chunk_id": f"{a['id']}#{i:02d}-{j}",
-                    "artwork_id": a["id"],
-                    "lang": d["lang"],
-                    "topic": d.get("topic", ""),
-                    "text": piece,
-                    "source_url": d["source_url"],
-                    "license": d["license"],
-                }
-            )
+            chunk = {
+                "chunk_id": f"{a['id']}#{i:02d}-{j}",
+                "artwork_id": a["id"],
+                "lang": d["lang"],
+                "topic": d.get("topic", ""),
+                "text": piece,
+                "source_url": d.get("source_url"),
+                "license": d["license"],
+            }
+            if d.get("source"):  # 沒有網址的出處（使用者投稿、外部上傳的文件）
+                chunk["source"] = d["source"]
+            chunks.append(chunk)
     if a.get("colors"):
         # 系統計算的段落沒有網址出處：source_url 為 None，改用 source（同工廠圖紙段落）
         chunks.append(

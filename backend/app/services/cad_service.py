@@ -26,6 +26,7 @@ from PIL import Image
 from app.cad.preprocess import model_input
 from app.cad.sandbox import extract_code, run_cad
 from app.core.config import REPO_ROOT, get_models_config, get_settings
+from app.core.errors import AppError
 from app.core.logging import log
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.providers import ProviderUnavailable, get_provider
@@ -33,6 +34,7 @@ from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
+from app.services.identity import Account, require_part
 from app.services.search_service import identify_drawing, load_upload, part_summary, rectify_to_part
 
 CAD_STRATEGIES = {"ortho2cad", "hybrid"}
@@ -110,13 +112,15 @@ async def reconstruct_stream(
     part_id: str | None = None,
     image_id: str | None = None,
     strategy: str = "ortho2cad",
+    account: Account | None = None,
 ) -> AsyncIterator[str]:
     """3D 重建用到 Ortho2CAD（對照組改用 Qwen3-VL）；照片要先辨識（Chinese-CLIP），
-    未收錄圖紙要請 Qwen3-VL 讀尺寸。記憶體吃緊時先釋放其他模型。"""
+    未收錄圖紙要請 Qwen3-VL 讀尺寸。記憶體吃緊時先釋放其他模型。
+    account：照片辨識出知識庫圖紙時，檢查目前身分看不看得到（資料範圍）；None＝不限。"""
     models = {"ortho2cad" if strategy == "ortho2cad" else "qwen"}
     if image_id:
         models |= {"clip", "qwen"}
-    events = _reconstruct_stream(request_id, part_id, image_id, strategy)
+    events = _reconstruct_stream(request_id, part_id, image_id, strategy, account)
     async for e in memory_guard.stream("reconstruct", models, events):
         yield e
 
@@ -126,6 +130,7 @@ async def _reconstruct_stream(
     part_id: str | None = None,
     image_id: str | None = None,
     strategy: str = "ortho2cad",
+    account: Account | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     s, cfg, store = get_settings(), get_models_config().cad, get_store()
@@ -153,6 +158,12 @@ async def _reconstruct_stream(
     if not part and not photo:
         yield err("VALIDATION_ERROR", "請指定 part_id 或 image_id")
         return
+    if part and account is not None:
+        try:
+            require_part(account, part)
+        except AppError as e:
+            yield err(e.code, e.message)
+            return
     if photo is None:
         drawing, layout = Image.open(REPO_ROOT / part["drawing"]).convert("RGB"), "kb"
     else:

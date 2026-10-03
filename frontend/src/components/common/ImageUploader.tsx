@@ -2,7 +2,9 @@ import { useRef, useState } from "react";
 import { api, ApiError } from "../../api/client";
 import { preprocessImage } from "../../lib/image";
 
-/** 拍照／上傳：手機直接開後鏡頭；上傳前先在瀏覽器轉正、壓縮、去除 EXIF */
+/** 拍照／上傳：手機直接開後鏡頭；上傳前先在瀏覽器轉正、壓縮、去除 EXIF。
+ * tone：保留給呼叫端（畫作頁 "seal"、工廠圖紙頁 "steel"），Apple 風格只有一個互動色，
+ * 目前兩種 tone 都是 Action Blue 的 btn-primary，不影響外觀。 */
 export function ImageUploader({
   onUploaded,
   tone = "seal",
@@ -42,9 +44,8 @@ export function ImageUploader({
           type="button"
           disabled={busy}
           onClick={() => cameraRef.current?.click()}
-          className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3.5 font-bold text-white shadow-sm transition disabled:opacity-60 ${
-            tone === "steel" ? "bg-steel hover:bg-steel-deep" : "bg-seal hover:bg-seal-deep"
-          }`}
+          data-tone={tone}
+          className="btn-primary w-full"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M4 8h3l2-3h6l2 3h3v11H4z" strokeLinejoin="round" />
@@ -56,7 +57,7 @@ export function ImageUploader({
           type="button"
           disabled={busy}
           onClick={() => fileRef.current?.click()}
-          className="flex items-center justify-center gap-2 rounded-xl border border-ink/15 bg-card px-4 py-3.5 font-bold text-ink transition hover:border-ink/40 disabled:opacity-60"
+          className="btn-ghost w-full"
         >
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
             <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -80,7 +81,7 @@ export function ImageUploader({
         hidden
         onChange={(e) => handle(e.target.files?.[0])}
       />
-      {error && <p className="text-sm text-seal">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

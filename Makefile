@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -45,7 +45,8 @@ help:
 	@echo "make scheduler-setup  建置排程服務（需 Java 21：brew install openjdk@21；Maven 會自動下載）"
 	@echo "make scheduler   啟動排程服務 http://localhost:$(SCHED_PORT)（另開一個終端機；沒啟動時排程頁改用簡易排程）"
 	@echo "--- 智慧助理（System 1：Jev／本地路由）---"
-	@echo "make eval-route  智慧助理的意圖路由評估（不是 eval-router 的領域路由）：Jev 與本地路由在 eval/route_qa.jsonl 的正確率（需後端在執行；沒金鑰只跑本地）"
+	@echo "make eval-route  智慧助理本地分流的意圖正確率＋第 2 段誤擋、誤短路（不是 eval-router 的領域路由；需後端在執行；沒金鑰只跑地端規則）"
+	@echo "make eval-guard  七段權限控管第 2 段：Jev Choice 與地端規則對 eval/guard_qa.jsonl 的攔截率、誤擋率、閒聊短路率（需後端在執行）"
 	@echo "make ci          CI 會跑的檢查：知識庫、lint、型別、單元測試、openapi 同步"
 
 # --compile-bytecode：CadQuery 在 sandbox-exec 裡不能寫 .pyc，沒預先編譯時每次 import 要 14 秒，
@@ -134,6 +135,9 @@ eval-sql:
 
 eval-route:
 	$(PY) eval/run_route_eval.py
+
+eval-guard:
+	$(PY) eval/run_guard_eval.py
 
 test:
 	cd backend && uv run pytest -q

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, File, Query, Request, Response, UploadFile
@@ -88,15 +89,26 @@ _TARGET = Query(
 )
 
 
+def _align_scope(target: str, request: Request) -> None:
+    """和圖紙比對也是讀圖紙（docs/adr/014 的資料範圍）：回應與疊圖都含圖紙內容，
+    看不到的圖紙 → 403。"""
+    kind, _, tid = target.partition(":")
+    if kind == "part":
+        _visible_part(tid, request)
+
+
 @router.get("/images/{image_id}/align", response_model=S.ImageAlignment, tags=["images"])
-def get_photo_alignment(image_id: str, target: str = _TARGET):
+def get_photo_alignment(image_id: str, request: Request, target: str = _TARGET):
     """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
-    畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。"""
+    畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
+    圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。"""
+    _align_scope(target, request)
     return compare_service.align_photo(image_id, target)
 
 
 @router.get("/images/{image_id}/align.png", response_class=Response, tags=["images"])
-def get_photo_alignment_overlay(image_id: str, target: str = _TARGET):
+def get_photo_alignment_overlay(image_id: str, request: Request, target: str = _TARGET):
+    _align_scope(target, request)
     return Response(compare_service.align_overlay(image_id, target), media_type="image/png")
 
 
@@ -167,6 +179,14 @@ def get_artwork_colormap(artwork_id: str):
     },
 )
 async def chat(body: S.ChatRequest, request: Request):
+    """圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
+    智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
+    放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。"""
+    account = identity.current(request)
+    if body.part_id:
+        part = _part_or_404(body.part_id)
+        if body.post_filter is None:
+            identity.require_part(account, part)
     stream = chat_service.chat_stream(
         question=body.question,
         request_id=request.state.request_id,
@@ -177,6 +197,8 @@ async def chat(body: S.ChatRequest, request: Request):
         allow_fallback=body.allow_fallback,
         part_id=body.part_id,
         rearrange=body.rearrange,
+        account=account,
+        post_filter=body.post_filter,
     )
     return StreamingResponse(
         stream,
@@ -193,18 +215,30 @@ def _part_or_404(part_id: str) -> dict:
     return p
 
 
+def _visible_part(part_id: str, request: Request) -> dict:
+    """圖紙存在、而且目前身分看得到（資料範圍：領域＋機密等級）。"""
+    p = _part_or_404(part_id)
+    identity.require_part(identity.current(request), p)
+    return p
+
+
 @router.get("/parts", response_model=S.PartListResponse, tags=["parts"])
-def list_parts():
+def list_parts(request: Request):
+    """只列目前身分看得到的圖紙（業務看不到機密圖紙；訪客不能使用工廠圖紙 → 403）。"""
+    account = identity.current(request)
+    identity.require_domain(account, "mfg")
     store = get_store()
+    items = [p for p in store.parts if account.can_see(p["confidentiality"])]
     return {
         "kb_version": store.manifest.get("kb_version", ""),
-        "items": [search_service.part_summary(p) for p in store.parts],
+        "items": [search_service.part_summary(p) for p in items],
+        "hidden": len(store.parts) - len(items),
     }
 
 
 @router.get("/parts/{part_id}", response_model=S.PartDetail, tags=["parts"])
-def get_part(part_id: str):
-    p = _part_or_404(part_id)
+def get_part(part_id: str, request: Request):
+    p = _visible_part(part_id, request)
     summary = search_service.part_summary(p)
     return {
         **p,
@@ -216,8 +250,8 @@ def get_part(part_id: str):
 
 
 @router.get("/parts/{part_id}/drawing", response_class=FileResponse, tags=["parts"])
-def get_part_drawing(part_id: str, size: str = "full"):
-    p = _part_or_404(part_id)
+def get_part_drawing(part_id: str, request: Request, size: str = "full"):
+    p = _visible_part(part_id, request)
     store = get_store()
     path = (
         store.parts_dir / "thumbs" / f"{part_id}.jpg"
@@ -228,9 +262,9 @@ def get_part_drawing(part_id: str, size: str = "full"):
 
 
 @router.get("/parts/{part_id}/model.{ext}", response_class=FileResponse, tags=["parts"])
-def get_part_model(part_id: str, ext: str):
+def get_part_model(part_id: str, ext: str, request: Request):
     """知識庫零件的標準 3D 模型（由 kb/cad/<id>.py 產生）：stl 給前端 3D 檢視、step 給 CAD 軟體。"""
-    p = _part_or_404(part_id)
+    p = _visible_part(part_id, request)
     if ext not in ("stl", "step"):
         raise AppError("VALIDATION_ERROR", "只提供 stl 或 step", 422)
     path = get_store().parts_dir / "gt" / f"{part_id}.{ext}"
@@ -240,20 +274,47 @@ def get_part_model(part_id: str, ext: str):
     return FileResponse(path, media_type=media, filename=f"{part_id}.{ext}")
 
 
+def _scope_drawing_result(result: dict, account: identity.Account) -> dict:
+    """以圖搜圖紙的結果只留看得到的圖紙；照片辨識出的正是看不到的圖紙 → 403。"""
+    if result["matched"]:
+        identity.require_part(account, get_store().get_part(result["best_part_id"]))
+    return {
+        **result,
+        "results": [r for r in result["results"] if account.can_see(r["part"]["confidentiality"])],
+    }
+
+
 @router.post("/search/drawing", response_model=S.DrawingSearchResponse, tags=["search"])
-def search_drawing(body: S.DrawingSearchRequest):
-    return search_service.identify_drawing(body.image_id, body.top_k)
+def search_drawing(body: S.DrawingSearchRequest, request: Request):
+    account = identity.current(request)
+    identity.require_domain(account, "mfg")
+    return _scope_drawing_result(
+        search_service.identify_drawing(body.image_id, body.top_k), account
+    )
 
 
 @router.post("/search/any", response_model=S.AnySearchResponse, tags=["search"])
-def search_any(body: S.ImageSearchRequest):
-    """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。"""
-    return search_service.identify_any(body.image_id, body.top_k)
+def search_any(body: S.ImageSearchRequest, request: Request):
+    """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
+    判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。"""
+    account = identity.current(request)
+    result = search_service.identify_any(body.image_id, body.top_k)
+    if result["drawing_result"] is not None:
+        identity.require_domain(account, "mfg")
+        result["drawing_result"] = _scope_drawing_result(result["drawing_result"], account)
+    return result
 
 
 @router.get("/search/parts", response_model=S.PartTextSearchResponse, tags=["search"])
-def search_parts(q: str = Query(min_length=1, max_length=200), top_k: int | None = None):
-    return search_service.search_parts_text(q, top_k)
+def search_parts(
+    request: Request,
+    q: str = Query(min_length=1, max_length=200),
+    top_k: int | None = None,
+):
+    """以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter）。"""
+    account = identity.current(request)
+    identity.require_domain(account, "mfg")
+    return search_service.search_parts_text(q, top_k, account.levels)
 
 
 @router.post(
@@ -268,12 +329,18 @@ def search_parts(q: str = Query(min_length=1, max_length=200), top_k: int | None
     },
 )
 async def reconstruct(body: S.ReconstructRequest, request: Request):
-    """工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。"""
+    """工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。
+    要能使用工廠圖紙；指定或照片辨識出的圖紙也要看得到（資料範圍）。"""
+    account = identity.current(request)
+    identity.require_domain(account, "mfg")
+    if body.part_id:
+        identity.require_part(account, _part_or_404(body.part_id))
     stream = cad_service.reconstruct_stream(
         request_id=request.state.request_id,
         part_id=body.part_id,
         image_id=body.image_id,
         strategy=body.strategy,
+        account=account,
     )
     return StreamingResponse(
         stream,
@@ -342,18 +409,29 @@ def get_intake_file(draft_id: str, name: str):
     return FileResponse(intake_service.draft_file(draft_id, name))
 
 
-@router.get("/cad/jobs/{job_id}", response_model=S.CadJobSummary, tags=["cad"])
-def get_cad_job(job_id: str):
-    """已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。"""
+def _cad_job(job_id: str, request: Request) -> dict:
+    """3D 重建結果的摘要；是知識庫圖紙的重建時，也要看得到那張圖紙（資料範圍）。"""
     path = get_settings().cad_jobs_dir / job_id / "summary.json"
     if not cad_service.JOB_ID.match(job_id) or not path.is_file():
         raise AppError("CAD_JOB_NOT_FOUND", "找不到這個 3D 重建結果，可能已超過保存期限", 404)
-    return json.loads(path.read_text(encoding="utf-8"))
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    account = identity.current(request)
+    identity.require_domain(account, "mfg")
+    part = (summary.get("meta") or {}).get("part")
+    if part and (p := get_store().get_part(part["id"])):
+        identity.require_part(account, p)
+    return summary
+
+
+@router.get("/cad/jobs/{job_id}", response_model=S.CadJobSummary, tags=["cad"])
+def get_cad_job(job_id: str, request: Request):
+    """已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。"""
+    return _cad_job(job_id, request)
 
 
 @router.get("/parts/{part_id}/reconstructions", response_model=S.CadJobListResponse, tags=["cad"])
-def list_part_reconstructions(part_id: str):
-    _part_or_404(part_id)
+def list_part_reconstructions(part_id: str, request: Request):
+    _visible_part(part_id, request)
     root = get_settings().cad_jobs_dir
     rows = [
         r
@@ -364,9 +442,11 @@ def list_part_reconstructions(part_id: str):
 
 
 @router.get("/cad/jobs/{job_id}/{name}", response_class=FileResponse, tags=["cad"])
-def get_cad_file(job_id: str, name: str):
+def get_cad_file(job_id: str, name: str, request: Request):
     if not cad_service.JOB_ID.match(job_id) or name not in cad_service.JOB_FILES:
         raise AppError("CAD_JOB_NOT_FOUND", "找不到這個 3D 重建結果", 404)
+    if (get_settings().cad_jobs_dir / job_id / "summary.json").is_file():
+        _cad_job(job_id, request)  # 還在重建中（沒有摘要）的檔案只有發起的人知道網址
     path = get_settings().cad_jobs_dir / job_id / name
     if not path.is_file():
         raise AppError("CAD_JOB_NOT_FOUND", "找不到這個 3D 重建結果，可能已超過保存期限", 404)
@@ -381,8 +461,9 @@ def get_cad_file(job_id: str, name: str):
 
 # ---------------------------------------------------------------- 工廠庫存（Text-to-SQL）
 @router.get("/inventory/schema", response_model=S.InventorySchemaResponse, tags=["inventory"])
-def inventory_schema():
+def inventory_schema(request: Request):
     """庫存資料庫的資料表與欄位說明（與給模型看的 schema 同一份來源）。"""
+    identity.require_domain(identity.current(request), "factory")
     repo = get_inventory_repo()
     repo.ensure_built()
     version = prompt_versions()[0]
@@ -394,15 +475,17 @@ def inventory_schema():
 
 
 @router.get("/inventory/overview", response_model=S.InventoryOverviewResponse, tags=["inventory"])
-def inventory_overview():
+def inventory_overview(request: Request):
+    identity.require_domain(identity.current(request), "factory")
     repo = get_inventory_repo()
     items = repo.overview()
     return {"as_of": repo.as_of, "company": repo.manifest.get("company", ""), "items": items}
 
 
 @router.get("/inventory/parts/{part_id}", response_model=S.PartInventory, tags=["inventory"])
-def part_inventory(part_id: str):
+def part_inventory(part_id: str, request: Request):
     """單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。"""
+    identity.require_domain(identity.current(request), "factory")
     data = get_inventory_repo().part_inventory(part_id)
     if not data:
         raise AppError("PART_NOT_FOUND", f"庫存資料庫中沒有圖紙 {part_id}", 404)
@@ -423,6 +506,7 @@ def part_inventory(part_id: str):
 )
 async def inventory_ask(body: S.InventoryAskRequest, request: Request):
     """Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。"""
+    identity.require_domain(identity.current(request), "factory")
     stream = sql_service.ask_stream(
         question=body.question,
         request_id=request.state.request_id,
@@ -438,14 +522,16 @@ async def inventory_ask(body: S.InventoryAskRequest, request: Request):
 
 # ---------------------------------------------------------------- 生產排程（Timefold）
 @router.get("/production/overview", response_model=S.ProductionOverview, tags=["production"])
-async def production_overview():
+async def production_overview(request: Request):
     """排程頁：機台、行事曆、待排工單、排程服務狀態與目前排程。"""
+    identity.require_domain(identity.current(request), "factory")
     return await schedule_service.overview()
 
 
 @router.get("/production/parts/{part_id}", response_model=S.PartPlan, tags=["production"])
-async def part_plan(part_id: str):
+async def part_plan(part_id: str, request: Request):
     """圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。"""
+    identity.require_domain(identity.current(request), "factory")
     return await schedule_service.part_plan(part_id)
 
 
@@ -526,14 +612,15 @@ async def stop_schedule():
 
 
 @router.get("/schedule/runs/{run_id}", response_model=S.ScheduleRunDetail, tags=["production"])
-def schedule_run(run_id: str):
+def schedule_run(run_id: str, request: Request):
+    identity.require_domain(identity.current(request), "factory")
     return schedule_service.run_detail(run_id)
 
 
 @router.post("/admin/production/reset", response_model=S.OkResponse, tags=["production"])
 def reset_production(request: Request):
-    """展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單與稽核紀錄
-    （DEMO_CONTROLS=false 時停用；生管或主管才可以）。"""
+    """展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
+    與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。"""
     if not get_settings().demo_controls:
         raise AppError("FORBIDDEN", "展示控制已停用", 403)
     identity.require(identity.current(request), "demo_reset", "展示還原")
@@ -568,8 +655,8 @@ def feedback(body: S.FeedbackRequest):
 def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
-        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）
-        # 與影像比對（-align）、照片建檔（-intake）的評估另有格式
+        # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
+        # 五段防護第 2 段（-guard）、影像比對（-align）與照片建檔（-intake）的評估另有格式
         if not p.name.endswith(
             (
                 "-cad.json",
@@ -578,6 +665,7 @@ def eval_runs():
                 "-color.json",
                 "-demo.json",
                 "-route.json",
+                "-guard.json",
                 "-align.json",
                 "-intake.json",
             )
@@ -733,36 +821,41 @@ def simulate_outage(body: S.OutageRequest):
     return S.OkResponse()
 
 
-# ---------------------------------------------------------------- 智慧助理（docs/adr/011）
-def _accounts(account: identity.Account) -> dict:
+# ---------------------------------------------------------------- 智慧助理（docs/adr/011、015）
+def _accounts(auth: identity.Auth) -> dict:
     return {
-        "current": account.public(),
+        "current": auth.account.public(),
         "accounts": [a.public() for a in identity.accounts().values()],
         "demo_controls": get_settings().demo_controls,
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
+        "token": auth.public(),
     }
 
 
 @router.get("/auth/accounts", response_model=S.AccountsResponse, tags=["agent"])
-def list_accounts(request: Request):
-    """展示帳號與目前身分（身分存在伺服器端的工作階段，預設訪客）。"""
-    return _accounts(identity.current(request))
+def list_accounts(request: Request, response: Response):
+    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，
+    放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。"""
+    return _accounts(identity.ensure(request, response))
 
 
 @router.post("/auth/switch", response_model=S.AccountsResponse, tags=["agent"])
 def switch_account(body: S.SwitchAccountRequest, request: Request, response: Response):
-    """展示版切換身分（不用密碼；DEMO_CONTROLS=false 時停用）。"""
+    """展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。"""
     return _accounts(identity.switch(request, response, body.account_id))
 
 
 @router.post("/agent/route", response_model=S.RouteResponse, tags=["agent"])
 async def agent_route(body: S.RouteRequest, request: Request):
-    """System 1：判斷意圖與信心（Jev 或本地路由）→ 信心閘門 → 分派到哪個本地模組。"""
+    """七段權限控管的第 1、2 段（docs/adr/015）：JWT 已在閘道驗過 → 個資遮蔽 →
+    本地分流判斷要做什麼 →
+    角色授權（功能、動作權限）→ Jev Choice（正常查詢／Prompt 注入／無關閒聊）→ 分派到哪個本地模組；
+    擋下就拒絕並記錄、閒聊快速短路回覆。"""
     if not body.question.strip() and not body.image_id:
         raise AppError("VALIDATION_ERROR", "請輸入一句話或附一張照片", 422)
     return await agent_service.route(
         body.question,
-        identity.current(request),
+        identity.auth_of(request),
         request.state.request_id,
         image_id=body.image_id,
         forced_intent=body.forced_intent,
@@ -816,6 +909,20 @@ def return_approval(ap_no: str, body: S.ReturnRequest, request: Request):
     return change_service.return_(
         ap_no, identity.current(request), body.reason, request.state.request_id
     )
+
+
+@router.get("/security/logs", response_model=S.SecurityLogsResponse, tags=["agent"])
+def security_logs(limit: int = Query(default=20, ge=1, le=200)):
+    """七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
+    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。"""
+    repo = get_logs_repo()
+    tz = timezone(timedelta(hours=8))
+    midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    counts = repo.count_security(midnight.astimezone(UTC).isoformat())
+    return {
+        "items": repo.recent_security(limit),
+        "today": {"rbac": counts.get(1, 0), "guard": counts.get(2, 0), "post": counts.get(4, 0)},
+    }
 
 
 @router.get("/audit", response_model=S.AuditResponse, tags=["agent"])

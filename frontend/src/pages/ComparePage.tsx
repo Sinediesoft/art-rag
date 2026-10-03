@@ -46,20 +46,20 @@ export function ComparePage() {
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <h1 className="font-serif text-2xl font-black">策略比較</h1>
-        <p className="text-sm text-ink-soft">
+        <h1 className="t-display">策略比較</h1>
+        <p className="mt-2 text-sm text-ink-80">
           同一個問題並排送給不同生成端。所有欄位共用同一個檢索層與 prompt 模板，只換最後的生成端，
           所以差異只反映生成端本身；每欄標示資料是否送出本機。雲端欄位只是對照組（需後端
           ALLOW_CLOUD=true），這頁只能選知識庫畫作、不開放上傳照片；比較模式不啟用備援。
         </p>
       </header>
 
-      <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-4 shadow-sm">
+      <form onSubmit={submit} className="card flex flex-col gap-3 p-5">
         <div className="flex flex-col gap-2 sm:flex-row">
           <select
             value={selected}
             onChange={(e) => setArtworkId(e.target.value)}
-            className="rounded-xl border border-line bg-paper px-3 py-2.5 sm:w-56"
+            className="field sm:w-56"
           >
             {data.items.map((a) => (
               <option key={a.id} value={a.id}>
@@ -70,9 +70,9 @@ export function ComparePage() {
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            className="min-w-0 flex-1 rounded-xl border border-line bg-paper px-3 py-2.5 outline-none focus:border-seal"
+            className="field min-w-0 flex-1"
           />
-          <button className="rounded-xl bg-seal px-5 py-2.5 font-bold text-white transition hover:bg-seal-deep">
+          <button className="btn-primary">
             並排比較
           </button>
         </div>
@@ -82,7 +82,7 @@ export function ComparePage() {
               key={q}
               type="button"
               onClick={() => setQuestion(q)}
-              className="rounded-full border border-line px-3 py-1 text-xs text-ink-soft hover:border-seal hover:text-seal"
+              className="chip text-ink-80 hover:border-accent hover:text-accent"
             >
               {q}
             </button>
@@ -93,10 +93,10 @@ export function ComparePage() {
       {run && (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {COLUMNS.map((c) => (
-            <section key={`${c.key}-${run.n}`} className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-4 shadow-sm">
-              <header className="border-b border-line pb-2">
-                <h2 className="font-serif text-lg font-bold">{c.label}</h2>
-                <p className="text-xs text-ink-faint">{c.note}</p>
+            <section key={`${c.key}-${run.n}`} className="card flex flex-col gap-3 p-5">
+              <header className="border-b border-hairline pb-2">
+                <h2 className="text-lg font-semibold">{c.label}</h2>
+                <p className="text-xs text-ink-48">{c.note}</p>
               </header>
               <ChatAnswer
                 compact

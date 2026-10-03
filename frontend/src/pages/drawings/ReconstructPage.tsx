@@ -75,13 +75,15 @@ export function ReconstructPage() {
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-ink-faint">
-            <Link to={id ? `/drawings/${id}` : "/drawings"} className="hover:text-steel">
-              ← {id ? "圖紙資料" : "工廠圖紙"}
-            </Link>
-          </p>
-          <h1 className="text-2xl font-black sm:text-3xl">三視圖 → 3D 模型</h1>
-          <p className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
+          {id && (
+            <p className="text-xs text-ink-48">
+              <Link to={`/drawings/${id}`} className="hover:text-accent">
+                ← 圖紙資料
+              </Link>
+            </p>
+          )}
+          <h1 className="t-display mt-1">三視圖 → 3D 模型</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-80">
             {p ? (
               <>
                 {p.name_zh} · {p.part_no} · {p.drawing_no} rev.{p.revision}
@@ -95,7 +97,7 @@ export function ReconstructPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-line bg-card p-1">
+          <div className="flex rounded-full border border-hairline bg-card p-1">
             {MODELS.map((m) => (
               <button
                 key={m.value}
@@ -103,8 +105,8 @@ export function ReconstructPage() {
                 title={m.hint}
                 disabled={running}
                 onClick={() => run(m.value)}
-                className={`rounded-lg px-3 py-1 text-sm font-medium transition disabled:opacity-60 ${
-                  shownStrategy === m.value ? "bg-steel text-white" : "text-ink-soft hover:bg-paper-deep"
+                className={`rounded-full px-3 py-1 text-sm font-normal transition disabled:opacity-60 ${
+                  shownStrategy === m.value ? "bg-accent text-white" : "text-ink-80 hover:bg-parchment-deep"
                 }`}
               >
                 {m.label}
@@ -115,7 +117,7 @@ export function ReconstructPage() {
             type="button"
             disabled={running}
             onClick={() => run(shownStrategy as CadStrategy)}
-            className="rounded-xl border border-ink/15 bg-card px-3 py-1.5 text-sm font-bold transition hover:border-ink/40 disabled:opacity-50"
+            className="btn-pearl"
           >
             {running ? `產生中 ${(elapsed / 1000).toFixed(0)} 秒` : "重新產生"}
           </button>
@@ -123,7 +125,7 @@ export function ReconstructPage() {
       </header>
 
       {ortho && !ortho.available && shownStrategy === "ortho2cad" && (
-        <div className="rounded-xl border border-amber/30 bg-amber-soft/60 p-3 text-sm text-amber">
+        <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
           Ortho2CAD 推論伺服器未啟動（{ortho.detail}）。在終端機執行 <code className="font-mono">make ortho2cad</code>。
         </div>
       )}
@@ -144,15 +146,15 @@ export function ReconstructPage() {
           <Card title="輸入圖紙">
             {inputUrl ? (
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-                <img src={inputUrl} alt="輸入圖紙" className="w-full rounded-lg border border-line bg-white object-contain" />
+                <img src={inputUrl} alt="輸入圖紙" className="w-full rounded-lg border border-hairline bg-canvas object-contain" />
                 {meta && (
                   <figure className="w-[112px] text-center">
                     <img
                       src={assetUrl(meta.input_url)}
                       alt="模型看到的影像"
-                      className="pixelated w-[112px] rounded border border-line bg-white"
+                      className="pixelated w-[112px] rounded-lg border border-hairline bg-canvas"
                     />
-                    <figcaption className="mt-1 text-[11px] leading-tight text-ink-faint">
+                    <figcaption className="mt-1 text-[11px] leading-tight text-ink-48">
                       模型實際看到的
                       <br />
                       {meta.input_size[0]}×{meta.input_size[1]}
@@ -161,10 +163,10 @@ export function ReconstructPage() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-ink-faint">載入中…</p>
+              <p className="text-sm text-ink-48">載入中…</p>
             )}
             {meta && (
-              <ul className="mt-3 flex flex-col gap-1 text-xs text-ink-soft">
+              <ul className="mt-3 flex flex-col gap-1 text-xs text-ink-80">
                 <li>• {LAYOUT[meta.layout]}</li>
                 <li>
                   • 尺寸依據：
@@ -185,9 +187,9 @@ export function ReconstructPage() {
           <CodePanel code={code} status={state.status} model={meta?.model} files={result?.files} />
           {result && <ResultCard result={result} target={meta?.scale_to ?? null} gt={p?.geometry ?? null} />}
           {done && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-48">
               <EgressBadge egress={done.egress} />
-              <span className="font-medium text-ink-soft">
+              <span className="font-normal text-ink-80">
                 {done.strategy === "ortho2cad" ? "Ortho2CAD" : "Qwen3-VL 對照組"} · {done.model}
               </span>
               <span>首字 {seconds(done.latency_ms.first_token)}</span>
@@ -195,7 +197,7 @@ export function ReconstructPage() {
               <span>執行 {seconds(done.latency_ms.exec)}</span>
               <span>總計 {seconds(done.latency_ms.total)}</span>
               <span>{done.tokens.output} tokens</span>
-              {state.cached && <span className="rounded bg-paper-deep px-1.5">已完成的結果</span>}
+              {state.cached && <span className="rounded bg-parchment-deep px-1.5">已完成的結果</span>}
             </div>
           )}
         </div>
@@ -208,17 +210,17 @@ export function ReconstructPage() {
               <img
                 src={meta?.layout === "kb" && p ? assetUrl(p.drawing_url) : inputUrl}
                 alt="輸入圖紙"
-                className="aspect-square w-full rounded-lg border border-line bg-white object-cover object-top"
+                className="aspect-square w-full rounded-lg border border-hairline bg-canvas object-cover object-top"
               />
-              <figcaption className="mt-1 text-center text-xs text-ink-faint">輸入圖紙</figcaption>
+              <figcaption className="mt-1 text-center text-xs text-ink-48">輸入圖紙</figcaption>
             </figure>
             <figure>
               <img
                 src={assetUrl(result.files["reproj.png"])}
                 alt="重建模型的三視圖"
-                className="aspect-square w-full rounded-lg border border-line bg-white object-contain"
+                className="aspect-square w-full rounded-lg border border-hairline bg-canvas object-contain"
               />
-              <figcaption className="mt-1 text-center text-xs text-ink-faint">重建模型的三視圖（同一套產生器）</figcaption>
+              <figcaption className="mt-1 text-center text-xs text-ink-48">重建模型的三視圖（同一套產生器）</figcaption>
             </figure>
           </div>
         </Card>
@@ -229,9 +231,9 @@ export function ReconstructPage() {
 
 function Card({ title, children, right }: { title: string; children: ReactNode; right?: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-line bg-card p-4 shadow-sm">
+    <section className="card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="font-bold">{title}</h2>
+        <h2 className="font-semibold">{title}</h2>
         {right}
       </div>
       {children}
@@ -264,15 +266,15 @@ function Pipeline({
             key={label}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
               failed
-                ? "border-seal/40 bg-seal-soft text-seal-deep"
+                ? "border-danger/30 bg-danger-soft text-danger"
                 : finished
-                  ? "border-jade/30 bg-jade-soft/60 text-jade"
+                  ? "border-success/30 bg-success-soft/60 text-success"
                   : active
-                    ? "border-steel/40 bg-steel-soft text-steel-deep"
-                    : "border-line bg-card text-ink-faint"
+                    ? "border-accent/30 bg-accent-soft text-accent"
+                    : "border-hairline bg-card text-ink-48"
             }`}
           >
-            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/80 text-[11px] font-bold">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-canvas/80 text-[11px] font-semibold">
               {failed ? "✗" : finished ? "✓" : active ? <Spinner /> : i + 1}
             </span>
             <span className="leading-tight">{label}</span>
@@ -283,7 +285,7 @@ function Pipeline({
   );
 }
 
-const Spinner = () => <span className="h-3 w-3 animate-spin rounded-full border-2 border-steel/30 border-t-steel" />;
+const Spinner = () => <span className="h-3 w-3 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />;
 
 function CodePanel({
   code,
@@ -306,11 +308,11 @@ function CodePanel({
     <Card
       title="CadQuery 程式碼"
       right={
-        <span className="flex items-center gap-2 text-xs text-ink-faint">
+        <span className="flex items-center gap-2 text-xs text-ink-48">
           {model && <span className="font-mono">{model}</span>}
           {lines > 0 && <span>{lines} 行</span>}
           {files?.["code.py"] && (
-            <a href={assetUrl(files["code.py"])} className="text-steel underline">
+            <a href={assetUrl(files["code.py"])} className="link">
               下載 .py
             </a>
           )}
@@ -319,7 +321,7 @@ function CodePanel({
     >
       <pre
         ref={ref}
-        className={`max-h-[460px] min-h-[220px] overflow-auto rounded-xl bg-code p-3 font-mono text-[12px] leading-relaxed text-[#d7e3ee] ${
+        className={`max-h-[460px] min-h-[220px] overflow-auto rounded-xl bg-tile p-3 font-mono text-[12px] leading-relaxed text-[#e0e0e0] ${
           streaming ? "caret" : ""
         }`}
       >
@@ -331,7 +333,7 @@ function CodePanel({
               : "")}
       </pre>
       {status === "executing" && (
-        <p className="mt-2 flex items-center gap-2 text-sm text-steel-deep">
+        <p className="mt-2 flex items-center gap-2 text-sm text-accent">
           <Spinner /> 安全檢查通過，在沙箱中執行程式碼（禁止網路、只准寫入暫存目錄）…
         </p>
       )}
@@ -362,10 +364,10 @@ function ResultCard({
 }) {
   if (!result.ok)
     return (
-      <div className="rounded-2xl border border-seal/30 bg-seal-soft/50 p-4 text-sm">
-        <p className="font-bold text-seal-deep">程式碼無法產生實體</p>
-        <p className="mt-1 break-all font-mono text-xs text-ink-soft">{result.error}</p>
-        <p className="mt-2 text-xs text-ink-faint">模型輸出不保證可執行；論文中未微調模型的可執行率遠低於 Ortho2CAD。</p>
+      <div className="rounded-2xl border border-danger/30 bg-danger-soft p-5 text-sm">
+        <p className="font-semibold text-danger">程式碼無法產生實體</p>
+        <p className="mt-1 break-all font-mono text-xs text-ink-80">{result.error}</p>
+        <p className="mt-2 text-xs text-ink-48">模型輸出不保證可執行；論文中未微調模型的可執行率遠低於 Ortho2CAD。</p>
       </div>
     );
   const d = result.dims!;
@@ -379,10 +381,10 @@ function ResultCard({
       title="重建結果"
       right={
         <span className="flex gap-2 text-xs">
-          <a href={assetUrl(result.files["model.step"])} className="text-steel underline">
+          <a href={assetUrl(result.files["model.step"])} className="link">
             STEP
           </a>
-          <a href={assetUrl(result.files["model.stl"])} className="text-steel underline">
+          <a href={assetUrl(result.files["model.stl"])} className="link">
             STL
           </a>
         </span>
@@ -390,11 +392,11 @@ function ResultCard({
     >
       <div className="flex flex-col gap-3 text-sm">
         <p className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-jade-soft px-2 py-0.5 text-xs font-bold text-jade">✓ 程式碼可執行</span>
+          <span className="rounded-full bg-success-soft px-2 py-0.5 text-xs font-semibold text-success">✓ 程式碼可執行</span>
           <span
             title={result.repaired ? "模型產生的實體有面方向或縫隙等瑕疵，已用 OCC ShapeFix 自動修復" : ""}
-            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-              result.valid ? "bg-jade-soft text-jade" : "bg-amber-soft text-amber"
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              result.valid ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
             }`}
           >
             {result.valid ? "✓ 實體有效" : result.repaired ? "實體有瑕疵 → 已自動修復" : "實體有瑕疵"}
@@ -404,29 +406,29 @@ function ResultCard({
           <div className="flex flex-col gap-1.5">
             <ScoreMeter label="IoU" value={result.iou} />
             {result.iou_bbox != null && <ScoreMeter label="外框對齊" value={result.iou_bbox} />}
-            <p className="text-xs text-ink-faint">
+            <p className="text-xs text-ink-48">
               與知識庫標準模型的體積交聯比。IoU：對齊質心與慣性主軸、正規化尺度（Ortho2CAD 論文的評估法，論文在
               DeepCAD 測試集平均 0.79；對薄壁件很嚴格）。外框對齊：把重建結果的外框對齊到圖紙標註的外形尺寸，只看形狀像不像。
             </p>
           </div>
         )}
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-ink-faint">
+          <thead className="text-left text-xs text-ink-48">
             <tr>
-              <th className="py-1 font-medium" />
-              {target && <th className="font-medium">圖紙標註</th>}
-              <th className="font-medium">重建結果</th>
-              {target && <th className="font-medium">誤差</th>}
+              <th className="py-1 font-normal" />
+              {target && <th className="font-normal">圖紙標註</th>}
+              <th className="font-normal">重建結果</th>
+              {target && <th className="font-normal">誤差</th>}
             </tr>
           </thead>
           <tbody className="font-mono tabular-nums">
             {axes.map(([k, label]) => (
-              <tr key={k} className="border-t border-line">
-                <td className="py-1 font-sans text-ink-faint">{label}</td>
+              <tr key={k} className="border-t border-hairline">
+                <td className="py-1 font-sans text-ink-48">{label}</td>
                 {target && <td>{target[k].toFixed(1)}</td>}
                 <td>{d[k].toFixed(1)}</td>
                 {target && (
-                  <td className={Math.abs(d[k] - target[k]) / target[k] > 0.1 ? "text-amber" : "text-jade"}>
+                  <td className={Math.abs(d[k] - target[k]) / target[k] > 0.1 ? "text-warning" : "text-success"}>
                     {(((d[k] - target[k]) / target[k]) * 100).toFixed(1)}%
                   </td>
                 )}
@@ -434,7 +436,7 @@ function ResultCard({
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-ink-faint">
+        <p className="text-xs text-ink-48">
           模型輸出為 DeepCAD 正規化尺度（原始外形 {result.raw_dims!.width.toFixed(3)} × {result.raw_dims!.depth.toFixed(3)} ×{" "}
           {result.raw_dims!.height.toFixed(3)}），依圖紙標註等比縮放 ×{result.scale!.toFixed(2)}，單位 mm。
           {gt?.volume_mm3 != null && result.volume != null && (
@@ -458,14 +460,14 @@ function ModelCard({ stl, gt }: { stl: string; gt: string | null }) {
         ? [{ url: gt, color: "#c9b79c" }]
         : [
             { url: stl, color: "#8fb3d6" },
-            { url: gt, color: "#b3261e", ghost: true },
+            { url: gt, color: "#d70015", ghost: true },
           ];
   return (
     <Card
       title="3D 模型"
       right={
         gt && (
-          <div className="flex rounded-lg border border-line p-0.5 text-xs">
+          <div className="flex rounded-full border border-hairline p-0.5 text-xs">
             {(
               [
                 ["gen", "重建結果"],
@@ -477,7 +479,7 @@ function ModelCard({ stl, gt }: { stl: string; gt: string | null }) {
                 key={k}
                 type="button"
                 onClick={() => setMode(k)}
-                className={`rounded-md px-2 py-0.5 ${mode === k ? "bg-steel text-white" : "text-ink-soft"}`}
+                className={`rounded-full px-2.5 py-0.5 transition ${mode === k ? "bg-accent text-white" : "text-ink-80 hover:bg-parchment-deep"}`}
               >
                 {label}
               </button>
@@ -488,7 +490,7 @@ function ModelCard({ stl, gt }: { stl: string; gt: string | null }) {
     >
       <ModelViewer layers={layers} height={340} />
       {mode === "overlay" && (
-        <p className="mt-2 text-xs text-ink-faint">藍色實體＝Ortho2CAD 重建結果；紅色半透明＝知識庫標準模型（以外框中心對齊）</p>
+        <p className="mt-2 text-xs text-ink-48">藍色實體＝Ortho2CAD 重建結果；紅色半透明＝知識庫標準模型（以外框中心對齊）</p>
       )}
     </Card>
   );
@@ -497,9 +499,9 @@ function ModelCard({ stl, gt }: { stl: string; gt: string | null }) {
 function UploadPrompt() {
   const navigate = useNavigate();
   return (
-    <div className="blueprint mx-auto flex max-w-xl flex-col gap-4 rounded-2xl border border-steel/20 p-6">
-      <h1 className="text-2xl font-black">三視圖 → 3D 模型</h1>
-      <p className="text-ink-soft">
+    <div className="card mx-auto flex max-w-xl flex-col gap-4 p-6 sm:p-10">
+      <h1 className="t-display">三視圖 → 3D 模型</h1>
+      <p className="t-body text-ink-80">
         上傳第一角法三視圖（前視、俯視、右視，隱藏線以虛線表示）。已收錄的圖紙會先辨識並拉正；
         未收錄的圖紙由本地 Qwen3-VL 讀取尺寸標註，Ortho2CAD 建模。
       </p>

@@ -1,120 +1,93 @@
 """TypeSafe Jev（System One 決策模型）：只做分類判斷、不生成文字。
 
-POST {JEV_BASE_URL}/systemone，Authorization: Bearer <JEV_API_KEY>；一次請求問完所有題目：
-- intent（choice）：使用者想做哪件事
-- modify_op（choice）：如果要修改資料，是哪一種操作
-- wants_numbers／refers_to_current／overrides_rules（noul，是非題）
+2026-10-03 起用在七段權限控管的四個地方（docs/adr/015）：
+- 第 2 段 Jev Choice：使用者這句話是正常查詢、Prompt 注入還是無關閒聊
+- 第 4 段 Jev Noul：每個公開段落 ① is_relevant ② security_leak_check
+- 第 5 段 Jev Score：通過的段落依幫助程度評分（0～3），取代傳統的 Reranker
+- 第 6 段 Jev Noul（生成閘門）：權限內的資料能不能回答、回答是否合規
 
-送出去的只有本機代號化後的文字（[圖紙A]、[客戶1]）與題目說明；圖片、原始名稱、資料庫內容都不送。
-回應：answers.<題目>.choice／probabilities／noul／confidence。金鑰沒填或呼叫失敗時由呼叫端改走本地路由。
+POST {JEV_BASE_URL}/systemone，Authorization: Bearer <JEV_API_KEY>；一次請求問完所有題目：
+choice（選擇題，回 probabilities／choice）、noul（是非題，回 noul＝「是」的機率）、
+score（評分題，回 score＝各等級機率加權後的分數）。
+
+送出去的只有遮蔽個資、代號化後的文字（[圖紙A]、[客戶1]、[電話1]）與題目說明；
+圖片、原始名稱、內部與機密段落、資料庫內容都不送。金鑰沒填或呼叫失敗時由呼叫端改用地端規則。
 """
 
 import json
 import time
+from dataclasses import dataclass, field
 
 import httpx
 
-from app.agent.types import System1Result, normalize
-from app.core.config import get_agent_config, get_settings
+from app.core.config import get_settings
 
 # 測試用：注入 httpx.MockTransport，不連真的 API
 TRANSPORT: httpx.AsyncBaseTransport | None = None
 
-STATE_CONTEXT = (
-    "這是一套地端的畫作導覽＋工廠機械加工圖助理：可以用文字找畫、問畫作，查工廠圖紙與製程文件，"
-    "查庫存／訂單／工單數字，把圖紙轉成 3D，執行生產排程，或修改庫存、訂單、工單。"
-    "使用者訊息裡的 [圖紙A]、[客戶1]、[倉庫1] 等是代號，代表真實名稱。"
-)
-
 
 class JevUnavailable(Exception):
-    """沒金鑰、停用、逾時或 API 錯誤：改走本地路由，message 會顯示在路由卡上。"""
+    """沒金鑰、停用、逾時或 API 錯誤：改用地端規則，message 會顯示在處理過程上。"""
+
+
+@dataclass
+class JevReply:
+    model: str
+    latency_ms: int
+    # 送出本機的位元組數（請求本文）
+    bytes: int
+    request: dict
+    answers: dict = field(default_factory=dict)
+
+    def noul(self, name: str) -> float:
+        """是非題：回答「是」的機率。"""
+        return float((self.answers.get(name) or {}).get("noul") or 0.0)
+
+    def score(self, name: str) -> float:
+        """評分題：各等級機率加權後的分數（0＝最低一級）。"""
+        a = self.answers.get(name) or {}
+        if a.get("score") is None:
+            raise JevUnavailable(f"Jev 回應缺少 {name}")
+        return float(a["score"])
+
+    def choice(self, name: str, keys: list[str]) -> tuple[str, float, dict[str, float]]:
+        """選擇題：(機率最高的選項, 它的機率, 各選項機率)。"""
+        a = self.answers.get(name) or {}
+        probs = a.get("probabilities") or ({a["choice"]: 1.0} if a.get("choice") else {})
+        probs = {k: float(probs.get(k, 0.0)) for k in keys}
+        if not any(probs.values()):
+            raise JevUnavailable(f"Jev 回應缺少 {name}")
+        best = max(probs.items(), key=lambda kv: kv[1])
+        return best[0], best[1], probs
 
 
 def status() -> tuple[bool, str]:
     s = get_settings()
     if not s.jev_enabled:
-        return False, "已停用（JEV_ENABLED=false），一律走本地路由"
+        return False, "已停用（JEV_ENABLED=false），第 2、4～6 段改用地端規則"
     if not s.jev_api_key:
-        return False, "未設定金鑰（.env 的 JEV_API_KEY 留空），一律走本地路由"
+        return False, "未設定金鑰（.env 的 JEV_API_KEY 留空），第 2、4～6 段改用地端規則"
     return True, f"{s.jev_model}（{s.jev_base_url}）"
 
 
-def build_request(masked_text: str, photo_kind: str | None) -> dict:
-    cfg = get_agent_config()
-    s = get_settings()
-    state: dict = {"context": STATE_CONTEXT, "user_message": masked_text}
-    if photo_kind:
-        # 照片本身不送：只告訴 Jev 本機辨識出照片是畫作還是圖紙
-        state["attached_photo"] = {"art": "畫作照片", "drawing": "工廠圖紙照片"}.get(
-            photo_kind, "無法辨識的照片"
-        )
-    return {
-        "model": s.jev_model,
-        "state": state,
-        "questions": {
-            "intent": {
-                "type": "choice",
-                "instructions": "使用者這句話想要系統做哪一件事？選最符合的一項。",
-                "criteria": {k: v["jev"] for k, v in cfg["intents"].items()},
-            },
-            "modify_op": {
-                "type": "choice",
-                "instructions": "如果使用者要修改資料，是哪一種操作？不是修改資料就選 none。",
-                "criteria": {
-                    "none": "不是修改資料（只是查詢或其他）",
-                    **{k: v["jev"] for k, v in cfg["modify_ops"].items()},
-                },
-            },
-            **{
-                name: {"type": "noul", "instructions": f["jev"]} for name, f in cfg["flags"].items()
-            },
-        },
-    }
-
-
-def parse_response(data: dict) -> System1Result:
-    cfg = get_agent_config()
-    answers = data.get("answers") or {}
-    intent = answers.get("intent") or {}
-    if not intent.get("probabilities") and not intent.get("choice"):
-        raise JevUnavailable("Jev 回應缺少 intent")
-    keys = list(cfg["intents"])
-    raw = intent.get("probabilities") or {intent["choice"]: 1.0}
-    op = answers.get("modify_op") or {}
-    op_keys = ["none", *cfg["modify_ops"]]
-    op_raw = op.get("probabilities") or ({op["choice"]: 1.0} if op.get("choice") else {})
-    op_raw = {k: v for k, v in op_raw.items() if k in op_keys}
-    flag_probs = {
-        name: float((answers.get(name) or {}).get("noul") or 0.0) for name in cfg["flags"]
-    }
-    return System1Result(
-        engine="jev",
-        intent_probs=normalize(raw, keys),
-        op_probs=normalize(op_raw, op_keys) if op_raw else {},
-        flags={k: v >= 0.5 for k, v in flag_probs.items()},
-        flag_probs=flag_probs,
-        model=data.get("model") or get_settings().jev_model,
-        jev_confidence=intent.get("confidence"),
-        detail={"usage": data.get("usage") or {}},
-    )
-
-
-async def classify(masked_text: str, photo_kind: str | None = None) -> System1Result:
+async def ask(state: dict, questions: dict, timeout_s: float | None = None) -> JevReply:
+    """一次請求問完 questions；state 是給 Jev 看的情境（只能放代號化文字）。
+    timeout_s 留空＝.env 的 JEV_TIMEOUT_S（第 4 段一次問多段，呼叫端會給長一點）。"""
     ok, detail = status()
     if not ok:
         raise JevUnavailable(detail)
     s = get_settings()
-    body = build_request(masked_text, photo_kind)
+    body = {"model": s.jev_model, "state": state, "questions": questions}
     payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
     url = s.jev_base_url.rstrip("/") + "/systemone"
     headers = {"Authorization": f"Bearer {s.jev_api_key}", "Content-Type": "application/json"}
+    timeout = timeout_s or s.jev_timeout_s
     t0 = time.perf_counter()
     try:
-        async with httpx.AsyncClient(timeout=s.jev_timeout_s, transport=TRANSPORT) as client:
+        async with httpx.AsyncClient(timeout=timeout, transport=TRANSPORT) as client:
             r = await client.post(url, content=payload, headers=headers)
     except httpx.TimeoutException as e:
-        raise JevUnavailable(f"Jev 逾時（>{s.jev_timeout_s:g} 秒）") from e
+        raise JevUnavailable(f"Jev 逾時（>{timeout:g} 秒）") from e
     except httpx.HTTPError as e:
         raise JevUnavailable(f"連不上 Jev：{type(e).__name__}") from e
     if r.status_code != 200:
@@ -126,10 +99,16 @@ async def classify(masked_text: str, photo_kind: str | None = None) -> System1Re
         }
         raise JevUnavailable(f"Jev 回應錯誤：{reason.get(r.status_code, f'HTTP {r.status_code}')}")
     try:
-        result = parse_response(r.json())
+        data = r.json()
+        answers = data.get("answers")
+        if not isinstance(answers, dict) or not answers:
+            raise ValueError("缺少 answers")
     except (ValueError, KeyError, TypeError) as e:
         raise JevUnavailable(f"Jev 回應無法解析：{e}") from e
-    result.latency_ms = round((time.perf_counter() - t0) * 1000)
-    result.egress_bytes = len(payload)
-    result.detail["request"] = body
-    return result
+    return JevReply(
+        model=data.get("model") or s.jev_model,
+        latency_ms=round((time.perf_counter() - t0) * 1000),
+        bytes=len(payload),
+        request=body,
+        answers=answers,
+    )

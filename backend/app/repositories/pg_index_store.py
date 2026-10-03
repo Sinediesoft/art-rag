@@ -162,7 +162,12 @@ class PgCollection(Collection):
         return [Hit(self.by_id[i], float(s)) for i, s in rows if i in self.by_id]
 
     def search_chunks(
-        self, query: np.ndarray, k: int, owner_id: str | None = None, exclude: set | None = None
+        self,
+        query: np.ndarray,
+        k: int,
+        owner_id: str | None = None,
+        exclude: set | None = None,
+        owners: set | None = None,
     ) -> list[Hit]:
         if not self.chunks:
             return []
@@ -170,9 +175,16 @@ class PgCollection(Collection):
             rows = conn.execute(
                 f"SELECT chunk_id, 1 - (text_vec <=> %(q)s) FROM {self.chunks_table}"
                 f" WHERE (%(owner)s::text IS NULL OR {self.owner_key} = %(owner)s)"
+                f" AND (%(owners)s::text[] IS NULL OR {self.owner_key} = ANY (%(owners)s))"
                 " AND chunk_id <> ALL (%(exclude)s::text[])"
                 " ORDER BY text_vec <=> %(q)s LIMIT %(k)s",
-                {"q": query, "k": k, "owner": owner_id or None, "exclude": list(exclude or ())},
+                {
+                    "q": query,
+                    "k": k,
+                    "owner": owner_id or None,
+                    "owners": sorted(owners) if owners is not None else None,
+                    "exclude": list(exclude or ()),
+                },
             ).fetchall()
         return [Hit(self._chunk_by_id[c], float(s)) for c, s in rows if c in self._chunk_by_id]
 
