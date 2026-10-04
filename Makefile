@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-versions eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -31,6 +31,7 @@ help:
 	@echo "make eval-style  畫作卡推測評估（不用開後端、不用索引）：風格大類、細分流派、題材、媒材的正確率，「像畫作」把關擋下圖紙照片"
 	@echo "make eval-style-met 畫作卡推測＋大都會評估集（555 件，第一次會從 Met 開放 API 抓圖到 data/met_eval/，約 56 MB）：畫作 340 幅、雕塑陶瓷器物與老照片 215 件，門檻掃描"
 	@echo "make style-head  重訓畫作卡的媒材分類頭（大都會館藏 2,010 幅，第一次會抓圖約 215 MB）：輸出 shared/style_head_v1.npz 與和零樣本的比較；換 Chinese-CLIP 後要重跑"
+	@echo "make eval-versions 以圖搜圖「同系列、不同版本」評估（不用開後端、不用索引；第一次會從 Wikimedia Commons 抓 46 張圖到 data/version_eval/，連模擬照約 50 MB）：畫家的別版、習作、同系列有沒有被認成知識庫的畫，同一幅畫的實拍照認不認得出來"
 	@echo "make eval-align 影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、畫作找不同、圖紙找不同、兩張照片互比的偵出率與假差異"
 	@echo "make demo-add    展示用：加入第 4、5 筆畫作（早春圖、睡蓮）與第 7 張圖紙（治具定位板，含庫存與途程）並重建索引"
 	@echo "make demo-reset  展示用：移除上述展示資料、清掉開立的工單、排程結果、智慧助理的異動與核准單，並重建索引"
@@ -179,6 +180,11 @@ eval-style-met:
 # → shared/style_head_v1.npz＋eval/runs/*-style-head.json（和零樣本的比較）；缺的圖從 Met 補抓。換 Chinese-CLIP 要重跑
 style-head:
 	$(PY) pipelines/train_style_head.py
+
+# 以圖搜圖「同系列、不同版本」（docs/adr/002，Q-2026-10-04-05 第 2 項）：清單與正解在 eval/version_set.json，
+# 缺的圖從 Wikimedia Commons 補抓到 data/version_eval/（不 commit）。改 image_threshold、verify_min_inliers 時要跑
+eval-versions:
+	$(PY) eval/run_version_eval.py
 
 # 影像對位與比對（docs/adr/012）：在程序內執行，不用開後端；照片由 eval/make_align_photos.py 產生（已附在 repo）
 eval-align:

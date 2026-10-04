@@ -26,9 +26,11 @@ chunking:                     # 改了就要重建索引
 retrieval:
   # 以圖搜圖兩階段：Chinese-CLIP 粗篩 → ORB 幾何驗證（見 docs/adr/002）
   # 兩個條件都要過才算「辨識成功」，否則一律回覆「知識庫中沒有這幅畫」；數值由 eval 校正
+  # 同一位畫家的別版、習作、同系列（make eval-versions，2026-10-04）：CLIP 全部過門檻（最高 0.968），
+  # 靠幾何驗證擋下（inlier ≤ 10）；所以要防認錯別版只能調 verify_min_inliers，調 image_threshold 沒用
   image_threshold: 0.70       # 第一階段 CLIP 相似度下限
   verify_top_n: 3             # 對 CLIP 前 N 名做幾何驗證
-  verify_min_inliers: 20      # RANSAC inlier 數下限（同一幅畫實測 ≥ 57，不同畫作 ≤ 7）
+  verify_min_inliers: 20      # RANSAC inlier 數下限（同一幅畫實測 ≥ 57，不同畫作 ≤ 7，別版 ≤ 10）
   top_k_search: 5
   # 問答檢索段落規則：相似度門檻＋最多 top_k_chunks 段，不硬湊滿
   # 保留條件：score ≥ min_chunk_score 且 score ≥ 第一名 × relative_chunk_ratio；

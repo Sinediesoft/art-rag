@@ -323,6 +323,18 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 2026-10-01 起 `eval/qa.jsonl` 多了 3 題顏色題（已收錄的 3 幅畫從 16 題變成 19 題），所以上表（16 題）和之後
 `make eval` 的數字不能直接比較。
 
+### 以圖搜圖：同系列、不同版本（`make eval-versions`）
+
+不用開後端、不用索引。同一位畫家畫好幾版的作品，觀眾拍到別館的那一版時，系統不能回答「這是知識庫裡的那幅」。
+清單與正解在 `eval/version_set.json`（Wikimedia Commons 46 張：梵谷〈麥田〉的倫敦版與小版、秀拉〈大碗島〉的習作、
+莫內同系列的〈睡蓮〉，以及這三幅原作本身的展場實拍），第一次跑會抓圖到 `data/version_eval/`（連模擬照約 50 MB）。
+2026-10-04 在我的筆電上的結果（run_id `20261004T125357-dc7a`，細節見 ADR 002 文末）：
+
+| | 張數（含模擬照） | 結果 |
+|---|---|---|
+| 畫家的別版、習作、同系列 | 143 | 0 張被認成知識庫的畫（CLIP 全部過門檻，inlier 最多 10） |
+| 同一幅畫的其他照片 | 43 | 41 張認得出來（inlier 最少 158）；局部近拍、前面擠滿觀眾的各 1 張回「知識庫中沒有這幅畫」 |
+
 ### 色彩分析（`make eval-color`）
 
 不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
@@ -579,7 +591,7 @@ art-rag/
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py、train_style_head.py（make style-head）
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_version_eval.py（＋version_set.json 同系列不同版本）、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md、style_head_v1.npz（畫作卡媒材的線性分類頭）
