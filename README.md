@@ -353,6 +353,38 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 
 細分流派分不清印象派／新印象派／後印象派，畫面以大類為主；正解只有 10 幅畫，數字只能說明方向。
 
+`make eval-style-met` 另跑大都會評估集：從 Met 開放 API（CC0）抽的 340 幅畫、215 件雕塑、陶瓷、器物與老照片。
+清單與正解在 `eval/met_set.json`，第一次跑會抓圖到 `data/met_eval/`（約 56 MB）。
+題材、媒材依館方的畫面標籤與媒材欄；歐洲繪畫沒有流派標籤，只評大類和年代對不對得上。
+2026-10-04 依這份資料替把關補了「雕塑、陶瓷器物、古代器物、老照片」4 句提示，媒材「濕壁畫」拿掉別名「壁畫」
+（run_id `20261004T073634-f8f5`，改之前的數字與細節見 ADR 018）：
+
+| 指標 | 結果 |
+|---|---|
+| 畫作通過把關 | 312/340（擋下的多是象牙、羊皮紙上的肖像微型畫） |
+| 雕塑、陶瓷、器物被擋下 | 184/190（改之前 148；歐洲雕塑 4/30 → 28/30） |
+| 老照片被擋下 | 22/25（改之前 14） |
+| 風格大類（中國畫＋浮世繪） | 115/119 |
+| 大類和年代對得上（歐洲繪畫） | 143/192 |
+| 題材第一名 | 150/192 |
+| 媒材第一名 | 222/298（改之前 213/304，最大的錯是老油畫被判成濕壁畫） |
+| 領域路由 | 555 件全部分到畫作 |
+
+**媒材改用線性分類頭**（`make style-head`）：
+- 訓練資料：大都會館藏 2,010 幅（`eval/met_train.json`，和評估集不重疊；第一次跑會抓圖約 215 MB）。
+- 方法：用 Chinese-CLIP 照片向量，每種媒材一個 logistic regression，門檻依 F0.5 調，可以同時列出兩種。
+- 權重檔：`shared/style_head_v1.npz`（42 KB），換 Chinese-CLIP 要重跑。
+- 題材也試過，但館方沒有「風俗畫」「城市街景」標籤，自己的 35 張從 35 掉到 18，所以題材維持零樣本。
+
+和零樣本的比較見 run `20261004T085950-8644`，上線後的結果是 run `20261004T092015-481a`（細節見 ADR 018）：
+
+| 媒材第一名（錯了卻沒標「看不太出來」） | 零樣本 | 分類頭 |
+|---|---|---|
+| 大都會評估集（過了把關的） | 222/298（67） | 291/298（5） |
+| 大都會評估集做成的模擬照（不經過把關） | 240/305（51） | 290/305（9） |
+| 自己的原圖 10 幅 | 9/10（0） | 9/10（0） |
+| 自己的模擬照 25 張 | 22/25（2） | 25/25（0） |
+
 ### 影像對位與比對（`make eval-align`）
 
 不用開後端、不用索引；約 1 分鐘。照片由 `eval/make_align_photos.py` 產生（78 張單張照片＋35 組成對照片＋60 張動過手腳的畫作照片，每張附正確答案，在 `eval/align_photos/`）。
@@ -545,12 +577,12 @@ art-rag/
 │   ├── services/batch_service   批次辨識：逐張擋模糊、領域路由＋辨識、依資料範圍標「看不到」（SSE）
 │   └── services/item_compare_service  兩件並排比較：逐欄並排與出處、本地模型的差異摘要（SSE）
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
-├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
+├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py、train_style_head.py（make style-head）
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
-├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md
+├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md、style_head_v1.npz（畫作卡媒材的線性分類頭）
 ├── docs/adr/          技術決策紀錄
 └── .github/workflows/ CI：知識庫、lint、型別、單元測試、openapi 同步、前端建置
 ```

@@ -1,0 +1,457 @@
+{
+  "run_id": "20261004T085950-8644",
+  "created_at": "2026-10-04T08:59:50.125711+00:00",
+  "fields": {
+    "genre": {
+      "train_n": 1222,
+      "lambda": 0.01,
+      "logloss": {
+        "0.001": 0.07402571023908372,
+        "0.01": 0.05712812636677457,
+        "0.1": 0.060300590830173875,
+        "1.0": 0.10358336247674273
+      },
+      "cv": {
+        "n": 1222,
+        "top1": "1149/1222",
+        "top1_rate": 0.94,
+        "kept": 1133,
+        "kept_ok": 1097,
+        "wrong_not_flagged": 36,
+        "multi_shown": 1234,
+        "multi_precision": 0.965,
+        "multi_recall": 0.876,
+        "multi_f05": 0.946,
+        "multi_label_items": 101
+      },
+      "per_label": {
+        "肖像畫": {
+          "train_pos": 493,
+          "threshold": 0.52,
+          "cv": {
+            "precision": 0.978,
+            "recall": 0.978,
+            "f05": 0.978
+          }
+        },
+        "風俗畫": {
+          "train_pos": 0,
+          "skipped": "正例少於 15"
+        },
+        "風景畫": {
+          "train_pos": 310,
+          "threshold": 0.58,
+          "cv": {
+            "precision": 0.937,
+            "recall": 0.906,
+            "f05": 0.93
+          }
+        },
+        "山水畫": {
+          "train_pos": 100,
+          "threshold": 0.83,
+          "cv": {
+            "precision": 0.977,
+            "recall": 0.86,
+            "f05": 0.951
+          }
+        },
+        "海景畫": {
+          "train_pos": 41,
+          "threshold": 0.82,
+          "cv": {
+            "precision": 0.963,
+            "recall": 0.634,
+            "f05": 0.872
+          }
+        },
+        "城市街景": {
+          "train_pos": 13,
+          "skipped": "正例少於 15"
+        },
+        "室內畫": {
+          "train_pos": 58,
+          "threshold": 0.65,
+          "cv": {
+            "precision": 0.95,
+            "recall": 0.655,
+            "f05": 0.872
+          }
+        },
+        "靜物畫": {
+          "train_pos": 33,
+          "threshold": 0.17,
+          "cv": {
+            "precision": 1.0,
+            "recall": 0.879,
+            "f05": 0.973
+          }
+        },
+        "宗教畫": {
+          "train_pos": 225,
+          "threshold": 0.85,
+          "cv": {
+            "precision": 0.974,
+            "recall": 0.818,
+            "f05": 0.938
+          }
+        },
+        "歷史神話畫": {
+          "train_pos": 40,
+          "threshold": 0.51,
+          "cv": {
+            "precision": 0.917,
+            "recall": 0.55,
+            "f05": 0.809
+          }
+        },
+        "花鳥畫": {
+          "train_pos": 47,
+          "threshold": 0.35,
+          "cv": {
+            "precision": 0.977,
+            "recall": 0.915,
+            "f05": 0.964
+          }
+        },
+        "抽象畫": {
+          "train_pos": 0,
+          "skipped": "正例少於 15"
+        }
+      },
+      "compare": {
+        "met_eval": {
+          "zero_shot": {
+            "n": 217,
+            "top1": "173/217",
+            "top1_rate": 0.797,
+            "kept": 202,
+            "kept_ok": 164,
+            "wrong_not_flagged": 38,
+            "multi_shown": 202,
+            "multi_precision": 0.812,
+            "multi_recall": 0.653,
+            "multi_f05": 0.774,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 217,
+            "top1": "202/217",
+            "top1_rate": 0.931,
+            "kept": 191,
+            "kept_ok": 186,
+            "wrong_not_flagged": 5,
+            "multi_shown": 214,
+            "multi_precision": 0.967,
+            "multi_recall": 0.825,
+            "multi_f05": 0.935,
+            "multi_label_items": 23
+          }
+        },
+        "met_synth": {
+          "zero_shot": {
+            "n": 217,
+            "top1": "165/217",
+            "top1_rate": 0.76,
+            "kept": 209,
+            "kept_ok": 164,
+            "wrong_not_flagged": 45,
+            "multi_shown": 209,
+            "multi_precision": 0.785,
+            "multi_recall": 0.653,
+            "multi_f05": 0.754,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 217,
+            "top1": "196/217",
+            "top1_rate": 0.903,
+            "kept": 182,
+            "kept_ok": 177,
+            "wrong_not_flagged": 5,
+            "multi_shown": 201,
+            "multi_precision": 0.97,
+            "multi_recall": 0.777,
+            "multi_f05": 0.924,
+            "multi_label_items": 19
+          }
+        },
+        "own_orig": {
+          "zero_shot": {
+            "n": 10,
+            "top1": "10/10",
+            "top1_rate": 1.0,
+            "kept": 10,
+            "kept_ok": 10,
+            "wrong_not_flagged": 0,
+            "multi_shown": 10,
+            "multi_precision": 1.0,
+            "multi_recall": 0.769,
+            "multi_f05": 0.943,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 10,
+            "top1": "5/10",
+            "top1_rate": 0.5,
+            "kept": 8,
+            "kept_ok": 4,
+            "wrong_not_flagged": 4,
+            "multi_shown": 11,
+            "multi_precision": 0.636,
+            "multi_recall": 0.538,
+            "multi_f05": 0.614,
+            "multi_label_items": 3
+          }
+        },
+        "own_photo": {
+          "zero_shot": {
+            "n": 25,
+            "top1": "25/25",
+            "top1_rate": 1.0,
+            "kept": 25,
+            "kept_ok": 25,
+            "wrong_not_flagged": 0,
+            "multi_shown": 25,
+            "multi_precision": 1.0,
+            "multi_recall": 1.0,
+            "multi_f05": 1.0,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 25,
+            "top1": "13/25",
+            "top1_rate": 0.52,
+            "kept": 20,
+            "kept_ok": 9,
+            "wrong_not_flagged": 11,
+            "multi_shown": 28,
+            "multi_precision": 0.5,
+            "multi_recall": 0.56,
+            "multi_f05": 0.511,
+            "multi_label_items": 8
+          }
+        }
+      }
+    },
+    "media": {
+      "train_n": 1901,
+      "lambda": 0.01,
+      "logloss": {
+        "0.001": 0.11796203694162871,
+        "0.01": 0.08414010672528156,
+        "0.1": 0.08768458345879482,
+        "1.0": 0.13661937203503027
+      },
+      "cv": {
+        "n": 1901,
+        "top1": "1746/1901",
+        "top1_rate": 0.918,
+        "kept": 1687,
+        "kept_ok": 1620,
+        "wrong_not_flagged": 67,
+        "multi_shown": 1737,
+        "multi_precision": 0.95,
+        "multi_recall": 0.813,
+        "multi_f05": 0.919,
+        "multi_label_items": 48
+      },
+      "per_label": {
+        "油畫": {
+          "train_pos": 895,
+          "threshold": 0.7,
+          "cv": {
+            "precision": 0.95,
+            "recall": 0.918,
+            "f05": 0.944
+          }
+        },
+        "水彩畫": {
+          "train_pos": 160,
+          "threshold": 0.71,
+          "cv": {
+            "precision": 0.943,
+            "recall": 0.619,
+            "f05": 0.853
+          }
+        },
+        "水墨畫": {
+          "train_pos": 239,
+          "threshold": 0.71,
+          "cv": {
+            "precision": 0.996,
+            "recall": 0.967,
+            "f05": 0.99
+          }
+        },
+        "木刻版畫": {
+          "train_pos": 200,
+          "threshold": 0.7,
+          "cv": {
+            "precision": 1.0,
+            "recall": 0.97,
+            "f05": 0.994
+          }
+        },
+        "濕壁畫": {
+          "train_pos": 70,
+          "threshold": 0.58,
+          "cv": {
+            "precision": 0.963,
+            "recall": 0.743,
+            "f05": 0.909
+          }
+        },
+        "蛋彩畫": {
+          "train_pos": 96,
+          "threshold": 0.82,
+          "cv": {
+            "precision": 0.95,
+            "recall": 0.396,
+            "f05": 0.742
+          }
+        },
+        "素描": {
+          "train_pos": 264,
+          "threshold": 0.74,
+          "cv": {
+            "precision": 0.921,
+            "recall": 0.663,
+            "f05": 0.854
+          }
+        },
+        "粉彩畫": {
+          "train_pos": 106,
+          "threshold": 0.53,
+          "cv": {
+            "precision": 0.702,
+            "recall": 0.377,
+            "f05": 0.599
+          }
+        }
+      },
+      "compare": {
+        "met_eval": {
+          "zero_shot": {
+            "n": 305,
+            "top1": "225/305",
+            "top1_rate": 0.738,
+            "kept": 289,
+            "kept_ok": 218,
+            "wrong_not_flagged": 71,
+            "multi_shown": 289,
+            "multi_precision": 0.754,
+            "multi_recall": 0.712,
+            "multi_f05": 0.746,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 305,
+            "top1": "296/305",
+            "top1_rate": 0.97,
+            "kept": 287,
+            "kept_ok": 282,
+            "wrong_not_flagged": 5,
+            "multi_shown": 288,
+            "multi_precision": 0.979,
+            "multi_recall": 0.922,
+            "multi_f05": 0.967,
+            "multi_label_items": 1
+          }
+        },
+        "met_synth": {
+          "zero_shot": {
+            "n": 305,
+            "top1": "240/305",
+            "top1_rate": 0.787,
+            "kept": 280,
+            "kept_ok": 229,
+            "wrong_not_flagged": 51,
+            "multi_shown": 280,
+            "multi_precision": 0.818,
+            "multi_recall": 0.748,
+            "multi_f05": 0.803,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 305,
+            "top1": "290/305",
+            "top1_rate": 0.951,
+            "kept": 270,
+            "kept_ok": 261,
+            "wrong_not_flagged": 9,
+            "multi_shown": 272,
+            "multi_precision": 0.96,
+            "multi_recall": 0.853,
+            "multi_f05": 0.936,
+            "multi_label_items": 2
+          }
+        },
+        "own_orig": {
+          "zero_shot": {
+            "n": 10,
+            "top1": "9/10",
+            "top1_rate": 0.9,
+            "kept": 9,
+            "kept_ok": 9,
+            "wrong_not_flagged": 0,
+            "multi_shown": 9,
+            "multi_precision": 1.0,
+            "multi_recall": 0.9,
+            "multi_f05": 0.978,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 10,
+            "top1": "9/10",
+            "top1_rate": 0.9,
+            "kept": 8,
+            "kept_ok": 8,
+            "wrong_not_flagged": 0,
+            "multi_shown": 8,
+            "multi_precision": 1.0,
+            "multi_recall": 0.8,
+            "multi_f05": 0.952,
+            "multi_label_items": 0
+          }
+        },
+        "own_photo": {
+          "zero_shot": {
+            "n": 25,
+            "top1": "22/25",
+            "top1_rate": 0.88,
+            "kept": 24,
+            "kept_ok": 22,
+            "wrong_not_flagged": 2,
+            "multi_shown": 24,
+            "multi_precision": 0.917,
+            "multi_recall": 0.88,
+            "multi_f05": 0.909,
+            "multi_label_items": 0
+          },
+          "head": {
+            "n": 25,
+            "top1": "25/25",
+            "top1_rate": 1.0,
+            "kept": 21,
+            "kept_ok": 21,
+            "wrong_not_flagged": 0,
+            "multi_shown": 21,
+            "multi_precision": 1.0,
+            "multi_recall": 0.84,
+            "multi_f05": 0.963,
+            "multi_label_items": 0
+          }
+        }
+      }
+    }
+  },
+  "meta": {
+    "version": "style-head-v1",
+    "clip": "OFA-Sys/chinese-clip-vit-base-patch16@36e679e65c2a2fead755ae21162091293ad37834",
+    "train_sha1": "87b1056799062e0463da7e9239a8484f2f8f9e31",
+    "train_n": 2010,
+    "beta": 0.5,
+    "run_id": "20261004T085950-8644"
+  }
+}

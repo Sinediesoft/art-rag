@@ -20,18 +20,25 @@ function ProbBar({ value, muted }: { value: number; muted?: boolean }) {
 }
 
 function FieldTile({ f }: { f: StyleField }) {
+  const head = f.source === "head";
   return (
     <div className="flex flex-col gap-1.5 rounded-lg border border-hairline p-3">
-      <dt className="text-xs font-semibold text-ink-48">{f.label}</dt>
+      <dt className="text-xs font-semibold text-ink-48">
+        {f.label}
+        {head && <span className="ml-1 font-normal">· 館藏訓練的分類頭</span>}
+      </dt>
       <dd className={`text-base font-semibold ${f.uncertain ? "text-ink-48" : "text-ink"}`}>
-        {f.uncertain ? "看不太出來" : f.name}
+        {/* 分類頭是多標籤：過門檻的都列出（例如同時像油畫和蛋彩畫） */}
+        {f.uncertain ? "看不太出來" : [f.name, ...(f.also ?? [])].join("、")}
         {f.period && !f.uncertain && <span className="block text-xs font-normal text-ink-80">{f.period}</span>}
       </dd>
       <dd>
         <ProbBar value={f.prob} muted={f.uncertain} />
       </dd>
       <dd className="mt-1 border-t border-hairline pt-1.5">
-        <p className="mb-1 text-[11px] text-ink-48">{f.key === "style" ? "細分流派（僅供參考）" : "最接近的幾個"}</p>
+        <p className="mb-1 text-[11px] text-ink-48">
+          {f.key === "style" ? "細分流派（僅供參考）" : head ? "各自的機率（每種各有門檻）" : "最接近的幾個"}
+        </p>
         <ul className="flex flex-col gap-0.5">
           {f.candidates.map((c) => (
             <li key={c.name} className="grid grid-cols-[minmax(0,5.5rem)_1fr] items-center gap-2 text-xs text-ink-80">
@@ -49,6 +56,8 @@ function FieldTile({ f }: { f: StyleField }) {
 
 /** 畫作卡推測（docs/adr/018，借鑒 ArtSeek 的畫作卡）：知識庫沒有這幅畫時，推測風格大類、題材、媒材 */
 export function StyleGuessCard({ data }: { data: StyleGuess }) {
+  const headLabels = data.fields.filter((f) => f.source === "head").map((f) => f.label);
+  const zeroLabels = data.fields.filter((f) => f.source !== "head").map((f) => f.label);
   return (
     <section className="card flex flex-col gap-4 p-5">
       <header>
@@ -79,8 +88,10 @@ export function StyleGuessCard({ data }: { data: StyleGuess }) {
           </ul>
         )}
         <p>
-          本機 Chinese-CLIP 零樣本比對（和辨識同一個模型，不用訓練、照片不出站）· 像畫作的程度{" "}
-          {pct(data.painting_score)} · {data.latency_ms} ms
+          {headLabels.length > 0
+            ? `本機 Chinese-CLIP（和辨識同一個模型、照片不出站）：${zeroLabels.join("、")}零樣本比對，${headLabels.join("、")}用大都會館藏訓練的分類頭`
+            : "本機 Chinese-CLIP 零樣本比對（和辨識同一個模型，不用訓練、照片不出站）"}{" "}
+          · 像畫作的程度 {pct(data.painting_score)} · {data.latency_ms} ms
         </p>
       </footer>
     </section>

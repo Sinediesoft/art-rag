@@ -164,7 +164,10 @@ class ColorAnalysis(BaseModel):
 # ---------------------------------------------------------------- 畫作卡推測（docs/adr/018）
 class StyleCandidate(BaseModel):
     name: str
-    prob: float = Field(description="這個標籤的機率 0–1（同一欄所有標籤加總為 1）")
+    prob: float = Field(
+        description="這個標籤的機率 0–1"
+        "（零樣本：同一欄所有標籤加總為 1；線性分類頭：每個標籤各自的機率）"
+    )
     group: str | None = Field(None, description="風格才有：細分流派所屬的大類")
 
 
@@ -175,7 +178,17 @@ class StyleField(BaseModel):
     period: str | None = Field(None, description="風格才有：大類的年代")
     prob: float
     uncertain: bool = Field(
-        description="機率低於 style_guess.min_confidence，畫面上標「看不太出來」"
+        description="零樣本：機率低於 style_guess.min_confidence；"
+        "線性分類頭：沒有任何標籤過各自的門檻。畫面上標「看不太出來」"
+    )
+    also: list[str] = Field(
+        default_factory=list,
+        description="線性分類頭（多標籤）才有：name 之外也過了門檻的標籤，例如同時像油畫和蛋彩畫",
+    )
+    source: Literal["zero_shot", "head"] = Field(
+        "zero_shot",
+        description="zero_shot＝Chinese-CLIP 零樣本；"
+        "head＝大都會館藏訓練的線性分類頭（style_guess.head）",
     )
     candidates: list[StyleCandidate] = Field(description="前 3 名；風格是細分流派")
 

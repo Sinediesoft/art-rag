@@ -186,9 +186,18 @@ class StyleTaskSpec(BaseModel):
     groups: list[StyleGroupSpec]
 
 
+class StyleHeadSpec(BaseModel):
+    """畫作卡推測的線性分類頭（docs/adr/018「線性分類頭」）：列在 fields 的欄位改用
+    pipelines/train_style_head.py 訓練的多標籤分類頭
+    （Chinese-CLIP 照片向量 → 每個標籤 sigmoid＋各自的門檻）。"""
+
+    path: str  # 相對專案根目錄
+    fields: list[Literal["genre", "media"]] = []
+
+
 class StyleGuessSpec(BaseModel):
-    """畫作卡推測（docs/adr/018）：Chinese-CLIP 零樣本推測風格大類、題材、媒材。
-    不影響索引，改了不用重建。"""
+    """畫作卡推測（docs/adr/018）：Chinese-CLIP 零樣本推測風格大類、題材、媒材
+    （head 列出的欄位改用線性分類頭）。不影響索引，改了不用重建。"""
 
     method: str = "clip-zeroshot-v1"
     temperature: float = 100
@@ -199,6 +208,7 @@ class StyleGuessSpec(BaseModel):
     style: StyleTaskSpec | None = None
     genre: GuessTaskSpec | None = None
     media: GuessTaskSpec | None = None
+    head: StyleHeadSpec | None = None
 
 
 class CompareSpec(BaseModel):

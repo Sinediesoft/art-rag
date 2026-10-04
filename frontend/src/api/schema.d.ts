@@ -4135,7 +4135,7 @@ export interface components {
             name: string;
             /**
              * Prob
-             * @description 這個標籤的機率 0–1（同一欄所有標籤加總為 1）
+             * @description 這個標籤的機率 0–1（零樣本：同一欄所有標籤加總為 1；線性分類頭：每個標籤各自的機率）
              */
             prob: number;
             /**
@@ -4170,9 +4170,21 @@ export interface components {
             prob: number;
             /**
              * Uncertain
-             * @description 機率低於 style_guess.min_confidence，畫面上標「看不太出來」
+             * @description 零樣本：機率低於 style_guess.min_confidence；線性分類頭：沒有任何標籤過各自的門檻。畫面上標「看不太出來」
              */
             uncertain: boolean;
+            /**
+             * Also
+             * @description 線性分類頭（多標籤）才有：name 之外也過了門檻的標籤，例如同時像油畫和蛋彩畫
+             */
+            also?: string[];
+            /**
+             * Source
+             * @description zero_shot＝Chinese-CLIP 零樣本；head＝大都會館藏訓練的線性分類頭（style_guess.head）
+             * @default zero_shot
+             * @enum {string}
+             */
+            source: "zero_shot" | "head";
             /**
              * Candidates
              * @description 前 3 名；風格是細分流派
