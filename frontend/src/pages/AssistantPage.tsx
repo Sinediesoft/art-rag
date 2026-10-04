@@ -19,6 +19,7 @@ import { ArtworkCard } from "../components/common/ArtworkCard";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
 import { SqlAnswer } from "../components/inventory/SqlAnswer";
 import { PartCard } from "../components/parts/PartCard";
+import { PhotoStyleGuess } from "../components/style/StyleGuessCard";
 import { preprocessImage } from "../lib/image";
 
 /** 不用先選功能：每一句會被七段流程分派到不同模組 */
@@ -529,7 +530,7 @@ function deepActions(route: RouteResponse, imageId: string | null): DeepAction[]
     imageId && route.photo ? [{ label: "看照片辨識細節", to: `/search?image=${imageId}` }] : [];
   if (route.photo?.kind === "unknown" && !route.question)
     return [
-      ...photo.map((a) => ({ ...a, label: "看照片辨識細節（沒收錄也能分析色彩、重建 3D）", primary: true })),
+      ...photo.map((a) => ({ ...a, label: "看照片辨識細節（沒收錄也能推測風格、分析色彩、重建 3D）", primary: true })),
       ...intakeActions(route, imageId),
     ];
   if (route.gate === "clarify" || route.gate === "out_of_scope") return [];
@@ -672,10 +673,14 @@ function Dispatch({
 
   if (route.photo?.kind === "unknown" && !route.question)
     return (
-      <p className="text-sm text-ink-80">
-        這張照片在本機比對不到知識庫裡的畫作或工廠圖紙。可以補一句說明，例如「這是哪一幅畫？」或「這張圖紙的公差要求」；
-        也可以按下方「看照片辨識細節」：沒收錄的畫作也能分析色彩，沒收錄的圖紙也能用 Ortho2CAD 重建 3D。
-      </p>
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-ink-80">
+          這張照片在本機比對不到知識庫裡的畫作或工廠圖紙。可以補一句說明，例如「這是哪一幅畫？」或「這張圖紙的公差要求」；
+          也可以按下方「看照片辨識細節」：沒收錄的畫作也能分析色彩，沒收錄的圖紙也能用 Ortho2CAD 重建 3D。
+        </p>
+        {/* 領域路由判成畫作才推測（圖紙不做）：本機 Chinese-CLIP，照片與結果都不送 Jev（ADR 018） */}
+        {route.photo.domain === "art" && imageId && <PhotoStyleGuess imageId={imageId} />}
+      </div>
     );
 
   if (route.gate === "out_of_scope")

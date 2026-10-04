@@ -161,6 +161,39 @@ class ColorAnalysis(BaseModel):
     latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
 
 
+# ---------------------------------------------------------------- 畫作卡推測（docs/adr/018）
+class StyleCandidate(BaseModel):
+    name: str
+    prob: float = Field(description="這個標籤的機率 0–1（同一欄所有標籤加總為 1）")
+    group: str | None = Field(None, description="風格才有：細分流派所屬的大類")
+
+
+class StyleField(BaseModel):
+    key: Literal["style", "genre", "media"]
+    label: str = Field(description="風格／題材／媒材")
+    name: str = Field(description="推測結果；風格是大類（同一大類的細分流派機率加總）")
+    period: str | None = Field(None, description="風格才有：大類的年代")
+    prob: float
+    uncertain: bool = Field(
+        description="機率低於 style_guess.min_confidence，畫面上標「看不太出來」"
+    )
+    candidates: list[StyleCandidate] = Field(description="前 3 名；風格是細分流派")
+
+
+class StyleGuess(BaseModel):
+    method: str
+    is_painting: bool = Field(
+        description="像不像畫作；不像（圖紙、文件、生活照）就不推測，fields 為空"
+    )
+    painting_score: float = Field(
+        description="像畫作的程度 0–1，低於 style_guess.painting_min 視為不是畫作"
+    )
+    fields: list[StyleField]
+    summary: str
+    notes: list[str]
+    latency_ms: int
+
+
 # ---------------------------------------------------------------- 影像對位與比對（docs/adr/012）
 class AlignTarget(BaseModel):
     kind: Literal["artwork", "part", "image"] = Field(
@@ -944,6 +977,11 @@ class RoutePhoto(BaseModel):
     kind: Literal["art", "drawing", "unknown"]
     id: str | None
     label: str
+    domain: Literal["art", "mfg"] | None = Field(
+        None,
+        description="領域路由判斷的領域；辨識不到（unknown）時用來分辨是沒收錄的畫作還是圖紙"
+        "（畫作可以顯示畫作卡推測，docs/adr/018）",
+    )
 
 
 class GuardCheck(BaseModel):

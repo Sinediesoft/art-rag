@@ -37,14 +37,14 @@ def _identify_photo(image_id: str) -> dict:
     if found["route"]["domain"] == "art":
         art = found["artwork_result"]
         if not art["matched"]:
-            return {"kind": "unknown", "id": None, "label": "知識庫中沒有這幅畫"}
+            return {"kind": "unknown", "id": None, "label": "知識庫中沒有這幅畫", "domain": "art"}
         a = get_store().get_artwork(art["best_artwork_id"])
-        return {"kind": "art", "id": a["id"], "label": a["title"]["zh"]}
+        return {"kind": "art", "id": a["id"], "label": a["title"]["zh"], "domain": "art"}
     drawing = found["drawing_result"]
     if not drawing["matched"]:
-        return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張圖紙"}
+        return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張圖紙", "domain": "mfg"}
     p = get_store().get_part(drawing["best_part_id"])
-    return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"]}
+    return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"], "domain": "mfg"}
 
 
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:
@@ -264,6 +264,8 @@ async def route(
         # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
         # bge-m3 一律保留：本地分流下一句還要用（釋放後重新載入要 1～2 秒）
         keep = set(cfg["intent_models"].get(intent, [])) | {"bge"}
+        if photo and photo["kind"] == "unknown" and photo["domain"] == "art":
+            keep.add("clip")  # 沒收錄的畫作：前端接著用 CLIP 做畫作卡推測（ADR 018），不先卸載
         await asyncio.to_thread(
             memory_guard.guard.check, f"智慧助理預估（{labels[intent]}）", keep, False, True
         )

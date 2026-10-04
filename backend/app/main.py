@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from app.agent import guard, local_router
+from app.analysis import style
 from app.api.routes import router
 from app.core import jwt
 from app.core.config import get_settings
@@ -54,6 +55,7 @@ async def lifespan(app: FastAPI):
         log.error(f"庫存資料庫建立失敗：{e}")
     warmup()
     local_router.warmup()
+    style.warmup()
     m = get_store().manifest
     where = f"PostgreSQL {db.describe(s.database_url)}" if s.database_url else "檔案索引＋SQLite"
     log.info(

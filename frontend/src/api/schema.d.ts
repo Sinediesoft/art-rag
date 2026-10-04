@@ -72,6 +72,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/{image_id}/style": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Photo Style
+         * @description 知識庫沒有這幅畫時的畫作卡：Chinese-CLIP 零樣本推測風格大類、題材、媒材（docs/adr/018）。
+         *     只是推測、沒有出處，不寫進知識庫、不放進問答的 prompt。
+         */
+        get: operations["get_photo_style_api_v1_images__image_id__style_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{image_id}/align": {
         parameters: {
             query?: never;
@@ -1665,7 +1686,7 @@ export interface components {
              * Domain
              * @description art／mfg＝只跑該領域的辨識；null＝每張先交給領域路由判斷
              */
-            domain?: ("mfg" | "art") | null;
+            domain?: ("art" | "mfg") | null;
         };
         /** BlockedInfo */
         BlockedInfo: {
@@ -2546,7 +2567,7 @@ export interface components {
              * Domain
              * @description 從哪一邊進來：mfg＝工廠圖紙、art＝畫作；null＝交給領域路由判斷。指定了但路由很確定是另一個領域時回 INTAKE_WRONG_DOMAIN
              */
-            domain?: ("mfg" | "art") | null;
+            domain?: ("art" | "mfg") | null;
         };
         /** IntakeUpdate */
         IntakeUpdate: {
@@ -3568,6 +3589,11 @@ export interface components {
             id: string | null;
             /** Label */
             label: string;
+            /**
+             * Domain
+             * @description 領域路由判斷的領域；辨識不到（unknown）時用來分辨是沒收錄的畫作還是圖紙（畫作可以顯示畫作卡推測，docs/adr/018）
+             */
+            domain?: ("art" | "mfg") | null;
         };
         /** RouteRequest */
         RouteRequest: {
@@ -4103,6 +4129,79 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** StyleCandidate */
+        StyleCandidate: {
+            /** Name */
+            name: string;
+            /**
+             * Prob
+             * @description 這個標籤的機率 0–1（同一欄所有標籤加總為 1）
+             */
+            prob: number;
+            /**
+             * Group
+             * @description 風格才有：細分流派所屬的大類
+             */
+            group?: string | null;
+        };
+        /** StyleField */
+        StyleField: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "style" | "genre" | "media";
+            /**
+             * Label
+             * @description 風格／題材／媒材
+             */
+            label: string;
+            /**
+             * Name
+             * @description 推測結果；風格是大類（同一大類的細分流派機率加總）
+             */
+            name: string;
+            /**
+             * Period
+             * @description 風格才有：大類的年代
+             */
+            period?: string | null;
+            /** Prob */
+            prob: number;
+            /**
+             * Uncertain
+             * @description 機率低於 style_guess.min_confidence，畫面上標「看不太出來」
+             */
+            uncertain: boolean;
+            /**
+             * Candidates
+             * @description 前 3 名；風格是細分流派
+             */
+            candidates: components["schemas"]["StyleCandidate"][];
+        };
+        /** StyleGuess */
+        StyleGuess: {
+            /** Method */
+            method: string;
+            /**
+             * Is Painting
+             * @description 像不像畫作；不像（圖紙、文件、生活照）就不推測，fields 為空
+             */
+            is_painting: boolean;
+            /**
+             * Painting Score
+             * @description 像畫作的程度 0–1，低於 style_guess.painting_min 視為不是畫作
+             */
+            painting_score: number;
+            /** Fields */
+            fields: components["schemas"]["StyleField"][];
+            /** Summary */
+            summary: string;
+            /** Notes */
+            notes: string[];
+            /** Latency Ms */
+            latency_ms: number;
+        };
         /** SwitchAccountRequest */
         SwitchAccountRequest: {
             /** Account Id */
@@ -4379,6 +4478,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_photo_style_api_v1_images__image_id__style_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StyleGuess"];
+                };
             };
             /** @description Client Error */
             "4XX": {
