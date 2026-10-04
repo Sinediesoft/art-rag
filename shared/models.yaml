@@ -28,9 +28,23 @@ retrieval:
   # 兩個條件都要過才算「辨識成功」，否則一律回覆「知識庫中沒有這幅畫」；數值由 eval 校正
   # 同一位畫家的別版、習作、同系列（make eval-versions，2026-10-04）：CLIP 全部過門檻（最高 0.968），
   # 靠幾何驗證擋下（inlier ≤ 10）；所以要防認錯別版只能調 verify_min_inliers，調 image_threshold 沒用
+  # 觀眾實拍照（make eval-met-photos，2026-10-05，The Met Dataset，評估用知識庫 2,467 幅）：認錯 0、未收錄被認錯 0；
+  # 一般觀眾的照片認對 71%（知識庫 3 幅時 86%，其餘是 ORB 對不上）。image_threshold 0.5–0.7 結果一樣。
+  # 知識庫上百幅以後 CLIP 會把正解排到前 3 名外（2,467 幅時前 3 名只剩 79%），verify_top_n 要調到 10–20
+  # （有下面的退化 homography 檢查，調大時 verify_min_inliers 不用跟著提高）
   image_threshold: 0.70       # 第一階段 CLIP 相似度下限
-  verify_top_n: 3             # 對 CLIP 前 N 名做幾何驗證
-  verify_min_inliers: 20      # RANSAC inlier 數下限（同一幅畫實測 ≥ 57，不同畫作 ≤ 7，別版 ≤ 10）
+  verify_top_n: 3             # 對 CLIP 前 N 名做幾何驗證（可以比 top_k_search 大，多的也會驗）
+  # RANSAC inlier 數下限：同一幅畫實測 ≥ 57，不同畫作 ≤ 7，別版 ≤ 10；真實照片的錯誤配對加檢查後最多 19
+  # （照〈兩姊妹〉做的版畫，是真的複製品），所以不降
+  verify_min_inliers: 20
+  # 退化的 homography 不算對上（ADR 002「退化的 homography」）：觀眾照片畫框上一排重複花紋被對成參考圖的一點、
+  # 鏡像或強烈透視，不相干的畫也能對上 65–79 個 inlier。三個條件都要過；圖紙另有一套（verify._plausible）。
+  # 由觀眾實拍照的配對（inlier ≥ 20）校正：正確 310 對 det 第 5 百分位 0.16、透視項第 95 百分位 0.0011、
+  # 分布第 5 百分位 0.029；錯誤 13 對全部擋下，正確少 5 對（都是研究團隊大角度斜拍的 500 px 照片）。
+  # 加上後重跑：各種知識庫大小與 verify_top_n 都 0 認錯（之前最多 0.6%），一般觀眾的原圖認對一張沒少
+  verify_min_det: 0.02        # H 左上 2×2 的行列式下限（≤ 0 是鏡像，≈ 0 是壓成一點或一條線；站遠拍的正確配對可到 100 以上，不設上限）
+  verify_max_persp: 0.002     # 透視項 |h31|、|h32| 上限（原始座標：照片解析度越低數字越大，上傳照片縮到 1024）
+  verify_min_spread: 0.01     # inlier 在知識庫圖上的分布（標準差占寬、高的比例，取小的）下限
   top_k_search: 5
   # 問答檢索段落規則：相似度門檻＋最多 top_k_chunks 段，不硬湊滿
   # 保留條件：score ≥ min_chunk_score 且 score ≥ 第一名 × relative_chunk_ratio；

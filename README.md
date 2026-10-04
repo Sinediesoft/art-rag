@@ -335,6 +335,30 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 | 畫家的別版、習作、同系列 | 143 | 0 張被認成知識庫的畫（CLIP 全部過門檻，inlier 最多 10） |
 | 同一幅畫的其他照片 | 43 | 41 張認得出來（inlier 最少 158）；局部近拍、前面擠滿觀眾的各 1 張回「知識庫中沒有這幅畫」 |
 
+### 以圖搜圖：觀眾實拍照、知識庫變大（`make eval-met-photos`）
+
+不用開後端、不用索引。用 The Met Dataset 的觀眾實拍照（觀眾在大都會用手機拍的照片，標了拍到哪件館藏）量真實照片認不認得出來，
+並把評估用知識庫從 3 幅放大到 2,467 幅（大都會的畫，只在記憶體裡、不進 `kb/`），看 CLIP 粗篩還找不找得到正解。
+清單與正解在 `eval/met_photo_set.json`（重做：`eval/make_met_photo_set.py`）。第一次跑會抓：
+- Met Dataset 的照片與標註（約 40 MB），從 `ptak.felk.cvut.cz` 抓；官網 `cmp.felk.cvut.cz` 從筆電連不上；
+- 館藏圖與 Flickr 原圖到 `data/met_photo/`；Flickr 連抓一百多張會限流，遇到就先用 500 px 版，下次再跑會補抓；
+- 沒跑過 `eval-style-met`／`style-head` 的話，另外抓干擾項約 270 MB。
+
+2,467 幅的 CLIP 向量第一次要算約 15 分鐘，之後有快取；ORB 比對約 50 分鐘。
+2026-10-05 在我的筆電上的結果（run_id `20261004T165452-a7ba`，門檻照舊、已加退化 homography 檢查，細節見 ADR 002 文末）：
+
+| | 張數 | 知識庫 3 幅 | 知識庫 2,467 幅 |
+|---|---|---|---|
+| 一般觀眾的照片（Flickr 原圖） | 160 | 認對 86% | 認對 71%，認錯 0 |
+| 研究團隊刻意拍難的照片 | 46 | 認對 59% | 認對 41%，認錯 0 |
+| 未收錄：拿掉正解、器物雕塑 | 366＋926 | — | 0 張被認錯 |
+
+- 知識庫小的時候，認不出來的都是 ORB 對不上：局部近拍、屏風、手卷、朦朧的畫。
+- 知識庫上百幅以後 CLIP 開始漏（2,467 幅時正解在前 3 名的只剩 79%），`verify_top_n` 要調到 10–20。
+- 畫框上重複的花紋曾讓不相干的畫對上 65–79 個點（退化的 homography），已在幾何驗證擋掉
+  （`shared/models.yaml` 的 `verify_min_det`、`verify_max_persp`、`verify_min_spread`）。
+  加上之後，各種知識庫大小、`verify_top_n` 3–20 都沒有認錯（之前最多 0.6%）。
+
 ### 色彩分析（`make eval-color`）
 
 不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
@@ -591,7 +615,7 @@ art-rag/
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
 ├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py、train_style_head.py（make style-head）
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_version_eval.py（＋version_set.json 同系列不同版本）、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_version_eval.py（＋version_set.json 同系列不同版本）、make_met_photo_set.py＋run_met_photo_eval.py（＋met_photo_set.json 觀眾實拍照）、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md、style_head_v1.npz（畫作卡媒材的線性分類頭）

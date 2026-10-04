@@ -62,9 +62,11 @@ def _orb():
 
 
 def features(img: Image.Image, mask: np.ndarray | None = None):
+    """(特徵點, 描述子, 縮放比例, 縮圖的 (高, 寬))；座標都是縮圖座標。"""
+    gray = _gray(img)
     with _lock:
-        kp, desc = _orb().detectAndCompute(_gray(img), mask)
-    return kp, desc, _scale(img)
+        kp, desc = _orb().detectAndCompute(gray, mask)
+    return kp, desc, _scale(img), gray.shape
 
 
 @lru_cache(maxsize=64)
@@ -86,12 +88,31 @@ def _plausible(h: np.ndarray, pts: np.ndarray) -> bool:
     return bool(span.min() >= 80)
 
 
-def match(query, ref, strict: bool = False) -> tuple[int, np.ndarray | None]:
+def _degenerate(h: np.ndarray, pts: np.ndarray, shape: tuple[int, int], g: dict) -> bool:
+    """畫作的退化 homography（docs/adr/002「退化的 homography」）。
+
+    觀眾照片的畫框上有一整排重複的花紋，RANSAC 會把它們對到參考圖的同一點、一小塊，
+    或對成鏡像（det ≤ 0）、強烈透視，不相干的畫因此能對上幾十個 inlier（實測 65–79）。
+    圖紙的 _plausible 不能照搬：觀眾站遠拍時畫只占照片一小塊，正確配對的 det 可以到 100 以上。
+    h：原始座標的 H；pts：inlier 在參考圖縮圖上的位置；shape：參考圖縮圖的 (高, 寬)；
+    g：models.yaml 的 retrieval（verify_min_det、verify_max_persp、verify_min_spread）。
+    """
+    det = float(np.linalg.det(h[:2, :2]))
+    if det < g["verify_min_det"] or max(abs(h[2, 0]), abs(h[2, 1])) > g["verify_max_persp"]:
+        return True
+    spread = pts.std(axis=0) / np.array(shape[::-1], dtype=float)  # 占參考圖寬、高的比例
+    return bool(spread.min() < g["verify_min_spread"])
+
+
+def match(
+    query, ref, strict: bool = False, geometry: dict | None = None
+) -> tuple[int, np.ndarray | None]:
     """回傳 (inlier 數, H)；H 把查詢圖（原始座標）對應到知識庫圖（原始座標）。
 
     strict=True（工廠圖紙）另外檢查 homography 是否合理，不合理就當作沒對上。
+    geometry（畫作，傳 models.yaml 的 retrieval）：退化的 homography 也當作沒對上（_degenerate）。
     """
-    (kq, dq, sq), (kr, dr, sr) = query, ref
+    (kq, dq, sq, _), (kr, dr, sr, ref_shape) = query, ref
     if dq is None or dr is None or len(kq) < 8 or len(kr) < 8:
         return 0, None
     pairs = cv2.BFMatcher(cv2.NORM_HAMMING).knnMatch(dq, dr, k=2)
@@ -104,13 +125,16 @@ def match(query, ref, strict: bool = False) -> tuple[int, np.ndarray | None]:
     if mask is None or h is None:
         return 0, None
     full = np.diag([1 / sr, 1 / sr, 1.0]) @ h @ np.diag([sq, sq, 1.0])
-    if strict and not _plausible(full, dst[mask.ravel() == 1] / sr):
+    inl = dst[mask.ravel() == 1]
+    if strict and not _plausible(full, inl / sr):
+        return 0, None
+    if geometry and _degenerate(full, inl, ref_shape, geometry):
         return 0, None
     return int(mask.sum()), full
 
 
-def count_inliers(query, ref, strict: bool = False) -> int:
-    return match(query, ref, strict)[0]
+def count_inliers(query, ref, strict: bool = False, geometry: dict | None = None) -> int:
+    return match(query, ref, strict, geometry)[0]
 
 
 def rectify(

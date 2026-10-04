@@ -173,7 +173,11 @@ def main() -> int:
         img = load_image(path.read_bytes())
         vec, feats = embed_image(img), verify.features(img)
         per = {
-            tid: {"clip": float(vec @ tvec), "inliers": verify.count_inliers(feats, tfeat)}
+            tid: {
+                "clip": float(vec @ tvec),
+                # 和 identify 一樣排除退化的 homography（docs/adr/002「退化的 homography」）
+                "inliers": verify.count_inliers(feats, tfeat, geometry=cfg),
+            }
             for tid, (tvec, tfeat) in targets.items()
         }
         accepted = [
