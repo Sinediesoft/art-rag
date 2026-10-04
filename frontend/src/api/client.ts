@@ -5,6 +5,8 @@ export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
 export type ArtworkDetail = Schemas["ArtworkDetail"];
 export type ColorAnalysis = Schemas["ColorAnalysis"];
+export type StyleGuess = Schemas["StyleGuess"];
+export type StyleField = Schemas["StyleField"];
 export type ImageAlignment = Schemas["ImageAlignment"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
@@ -159,6 +161,8 @@ export const api = {
   artworkColors: (id: string) => request<ColorAnalysis>(`/artworks/${encodeURIComponent(id)}/colors`),
   photoColors: (imageId: string) =>
     request<ColorAnalysis>(`/images/${encodeURIComponent(imageId)}/colors`),
+  /** 畫作卡推測（docs/adr/018）：知識庫沒有這幅畫時，推測風格大類、題材、媒材（沒有出處） */
+  photoStyle: (imageId: string) => request<StyleGuess>(`/images/${encodeURIComponent(imageId)}/style`),
   /** 影像對位與比對（docs/adr/012）：target 是 artwork:<畫作 id> 或 part:<圖紙 id> */
   photoAlignment: (imageId: string, target: string) =>
     request<ImageAlignment>(

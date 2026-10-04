@@ -101,6 +101,8 @@ def test_modify_op_and_dispatch(client):
         ("mfg", True, "drawing", "drawing_qa"),
         # 路由判成圖紙（拿不準也是）就只看圖紙辨識：沒過就是無法辨識，不再改試畫作
         ("mfg", False, "unknown", "out_of_scope"),
+        # 沒收錄的畫作：帶 domain，前端才知道可以顯示畫作卡推測（ADR 018）
+        ("art", False, "unknown", "out_of_scope"),
     ],
 )
 def test_photo_goes_through_domain_router(client, monkeypatch, domain, matched, kind, intent):
@@ -125,6 +127,7 @@ def test_photo_goes_through_domain_router(client, monkeypatch, domain, matched, 
     monkeypatch.setattr(search_service, "identify_drawing", no_direct)
     r = route(client, "", image_id="img-fake")
     assert r["photo"]["kind"] == kind and r["intent"] == intent
+    assert r["photo"]["domain"] == domain
     if kind == "art":
         assert r["photo"]["id"] == r["dispatch"]["artwork_id"] == "npm-000001"
     if kind == "drawing":

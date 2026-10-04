@@ -168,6 +168,39 @@ class ColorAnalysisSpec(BaseModel):
     chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
 
 
+class GuessTaskSpec(BaseModel):
+    """畫作卡推測的一欄：標籤 → 別名（別名只用來算標籤向量，不顯示）。"""
+
+    templates: list[str]
+    labels: dict[str, list[str]] = {}
+
+
+class StyleGroupSpec(BaseModel):
+    name: str
+    period: str
+    labels: dict[str, list[str]]
+
+
+class StyleTaskSpec(BaseModel):
+    templates: list[str]
+    groups: list[StyleGroupSpec]
+
+
+class StyleGuessSpec(BaseModel):
+    """畫作卡推測（docs/adr/018）：Chinese-CLIP 零樣本推測風格大類、題材、媒材。
+    不影響索引，改了不用重建。"""
+
+    method: str = "clip-zeroshot-v1"
+    temperature: float = 100
+    painting_min: float = 0.6
+    painting_prompts: list[str] = ["一幅畫"]
+    other_prompts: list[str] = ["一張生活照片"]
+    min_confidence: float = 0.4
+    style: StyleTaskSpec | None = None
+    genre: GuessTaskSpec | None = None
+    media: GuessTaskSpec | None = None
+
+
 class CompareSpec(BaseModel):
     """影像對位與比對（docs/adr/012），一個領域一份。不影響索引，改了不用重建。"""
 
@@ -254,6 +287,7 @@ class ModelsConfig(BaseModel):
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
+    style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
     intake: IntakeSpec = IntakeSpec()
 

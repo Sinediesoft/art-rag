@@ -7,6 +7,7 @@ import { PhotoColors } from "../components/color/ColorAnalysisCard";
 import { ArtworkCard } from "../components/common/ArtworkCard";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
 import { NotInKbNotice, RouteNotice, VerifiedBadge } from "../components/common/StatusNotices";
+import { PhotoStyleGuess } from "../components/style/StyleGuessCard";
 
 export function SearchPage() {
   const [params] = useSearchParams();
@@ -111,6 +112,8 @@ function ImageResults({
           <NotInKbNotice
             detail={`最接近的畫作沒有通過驗證（需要相似度 ≥ ${data.threshold} 且對應點 ≥ ${data.min_inliers}），所以不硬湊答案。`}
           />
+          {/* 不硬湊答案，但可以給「看起來像什麼」：風格大類、題材、媒材的推測，標明沒有出處（ADR 018） */}
+          <PhotoStyleGuess imageId={imageId} />
           <Link
             to={`/artworks/intake?image=${imageId}`}
             className="card flex items-center justify-between px-4 py-3 font-semibold text-accent transition hover:border-accent"

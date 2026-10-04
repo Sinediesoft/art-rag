@@ -23,6 +23,15 @@ export const usePhotoColors = (imageId: string | null) =>
     staleTime: Infinity,
   });
 
+/** 畫作卡推測結果固定（同一張照片每次算出來都一樣），不必重抓 */
+export const usePhotoStyle = (imageId: string | null) =>
+  useQuery({
+    queryKey: ["photo-style", imageId],
+    queryFn: () => api.photoStyle(imageId!),
+    enabled: !!imageId,
+    staleTime: Infinity,
+  });
+
 /** 對位結果固定；對不上（ALIGN_FAILED）是確定的答案，不重試 */
 export const useImageAlignment = (imageId: string, target: string | null) =>
   useQuery({

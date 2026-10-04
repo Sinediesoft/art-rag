@@ -41,6 +41,7 @@ from app.services import (
     schedule_service,
     search_service,
     sql_service,
+    style_service,
 )
 
 router = APIRouter(prefix="/api/v1", responses={"4XX": {"model": S.ErrorResponse}})
@@ -80,6 +81,13 @@ def get_photo_colors(image_id: str):
 @router.get("/images/{image_id}/colormap.png", response_class=Response, tags=["images"])
 def get_photo_colormap(image_id: str):
     return Response(color_service.photo_colormap(image_id), media_type="image/png")
+
+
+@router.get("/images/{image_id}/style", response_model=S.StyleGuess, tags=["images"])
+def get_photo_style(image_id: str):
+    """知識庫沒有這幅畫時的畫作卡：Chinese-CLIP 零樣本推測風格大類、題材、媒材（docs/adr/018）。
+    只是推測、沒有出處，不寫進知識庫、不放進問答的 prompt。"""
+    return style_service.photo_style(image_id)
 
 
 _TARGET = Query(
@@ -656,7 +664,8 @@ def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
-        # 五段防護第 2 段（-guard）、影像比對（-align）與照片建檔（-intake）的評估另有格式
+        # 五段防護第 2 段（-guard）、影像比對（-align）、照片建檔（-intake）
+        # 與畫作卡推測（-style）的評估另有格式
         if not p.name.endswith(
             (
                 "-cad.json",
@@ -668,6 +677,7 @@ def eval_runs():
                 "-guard.json",
                 "-align.json",
                 "-intake.json",
+                "-style.json",
             )
         ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))

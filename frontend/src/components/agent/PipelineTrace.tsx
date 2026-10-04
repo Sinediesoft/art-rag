@@ -169,7 +169,9 @@ export function buildStages(route: RouteResponse, mod: ModuleProgress): Stage[] 
   const none = (msg: string) => [stage("verify", "skip", msg), stage("rerank", "skip", msg), stage("gate", "skip", msg)];
 
   if (r.photo?.kind === "unknown" && !r.question) {
-    out.push(stage("retrieve", "skip", "照片比對不到知識庫，沒有檢索"), ...none("沒有段落"), reply("請你補一句說明"));
+    // 沒收錄的畫作：本機推測風格、題材、媒材（ADR 018），不檢索、不生成
+    const guess = r.photo.domain === "art" ? "本機推測風格、題材、媒材（沒有出處）；" : "";
+    out.push(stage("retrieve", "skip", "照片比對不到知識庫，沒有檢索"), ...none("沒有段落"), reply(`${guess}請你補一句說明`));
   } else if (r.intent === "out_of_scope") {
     out.push(stage("retrieve", "skip", "不需檢索"), ...none("沒有段落"), reply("固定回覆系統能做的事"));
   } else if (r.intent === "system") {
