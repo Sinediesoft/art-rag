@@ -1,6 +1,6 @@
 import json
 
-from app.core.config import REPO_ROOT
+from app.core.config import REPO_ROOT, get_models_config
 
 KB_PHOTOS = (
     (REPO_ROOT / "kb/drawings/mfg-006.png", "image/png"),
@@ -110,7 +110,10 @@ def test_chat_rearrange_is_off_by_default_and_reported_when_on(client, monkeypat
 
     # mock 向量是雜湊亂數，相似度都在門檻以下：已指定畫作時檢索只留最相關的 1 段，
     # 只有 1 段時篩選直接跳過。這裡改成不設門檻、取這幅畫的前 3 段，篩選才會交給生成端判斷
-    def top3(question, artwork_id, part_id=None, levels=None):
+    asked = []
+
+    def top3(question, artwork_id, part_id=None, levels=None, k=None):
+        asked.append(k)
         store = chat_service.get_store()
         qvec = chat_service.embed_text([question])[0]
         hits = store.art.search_chunks(qvec, 3, owner_id=artwork_id)
@@ -121,6 +124,8 @@ def test_chat_rearrange_is_off_by_default_and_reported_when_on(client, monkeypat
     off = parse_sse(client.post("/api/v1/chat", json=body).text)[0][1]
     assert off["rearrange"] is None
     on = parse_sse(client.post("/api/v1/chat", json={**body, "rearrange": True}).text)[0][1]
+    # 篩選開著時多抓候選：檢索取 rearrange.max_candidates 段；關著照 top_k_chunks（k 不給）
+    assert asked == [None, get_models_config().rearrange.max_candidates]
     # mock 生成端的輸出不是「1,3」格式 → 退回原本的段落，但要回報篩選資訊
     info = on["rearrange"]
     assert info["candidates"] == 3 and info["fallback"]

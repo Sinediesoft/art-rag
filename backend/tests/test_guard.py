@@ -349,7 +349,7 @@ def test_photo_only_skips_guard(client, monkeypatch, fake_jev):
 def all_chunks(monkeypatch):
     """mock 向量是雜湊亂數，檢索只會留 1 段；改成取這個對象看得到的全部段落，才看得到第 4～6 段。"""
 
-    def every(question, artwork_id, part_id=None, scope=None):
+    def every(question, artwork_id, part_id=None, scope=None, k=None):
         store = chat_service.get_store()
         coll, owner = (store.mfg, part_id) if part_id else (store.art, artwork_id)
         owners = chat_service.visible_parts(scope) if part_id else None

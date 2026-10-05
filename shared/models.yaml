@@ -49,6 +49,7 @@ retrieval:
   # 問答檢索段落規則：相似度門檻＋最多 top_k_chunks 段，不硬湊滿
   # 保留條件：score ≥ min_chunk_score 且 score ≥ 第一名 × relative_chunk_ratio；
   # 已指定畫作時至少保留該畫作最相關的 1 段。數值由 eval 校正（實測第一名多在 0.38–0.78）
+  # 段落篩選（rearrange）開著時，其他頁面的問答改取 rearrange.max_candidates 段，篩完才送進 prompt
   top_k_chunks: 5
   min_chunk_score: 0.30
   relative_chunk_ratio: 0.6
@@ -301,14 +302,20 @@ item_compare:
 # 逾時、連不上或輸出看不懂時退回原本的段落，不擋回答。
 # 2026-10-03 起預設開（五段防護第 4 段：不送 Jev 的內部、機密段落由本地 Qwen3-VL 挑，其他頁面的問答也一起）；
 # GTX 1650 每題約多 3–6 秒。各主機可用 .env 的 REARRANGE 覆寫，請求也可用 rearrange 指定。
+# 其他頁面的問答開著篩選時，檢索改取 max_candidates 段（多抓、再篩）；篩選失敗退回時截回 top_k_chunks 段。
+# 2026-10-05 由 5 改 10（make eval-rearrange 的跨段落題）：一句問兩件事時，第二件的段落常排第 6、7 名，
+# 只取 5 段就被截掉；已驗證篩選不會誤刪多段題的段落。每幅畫 7–8 段，10 段＝自己那幅全部＋比較題第二幅的一半名額。
+# 改後（GTX 1050 Ti）：兩段正解都留下 16/27 → 26/27、跨段落題 71% → 86%；篩選本身中位數 5.8 → 12.4 秒（最慢 17.3 秒）
 rearrange:
   enabled: true
   prompt_version: rearrange_v1  # 對應 shared/prompts/rearrange_v1.md
-  max_candidates: 5             # 最多交給模型判斷幾段
+  max_candidates: 10            # 檢索取幾段交給模型判斷（智慧助理的第 4 段另有規則，候選仍是 top_k_chunks）
   timeout_s: 30                 # 篩選整體的時間上限，超過就用原本的段落
   max_tokens: 16                # 模型只需要輸出段落編號
 
-# 已指定畫作時只取該畫作的段落；問題含下列字詞（比較、背景類）才從全庫補足
+# 已指定畫作時只取該畫作的段落；問題含下列字詞（比較、背景類）才從全庫補足（只補剩下的名額）。
+# 題目寫出其他畫作的標題（「和〈谿山行旅圖〉比較」）時，只從那幾幅補，沒有這些字也補，而且替它們留一半名額：
+# 原本一律先佔滿已指定畫作的段落，每幅畫 7–8 段一定佔滿，比較題從來補不進第二幅（docs/adr/008 2026-10-05）
 global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作品, 同時代, 背景, 影響]
 
 prompt:

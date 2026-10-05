@@ -15,8 +15,9 @@
 
 `sources` 另帶 `rearrange`：開啟檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008；請求的 `rearrange`、
 `.env` 的 `REARRANGE` 或 `models.yaml` 的 `rearrange.enabled`，2026-10-03 起預設開）時為
-`{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`，
-失敗時 `sources` 是原本的全部段落）；沒開篩選（或關檢索）時為 `null`。候選只有 0～1 段時不呼叫模型，
+`{"candidates", "kept", "ms", "fallback"}`——候選幾段、模型留下幾段、篩選花幾毫秒、失敗原因（成功為 `null`）；
+沒開篩選（或關檢索）時為 `null`。開篩選時（智慧助理以外的頁面）檢索改取 `rearrange.max_candidates` 段當候選
+（2026-10-05 起 10 段，多抓再篩）；失敗時 `sources` 照不篩選時的規則截回 `top_k_chunks` 段。候選只有 0～1 段時不呼叫模型，
 `candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
 `sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
 

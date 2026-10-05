@@ -5,13 +5,17 @@
 - 問答：qa.jsonl 每題 × 各策略；answer_ok 以關鍵字比對、citation_ok 檢查引用是否指向正確畫作與段落
   （兩者都是人工評分前的自動化代理指標，正式成績依企劃書由兩人獨立評分）
 - 每題有題目類型 type（common 常識／kb_only 知識庫獨有／no_answer 無答案／distractor 干擾，
+  multi 跨段落／compare 比較：要兩段以上才答得完整，eval/make_qa_multi.py 出的題；
   未標註記為 untyped），結果依類型分組；每筆也記錄送出本機的資料量（egress）
+- 標了 gold_chunks（答案要用到的段落）的題另外量：送進 prompt 的段落留下了幾段正解（gold_kept）、
+  回答引用了幾段（gold_cited）。hybrid_plain 對 hybrid_rearrange：前者是檢索留下的，
+  後者是 Rearrange 篩過之後留下的，兩者的差就是篩選誤刪的（docs/adr/008）
 
 雲端對照組（api_nokb＝A1 無檢索、api_kb＝A2 有檢索）需要後端 ALLOW_CLOUD=true 與 API_KEY。
 
 用法：python eval/run_eval.py [--base http://localhost:8000]
       [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock]
-      [--split dev|test|all]
+      [--split dev|test|all] [--types multi,compare]
       hybrid_plain／hybrid_rearrange：檢索段落篩選（MIRA 的 Rearrange）關／開的對照
 """
 
@@ -114,14 +118,42 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
         ok = "沒有" in ans and not re.search(r"\d{3,}", ans)
         return ok, ok
     answer_ok = all(any(k in ans for k in group) for group in q["keywords"])
-    cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)} - {0}
+    cited = cited_refs(ans)
     by_ref = {s["ref"]: s for s in res["sources"]}
+    # 比較題會引用另一幅畫的段落：正解段落所屬的畫作都算對
+    allowed = {q["artwork_id"]} | {c.split("#")[0] for c in q.get("gold_chunks", [])}
     citation_ok = (
         bool(cited)
-        and all(n in by_ref and by_ref[n]["artwork_id"] == q["artwork_id"] for n in cited)
+        and all(n in by_ref and by_ref[n]["artwork_id"] in allowed for n in cited)
         and any(by_ref[n]["topic"] in q["topics"] for n in cited if n in by_ref)
     )
     return answer_ok, citation_ok
+
+
+def cited_refs(answer: str) -> set[int]:
+    return {int(n) for n in re.findall(r"\[(\d+)\]", answer)} - {0}
+
+
+def gold_stats(q: dict, res: dict) -> tuple[int, int]:
+    """（送進 prompt 的段落裡有幾段正解，回答引用了幾段正解）；沒標 gold_chunks 的題回 (0, 0)。"""
+    gold = set(q.get("gold_chunks", []))
+    kept = {s["chunk_id"] for s in res["sources"]} & gold
+    by_ref = {s["ref"]: s["chunk_id"] for s in res["sources"]}
+    cited = {by_ref[n] for n in cited_refs(res["answer"]) if n in by_ref} & gold
+    return len(kept), len(cited)
+
+
+def gold_summary(results: list[dict]) -> dict:
+    """有標 gold_chunks 的題：正解段落全部留下的比例、留下的段數比例、全部引用的比例。"""
+    g = [r for r in results if r["gold_n"]]
+    if not g:
+        return {}
+    return {
+        "gold_questions": len(g),
+        "gold_all_kept": sum(r["gold_kept"] == r["gold_n"] for r in g) / len(g),
+        "gold_recall": sum(r["gold_kept"] for r in g) / sum(r["gold_n"] for r in g),
+        "gold_all_cited": sum(r["gold_cited"] == r["gold_n"] for r in g) / len(g),
+    }
 
 
 def main() -> int:
@@ -129,7 +161,9 @@ def main() -> int:
     ap.add_argument("--base", default="http://localhost:8000")
     ap.add_argument("--strategies", default="hybrid,hybrid_norag")
     ap.add_argument("--split", default="all", choices=["dev", "test", "all"])
+    ap.add_argument("--types", default="", help="只評這幾種題型（逗號分隔，例如 multi,compare）")
     args = ap.parse_args()
+    types = {t for t in args.types.split(",") if t}
 
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
@@ -162,7 +196,9 @@ def main() -> int:
     questions = [
         q
         for q in questions
-        if q["artwork_id"] in kb_ids and (args.split == "all" or q["split"] == args.split)
+        if q["artwork_id"] in kb_ids
+        and (args.split == "all" or q["split"] == args.split)
+        and (not types or q.get("type", "untyped") in types)
     ]
     rows, by_strategy = [], {}
     for strat in args.strategies.split(","):
@@ -178,6 +214,7 @@ def main() -> int:
             res = run_chat(client, body)
             done = res["done"] or {}
             answer_ok, citation_ok = score_answer(q, res) if not res["error"] else (False, False)
+            gold_kept, gold_cited = gold_stats(q, res) if not res["error"] else (0, 0)
             if done.get("prompt_version"):
                 prompt_version = done["prompt_version"]
             egress = done.get("egress") or {}
@@ -195,6 +232,9 @@ def main() -> int:
                 "answer_ok": answer_ok,
                 "citation_ok": citation_ok,
                 "n_sources": len(res["sources"]),
+                "gold_n": len(q.get("gold_chunks", [])),
+                "gold_kept": gold_kept,
+                "gold_cited": gold_cited,
                 "rearrange_ms": ra.get("ms"),
                 "rearrange_fallback": ra.get("fallback") or "",
                 "first_token_ms": (done.get("latency_ms") or {}).get("first_token"),
@@ -221,6 +261,7 @@ def main() -> int:
             else None,
             "mean_sources": statistics.mean([r["n_sources"] for r in ok]) if ok else None,
             "rearrange_fallbacks": sum(1 for r in results if r["rearrange_fallback"]),
+            **gold_summary(results),
             "p95_first_token_ms": p95([r["first_token_ms"] for r in ok]),
             "p95_total_ms": p95([r["total_ms"] for r in ok]),
             "median_total_ms": statistics.median([r["total_ms"] for r in ok]) if ok else None,

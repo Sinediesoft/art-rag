@@ -95,32 +95,75 @@ def visible_parts(scope: guard.MetaFilter | None) -> set[str] | None:
     }
 
 
+def named_artworks(question: str, artwork_id: str | None) -> set[str]:
+    """題目寫出標題的其他畫作（比較題：「這幅畫和〈谿山行旅圖〉有什麼不同？」）。"""
+    return {
+        aid
+        for aid, a in get_store().by_id.items()
+        if aid != artwork_id and a["title"]["zh"] in question
+    }
+
+
+def split_slots(own: list, fill: list, k: int, reserve: int) -> tuple[list, list]:
+    """已指定對象的段落（own）和補進來的段落（fill）合計最多 k 段：先替 fill 留 reserve 個名額，
+    own 取剩下的，own 用不完的名額再給 fill。reserve＝0 就是 own 優先、fill 只補剩下的名額。"""
+    n_own = min(len(own), k - min(len(fill), reserve))
+    return own[:n_own], fill[: k - n_own]
+
+
+def fill_reserve(question: str, artwork_id: str | None, part_id: str | None, k: int) -> int:
+    """題目點名了其他畫作時，替它們留一半名額（k // 2）。只靠比較、背景類字詞時不留：
+    「背景」也會出現在「畫的背景是什麼」這種一般問題，不能硬塞別幅畫的段落。
+
+    原本一律 own 優先：每幅畫有 7–8 段，own 一定先佔滿 top_k_chunks，比較題從來補不進
+    第二幅畫（docs/adr/008 2026-10-05：比較題 0/6）。"""
+    return k // 2 if not part_id and named_artworks(question, artwork_id) else 0
+
+
 def retrieve(
     question: str,
     artwork_id: str | None,
     part_id: str | None = None,
     scope: guard.MetaFilter | None = None,
+    k: int | None = None,
 ) -> list[dict]:
     """檢索段落規則（共用層 §三）：已指定畫作（或圖紙）只取它的段落；相似度門檻＋最多 k 段，
     不硬湊滿；只有比較、背景類問題（或未指定）才從同一領域的全庫補足。
+    題目寫出其他畫作的標題時，只從那幾幅補（沒有比較字眼也補），並替它們留一半名額。
 
     scope：第 3 段的 Metadata Filter（照 JWT 產生）。工廠圖紙只取看得到的圖紙，
-    連已指定的圖紙也一樣（看不到就沒有候選，第 6 段降級）；畫作都是公開的，不受影響。"""
+    連已指定的圖紙也一樣（看不到就沒有候選，第 6 段降級）；畫作都是公開的，不受影響。
+    k：最多幾段，預設 top_k_chunks；段落篩選（Rearrange）開著時呼叫端給 rearrange.max_candidates，
+    多抓一些再交給模型挑（docs/adr/008 2026-10-05）。"""
     store = get_store()
     cfg = get_models_config()
     coll, owner = (store.mfg, part_id) if part_id else (store.art, artwork_id)
     owners = visible_parts(scope) if part_id else None
-    k = int(cfg.retrieval["top_k_chunks"])
+    k = k or int(cfg.retrieval["top_k_chunks"])
     qvec = embed_text([question])[0]
-    wide = not owner or any(w in question for w in cfg.global_fill_keywords)
+    named = named_artworks(question, artwork_id) if not part_id else set()
+    wide = not owner or bool(named) or any(w in question for w in cfg.global_fill_keywords)
     own = coll.search_chunks(qvec, k, owner_id=owner, owners=owners) if owner else []
     seen = {h.item["chunk_id"] for h in own}
-    extra = coll.search_chunks(qvec, k, exclude=seen, owners=owners) if wide else []
+    extra = coll.search_chunks(qvec, k, exclude=seen, owners=named or owners) if wide else []
     best = max((h.score for h in own + extra), default=0.0)
     floor = max(cfg.retrieval["min_chunk_score"], best * cfg.retrieval["relative_chunk_ratio"])
-    hits = [h for h in own if h.score >= floor] or own[:1]  # 已指定時至少留最相關的 1 段
-    hits += [h for h in extra if h.score >= floor][: k - len(hits)]
-    return [_source(i, h, store) for i, h in enumerate(hits)]
+    own = [h for h in own if h.score >= floor] or own[:1]  # 已指定時至少留最相關的 1 段
+    extra = [h for h in extra if h.score >= floor]
+    own, extra = split_slots(own, extra, k, fill_reserve(question, artwork_id, part_id, k))
+    return [_source(i, h, store) for i, h in enumerate(own + extra)]
+
+
+def trim_sources(
+    question: str, sources: list[dict], artwork_id: str | None, part_id: str | None
+) -> list[dict]:
+    """段落篩選失敗、退回原本的段落時，把多抓的候選照不篩選時的規則截回 top_k_chunks 段。"""
+    k = int(get_models_config().retrieval["top_k_chunks"])
+    key, owner = ("part_id", part_id) if part_id else ("artwork_id", artwork_id)
+    own = [s for s in sources if owner and s.get(key) == owner]
+    fill = [s for s in sources if not (owner and s.get(key) == owner)]
+    own, fill = split_slots(own, fill, k, fill_reserve(question, artwork_id, part_id, k))
+    return [{**s, "ref": i + 1} for i, s in enumerate(own + fill)]
 
 
 async def chat_stream(
@@ -282,7 +325,12 @@ async def _chat_stream(
     # 2. 檢索（第 3 段，Metadata Filter 照 JWT 產生；
     #    關檢索時仍算一次，供前端比較用，但不放進 prompt）
     meta = guard.MetaFilter.of(account, domain, doc) if account is not None else None
-    sources = retrieve(question, artwork_id, part_id, meta)
+    # 其他頁面開著段落篩選時多抓候選（rearrange.max_candidates），再交給模型挑：
+    # 一句問兩件事時，第二件的段落常排在 top_k_chunks 之外（docs/adr/008 2026-10-05）。
+    # 智慧助理（post_filter）的第 4～6 段另有段數規則，照舊
+    scan_rearrange = not post_filter and rearrange_mod.enabled(rearrange)
+    k = get_models_config().rearrange.max_candidates if scan_rearrange else None
+    sources = retrieve(question, artwork_id, part_id, meta, k)
     candidates = len(sources)
     # 第 4～6 段：要放進 prompt 的段落先驗證。每段都用地端規則掃描洩密風險；
     # 智慧助理（post_filter）再做 Jev Noul 雙重驗證 → Jev Score 重排（最多 3 段）→ 生成閘門。
@@ -312,6 +360,9 @@ async def _chat_stream(
         rearrange_info = post.rearrange
         if post.mode == "scan" and rearrange_mod.enabled(rearrange):
             sources, rearrange_info = await rearrange_mod.rearrange(question, sources, strategy)
+            if rearrange_info["fallback"]:  # 退回原本的段落：多抓的候選截回不篩選時的段數
+                sources = trim_sources(question, sources, artwork_id, part_id)
+                rearrange_info["kept"] = len(sources)
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     yield sse(
         "sources",
