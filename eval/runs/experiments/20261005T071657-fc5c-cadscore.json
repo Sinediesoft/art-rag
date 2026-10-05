@@ -1,0 +1,300 @@
+{
+ "run_id": "20261005T071657-fc5c",
+ "created_at": "2026-10-05T07:17:24.508016+00:00",
+ "results": {
+  "ortho2cad": {
+   "valid_rate": 1.0,
+   "mean_iou": 0.4634247857574052,
+   "mean_iou_bbox": 0.6437856775664634,
+   "rows": [
+    {
+     "part_id": "mfg-001",
+     "name": "L 型固定支架",
+     "ok": true,
+     "error": null,
+     "iou": 0.13894827531191167,
+     "iou_bbox": 0.6679494337214866,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-002",
+     "name": "連接法蘭",
+     "ok": true,
+     "error": null,
+     "iou": 0.8140698507083873,
+     "iou_bbox": 0.8212859594569336,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-003",
+     "name": "階梯傳動軸",
+     "ok": true,
+     "error": null,
+     "iou": 0.24732079259211293,
+     "iou_bbox": 0.28905315604926457,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-004",
+     "name": "步進馬達安裝板",
+     "ok": true,
+     "error": null,
+     "iou": 0.7528044429732612,
+     "iou_bbox": 0.8564958958392301,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-005",
+     "name": "T 型槽螺帽",
+     "ok": true,
+     "error": null,
+     "iou": 0.45564277088593697,
+     "iou_bbox": 0.7384112191406424,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-006",
+     "name": "立式軸承座",
+     "ok": true,
+     "error": null,
+     "iou": 0.371762582072821,
+     "iou_bbox": 0.4895184011912235,
+     "repaired": true
+    }
+   ],
+   "generate": {
+    "model": "ortho2cad",
+    "baseline": false,
+    "max_pixels": 50176,
+    "rows": [
+     {
+      "part": "mfg-001",
+      "output_tokens": 1201,
+      "seconds": 16.9
+     },
+     {
+      "part": "mfg-002",
+      "output_tokens": 709,
+      "seconds": 5.4
+     },
+     {
+      "part": "mfg-003",
+      "output_tokens": 1491,
+      "seconds": 11.2
+     },
+     {
+      "part": "mfg-004",
+      "output_tokens": 2578,
+      "seconds": 19.6
+     },
+     {
+      "part": "mfg-005",
+      "output_tokens": 2911,
+      "seconds": 22.3
+     },
+     {
+      "part": "mfg-006",
+      "output_tokens": 2765,
+      "seconds": 21.1
+     }
+    ]
+   }
+  },
+  "qwen3-vl_8b-instruct": {
+   "valid_rate": 0.3333333333333333,
+   "mean_iou": 0.17536646337290607,
+   "mean_iou_bbox": 0.2019247119244981,
+   "rows": [
+    {
+     "part_id": "mfg-001",
+     "name": "L 型固定支架",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 7 行）：StdFail_NotDone: GC_MakeArcOfCircle::Value() - no result",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-002",
+     "name": "連接法蘭",
+     "ok": true,
+     "error": null,
+     "iou": 0.498522814312288,
+     "iou_bbox": 0.5540338206799366,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-003",
+     "name": "階梯傳動軸",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 3 行）：ValueError: No start point specified - cannot close",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-004",
+     "name": "步進馬達安裝板",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 15 行）：ValueError: Cannot find a solid on the stack or in the parent chain",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-005",
+     "name": "T 型槽螺帽",
+     "ok": true,
+     "error": null,
+     "iou": 0.5536759659251483,
+     "iou_bbox": 0.6575144508670521,
+     "repaired": false
+    },
+    {
+     "part_id": "mfg-006",
+     "name": "立式軸承座",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 20 行）：ValueError: Workplane object must have at least one solid on the stack to union!",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    }
+   ],
+   "generate": {
+    "model": "qwen3-vl:8b-instruct",
+    "baseline": true,
+    "max_pixels": 640000,
+    "rows": [
+     {
+      "part": "mfg-001",
+      "output_tokens": 648,
+      "seconds": 12.4
+     },
+     {
+      "part": "mfg-002",
+      "output_tokens": 378,
+      "seconds": 3.5
+     },
+     {
+      "part": "mfg-003",
+      "output_tokens": 196,
+      "seconds": 2.1
+     },
+     {
+      "part": "mfg-004",
+      "output_tokens": 244,
+      "seconds": 2.4
+     },
+     {
+      "part": "mfg-005",
+      "output_tokens": 181,
+      "seconds": 2.0
+     },
+     {
+      "part": "mfg-006",
+      "output_tokens": 266,
+      "seconds": 2.6
+     }
+    ]
+   }
+  },
+  "qwen3-vl_4b-instruct": {
+   "valid_rate": 0.16666666666666666,
+   "mean_iou": 0.06795694948680024,
+   "mean_iou_bbox": 0.07870665637273001,
+   "rows": [
+    {
+     "part_id": "mfg-001",
+     "name": "L 型固定支架",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 12 行）：ValueError: Workplane object must have at least one solid on the stack to union!",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-002",
+     "name": "連接法蘭",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 10 行）：Standard_ConstructionError: BRepSweep_Translation::Constructor",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-003",
+     "name": "階梯傳動軸",
+     "ok": false,
+     "error": "安全檢查未通過：語法錯誤（第 9 行）：'(' was never closed",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-004",
+     "name": "步進馬達安裝板",
+     "ok": false,
+     "error": "安全檢查未通過：語法錯誤（第 333 行）：unexpected EOF while parsing",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-005",
+     "name": "T 型槽螺帽",
+     "ok": false,
+     "error": "程式碼執行錯誤（第 9 行）：TypeError: 'float' object is not subscriptable",
+     "iou": 0.0,
+     "iou_bbox": 0.0,
+     "repaired": null
+    },
+    {
+     "part_id": "mfg-006",
+     "name": "立式軸承座",
+     "ok": true,
+     "error": null,
+     "iou": 0.4077416969208014,
+     "iou_bbox": 0.4722399382363801,
+     "repaired": false
+    }
+   ],
+   "generate": {
+    "model": "qwen3-vl:4b-instruct",
+    "baseline": true,
+    "max_pixels": 640000,
+    "rows": [
+     {
+      "part": "mfg-001",
+      "output_tokens": 355,
+      "seconds": 6.2
+     },
+     {
+      "part": "mfg-002",
+      "output_tokens": 3009,
+      "seconds": 15.9
+     },
+     {
+      "part": "mfg-003",
+      "output_tokens": 3009,
+      "seconds": 15.9
+     },
+     {
+      "part": "mfg-004",
+      "output_tokens": 3009,
+      "seconds": 15.8
+     },
+     {
+      "part": "mfg-005",
+      "output_tokens": 386,
+      "seconds": 2.3
+     },
+     {
+      "part": "mfg-006",
+      "output_tokens": 216,
+      "seconds": 1.5
+     }
+    ]
+   }
+  }
+ }
+}

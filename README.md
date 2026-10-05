@@ -389,7 +389,22 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 
 - 解碼約 **121–126 token/s**（Mac 15–25），一張 6–24 秒。
 - temperature 0 也**不跨硬體一致**：只有連接法蘭和 Mac 逐字相同（709 token），其他 5 張從某個 token 起分岔
-  （CUDA 與 Metal 的浮點差異）。上方 Mac 的 IoU 不能代表這台，要在 WSL2 上重跑 `make eval-cad`。
+  （CUDA 與 Metal 的浮點差異）。
+
+**Ortho2CAD 的 IoU**（Windows 產生程式碼、WSL2 執行並算 IoU，`eval/cad_generate.py`＋`eval/cad_score.py`，
+做法見 `docs/5070ti-host.md`；run_id `20261005T071657-fc5c`）：
+
+| | 可執行率 | 平均 IoU | 外框對齊 IoU |
+|---|---|---|---|
+| Ortho2CAD（5070 Ti） | 100% | **0.46** | 0.64 |
+| Ortho2CAD（MacBook Air M5，上表） | 100% | 0.54 | 0.71 |
+| Qwen3-VL **8B** 未微調（和 Ortho2CAD 同大小，新增） | 33% | 0.18 | 0.20 |
+| Qwen3-VL 4B 未微調 | 17% | 0.07 | 0.08（和 Mac 完全相同） |
+
+- 量法和 `make eval-cad` 一致：連接法蘭程式碼和 Mac 逐字相同，IoU 0.814 對 Mac 0.81；4B 對照組兩台一模一樣。
+- 5070 Ti 比 Mac 低 0.08，差在**生成的程式碼不同**（硬體浮點差異），T 型槽螺帽這台較好（0.46 對 0.29）、
+  立式軸承座較差（0.37 對 0.70）——是硬體帶來的變異，不是哪台的模型比較好。報告引用時兩台都列。
+- 和**同樣 8B 的未微調模型**比，最能看出微調的效果：可執行 33% → 100%、平均 IoU 0.18 → 0.46。
 
 **8B 要不要換成 Q8**（2026-10-05，`qwen3-vl:8b-instruct-q8_0`，9.8 GB）：不換。問答與引用 92%／92%、干擾段落題擋下 4/6
 被帶偏 2/6、Text-to-SQL 95%、照片建檔 260/264、智慧助理分流 100%，**每一項都和 Q4 相同、連錯的題目都一樣**；
@@ -717,7 +732,7 @@ art-rag/
 | 資料庫 | PostgreSQL + pgvector | PostgreSQL 17 + pgvector 0.8.6 跑在 Docker（`.env` 設 `DATABASE_URL`）；留空時退回 `data/index/` 檔案索引＋SQLite。見 ADR 009 | B：Alembic、每日 `pg_dump` 使用紀錄 |
 | 部署 | Docker Compose + Nginx + Tailscale Funnel | `deploy/docker-compose.yml` 目前只有資料庫；後端直接提供前端建置檔 | B 在同一份 Compose 補 Nginx、後端容器、Funnel |
 | 以圖搜圖 | Chinese-CLIP 粗篩＋ORB 幾何驗證 | 相同 | 見 ADR 002；D 用真實實拍照校正 |
-| 本地生成 | Qwen3-VL 8B（5070 Ti） | Qwen3-VL 4B（Mac 備用機設定） | 5070 Ti 在 `.env` 改 `HYBRID_MODEL` |
+| 本地生成 | Qwen3-VL 8B（5070 Ti） | 5070 Ti 主機：`HYBRID_MODEL=qwen3-vl:8b-instruct`（Q4；Q8 比過沒有比較好），備援 4B；Mac 備用機維持 4B。實測見上方「5070 Ti 主機（Qwen3-VL 8B）」 | 組員經 Tailscale 連 5070 Ti（`HYBRID_BASE_URL=http://100.x.y.z:11434/v1`） |
 | 雲端 API | 只當對照組（A1／A2） | 介面已接好（OpenAI 相容），`ALLOW_CLOUD` 預設 false、**未設定金鑰** | 評估時在 `.env` 設 `ALLOW_CLOUD=true` 並填 `API_KEY`，跑 `make eval-cloud` |
 | 零外送 | 後端容器封鎖對外連線 | 程式層保護：本地生成端只准連本機／內網位址、雲端預設關閉、每次回應記錄 egress | B 補 `deploy/` 時用 Docker network 封鎖對外連線 |
 | 生產排程 | （企劃書未列） | Timefold Solver 2.7 Java 服務（:8082）＋`production.sqlite3`，結果同步到工廠資料庫 | 正式版放同一個 PostgreSQL 的 production schema，見 ADR 005 |
