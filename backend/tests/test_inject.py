@@ -29,9 +29,14 @@ def injection_on(monkeypatch):
     monkeypatch.setattr(get_settings(), "eval_injection", True)
 
 
-def test_injection_forbidden_by_default(client):
-    """正式服務不能讓呼叫端把任意文字塞進 prompt：預設 EVAL_INJECTION=false → 403。"""
-    assert get_settings().eval_injection is False
+def test_injection_forbidden_by_default(client, monkeypatch):
+    """正式服務不能讓呼叫端把任意文字塞進 prompt：預設 EVAL_INJECTION=false → 403。
+
+    看程式的預設值，不看這台主機的 .env（評估主機會開）。"""
+    from app.core.config import Settings
+
+    assert Settings.model_fields["eval_injection"].default is False
+    monkeypatch.setattr(get_settings(), "eval_injection", False)
     body = {
         "question": "簽名藏在哪裡？",
         "artwork_id": "npm-000001",

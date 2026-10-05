@@ -115,18 +115,28 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
     return out
 
 
+# 回答明白指出參考資料互相矛盾（answer_v2 第 5 條，docs/adr/020）
+CONFLICT_WORDS = ("不一致", "說法不同", "互相矛盾", "有出入", "說法不一")
+
+
 def score_distractor(q: dict, res: dict) -> dict:
-    """干擾段落題的三項（其他題目回空 dict）：kept＝通過篩選進了 prompt、cited＝回答引用了它、
-    misled＝回答出現 forbidden 裡的錯誤事實。"""
+    """干擾段落題（其他題目回空 dict）：kept＝通過篩選進了 prompt、cited＝回答引用了它、
+    flagged＝回答寫出正確答案、也明白指出參考資料說法不一致、
+    misled＝回答出現 forbidden 裡的錯誤事實，而且沒有 flagged。
+
+    系統沒辦法自己判斷兩段誰對，所以「答對並指出另一段說法不同」是要的行為，不算被帶偏。"""
     if not q.get("distractors"):
         return {}
     ans = res["answer"]
     injected = {s["ref"] for s in res["sources"] if s.get("injected")}
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)}
+    correct = all(any(k in ans for k in group) for group in q["keywords"])
+    flagged = correct and any(w in ans for w in CONFLICT_WORDS)
     return {
         "distractor_kept": bool(injected),
         "distractor_cited": bool(injected & cited),
-        "distractor_misled": any(k in ans for k in q.get("forbidden", [])),
+        "distractor_flagged": flagged,
+        "distractor_misled": not flagged and any(k in ans for k in q.get("forbidden", [])),
     }
 
 
@@ -138,18 +148,19 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     answer_ok = all(any(k in ans for k in group) for group in q["keywords"])
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)} - {0}
     by_ref = {s["ref"]: s for s in res["sources"]}
+    d = score_distractor(q, res)
+    flagged = d.get("distractor_flagged", False)
     citation_ok = (
         bool(cited)
         and all(
             n in by_ref
             and by_ref[n]["artwork_id"] == q["artwork_id"]
-            and not by_ref[n].get("injected")
+            and (flagged or not by_ref[n].get("injected"))  # 指出矛盾時引用干擾段落是對的
             for n in cited
         )
         and any(by_ref[n]["topic"] in q["topics"] for n in cited if n in by_ref)
     )
-    d = score_distractor(q, res)
-    if d.get("distractor_misled") or d.get("distractor_cited"):
+    if d.get("distractor_misled") or (d.get("distractor_cited") and not flagged):
         answer_ok = False  # 被干擾段落帶偏就不算答對
     return answer_ok, citation_ok
 
@@ -177,7 +188,7 @@ def main() -> int:
         )
         for i in kb_ids
     }
-    prompt_version = "answer_v1"
+    prompt_version = "answer_v2"
 
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     print(f"評估 {run_id}：kb_version={manifest['kb_version']}，{len(kb_ids)} 幅畫")
@@ -243,6 +254,7 @@ def main() -> int:
                 "error": (res["error"] or {}).get("code", ""),
                 "distractor_kept": dist.get("distractor_kept", ""),
                 "distractor_cited": dist.get("distractor_cited", ""),
+                "distractor_flagged": dist.get("distractor_flagged", ""),
                 "distractor_misled": dist.get("distractor_misled", ""),
                 "answer": res["answer"].replace("\n", " "),
             }
@@ -276,6 +288,7 @@ def main() -> int:
                 "n": len(injected),
                 "filtered_out": sum(not r["distractor_kept"] for r in injected) / len(injected),
                 "cited": sum(r["distractor_cited"] for r in injected) / len(injected),
+                "flagged": sum(r["distractor_flagged"] for r in injected) / len(injected),
                 "misled": sum(r["distractor_misled"] for r in injected) / len(injected),
             }
             if injected

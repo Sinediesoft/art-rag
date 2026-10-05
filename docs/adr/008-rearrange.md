@@ -21,7 +21,7 @@ MIRA（Wang et al., ACM MM 2025）的 Rearrange：先取固定數量的候選，
 
 ## 決定
 採用 3，**預設關**。
-- `backend/app/rag/rearrange.py`、prompt `shared/prompts/rearrange_v1.md`：候選段落（最多 `max_candidates` 段）
+- `backend/app/rag/rearrange.py`、prompt `shared/prompts/rearrange_v1.md`（2026-10-05 起用 `rearrange_v2`：矛盾的段落一起留下，見 ADR 020）：候選段落（最多 `max_candidates` 段）
   一次交給本地主推論伺服器判斷，只送文字、不送照片；不論問答用哪個策略都不送雲端。
 - 輸出只接受「1,3」或「無」這種固定格式；逾時（`timeout_s`）、連不上、輸出看不懂時一律用原本的段落，不擋回答。
 - 「無」也保底留相似度最高的 1 段（照 MIRA 的做法，prompt 的第 3 條規則會負責拒答）；留下的段落 `ref` 從 1 重新編號。

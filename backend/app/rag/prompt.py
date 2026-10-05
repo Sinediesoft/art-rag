@@ -1,6 +1,6 @@
 """共用 prompt 模板組裝：三種策略用同一份（shared/prompts/<version>.md）。
 
-畫作用 answer_v1，工廠圖紙用 drawing_v1（models.yaml 的 prompt.version／prompt.drawing_version）。
+畫作用 answer_v2，工廠圖紙用 drawing_v1（models.yaml 的 prompt.version／prompt.drawing_version）。
 """
 
 import base64

@@ -151,7 +151,7 @@ class RearrangeSpec(BaseModel):
     """檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）"""
 
     enabled: bool = False
-    prompt_version: str = "rearrange_v1"
+    prompt_version: str = "rearrange_v2"
     max_candidates: int = 5
     timeout_s: float = 30
     max_tokens: int = 16
