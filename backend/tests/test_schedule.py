@@ -221,6 +221,8 @@ def fake_models(monkeypatch):
 
     monkeypatch.setattr(memory_guard, "_models", lambda: [make(k) for k in loaded])
     monkeypatch.setattr(memory_guard.time, "sleep", lambda s: None)
+    # 只有系統記憶體一個池（Mac 的情況）；有 NVIDIA 顯示卡的兩個池見 test_memory_gpu.py
+    monkeypatch.setattr(memory_guard, "has_gpu", lambda: False)
     g = memory_guard.MemoryGuard()
     return g, released, loaded
 

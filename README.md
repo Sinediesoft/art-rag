@@ -353,9 +353,9 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 
 - **延遲會被同一張顯示卡上的其他程式拖慢**：同一套評估在 GPU 被遊戲、錄影軟體佔用時，P95 首字量到 2.1–3.9 秒、
   Text-to-SQL P50 7 秒。正式量測與展示前請關掉這些程式。
-- **記憶體管理（ADR 006）在獨立顯卡上看錯指標**：它看的是系統記憶體，但 Qwen3-VL 在 VRAM，卸載後系統記憶體幾乎不降。
-  系統記憶體被其他程式佔滿時，曾每 18 秒卸載一次 8B（重新載入 3–40 秒）。這台把 `MEMORY_HIGH_PCT` 調到 92；
-  之後可改成在有 NVIDIA 顯示卡時看 VRAM。
+- **記憶體管理分兩個池（ADR 021）**：原本只看系統記憶體，系統記憶體被其他程式佔滿時曾每 18 秒卸載一次 8B（重新載入 3–40 秒）。
+  現在有 NVIDIA 顯示卡時 Qwen3-VL、Ortho2CAD 另外看顯示記憶體（`MEMORY_GPU_HIGH_PCT`，預設 90）；
+  系統記憶體 98.8% 時 8B 不再被卸載，只釋放 Chinese-CLIP、bge-m3。
 - 直接在 Windows 執行：排程服務可用（`pipelines/setup_scheduler.py` 已支援 `java.exe`／`mvn.cmd`，`make demo-test` 排程 7/7 準時），
   Ortho2CAD 3D 重建不能用（見上方「直接在 Windows 執行」），要等 WSL2。
 
@@ -693,7 +693,7 @@ art-rag/
 | 生產排程 | （企劃書未列） | Timefold Solver 2.7 Java 服務（:8082）＋`production.sqlite3`，結果同步到工廠資料庫 | 正式版放同一個 PostgreSQL 的 production schema，見 ADR 005 |
 | 統一入口 | （新增，ADR 011、014、015） | 智慧助理：七段權限控管（認證與授權 → Jev Choice → Metadata Filter 檢索 → Jev Noul → Jev Score → 生成閘門 → 本地 LLM）；交給哪個模組由本地分流判斷，Jev 只收代號化文字、只看公開段落，每次顯示外送量 | `guard_qa.jsonl` 補沒看過的攻擊句、`qa.jsonl` 補不可答題；正式版評估 Jev 的服務條款與資料保存 |
 | 身分與權限 | （新增，ADR 011、014、015） | 7 個展示帳號（`shared/access.yaml`），頁首切換、不用密碼，後端簽發 JWT（HS256，roles／部門／clearance／效期），API 閘道驗不過一律 401；資料範圍（訪客只讀公開畫作、業務看不到機密圖紙）在所有讀取 API 檢查；修改資料四項權限判定＋超額送主管核准 | 正式版接公司 SSO（JWT 改由 SSO 簽發、RS256），稽核紀錄改存 PostgreSQL |
-| 記憶體 | 5070 Ti 主機 16 GB 顯示記憶體 | Mac 16 GB：超過 80% 時釋放目前流程用不到的模型 | 5070 Ti 上可調高 `MEMORY_HIGH_PCT` 或關閉，見 ADR 006 |
+| 記憶體 | 5070 Ti 主機 16 GB 顯示記憶體 | 超過 80% 時釋放目前流程用不到的模型（ADR 006）；有 NVIDIA 顯示卡時 VRAM 裡的模型另外看顯示記憶體（ADR 021） | 多張顯示卡、AMD／Intel 顯示卡再擴充 |
 | 評估題型 | 知識庫獨有題、無答案題、干擾段落題，每題標註類型 | `qa.jsonl` 1 題 `no_answer`、6 題 `distractor`（示範題，注入機制見 ADR 019），其餘為 `untyped` | D 補題並標註 `type`；干擾段落題每幅畫至少各一題 counterfactual 與 other |
 | 故宮圖檔 | 故宮 Open Data | Wikimedia Commons 公有領域副本 | D 換成故宮 Open Data 並填 `source_id` |
 | 畫作說明 | 從來源頁整理 | 依公開資料撰寫的摘要 | D 逐段對照來源頁校對 |

@@ -2863,12 +2863,26 @@ export interface components {
             flow: string | null;
             /** Flow Label */
             flow_label: string;
+            /**
+             * Pool
+             * @description 觸發的記憶體池；percent_*、threshold 是這個池的數字
+             * @default ram
+             * @enum {string}
+             */
+            pool: "ram" | "gpu";
             /** Threshold */
             threshold: number;
             /** Percent Before */
             percent_before: number;
             /** Percent After */
             percent_after: number;
+            /**
+             * Gpu Percent Before
+             * @description 有 NVIDIA 顯示卡時
+             */
+            gpu_percent_before?: number | null;
+            /** Gpu Percent After */
+            gpu_percent_after?: number | null;
             /** Released */
             released: components["schemas"]["MemoryReleased"][];
             /** Failed */
@@ -2878,6 +2892,22 @@ export interface components {
              * @description 目前流程或其他請求正在用、所以保留的模型
              */
             kept: string[];
+        };
+        /** MemoryGpu */
+        MemoryGpu: {
+            /** Name */
+            name: string;
+            /**
+             * Percent
+             * @description 顯示記憶體使用率（%，整張卡、含其他程式）
+             */
+            percent: number;
+            /** Threshold */
+            threshold: number;
+            /** Used Mb */
+            used_mb: number;
+            /** Total Mb */
+            total_mb: number;
         };
         /** MemoryModel */
         MemoryModel: {
@@ -2907,6 +2937,13 @@ export interface components {
             in_use: boolean;
             /** Needed By Current Flow */
             needed_by_current_flow: boolean;
+            /**
+             * Pool
+             * @description ram＝系統記憶體；gpu＝顯示記憶體（有 NVIDIA 顯示卡時的 Ollama、llama-server，ADR 021）
+             * @default ram
+             * @enum {string}
+             */
+            pool: "ram" | "gpu";
         };
         /** MemoryReleaseResponse */
         MemoryReleaseResponse: {
@@ -2939,6 +2976,8 @@ export interface components {
             total_mb: number;
             /** Available Mb */
             available_mb: number;
+            /** @description NVIDIA 顯示卡的顯示記憶體；沒有時 null（只看系統記憶體） */
+            gpu?: components["schemas"]["MemoryGpu"] | null;
             /** Current Flow */
             current_flow: string | null;
             /** Current Flow Label */

@@ -927,6 +927,12 @@ function SystemBrief() {
       <div>
         <p>
           系統記憶體 <b className="font-mono">{Math.round(m.percent)}%</b>（超過 {m.threshold}% 會釋放目前流程用不到的模型）；
+          {m.gpu && (
+            <>
+              顯示記憶體 <b className="font-mono">{Math.round(m.gpu.percent)}%</b>（{m.gpu.name}，超過 {m.gpu.threshold}%
+              只釋放 VRAM 裡的模型）；
+            </>
+          )}
           服務狀態 <b>{data.status === "ok" ? "正常" : "部分異常"}</b>。
         </p>
         <p className="mt-1 text-ink-80">已載入：{m.models.filter((x) => x.loaded).map((x) => x.label).join("、") || "無"}</p>

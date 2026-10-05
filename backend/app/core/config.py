@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # 記憶體管理：系統記憶體使用率超過門檻時，釋放目前流程用不到的模型（services/memory_guard.py）
     memory_guard: bool = True
     memory_high_pct: float = 80.0
+    # 有 NVIDIA 顯示卡時，Ollama 與 llama-server 的模型在 VRAM：改看顯示記憶體使用率（docs/adr/021）
+    memory_gpu_high_pct: float = 90.0
     memory_check_interval_s: float = 5.0
 
     # 智慧助理的 System 1（意圖判斷）：TypeSafe Jev（雲端，只收代號化文字，docs/adr/011）。

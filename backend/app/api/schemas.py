@@ -659,6 +659,19 @@ class MemoryModel(BaseModel):
     loaded: bool | None = Field(description="是否載入中；null＝連不上或不在本機")
     in_use: bool = Field(description="有請求正在使用（不會被釋放）")
     needed_by_current_flow: bool
+    pool: Literal["ram", "gpu"] = Field(
+        default="ram",
+        description="ram＝系統記憶體；gpu＝顯示記憶體"
+        "（有 NVIDIA 顯示卡時的 Ollama、llama-server，ADR 021）",
+    )
+
+
+class MemoryGpu(BaseModel):
+    name: str
+    percent: float = Field(description="顯示記憶體使用率（%，整張卡、含其他程式）")
+    threshold: float
+    used_mb: int
+    total_mb: int
 
 
 class MemoryReleased(BaseModel):
@@ -673,9 +686,14 @@ class MemoryEvent(BaseModel):
     trigger: str = Field(description="進入「…」流程／背景監控／手動")
     flow: str | None
     flow_label: str
+    pool: Literal["ram", "gpu"] = Field(
+        default="ram", description="觸發的記憶體池；percent_*、threshold 是這個池的數字"
+    )
     threshold: float
     percent_before: float
     percent_after: float
+    gpu_percent_before: float | None = Field(default=None, description="有 NVIDIA 顯示卡時")
+    gpu_percent_after: float | None = None
     released: list[MemoryReleased]
     failed: list[MemoryReleased]
     kept: list[str] = Field(description="目前流程或其他請求正在用、所以保留的模型")
@@ -687,6 +705,9 @@ class MemoryStatus(BaseModel):
     threshold: float
     total_mb: int
     available_mb: int
+    gpu: MemoryGpu | None = Field(
+        default=None, description="NVIDIA 顯示卡的顯示記憶體；沒有時 null（只看系統記憶體）"
+    )
     current_flow: str | None
     current_flow_label: str | None
     flow_at: str | None

@@ -116,20 +116,25 @@ function MemoryChip({ memory, pushRight }: { memory: MemoryStatus | null | undef
   if (!memory) return null;
   const last = memory.events.find((e) => e.released.length > 0);
   const recent = last && Date.now() - new Date(last.at).getTime() < 60_000;
-  const high = memory.percent >= memory.threshold;
+  const gpu = memory.gpu;
+  const high = memory.percent >= memory.threshold || (!!gpu && gpu.percent >= gpu.threshold);
+  const pool = last?.pool === "gpu" ? "顯示記憶體 " : "";
+  const vram = gpu ? `；顯示記憶體 ${gpu.percent}%（超過 ${gpu.threshold}% 只釋放 VRAM 裡的模型）` : "";
   return (
     <Link
       to="/admin#memory"
       title={
         recent && last
-          ? `${last.trigger}：已釋放 ${last.released.map((r) => r.label).join("、")}（${last.percent_before}% → ${last.percent_after}%）`
-          : `系統記憶體 ${memory.percent}%（超過 ${memory.threshold}% 會釋放目前流程用不到的模型）`
+          ? `${last.trigger}：已釋放 ${last.released.map((r) => r.label).join("、")}（${pool}${last.percent_before}% → ${last.percent_after}%）`
+          : `系統記憶體 ${memory.percent}%（超過 ${memory.threshold}% 會釋放目前流程用不到的模型）${vram}`
       }
       className={`${pushRight ? "ml-auto sm:ml-1" : "ml-1"} hidden shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-xs tabular-nums sm:inline-block ${
         recent ? "text-success-on-dark" : high ? "text-warning-on-dark" : "text-white/70"
       }`}
     >
-      {recent && last ? `釋放 ${last.released.length} 個模型 · ${last.percent_after}%` : `記憶體 ${Math.round(memory.percent)}%`}
+      {recent && last
+        ? `釋放 ${last.released.length} 個模型 · ${pool}${last.percent_after}%`
+        : `記憶體 ${Math.round(memory.percent)}%${gpu ? ` · VRAM ${Math.round(gpu.percent)}%` : ""}`}
     </Link>
   );
 }

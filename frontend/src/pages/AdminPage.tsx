@@ -450,6 +450,20 @@ export function AdminPage() {
   );
 }
 
+/** 使用率長條＋門檻線（系統記憶體、顯示記憶體共用） */
+function MemoryBar({ percent, threshold }: { percent: number; threshold: number }) {
+  const high = percent >= threshold;
+  return (
+    <div className="relative h-3 overflow-hidden rounded-full bg-parchment-deep">
+      <div
+        className={`h-full rounded-full ${high ? "bg-warning" : "bg-success"}`}
+        style={{ width: `${Math.min(100, percent)}%` }}
+      />
+      <div className="absolute inset-y-0 w-0.5 bg-ink/60" style={{ left: `${threshold}%` }} title="門檻" />
+    </div>
+  );
+}
+
 function MemoryCard({ h }: { h: HealthResponse }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -477,14 +491,29 @@ function MemoryCard({ h }: { h: HealthResponse }) {
               {m.current_flow_label && ` · 目前流程：${m.current_flow_label}`}
             </span>
           </div>
-          <div className="relative h-3 overflow-hidden rounded-full bg-parchment-deep">
-            <div
-              className={`h-full rounded-full ${high ? "bg-warning" : "bg-success"}`}
-              style={{ width: `${Math.min(100, m.percent)}%` }}
-            />
-            <div className="absolute inset-y-0 w-0.5 bg-ink/60" style={{ left: `${m.threshold}%` }} title="門檻" />
-          </div>
+          <MemoryBar percent={m.percent} threshold={m.threshold} />
         </div>
+        {m.gpu && (
+          <div>
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
+              <span>
+                顯示記憶體{" "}
+                <b
+                  className={`font-mono text-lg ${m.gpu.percent >= m.gpu.threshold ? "text-warning" : "text-success"}`}
+                >
+                  {m.gpu.percent}%
+                </b>
+                <span className="ml-2 text-xs text-ink-48">
+                  {m.gpu.name} · 已用 {(m.gpu.used_mb / 1024).toFixed(1)} GB／共 {(m.gpu.total_mb / 1024).toFixed(0)} GB
+                </span>
+              </span>
+              <span className="text-xs text-ink-48">
+                Qwen3-VL、Ortho2CAD 在這裡：超過 {m.gpu.threshold}% 時只釋放 VRAM 裡的模型（整張卡，含其他程式）
+              </span>
+            </div>
+            <MemoryBar percent={m.gpu.percent} threshold={m.gpu.threshold} />
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">
             <thead className="t-caption-strong text-left text-ink-48 [&_th]:font-semibold">
@@ -499,7 +528,10 @@ function MemoryCard({ h }: { h: HealthResponse }) {
               {m.models.map((x) => (
                 <tr key={x.key} className="border-t border-hairline">
                   <td className="py-1.5 pr-2">{x.label}</td>
-                  <td className="pr-2 text-xs text-ink-48">{x.where}</td>
+                  <td className="pr-2 text-xs text-ink-48">
+                    {x.where}
+                    {m.gpu && <span className="ml-1">（{x.pool === "gpu" ? "VRAM" : "系統記憶體"}）</span>}
+                  </td>
                   <td className="pr-2 text-right font-mono text-xs">{(x.approx_mb / 1024).toFixed(1)} GB</td>
                   <td className="text-xs">
                     {x.loaded === null ? (
@@ -528,6 +560,7 @@ function MemoryCard({ h }: { h: HealthResponse }) {
                   <span className="font-mono text-ink-48">{formatTaipei(e.at)}</span>
                   <span>{e.trigger}</span>
                   <span className="font-mono">
+                    {e.pool === "gpu" ? "顯示記憶體 " : ""}
                     {e.percent_before}% → {e.percent_after}%
                   </span>
                   <span className="text-success">

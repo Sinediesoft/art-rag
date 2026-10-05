@@ -58,12 +58,19 @@ async def lifespan(app: FastAPI):
     style.warmup()
     m = get_store().manifest
     where = f"PostgreSQL {db.describe(s.database_url)}" if s.database_url else "檔案索引＋SQLite"
+    gpu = memory_guard.gpu_memory() if memory_guard.has_gpu() else None
+    vram = (
+        f"；顯示記憶體 {gpu.percent:.0f}%（{gpu.name}，"
+        f"超過 {s.memory_gpu_high_pct:.0f}% 時釋放 VRAM 裡的閒置模型）"
+        if gpu
+        else ""
+    )
     log.info(
         f"ArtRAG 就緒：{m['artwork_count']} 幅畫、{m.get('part_count', 0)} 張工廠圖紙，"
         f"kb_version={m['kb_version']}；資料存放：{where}；"
         f"工廠資料庫 {get_inventory_repo().manifest.get('tables', {})}；"
         f"記憶體 {memory_guard.memory_percent():.0f}%"
-        f"（超過 {s.memory_high_pct:.0f}% 時釋放閒置模型）"
+        f"（超過 {s.memory_high_pct:.0f}% 時釋放閒置模型）{vram}"
     )
     # 記憶體管理的背景監控：超過門檻就釋放最近一次流程用不到的模型
     watcher = asyncio.create_task(memory_guard.watch()) if s.memory_guard else None
