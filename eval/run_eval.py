@@ -6,6 +6,9 @@
   （兩者都是人工評分前的自動化代理指標，正式成績依企劃書由兩人獨立評分）
 - 每題有題目類型 type（common 常識／kb_only 知識庫獨有／no_answer 無答案／distractor 干擾，
   未標註記為 untyped），結果依類型分組；每筆也記錄送出本機的資料量（egress）
+- 干擾段落題（docs/adr/019）：題目的 distractors 會注入檢索結果（後端要 EVAL_INJECTION=true），
+  forbidden 是干擾段落裡的錯誤事實。另計三項：干擾段落有沒有通過篩選進 prompt（kept）、
+  回答有沒有引用它（cited）、回答有沒有出現錯誤事實（misled）；被帶偏或引用了就不算答對
 
 雲端對照組（api_nokb＝A1 無檢索、api_kb＝A2 有檢索）需要後端 ALLOW_CLOUD=true 與 API_KEY。
 
@@ -90,6 +93,10 @@ def eval_images(client: httpx.Client, kb_ids: set[str]) -> dict:
 def run_chat(client: httpx.Client, body: dict) -> dict:
     out = {"answer": "", "sources": [], "rearrange": None, "done": None, "error": None}
     with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
+        if resp.status_code != 200:
+            resp.read()
+            out["error"] = resp.json().get("error") or {"code": f"HTTP {resp.status_code}"}
+            return out
         event = None
         for line in resp.iter_lines():
             if line.startswith("event:"):
@@ -108,6 +115,21 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
     return out
 
 
+def score_distractor(q: dict, res: dict) -> dict:
+    """干擾段落題的三項（其他題目回空 dict）：kept＝通過篩選進了 prompt、cited＝回答引用了它、
+    misled＝回答出現 forbidden 裡的錯誤事實。"""
+    if not q.get("distractors"):
+        return {}
+    ans = res["answer"]
+    injected = {s["ref"] for s in res["sources"] if s.get("injected")}
+    cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)}
+    return {
+        "distractor_kept": bool(injected),
+        "distractor_cited": bool(injected & cited),
+        "distractor_misled": any(k in ans for k in q.get("forbidden", [])),
+    }
+
+
 def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     ans = res["answer"]
     if q.get("expect_refusal"):
@@ -118,9 +140,17 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     by_ref = {s["ref"]: s for s in res["sources"]}
     citation_ok = (
         bool(cited)
-        and all(n in by_ref and by_ref[n]["artwork_id"] == q["artwork_id"] for n in cited)
+        and all(
+            n in by_ref
+            and by_ref[n]["artwork_id"] == q["artwork_id"]
+            and not by_ref[n].get("injected")
+            for n in cited
+        )
         and any(by_ref[n]["topic"] in q["topics"] for n in cited if n in by_ref)
     )
+    d = score_distractor(q, res)
+    if d.get("distractor_misled") or d.get("distractor_cited"):
+        answer_ok = False  # 被干擾段落帶偏就不算答對
     return answer_ok, citation_ok
 
 
@@ -175,9 +205,15 @@ def main() -> int:
                 "allow_fallback": False,
                 **STRATEGY_BODY[strat],
             }
+            # 關檢索的策略不放段落進 prompt，注入沒有意義
+            if q.get("distractors") and body.get("use_retrieval", True):
+                body["inject"] = q["distractors"]
             res = run_chat(client, body)
+            if (res["error"] or {}).get("code") == "FORBIDDEN" and "inject" in body:
+                print(f"  {q['id']}：後端沒開 EVAL_INJECTION=true，干擾段落題無法注入")
             done = res["done"] or {}
             answer_ok, citation_ok = score_answer(q, res) if not res["error"] else (False, False)
+            dist = score_distractor(q, res) if not res["error"] and "inject" in body else {}
             if done.get("prompt_version"):
                 prompt_version = done["prompt_version"]
             egress = done.get("egress") or {}
@@ -205,6 +241,9 @@ def main() -> int:
                 "egress_chunks": egress.get("chunks", 0),
                 "egress_bytes": egress.get("bytes", 0),
                 "error": (res["error"] or {}).get("code", ""),
+                "distractor_kept": dist.get("distractor_kept", ""),
+                "distractor_cited": dist.get("distractor_cited", ""),
+                "distractor_misled": dist.get("distractor_misled", ""),
                 "answer": res["answer"].replace("\n", " "),
             }
             rows.append(row)
@@ -212,6 +251,7 @@ def main() -> int:
             mark = "✓" if answer_ok else "✗"
             print(f"  [{strat}] {mark} {q['id']} {row['answer'][:60]}")
         ok = [r for r in results if not r["error"]]
+        injected = [r for r in ok if r["distractor_kept"] != ""]
         by_strategy[strat] = {
             "n": len(results),
             "errors": len(results) - len(ok),
@@ -231,6 +271,15 @@ def main() -> int:
                 / sum(1 for r in results if r["type"] == t)
                 for t in sorted({r["type"] for r in results})
             },
+            # 干擾段落題：篩選擋下率（越高越好）、引用率與被帶偏率（越低越好）
+            "distractor": {
+                "n": len(injected),
+                "filtered_out": sum(not r["distractor_kept"] for r in injected) / len(injected),
+                "cited": sum(r["distractor_cited"] for r in injected) / len(injected),
+                "misled": sum(r["distractor_misled"] for r in injected) / len(injected),
+            }
+            if injected
+            else None,
         }
 
     runs = EVAL / "runs"

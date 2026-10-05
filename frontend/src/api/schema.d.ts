@@ -265,6 +265,7 @@ export interface paths {
          * @description 圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
          *     智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
          *     放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。
+         *     inject（干擾段落注入）只給評估用，EVAL_INJECTION=false 時 403（docs/adr/019）。
          */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
@@ -1918,6 +1919,11 @@ export interface components {
              * @description 七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）
              */
             post_filter?: ("jev" | "local") | null;
+            /**
+             * Inject
+             * @description 評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403
+             */
+            inject?: components["schemas"]["Distractor"][] | null;
         };
         /** ChromaStats */
         ChromaStats: {
@@ -2049,6 +2055,35 @@ export interface components {
             license: string;
             /** Attribution */
             attribution?: string | null;
+        };
+        /**
+         * Distractor
+         * @description 干擾段落（評估專用，docs/adr/019）。混進檢索結果後照常經過洩密掃描與段落篩選。
+         */
+        Distractor: {
+            /**
+             * Kind
+             * @description counterfactual＝呼叫端手寫、和正確答案衝突的段落；other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落
+             * @enum {string}
+             */
+            kind: "counterfactual" | "other";
+            /**
+             * Text
+             * @description counterfactual 必填
+             */
+            text?: string | null;
+            /**
+             * Topic
+             * @description counterfactual 的段落主題；留空＝「干擾段落」
+             */
+            topic?: string | null;
+            /**
+             * Position
+             * @description 放在真正段落之前（較難）或之後
+             * @default first
+             * @enum {string}
+             */
+            position: "first" | "last";
         };
         /** DrawingSearchHit */
         DrawingSearchHit: {

@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # 展示用：在 /admin 模擬主推論伺服器斷線，正式上線請關閉
     demo_controls: bool = True
 
+    # 評估用：/chat 接受 inject（干擾段落注入，docs/adr/019）。等於讓呼叫端把任意文字塞進 prompt，
+    # 只在跑 make eval 的主機打開，正式服務一律 false
+    eval_injection: bool = False
+
     # 身分憑證（JWT，HS256，docs/adr/015 第 1 段）：留空＝每次啟動隨機產生
     # （後端重啟後舊憑證全部失效，前端自動改回訪客）；多台後端共用時要填同一組
     jwt_secret: str = ""

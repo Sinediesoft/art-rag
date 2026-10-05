@@ -123,6 +123,83 @@ def retrieve(
     return [_source(i, h, store) for i, h in enumerate(hits)]
 
 
+INJECTED_LABEL = "評估注入（干擾段落）"
+
+
+def inject_distractors(
+    question: str,
+    sources: list[dict],
+    specs: list[dict],
+    artwork_id: str | None,
+    part_id: str | None,
+    scope: guard.MetaFilter | None = None,
+) -> list[dict]:
+    """干擾段落注入（評估專用，docs/adr/019）：混進檢索結果，之後照常經過洩密掃描與段落篩選，
+    量「篩選擋不擋得掉」與「模型會不會被帶偏」。
+
+    counterfactual：呼叫端手寫的段落，掛在同一幅畫／同一張圖紙底下（看起來像真的）；
+    score 用它和問題的 bge-m3 相似度，和真正段落同一把尺。
+    other：同領域其他畫作／圖紙中和問題最相近的真實段落；工廠圖紙只從看得到的圖紙取。
+    每段標 injected，chunk_id 以 inject: 開頭，評估腳本靠它判斷有沒有引用到。"""
+    store = get_store()
+    domain_part = bool(part_id)
+    coll, owner = (store.mfg, part_id) if domain_part else (store.art, artwork_id)
+    counter = [s for s in specs if s["kind"] == "counterfactual"]
+    n_other = sum(1 for s in specs if s["kind"] == "other")
+    vecs = embed_text([question] + [s["text"] for s in counter])
+    qvec, cvecs = vecs[0], vecs[1:]
+
+    others = []
+    if n_other:
+        owners = visible_parts(scope) if domain_part else None
+        seen = {s["chunk_id"] for s in sources}
+        for h in coll.search_chunks(qvec, len(seen) + 20, exclude=seen, owners=owners):
+            if h.item[coll.owner_key] != owner:
+                others.append(h)
+            if len(others) >= n_other:
+                break
+
+    first, last = [], []
+    ci = oi = 0
+    for i, spec in enumerate(specs):
+        if spec["kind"] == "counterfactual":
+            s = {
+                "chunk_id": f"inject:{i}",
+                "topic": spec.get("topic") or "干擾段落",
+                "text": spec["text"],
+                "source_url": "",
+                "license": "",
+                "score": round(float(cvecs[ci] @ qvec), 4),
+                "source_label": INJECTED_LABEL,
+            }
+            ci += 1
+            if domain_part:
+                part = store.mfg.by_id[part_id]
+                s |= {
+                    "part_id": part_id,
+                    "title": part["name"]["zh"],
+                    "level": part["confidentiality"],
+                }
+            else:
+                title = store.by_id[artwork_id]["title"]["zh"] if artwork_id else ""
+                s |= {
+                    "artwork_id": artwork_id,
+                    "artwork_title": title,
+                    "title": title,
+                    "level": "公開",
+                }
+        else:
+            if oi >= len(others):
+                continue  # 同領域沒有別的段落可取（知識庫只有一筆）
+            real_id = others[oi].item["chunk_id"]
+            s = _source(0, others[oi], store) | {"chunk_id": f"inject:{i}:{real_id}"}
+            oi += 1
+        s |= {"injected": True, "injected_kind": spec["kind"]}
+        (first if spec.get("position", "first") == "first" else last).append(s)
+    merged = first + sources + last
+    return [{**s, "ref": i + 1} for i, s in enumerate(merged)]
+
+
 async def chat_stream(
     question: str,
     request_id: str,
@@ -135,6 +212,7 @@ async def chat_stream(
     rearrange: bool | None = None,
     account: Account | None = None,
     post_filter: str | None = None,
+    inject: list[dict] | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -142,6 +220,7 @@ async def chat_stream(
     account：目前身分（JWT 的資料範圍與 Metadata Filter）；
     None＝不限（評估腳本、單元測試直接呼叫時）。
     post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
+    inject：評估用的干擾段落（docs/adr/019），呼叫端要先確認 EVAL_INJECTION 已開啟。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -156,6 +235,7 @@ async def chat_stream(
         rearrange,
         account,
         post_filter,
+        inject,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -173,6 +253,7 @@ async def _chat_stream(
     rearrange: bool | None = None,
     account: Account | None = None,
     post_filter: str | None = None,
+    inject: list[dict] | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -283,6 +364,8 @@ async def _chat_stream(
     #    關檢索時仍算一次，供前端比較用，但不放進 prompt）
     meta = guard.MetaFilter.of(account, domain, doc) if account is not None else None
     sources = retrieve(question, artwork_id, part_id, meta)
+    if inject:
+        sources = inject_distractors(question, sources, inject, artwork_id, part_id, meta)
     candidates = len(sources)
     # 第 4～6 段：要放進 prompt 的段落先驗證。每段都用地端規則掃描洩密風險；
     # 智慧助理（post_filter）再做 Jev Noul 雙重驗證 → Jev Score 重排（最多 3 段）→ 生成閘門。

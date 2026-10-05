@@ -43,6 +43,10 @@
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
 雲端策略一律回 `error`（`CLOUD_CONFIDENTIAL_FORBIDDEN`）。
 
+**干擾段落注入**（評估專用，請求帶 `inject`、後端 `EVAL_INJECTION=true`，docs/adr/019）：被注入、而且通過洩密掃描與
+段落篩選留下來的段落，在 `sources` 裡多帶 `injected: true`、`injected_kind`（`counterfactual`／`other`），
+`chunk_id` 以 `inject:` 開頭，`source_label` 為「評估注入（干擾段落）」。前端不會送 `inject`，正常問答不會出現這些欄位。
+
 畫作的「色彩分析」段落（`chunk_id` 為 `<id>#color`，建索引時由系統計算，見 `docs/adr/010`）同樣 `source_url` 為 `null`，
 改帶 `source_label`（「系統計算：色彩分析（數位圖檔）」）；其他畫作段落不帶 `source_label`。
 

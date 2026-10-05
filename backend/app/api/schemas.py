@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # api_nokb／api_kb 是雲端對照組（A1 無檢索、A2 有檢索），ALLOW_CLOUD=false 時停用
 Strategy = Literal["hybrid", "api_nokb", "api_kb", "lora", "mock"]
@@ -267,6 +267,28 @@ class ImageAlignment(BaseModel):
     latency_ms: int = Field(description="對位與比對的計算時間（不含讀檔）")
 
 
+class Distractor(BaseModel):
+    """干擾段落（評估專用，docs/adr/019）。混進檢索結果後照常經過洩密掃描與段落篩選。"""
+
+    kind: Literal["counterfactual", "other"] = Field(
+        description="counterfactual＝呼叫端手寫、和正確答案衝突的段落；"
+        "other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落"
+    )
+    text: str | None = Field(default=None, max_length=2000, description="counterfactual 必填")
+    topic: str | None = Field(
+        default=None, max_length=50, description="counterfactual 的段落主題；留空＝「干擾段落」"
+    )
+    position: Literal["first", "last"] = Field(
+        default="first", description="放在真正段落之前（較難）或之後"
+    )
+
+    @model_validator(mode="after")
+    def _text_for_counterfactual(self):
+        if self.kind == "counterfactual" and not (self.text or "").strip():
+            raise ValueError("counterfactual 干擾段落要有 text")
+        return self
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None
@@ -284,6 +306,11 @@ class ChatRequest(BaseModel):
         description="七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、"
         "評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。"
         "null＝只用地端規則剔除有洩密風險的段落（其他頁面）",
+    )
+    inject: list[Distractor] | None = Field(
+        default=None,
+        max_length=5,
+        description="評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403",
     )
 
 
