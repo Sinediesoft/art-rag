@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（例如沒有 GPU 的電腦關掉）
     rearrange: str = ""
 
+    # 問答要不要附圖（docs/adr/024）：留空＝shared/models.yaml 的 chat.send_image；
+    # true／false 覆寫這台主機的設定（例如 4 GB 顯卡設 false）
+    send_image: str = ""
+
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
@@ -157,6 +161,12 @@ class RearrangeSpec(BaseModel):
     max_candidates: int = 5
     timeout_s: float = 30
     max_tokens: int = 16
+
+
+class ChatSpec(BaseModel):
+    """問答（docs/adr/024）：已辨識、檢索開著時要不要附圖"""
+
+    send_image: bool = True
 
 
 class ColorAnalysisSpec(BaseModel):
@@ -316,6 +326,7 @@ class ModelsConfig(BaseModel):
     # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/007）
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
+    chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()

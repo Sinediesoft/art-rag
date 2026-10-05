@@ -40,6 +40,10 @@ STRATEGY_BODY = {
     # 檢索段落篩選（MIRA 的 Rearrange）開關對照：明確指定，不受伺服器預設影響（make eval-rearrange）
     "hybrid_plain": {"strategy": "hybrid", "rearrange": False},
     "hybrid_rearrange": {"strategy": "hybrid", "rearrange": True},
+    # 問答附圖／不附圖對照（Issue #2、docs/adr/024，make eval-send-image）：
+    # 明確指定，不受伺服器預設影響
+    "hybrid_img": {"strategy": "hybrid", "send_image": True},
+    "hybrid_noimg": {"strategy": "hybrid", "send_image": False},
     "api_nokb": {"strategy": "api_nokb"},
     "api_kb": {"strategy": "api_kb"},
     "lora": {"strategy": "lora"},

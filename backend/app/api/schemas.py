@@ -312,6 +312,11 @@ class ChatRequest(BaseModel):
         max_length=5,
         description="評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403",
     )
+    send_image: bool | None = Field(
+        default=None,
+        description="已辨識（或已指定）、檢索開著時要不要附圖給生成模型（docs/adr/024）；"
+        "null＝依 .env 的 SEND_IMAGE／models.yaml 的 chat.send_image（預設送）。關檢索時一律送",
+    )
 
 
 class FeedbackRequest(BaseModel):

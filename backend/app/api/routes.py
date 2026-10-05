@@ -213,6 +213,7 @@ async def chat(body: S.ChatRequest, request: Request):
         account=account,
         post_filter=body.post_filter,
         inject=[d.model_dump() for d in body.inject] if body.inject else None,
+        send_image=body.send_image,
     )
     return StreamingResponse(
         stream,

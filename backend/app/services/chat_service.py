@@ -123,6 +123,20 @@ def retrieve(
     return [_source(i, h, store) for i, h in enumerate(hits)]
 
 
+def send_image_enabled(requested: bool | None = None) -> bool:
+    """問答要不要附圖（docs/adr/024）。
+
+    優先順序：請求的 send_image ＞ .env 的 SEND_IMAGE ＞ models.yaml 的 chat.send_image。"""
+    if requested is not None:
+        return requested
+    env = get_settings().send_image.strip().lower()
+    if env in ("true", "1", "on"):
+        return True
+    if env in ("false", "0", "off"):
+        return False
+    return get_models_config().chat.send_image
+
+
 INJECTED_LABEL = "評估注入（干擾段落）"
 
 
@@ -213,6 +227,7 @@ async def chat_stream(
     account: Account | None = None,
     post_filter: str | None = None,
     inject: list[dict] | None = None,
+    send_image: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -221,6 +236,7 @@ async def chat_stream(
     None＝不限（評估腳本、單元測試直接呼叫時）。
     post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
     inject：評估用的干擾段落（docs/adr/019），呼叫端要先確認 EVAL_INJECTION 已開啟。
+    send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -236,6 +252,7 @@ async def chat_stream(
         account,
         post_filter,
         inject,
+        send_image,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -254,6 +271,7 @@ async def _chat_stream(
     account: Account | None = None,
     post_filter: str | None = None,
     inject: list[dict] | None = None,
+    send_image: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -475,8 +493,14 @@ async def _chat_stream(
 
     # 3. 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
     #    Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
-    #    縮圖省不到時間，模型反而看得比較模糊
-    if image_id:
+    #    縮圖省不到時間，模型反而看得比較模糊。
+    #    走到這裡畫作／圖紙一定已經辨識或指定（辨識不到在第 1 步就回 NOT_IN_KB）；
+    #    檢索開著時答案來自段落與作品卡，可以設定不送圖（docs/adr/024）。
+    #    關檢索的對照組照樣送：檢索增益靠它量
+    attach_image = not (artwork and use_retrieval) or send_image_enabled(send_image)
+    if not attach_image:
+        image_jpeg = None
+    elif image_id:
         image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
@@ -560,6 +584,7 @@ async def _chat_stream(
         "fallback_reason": "；".join(reasons) or None,
         "prompt_version": prompt_version(domain),
         "use_retrieval": use_retrieval,
+        "image_sent": image_jpeg is not None,  # docs/adr/024
         "latency_ms": {
             "retrieval": retrieval_ms,
             "first_token": first_token_ms,

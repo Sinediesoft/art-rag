@@ -6,7 +6,7 @@
 |---|---|---|
 | `sources` | `{"request_id", "artwork_id", "strategy", "sources": [{"ref", "chunk_id", "artwork_id", "artwork_title", "text", "source_url", "license", "score"}]}` | 檢索到的來源，`ref` 即回答中的 [編號] |
 | `token` | `{"text"}` | 文字片段（已經過 OpenCC s2twp 轉換） |
-| `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "use_retrieval", "latency_ms": {"retrieval", "first_token", "generation", "total"}, "tokens": {"input", "output"}, "cost_twd", "egress": {"images", "chunks", "bytes"}}` | 完成；`fallback` 為 true 時前端顯示「本地備援模型」（`strategy_used` 為 `hybrid_fallback`）；`egress` 是送出本機的資料量，本地策略恆為 0，前端顯示「資料外送」標示 |
+| `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "use_retrieval", "image_sent", "latency_ms": {"retrieval", "first_token", "generation", "total"}, "tokens": {"input", "output"}, "cost_twd", "egress": {"images", "chunks", "bytes"}}` | 完成；`image_sent`＝這題有沒有附圖給生成模型（docs/adr/024：已辨識、檢索開著時可設定不送）；`fallback` 為 true 時前端顯示「本地備援模型」（`strategy_used` 為 `hybrid_fallback`）；`egress` 是送出本機的資料量，本地策略恆為 0，前端顯示「資料外送」標示 |
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 
 `sources` 另帶 `part_id`、`identified`（有做以圖辨識時的辨識結果）與 `route`：只帶 `image_id`、
