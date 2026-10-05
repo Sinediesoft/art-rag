@@ -115,8 +115,18 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
     return out
 
 
-# 回答明白指出參考資料互相矛盾（answer_v2 第 5 條，docs/adr/020）
-CONFLICT_WORDS = ("不一致", "說法不同", "互相矛盾", "有出入", "說法不一")
+def owner_of(q: dict) -> str:
+    """題目問的是哪一幅畫或哪一張圖紙（圖紙題用 part_id）。"""
+    return q.get("part_id") or q["artwork_id"]
+
+
+# 回答明白指出參考資料互相矛盾（answer_v2 第 5 條，docs/adr/020）。
+# 只在回答同時寫出正確答案時才算數。「所述…不同」「不符」是 2026-10-05 看到圖紙題才補的
+# （「[1] 與 [2] 所述最終扭力不同」「與本圖紙資料不符」）；單獨的「不同」不算——
+# 「在不同時間由不同人發現」是把兩種說法湊在一起，不是指出矛盾。補完重算了當天的評估
+CONFLICT = re.compile(
+    r"不一致|互相矛盾|矛盾|有出入|說法不一|說法.{0,4}不同|(所述|記載|說法|資料).{0,6}(不同|不符)|不符"
+)
 
 
 def score_distractor(q: dict, res: dict) -> dict:
@@ -131,7 +141,7 @@ def score_distractor(q: dict, res: dict) -> dict:
     injected = {s["ref"] for s in res["sources"] if s.get("injected")}
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)}
     correct = all(any(k in ans for k in group) for group in q["keywords"])
-    flagged = correct and any(w in ans for w in CONFLICT_WORDS)
+    flagged = correct and bool(CONFLICT.search(ans))
     return {
         "distractor_kept": bool(injected),
         "distractor_cited": bool(injected & cited),
@@ -154,7 +164,7 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
         bool(cited)
         and all(
             n in by_ref
-            and by_ref[n]["artwork_id"] == q["artwork_id"]
+            and (by_ref[n].get("part_id") or by_ref[n].get("artwork_id")) == owner_of(q)
             and (flagged or not by_ref[n].get("injected"))  # 指出矛盾時引用干擾段落是對的
             for n in cited
         )
@@ -182,11 +192,17 @@ def main() -> int:
     # 所有 /api/v1 請求都要 JWT（docs/adr/015）：先取一張訪客憑證（存在 client 的 cookie）
     client.get("/api/v1/auth/accounts").raise_for_status()
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
+    # 工廠圖紙題（part_id，docs/adr/020）：圖紙多是機密，切成主管才看得到全部
+    all_questions = [json.loads(x) for x in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]
+    if any(q.get("part_id") for q in all_questions):
+        client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+        kb_ids |= {p["id"] for p in client.get("/api/v1/parts").json()["items"]}
     source_lang = {
         i: "+".join(
             sorted({d["lang"] for d in client.get(f"/api/v1/artworks/{i}").json()["descriptions"]})
         )
         for i in kb_ids
+        if not i.startswith("mfg-")
     }
     prompt_version = "answer_v2"
 
@@ -199,11 +215,10 @@ def main() -> int:
         f"未收錄拒答 {img['reject_rate']:.0%}（{img['n_unknown']} 張）"
     )
 
-    questions = [json.loads(line) for line in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]
     questions = [
         q
-        for q in questions
-        if q["artwork_id"] in kb_ids and (args.split == "all" or q["split"] == args.split)
+        for q in all_questions
+        if owner_of(q) in kb_ids and (args.split == "all" or q["split"] == args.split)
     ]
     rows, by_strategy = [], {}
     for strat in args.strategies.split(","):
@@ -212,7 +227,7 @@ def main() -> int:
             t0 = time.time()
             body = {
                 "question": q["question"],
-                "artwork_id": q["artwork_id"],
+                ("part_id" if q.get("part_id") else "artwork_id"): owner_of(q),
                 "allow_fallback": False,
                 **STRATEGY_BODY[strat],
             }
@@ -233,8 +248,8 @@ def main() -> int:
                 "question_id": q["id"],
                 "split": q["split"],
                 "type": q.get("type", "untyped"),
-                "artwork_id": q["artwork_id"],
-                "source_lang": source_lang.get(q["artwork_id"], ""),
+                "artwork_id": owner_of(q),
+                "source_lang": source_lang.get(owner_of(q), ""),
                 "strategy": strat,
                 "model": done.get("model", ""),
                 "kb_version": manifest["kb_version"],

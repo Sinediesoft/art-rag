@@ -1,6 +1,6 @@
 """共用 prompt 模板組裝：三種策略用同一份（shared/prompts/<version>.md）。
 
-畫作用 answer_v2，工廠圖紙用 drawing_v1（models.yaml 的 prompt.version／prompt.drawing_version）。
+畫作用 answer_v2，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
 """
 
 import base64
@@ -25,7 +25,7 @@ def load_template(version: str) -> dict[str, str]:
 
 def prompt_version(domain: str = "art") -> str:
     p = get_models_config().prompt
-    return p.get("drawing_version", "drawing_v1") if domain == "mfg" else p["version"]
+    return p.get("drawing_version", "drawing_v2") if domain == "mfg" else p["version"]
 
 
 def artwork_card(a: dict | None) -> str:

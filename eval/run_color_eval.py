@@ -84,6 +84,8 @@ def retrieval_rows() -> list[dict]:
     rows = []
     for line in (ROOT / "eval" / "qa.jsonl").read_text(encoding="utf-8").splitlines():
         q = json.loads(line)
+        if not q.get("artwork_id"):
+            continue  # 工廠圖紙題（part_id）沒有色彩段落
         if not store.get_artwork(q["artwork_id"]):
             continue  # kb_staging 的畫在 demo-add 之前不在索引裡
         got = [s["chunk_id"] for s in retrieve(q["question"], q["artwork_id"])]
