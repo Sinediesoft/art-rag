@@ -1,0 +1,121 @@
+{
+  "run_id": "20261003T230127-998d",
+  "created_at": "2026-10-03T23:01:27.179467+00:00",
+  "base": "http://localhost:8000",
+  "steps": [
+    {
+      "step": "1. 以文字找圖紙",
+      "ok": true,
+      "detail": "「有 6 個螺栓孔的法蘭」→ 連接法蘭（mfg-002）、「L 型固定支架」→ L 型固定支架（mfg-001）、「階梯傳動軸」→ 階梯傳動軸（mfg-003）",
+      "seconds": 4.0,
+      "memory_before": 98.3,
+      "memory_after": 99.7,
+      "released": [],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "2. 製程問答",
+      "ok": true,
+      "detail": "連接法蘭：「精車內孔需達 Ø30H7（+0.021/0）公差，表面粗糙度 Ra 1.6，並與…」（qwen3-vl:8b-instruct，17.7 秒）",
+      "seconds": 18.9,
+      "memory_before": 99.1,
+      "memory_after": 92.8,
+      "released": [
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": [
+        {
+          "at": "2026-10-03T23:00:33.161417+00:00",
+          "trigger": "背景監控",
+          "flow": "chat",
+          "flow_label": "圖文問答",
+          "threshold": 92.0,
+          "percent_before": 93.2,
+          "percent_after": 92.9,
+          "released": [],
+          "failed": [],
+          "kept": [
+            "bge-m3（文字檢索）",
+            "Qwen3-VL（問答、Text-to-SQL）"
+          ]
+        },
+        {
+          "at": "2026-10-03T23:00:22.255870+00:00",
+          "trigger": "背景監控",
+          "flow": "chat",
+          "flow_label": "圖文問答",
+          "threshold": 92.0,
+          "percent_before": 98.7,
+          "percent_after": 92.2,
+          "released": [
+            {
+              "key": "qwen",
+              "label": "Qwen3-VL（問答、Text-to-SQL）",
+              "detail": "keep_alive=0：qwen3-vl:4b-instruct、qwen3-vl:8b-instruct",
+              "approx_mb": 4000
+            }
+          ],
+          "failed": [],
+          "kept": [
+            "bge-m3（文字檢索）"
+          ]
+        }
+      ]
+    },
+    {
+      "step": "4. 從圖紙開立工單",
+      "ok": true,
+      "detail": "WO-2610-07 連接法蘭 80 件（急件，AP-2610-02 主管核准，交期 2026-10-16）、WO-2610-08 L 型固定支架 120 件（一般，交期 2026-10-20）、WO-2610-09 階梯傳動軸 50 件（一般，交期 2026-10-21）",
+      "seconds": 0.4,
+      "memory_before": 93.0,
+      "memory_after": 93.1,
+      "released": [],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "5. 生產排程",
+      "ok": true,
+      "detail": "初始解 0hard/-3819medium/-32540soft → 0hard/0medium/-22939soft，總分核對一致；準時 7/7、換線 20 次、全部完工 2026-10-15 11:35",
+      "seconds": 10.5,
+      "memory_before": 92.1,
+      "memory_after": 89.7,
+      "released": [],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "6. Text-to-SQL 查排程",
+      "ok": true,
+      "detail": "「WO-2610-07 排程後什麼時候完工？會不會延遲？」→ 1 筆（9.7 秒）\n    SQL：SELECT wo_no AS 工單號, name AS 品名, planned_end AS 排程完工時間, on_time AS 是否延遲\nFROM v_wo_plan\nWHERE wo_no = 'WO-2610-07'\nORDER BY planned_end\n    回答：工單 WO-2610-07 排程完工時間為 2026-10-14 10:05，目前狀態為準時，不會延遲。",
+      "seconds": 10.9,
+      "memory_before": 89.3,
+      "memory_after": 92.0,
+      "released": [],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    }
+  ]
+}

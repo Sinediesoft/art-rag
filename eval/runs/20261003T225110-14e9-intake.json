@@ -1,0 +1,4299 @@
+{
+  "run_id": "20261003T225110-14e9",
+  "created_at": "2026-10-03T22:54:54.349076+00:00",
+  "kind": "intake",
+  "params": {
+    "prompt_version": "intake_v1",
+    "max_tokens": 300,
+    "max_blur": 0.3,
+    "page_size": [
+      800,
+      970
+    ],
+    "page_aspect_tol": 0.08,
+    "mfg": {
+      "id_prefix": "mfg",
+      "fields": {
+        "company": {
+          "label": "公司",
+          "hint": "標題欄左欄最上面一行的公司名稱",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "name": {
+          "label": "品名",
+          "hint": "標題欄左欄中間最大的字",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "part_no": {
+          "label": "料號",
+          "hint": "標題欄「料號」格",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": "[A-Z]{2,4}-\\d{3,5}",
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "drawing_no": {
+          "label": "圖號",
+          "hint": "標題欄「圖號」格",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": "[A-Z]-\\d{2}-\\d{4}",
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "revision": {
+          "label": "版次",
+          "hint": "標題欄「版次」格",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": "[A-Z0-9]{1,3}",
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "material": {
+          "label": "材料",
+          "hint": "標題欄「材料」格，牌號加名稱（例如 S45C 中碳鋼）",
+          "read": true,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "confidentiality": {
+          "label": "機密等級",
+          "hint": "標題欄左下角「機密等級：」後面的字",
+          "read": true,
+          "required": true,
+          "kind": "enum",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "width": {
+          "label": "寬（mm）",
+          "hint": "俯視圖（Top View）正下方的水平尺寸",
+          "read": true,
+          "required": true,
+          "kind": "number",
+          "pattern": null,
+          "min": 0.1,
+          "max": 5000.0,
+          "group": null
+        },
+        "depth": {
+          "label": "深（mm）",
+          "hint": "俯視圖（Top View）右側的垂直尺寸",
+          "read": true,
+          "required": true,
+          "kind": "number",
+          "pattern": null,
+          "min": 0.1,
+          "max": 5000.0,
+          "group": null
+        },
+        "height": {
+          "label": "高（mm）",
+          "hint": "前視圖（Front View）右側的垂直尺寸",
+          "read": true,
+          "required": true,
+          "kind": "number",
+          "pattern": null,
+          "min": 0.1,
+          "max": 5000.0,
+          "group": null
+        },
+        "density_g_cm3": {
+          "label": "密度（g/cm³）",
+          "hint": null,
+          "read": false,
+          "required": true,
+          "kind": "number",
+          "pattern": null,
+          "min": 0.5,
+          "max": 25.0,
+          "group": null
+        },
+        "category": {
+          "label": "類別",
+          "hint": null,
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "owner": {
+          "label": "負責單位",
+          "hint": null,
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "surface": {
+          "label": "表面處理",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        },
+        "name_en": {
+          "label": "英文品名",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": null
+        }
+      }
+    },
+    "art": {
+      "id_prefix": "photo",
+      "fields": {
+        "title": {
+          "label": "畫名",
+          "hint": "例如：早春圖",
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "title_en": {
+          "label": "英文畫名",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "artist": {
+          "label": "作者",
+          "hint": "例如：郭熙",
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "artist_en": {
+          "label": "作者英文名",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "date_text": {
+          "label": "年代",
+          "hint": "例如：北宋 1072 年",
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "medium": {
+          "label": "材質",
+          "hint": "例如：絹本 水墨淡設色",
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "dimensions": {
+          "label": "尺寸",
+          "hint": "例如：158.3 × 108.1 cm",
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "style_tags": {
+          "label": "風格標籤",
+          "hint": "用頓號或逗號分隔",
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "基本資料"
+        },
+        "collection": {
+          "label": "典藏單位",
+          "hint": null,
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "典藏與授權"
+        },
+        "source_id": {
+          "label": "館藏編號",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "典藏與授權"
+        },
+        "source_url": {
+          "label": "典藏頁網址",
+          "hint": "館方的作品頁（資料出處）",
+          "read": false,
+          "required": true,
+          "kind": "url",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "典藏與授權"
+        },
+        "image_license": {
+          "label": "照片授權",
+          "hint": null,
+          "read": false,
+          "required": true,
+          "kind": "enum",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "典藏與授權"
+        },
+        "image_attribution": {
+          "label": "照片標示文字",
+          "hint": "授權是 CC BY 4.0 時必填",
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "典藏與授權"
+        },
+        "description": {
+          "label": "介紹",
+          "hint": "至少 20 字；沒填就由系統依上面的欄位寫一段「基本資料」",
+          "read": false,
+          "required": false,
+          "kind": "longtext",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "介紹（選填）"
+        },
+        "description_source_url": {
+          "label": "介紹出處網址",
+          "hint": null,
+          "read": false,
+          "required": false,
+          "kind": "url",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "介紹（選填）"
+        },
+        "description_license": {
+          "label": "介紹授權",
+          "hint": "只收 CC0、公有領域、CC BY 4.0",
+          "read": false,
+          "required": false,
+          "kind": "enum",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "介紹（選填）"
+        },
+        "description_attribution": {
+          "label": "介紹標示文字",
+          "hint": "授權是 CC BY 4.0 時必填",
+          "read": false,
+          "required": false,
+          "kind": "text",
+          "pattern": null,
+          "min": null,
+          "max": null,
+          "group": "介紹（選填）"
+        },
+        "id_code": {
+          "label": "來源代碼",
+          "hint": "小寫英文；典藏單位是知識庫已有的就自動帶入（例如 npm）",
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": "[a-z]+",
+          "min": null,
+          "max": null,
+          "group": "知識庫 ID"
+        },
+        "id_no": {
+          "label": "編號",
+          "hint": "小寫英數字；預設取館藏編號",
+          "read": false,
+          "required": true,
+          "kind": "text",
+          "pattern": "[a-z0-9]+",
+          "min": null,
+          "max": null,
+          "group": "知識庫 ID"
+        }
+      }
+    }
+  },
+  "model": "qwen3-vl:8b-instruct",
+  "summary": {
+    "photos": 42,
+    "rejected": 18,
+    "raw": {
+      "ok": 240,
+      "null": 24,
+      "caught": 0,
+      "silent": 0,
+      "fields": 264
+    },
+    "final": {
+      "ok": 260,
+      "null": 4,
+      "caught": 0,
+      "silent": 0,
+      "fields": 264
+    },
+    "rejected_if_read": null,
+    "read_ms_median": 4917.0,
+    "elapsed_s": 224
+  },
+  "by_variant": {
+    "blur": {
+      "photos": 7,
+      "rejected": 7,
+      "final": {
+        "ok": 0,
+        "null": 0,
+        "caught": 0,
+        "silent": 0
+      }
+    },
+    "crop": {
+      "photos": 7,
+      "rejected": 7,
+      "final": {
+        "ok": 0,
+        "null": 0,
+        "caught": 0,
+        "silent": 0
+      }
+    },
+    "dim": {
+      "photos": 7,
+      "rejected": 0,
+      "final": {
+        "ok": 76,
+        "null": 1,
+        "caught": 0,
+        "silent": 0
+      }
+    },
+    "glare": {
+      "photos": 7,
+      "rejected": 0,
+      "final": {
+        "ok": 76,
+        "null": 1,
+        "caught": 0,
+        "silent": 0
+      }
+    },
+    "original": {
+      "photos": 7,
+      "rejected": 0,
+      "final": {
+        "ok": 76,
+        "null": 1,
+        "caught": 0,
+        "silent": 0
+      }
+    },
+    "tilt": {
+      "photos": 7,
+      "rejected": 4,
+      "final": {
+        "ok": 32,
+        "null": 1,
+        "caught": 0,
+        "silent": 0
+      }
+    }
+  },
+  "per_field": {
+    "company": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "name": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "part_no": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "drawing_no": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "revision": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "material": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "confidentiality": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "width": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "depth": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "height": {
+      "ok": 24,
+      "null": 0,
+      "caught": 0,
+      "silent": 0
+    },
+    "density_g_cm3": {
+      "ok": 20,
+      "null": 4,
+      "caught": 0,
+      "silent": 0
+    }
+  },
+  "art_gate": {
+    "blur": {
+      "photos": 5,
+      "rejected": 5,
+      "max_blur": 0.43,
+      "min_blur": 0.361
+    },
+    "crop": {
+      "photos": 5,
+      "rejected": 0,
+      "max_blur": 0.216,
+      "min_blur": 0.128
+    },
+    "dim": {
+      "photos": 5,
+      "rejected": 0,
+      "max_blur": 0.223,
+      "min_blur": 0.156
+    },
+    "glare": {
+      "photos": 5,
+      "rejected": 0,
+      "max_blur": 0.219,
+      "min_blur": 0.161
+    },
+    "tilt": {
+      "photos": 5,
+      "rejected": 0,
+      "max_blur": 0.207,
+      "min_blur": 0.161
+    },
+    "original": {
+      "photos": 10,
+      "rejected": 0,
+      "max_blur": 0.265,
+      "min_blur": 0.136
+    }
+  },
+  "rows": [
+    {
+      "part_id": "mfg-001",
+      "variant": "original",
+      "blur": 0.07,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 15217,
+        "tokens": [
+          1481,
+          131
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": 2.7,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "original",
+      "blur": 0.077,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 6072,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "original",
+      "blur": 0.088,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 18614,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "original",
+      "blur": 0.081,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11991,
+        "tokens": [
+          1481,
+          136
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": 2.68,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "original",
+      "blur": 0.065,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 4578,
+        "tokens": [
+          1481,
+          127
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "original",
+      "blur": 0.074,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 12536,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": 7.25,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "original",
+      "blur": 0.087,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3328,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-001",
+      "variant": "blur",
+      "blur": 0.348,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-001",
+      "variant": "crop",
+      "blur": 0.092,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-001",
+      "variant": "dim",
+      "blur": 0.097,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 5256,
+        "tokens": [
+          1481,
+          131
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": 2.7,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-001",
+      "variant": "glare",
+      "blur": 0.092,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11117,
+        "tokens": [
+          1481,
+          131
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": 2.7,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-001",
+      "variant": "tilt",
+      "blur": 0.113,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 2627,
+        "tokens": [
+          1481,
+          131
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "L 型固定支架",
+          "got": "L 型固定支架",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "BRK-1001",
+          "got": "BRK-1001",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0117",
+          "got": "D-24-0117",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A6061-T6 鋁合金",
+          "got": "A6061-T6 鋁合金",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 80.0,
+          "got": 80.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 50.0,
+          "got": 50.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 60.0,
+          "got": 60.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.7,
+          "got": 2.7,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "blur",
+      "blur": 0.365,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "crop",
+      "blur": 0.094,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "dim",
+      "blur": 0.111,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 2548,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "glare",
+      "blur": 0.102,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11015,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "連接法蘭",
+          "got": "連接法蘭",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FLG-2002",
+          "got": "FLG-2002",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0203",
+          "got": "D-24-0203",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "C",
+          "got": "C",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 22.0,
+          "got": 22.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-002",
+      "variant": "tilt",
+      "blur": 0.131,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "blur",
+      "blur": 0.353,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "crop",
+      "blur": 0.09,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "dim",
+      "blur": 0.109,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3224,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "glare",
+      "blur": 0.122,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3275,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-003",
+      "variant": "tilt",
+      "blur": 0.13,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11442,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "階梯傳動軸",
+          "got": "階梯傳動軸",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "SFT-3003",
+          "got": "SFT-3003",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0311",
+          "got": "D-24-0311",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "SCM440 鉻鉬鋼",
+          "got": "SCM440 鉻鉬鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 145.0,
+          "got": 145.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 30.0,
+          "got": 30.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "blur",
+      "blur": 0.352,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "crop",
+      "blur": 0.105,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "dim",
+      "blur": 0.111,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3260,
+        "tokens": [
+          1481,
+          136
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": 2.68,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "glare",
+      "blur": 0.102,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3236,
+        "tokens": [
+          1481,
+          136
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "步進馬達安裝板",
+          "got": "步進馬達安裝板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "MTP-4004",
+          "got": "MTP-4004",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0425",
+          "got": "D-24-0425",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "B",
+          "got": "B",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "A5052-H32 鋁板",
+          "got": "A5052-H32 鋁板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 10.0,
+          "got": 10.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 2.68,
+          "got": 2.68,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-004",
+      "variant": "tilt",
+      "blur": 0.143,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "blur",
+      "blur": 0.355,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "crop",
+      "blur": 0.071,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "dim",
+      "blur": 0.09,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11074,
+        "tokens": [
+          1481,
+          127
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "glare",
+      "blur": 0.111,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3143,
+        "tokens": [
+          1481,
+          127
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "T 型槽螺帽",
+          "got": "T 型槽螺帽",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "TSN-5005",
+          "got": "TSN-5005",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0502",
+          "got": "D-24-0502",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S45C 中碳鋼",
+          "got": "S45C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "內部",
+          "got": "內部",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 24.0,
+          "got": 24.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 17.0,
+          "got": 17.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": 7.85,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-005",
+      "variant": "tilt",
+      "blur": 0.123,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "blur",
+      "blur": 0.35,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "crop",
+      "blur": 0.081,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "dim",
+      "blur": 0.103,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3237,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": 7.25,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "glare",
+      "blur": 0.12,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 11191,
+        "tokens": [
+          1481,
+          134
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "立式軸承座",
+          "got": "立式軸承座",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "PBK-6006",
+          "got": "PBK-6006",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0618",
+          "got": "D-24-0618",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "D",
+          "got": "D",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "FC250 灰口鑄鐵",
+          "got": "FC250 灰口鑄鐵",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 120.0,
+          "got": 120.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 40.0,
+          "got": 40.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 72.0,
+          "got": 72.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.25,
+          "got": 7.25,
+          "source": "規則",
+          "verdict": "ok"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-006",
+      "variant": "tilt",
+      "blur": 0.095,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "blur",
+      "blur": 0.351,
+      "rejected": "blurry"
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "crop",
+      "blur": 0.107,
+      "rejected": "layout"
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "dim",
+      "blur": 0.113,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3300,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "glare",
+      "blur": 0.109,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 3800,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      }
+    },
+    {
+      "part_id": "mfg-007",
+      "variant": "tilt",
+      "blur": 0.13,
+      "rejected": null,
+      "read": {
+        "model": "qwen3-vl:8b-instruct",
+        "ms": 12156,
+        "tokens": [
+          1481,
+          129
+        ]
+      },
+      "raw": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      },
+      "final": {
+        "company": {
+          "truth": "示範精密機械（虛構）",
+          "got": "示範精密機械（虛構）",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "name": {
+          "truth": "治具定位板",
+          "got": "治具定位板",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "part_no": {
+          "truth": "FXP-7007",
+          "got": "FXP-7007",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "drawing_no": {
+          "truth": "D-24-0709",
+          "got": "D-24-0709",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "revision": {
+          "truth": "A",
+          "got": "A",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "material": {
+          "truth": "S50C 中碳鋼",
+          "got": "S50C 中碳鋼",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "confidentiality": {
+          "truth": "機密",
+          "got": "機密",
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "width": {
+          "truth": 150.0,
+          "got": 150.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "depth": {
+          "truth": 100.0,
+          "got": 100.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "height": {
+          "truth": 15.0,
+          "got": 15.0,
+          "source": "Qwen3-VL",
+          "verdict": "ok"
+        },
+        "density_g_cm3": {
+          "truth": 7.85,
+          "got": null,
+          "source": null,
+          "verdict": "null"
+        }
+      }
+    }
+  ]
+}
