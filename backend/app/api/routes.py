@@ -700,7 +700,9 @@ def route_eval_runs():
 
 
 @router.get("/health", response_model=S.HealthResponse, tags=["system"])
-async def health():
+async def health(response: Response):
+    # 即時狀態：禁止監控、代理或瀏覽器重用舊結果
+    response.headers["Cache-Control"] = "no-store"
     s = get_settings()
     cfg = get_models_config().strategies
     store = get_store()

@@ -25,6 +25,8 @@ def test_health(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200
     assert r.json()["index_consistent"] is True
+    # 即時狀態不能被監控、代理或瀏覽器快取
+    assert r.headers["cache-control"] == "no-store"
 
 
 def test_health_when_database_is_down(client, monkeypatch):
@@ -48,6 +50,7 @@ def test_health_when_database_is_down(client, monkeypatch):
     body = r.json()
     assert body["db"] is False and body["status"] == "degraded"
     assert body["recent_chats"] == body["recent_routes"] == []
+    assert r.headers["cache-control"] == "no-store"
 
 
 def test_artwork_detail_and_404(client):
