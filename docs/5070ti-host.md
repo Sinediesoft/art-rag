@@ -8,6 +8,7 @@
 | Ortho2CAD | 8081 | llama.cpp **Windows CUDA 版** `llama-server`（router 模式，`deploy/llama-router.ini`），約 122 token/s |
 | Timefold 排程 | 8082 | Microsoft OpenJDK 21 |
 | 後端＋前端 | 8000 | `uv` 啟動 uvicorn，前端是 `frontend/dist` 建置檔 |
+| PostgreSQL＋pgvector | 5432 | Docker Desktop（WSL2 後端），`deploy/docker-compose.yml`，只綁 127.0.0.1 |
 
 ## 開機後：一個指令啟動全部
 
@@ -26,7 +27,7 @@ HF_OFFLINE=true
 MEMORY_HIGH_PCT=92          # 這台常同時開其他大型程式；VRAM 另外看（ADR 021）
 EVAL_INJECTION=true         # 評估主機才開（ADR 019）
 MODEL_KEEP_ALIVE=60m        # 閒置 60 分鐘才卸載，避免冷啟動首字 6–16 秒（ADR 025）
-DATABASE_URL=               # 還沒裝 Docker：檔案索引＋SQLite
+DATABASE_URL=postgresql://artrag:artrag@127.0.0.1:5432/artrag   # Docker Desktop 的 PostgreSQL＋pgvector（ADR 009）
 ```
 
 ## 第一次安裝（已做過，換電腦時參考）
@@ -34,8 +35,12 @@ DATABASE_URL=               # 還沒裝 Docker：檔案索引＋SQLite
 1. `winget install OpenJS.NodeJS.LTS Microsoft.OpenJDK.21`，`uv` 另裝；`cd backend; uv sync --compile-bytecode`、`cd frontend; npm ci; npm run build`
 2. `ollama pull qwen3-vl:8b-instruct`、`ollama pull qwen3-vl:4b-instruct`
 3. `cd backend; uv run python ..\pipelines\build_index.py`（第一次會下載 Chinese-CLIP、bge-m3）
-4. 排程：`uv run --project backend python pipelines/setup_scheduler.py`
-5. Ortho2CAD：
+4. 資料庫：`winget install Docker.DockerDesktop`，第一次開啟要自己同意服務條款；`.env` 設 `DATABASE_URL` 後
+   `docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait db`、
+   `cd backend; uv run python ..\pipelines\build_index.py --db-only`、`uv run python ..\pipelines\import_sqlite_logs.py`
+   （一致性測試：另建 `artrag_test` 資料庫，設 `TEST_DATABASE_URL` 跑 `pytest tests/test_postgres.py`）
+5. 排程：`uv run --project backend python pipelines/setup_scheduler.py`
+6. Ortho2CAD：
    - llama.cpp 從官方 GitHub release 下載 **`llama-bXXXXX-bin-win-cuda-13.x-x64.zip` 與 `cudart-llama-bin-win-cuda-13.x-x64.zip`**
      （核對 release 頁的 SHA-256），解壓到 `%USERPROFILE%\tools\llama.cpp-bXXXXX\`。winget 的 `ggml.llamacpp` 是 Vulkan 版，比較慢
    - 模型：`uv run --project backend python pipelines/setup_ortho2cad.py`（約 6.2 GB；`LLAMA_CPP_TAG` 設成和 llama-server 同版）
