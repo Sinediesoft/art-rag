@@ -5,7 +5,7 @@
   powershell -ExecutionPolicy Bypass -File deploy\windows\start-services.ps1
   powershell -ExecutionPolicy Bypass -File deploy\windows\start-services.ps1 -Stop      # 停掉這個腳本啟動的服務
 
-依序：Ollama（:11434）→ Timefold 排程（:8082）→ Ortho2CAD llama-server（:8081，router 模式）→ 後端＋前端（:8000）。
+依序：資料庫（.env 設了 DATABASE_URL 時，Docker）→ Ollama（:11434）→ Timefold 排程（:8082）→ Ortho2CAD llama-server（:8081，router 模式）→ 後端＋前端（:8000）。
 - 都只綁 127.0.0.1；要給組員從 Tailscale 連，見 docs/5070ti-host.md
 - Ortho2CAD 要 llama.cpp 的 Windows CUDA 版（winget 的是 Vulkan 版，比較慢）：-LlamaServer 指定，
   或設環境變數 LLAMA_SERVER，或放在 PATH，或解壓到 %USERPROFILE%\tools\llama.cpp-*\
@@ -50,6 +50,28 @@ if ($Stop) {
     }
     '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
     return
+}
+
+# 這台的 .env（資料庫、主力模型、keep_alive）
+$envFile = Join-Path $Repo '.env'
+$envVars = @{}
+if (Test-Path $envFile) {
+    Get-Content $envFile -Encoding utf8 | Where-Object { $_ -match '^\s*([A-Z_]+)=(.*)$' } |
+        ForEach-Object { $envVars[$Matches[1]] = $Matches[2].Trim() }
+}
+
+# 0. 資料庫（.env 設了 DATABASE_URL 才需要；docs/adr/009）：後端啟動時要連得到
+if (-not $envVars['DATABASE_URL']) { '－ 沒設 DATABASE_URL：用檔案索引＋SQLite' }
+elseif (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw '設了 DATABASE_URL 但找不到 docker：先開 Docker Desktop' }
+else {
+    # docker 把進度訊息寫到 stderr；Windows PowerShell 5.1 在 Stop 模式下會把它當錯誤中止，這段改看結束碼
+    $ErrorActionPreference = 'Continue'
+    # Docker Desktop 剛開機時引擎還沒好：最多等 120 秒
+    for ($i = 0; $i -lt 60; $i++) { docker info *> $null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 2 }
+    docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait db *> (Join-Path $Logs 'db.log')
+    $dbOk = $LASTEXITCODE -eq 0
+    $ErrorActionPreference = 'Stop'
+    if ($dbOk) { '✓ 資料庫（PostgreSQL＋pgvector）' } else { throw "資料庫沒起來，看 $Logs\db.log（Docker Desktop 有開嗎？）" }
 }
 
 # 1. Ollama
@@ -98,18 +120,20 @@ else {
         '… 建置前端'
         Push-Location frontend; npm run build | Out-Null; Pop-Location
     }
-    Start-Hidden 'backend' 'uv' @('run', '--project', 'backend', 'uvicorn', 'app.main:app', '--app-dir', 'backend',
+    $backendArgs = @('run', '--project', 'backend', 'uvicorn', 'app.main:app', '--app-dir', 'backend',
         '--host', '127.0.0.1', '--port', '8000')
-    "… 啟動後端：$(Wait-Http 'http://127.0.0.1:8000/api/v1/health' 120)"
+    Start-Hidden 'backend' 'uv' $backendArgs
+    $code = Wait-Http 'http://127.0.0.1:8000/api/v1/health' 120
+    if ($code -eq '000' -and -not (Test-Port 8000)) {
+        # 系統記憶體極度吃緊（例如同時開遊戲）時，載入模型偶爾會當掉（0xc0000005）：重試一次
+        '… 後端沒起來，重試一次（系統記憶體可能不夠，關掉其他大型程式會比較穩）'
+        Start-Hidden 'backend' 'uv' $backendArgs
+        $code = Wait-Http 'http://127.0.0.1:8000/api/v1/health' 120
+    }
+    "… 啟動後端：$code"
 }
 
 # 5. 預熱主力模型（docs/adr/025）：開機後第一題不用等載入（冷啟動首字 6–16 秒）
-$envFile = Join-Path $Repo '.env'
-$envVars = @{}
-if (Test-Path $envFile) {
-    Get-Content $envFile -Encoding utf8 | Where-Object { $_ -match '^\s*([A-Z_]+)=(.*)$' } |
-        ForEach-Object { $envVars[$Matches[1]] = $Matches[2].Trim() }
-}
 $model = if ($envVars['HYBRID_MODEL']) { $envVars['HYBRID_MODEL'] } else { 'qwen3-vl:4b-instruct' }
 $keep = if ($envVars['MODEL_KEEP_ALIVE']) { $envVars['MODEL_KEEP_ALIVE'] } else { '5m' }
 # 用 Invoke-RestMethod：Windows PowerShell 5.1 把 JSON 傳給 curl.exe 時會吃掉雙引號（HTTP 400）
