@@ -208,7 +208,7 @@ def main() -> int:
         for i in kb_ids
         if not i.startswith("mfg-")
     }
-    prompt_version = "answer_v2"
+    prompt_version = ""
 
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     print(f"評估 {run_id}：kb_version={manifest['kb_version']}，{len(kb_ids)} 幅畫")
@@ -244,7 +244,8 @@ def main() -> int:
             done = res["done"] or {}
             answer_ok, citation_ok = score_answer(q, res) if not res["error"] else (False, False)
             dist = score_distractor(q, res) if not res["error"] and "inject" in body else {}
-            if done.get("prompt_version"):
+            # 整次評估記畫作的 prompt 版本；圖紙題回的是 drawing_vN，每列另外記
+            if done.get("prompt_version") and not q.get("part_id"):
                 prompt_version = done["prompt_version"]
             egress = done.get("egress") or {}
             ra = res["rearrange"] or {}

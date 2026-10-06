@@ -318,7 +318,7 @@ chat:
 global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作品, 同時代, 背景, 影響]
 
 prompt:
-  version: answer_v2          # 對應 shared/prompts/answer_v2.md（v2：參考資料矛盾時要指出，ADR 020）
+  version: answer_v3          # 對應 shared/prompts/answer_v3.md（v2：參考資料矛盾時要指出，ADR 020；v3：附圖時看圖才知道的內容標 [畫面]，ADR 026）
   drawing_version: drawing_v2 # 工廠圖紙問答，對應 shared/prompts/drawing_v2.md（v2：參考資料矛盾時要指出，ADR 020）
   sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
   sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）

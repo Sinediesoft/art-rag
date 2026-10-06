@@ -134,9 +134,11 @@ ${opts.body}
 </body></html>`;
 }
 
-/** 回答裡的 [編號] 換成連到出處清單的上標 */
+/** 回答裡的 [編號] 換成連到出處清單的上標；[畫面]（看附圖得到、不是段落，docs/adr/026）只標上標、不連結 */
 export function citeLinks(text: string, anchor: string): string {
-  return esc(text).replace(/\[(\d+)\]/g, (_, n) => `<sup><a href="#${anchor}-${n}">[${n}]</a></sup>`);
+  return esc(text)
+    .replace(/\[(\d+)\]/g, (_, n) => `<sup><a href="#${anchor}-${n}">[${n}]</a></sup>`)
+    .replace(/\[畫面\]/g, '<sup title="看附上的畫作圖片得到，知識庫段落沒有寫">[畫面]</sup>');
 }
 
 export interface ReportSource {

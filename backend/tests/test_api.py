@@ -75,7 +75,7 @@ def test_chat_streams_sources_tokens_done(client):
     kinds = [e for e, _ in events]
     assert kinds[0] == "sources" and kinds[-1] == "done" and "token" in kinds
     done = events[-1][1]
-    assert done["prompt_version"] == "answer_v2"
+    assert done["prompt_version"] == "answer_v3"
     assert "[" in "".join(d["text"] for e, d in events if e == "token")
 
 
