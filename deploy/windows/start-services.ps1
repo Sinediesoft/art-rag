@@ -10,7 +10,8 @@
 - Ortho2CAD 要 llama.cpp 的 Windows CUDA 版（winget 的是 Vulkan 版，比較慢）：-LlamaServer 指定，
   或設環境變數 LLAMA_SERVER，或放在 PATH，或解壓到 %USERPROFILE%\tools\llama.cpp-*\
 - 紀錄寫在 data\logs\（不進 Git）
-- 直接在 Windows 跑時 3D 重建不能執行產生的程式碼（沒有沙箱），要 WSL2，見 docs/5070ti-host.md
+- 直接在 Windows 跑時，3D 重建產生的程式碼要在 WSL2 執行（.env 設 CAD_WSL_PYTHON，docs/adr/027）；
+  這個腳本最後會檢查並預熱 WSL 裡的 CadQuery 環境，做法見 docs/5070ti-host.md
 #>
 param(
     [string]$LlamaServer = $env:LLAMA_SERVER,
@@ -144,6 +145,21 @@ try {
     "… 預熱 $model（keep_alive $keep）：✓"
 } catch {
     "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+}
+
+# 5b. 3D 重建的執行環境（docs/adr/027）：產生的程式碼在 WSL2 執行；順便讓 WSL 開機，第一次 3D 重建不用多等
+if (-not $envVars['CAD_WSL_PYTHON']) { '－ 沒設 CAD_WSL_PYTHON：3D 重建不執行模型產生的程式碼' }
+else {
+    $wslArgs = @()
+    if ($envVars['CAD_WSL_DISTRO']) { $wslArgs += @('-d', $envVars['CAD_WSL_DISTRO']) }
+    # 和沙箱一樣經過 unshare -rn：WSL 環境不允許非特權使用者命名空間時，這裡就會發現
+    $wslArgs += @('--exec', '/usr/bin/unshare', '-rn', $envVars['CAD_WSL_PYTHON'], '-c', 'import cadquery')
+    $ErrorActionPreference = 'Continue'
+    wsl.exe @wslArgs *> (Join-Path $Logs 'cad-wsl.log')
+    $cadOk = $LASTEXITCODE -eq 0
+    $ErrorActionPreference = 'Stop'
+    if ($cadOk) { '✓ 3D 重建執行環境（WSL2 的 CadQuery）' }
+    else { "✗ WSL 裡的 CadQuery 不能用，3D 重建會失敗：看 $Logs\cad-wsl.log（環境做法見 docs/5070ti-host.md）" }
 }
 
 # 6. 健康檢查

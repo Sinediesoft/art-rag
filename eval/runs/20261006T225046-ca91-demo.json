@@ -1,0 +1,193 @@
+{
+  "run_id": "20261006T225046-ca91",
+  "created_at": "2026-10-06T22:50:46.434389+00:00",
+  "base": "http://localhost:8000",
+  "steps": [
+    {
+      "step": "1. 以文字找圖紙",
+      "ok": true,
+      "detail": "「有 6 個螺栓孔的法蘭」→ 連接法蘭（mfg-002）、「L 型固定支架」→ L 型固定支架（mfg-001）、「階梯傳動軸」→ 階梯傳動軸（mfg-003）",
+      "seconds": 6.2,
+      "memory_before": 94.7,
+      "memory_after": 98.1,
+      "released": [],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Ortho2CAD（3D 重建）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "2. 製程問答",
+      "ok": true,
+      "detail": "連接法蘭：「精車內孔需達 Ø30H7（+0.021/0）公差，表面粗糙度 Ra 1.6 [1…」（qwen3-vl:8b-instruct，11.1 秒）",
+      "seconds": 21.9,
+      "memory_before": 98.0,
+      "memory_after": 76.7,
+      "released": [
+        "Ortho2CAD（3D 重建）"
+      ],
+      "loaded_after": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": [
+        {
+          "at": "2026-10-06T22:48:47.931502+00:00",
+          "trigger": "進入「圖文問答」（預估載入 Qwen3-VL（問答、Text-to-SQL） 後顯示記憶體約 93%）",
+          "flow": "chat",
+          "flow_label": "圖文問答",
+          "pool": "ram",
+          "threshold": 92.0,
+          "percent_before": 97.8,
+          "percent_after": 73.0,
+          "gpu_percent_before": 52.1,
+          "gpu_percent_after": 29.0,
+          "released": [
+            {
+              "key": "ortho2cad",
+              "label": "Ortho2CAD（3D 重建）",
+              "detail": "llama-server /models/unload",
+              "approx_mb": 6200
+            }
+          ],
+          "failed": [],
+          "kept": [
+            "bge-m3（文字檢索）"
+          ]
+        }
+      ]
+    },
+    {
+      "step": "3. Ortho2CAD 3D 重建",
+      "ok": true,
+      "detail": "連接法蘭：可執行，IoU 0.81（26 秒）",
+      "seconds": 36.4,
+      "memory_before": 77.4,
+      "memory_after": 89.1,
+      "released": [
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）"
+      ],
+      "loaded_after": [
+        "Ortho2CAD（3D 重建）",
+        "Timefold 排程服務"
+      ],
+      "events": [
+        {
+          "at": "2026-10-06T22:49:45.242002+00:00",
+          "trigger": "背景監控",
+          "flow": "reconstruct",
+          "flow_label": "3D 重建",
+          "pool": "ram",
+          "threshold": 92.0,
+          "percent_before": 93.1,
+          "percent_after": 89.0,
+          "gpu_percent_before": 69.7,
+          "gpu_percent_after": 69.7,
+          "released": [
+            {
+              "key": "bge",
+              "label": "bge-m3（文字檢索）",
+              "detail": "已卸載",
+              "approx_mb": 2200
+            }
+          ],
+          "failed": [],
+          "kept": []
+        },
+        {
+          "at": "2026-10-06T22:49:17.955323+00:00",
+          "trigger": "進入「3D 重建」（預估載入 Ortho2CAD（3D 重建） 後顯示記憶體約 113%）",
+          "flow": "reconstruct",
+          "flow_label": "3D 重建",
+          "pool": "gpu",
+          "threshold": 90.0,
+          "percent_before": 75.5,
+          "percent_after": 30.5,
+          "gpu_percent_before": 75.5,
+          "gpu_percent_after": 30.5,
+          "released": [
+            {
+              "key": "qwen",
+              "label": "Qwen3-VL（問答、Text-to-SQL）",
+              "detail": "keep_alive=0：qwen3-vl:4b-instruct、qwen3-vl:8b-instruct",
+              "approx_mb": 6734
+            }
+          ],
+          "failed": [],
+          "kept": []
+        }
+      ]
+    },
+    {
+      "step": "4. 從圖紙開立工單",
+      "ok": true,
+      "detail": "WO-2610-19 連接法蘭 80 件（急件，AP-2610-06 主管核准，交期 2026-10-16）、WO-2610-20 L 型固定支架 120 件（一般，交期 2026-10-20）、WO-2610-21 階梯傳動軸 50 件（一般，交期 2026-10-21）",
+      "seconds": 0.5,
+      "memory_before": 89.3,
+      "memory_after": 89.2,
+      "released": [],
+      "loaded_after": [
+        "Ortho2CAD（3D 重建）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "5. 生產排程",
+      "ok": true,
+      "detail": "初始解 0hard/-3819medium/-32540soft → 0hard/0medium/-22939soft，總分核對一致；準時 7/7、換線 20 次、全部完工 2026-10-15 11:35",
+      "seconds": 11.5,
+      "memory_before": 89.6,
+      "memory_after": 87.8,
+      "released": [],
+      "loaded_after": [
+        "Ortho2CAD（3D 重建）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "6. Text-to-SQL 查排程",
+      "ok": true,
+      "detail": "「WO-2610-19 排程後什麼時候完工？會不會延遲？」→ 1 筆（13.3 秒）\n    SQL：SELECT wo_no AS 工單號, name AS 品名, planned_end AS 排程完工時間, on_time AS 是否延遲\nFROM v_wo_plan\nWHERE wo_no = 'WO-2610-19'\nORDER BY planned_end\n    回答：工單 WO-2610-19 排程完工時間為 2026-10-14 10:05，目前狀態為準時，不會延遲。",
+      "seconds": 22.0,
+      "memory_before": 87.3,
+      "memory_after": 73.8,
+      "released": [
+        "Ortho2CAD（3D 重建）"
+      ],
+      "loaded_after": [
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": [
+        {
+          "at": "2026-10-06T22:50:28.618689+00:00",
+          "trigger": "進入「庫存查詢」（預估載入 Qwen3-VL（問答、Text-to-SQL） 後顯示記憶體約 113%）",
+          "flow": "sql",
+          "flow_label": "庫存查詢",
+          "pool": "gpu",
+          "threshold": 90.0,
+          "percent_before": 71.7,
+          "percent_after": 32.6,
+          "gpu_percent_before": 71.7,
+          "gpu_percent_after": 32.6,
+          "released": [
+            {
+              "key": "ortho2cad",
+              "label": "Ortho2CAD（3D 重建）",
+              "detail": "llama-server /models/unload",
+              "approx_mb": 6200
+            }
+          ],
+          "failed": [],
+          "kept": []
+        }
+      ]
+    }
+  ]
+}
