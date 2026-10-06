@@ -19,7 +19,7 @@
 | `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在或已過期（與上傳照片同為 7 天） |
 | `PART_MODEL_NOT_FOUND` | 404 | 這張圖紙沒有標準 3D 模型（照片建檔的零件，`/parts/{id}/model.stl`、`model.step`；docs/adr/013） |
 | `INTAKE_TOO_BLURRY` | 200（SSE `error`） | 照片建檔：照片太模糊（模糊程度超過 `intake.max_blur`，圖紙與畫作共用），不送模型、不建檔——模型看不清楚時不會留空而是猜，糊的原圖之後也認不出來（docs/adr/013） |
-| `INTAKE_ALREADY_IN_KB` | 200（SSE `error`） | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔 |
+| `INTAKE_ALREADY_IN_KB` | 200（SSE `error`）／409 | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔。圖紙只和建檔人看得到的圖紙比（ADR 019），所以主管收錄（`POST /intake/{draft_id}/commit`）時會用主管的範圍再查一次，有重複回 409 |
 | `INTAKE_WRONG_DOMAIN` | 200（SSE `error`） | 照片建檔：從圖紙頁進來，領域路由卻很確定是畫作（或反過來）；`route` 附上路由結果，前端帶著同一張照片轉到另一邊 |
 | `INTAKE_DOMAIN_UNSUPPORTED` | 200（SSE `error`）／422 | 照片建檔：`shared/models.yaml` 沒有這個領域的 `intake` 設定 |
 | `INTAKE_PAGE_NOT_FOUND` | 200（SSE `error`） | 照片建檔：找不到整張圖紙的四個角或完整的標題欄外框（沒拍完整，或不是知識庫圖紙的版面） |

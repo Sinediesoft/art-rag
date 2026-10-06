@@ -56,6 +56,12 @@ ADR 015 的七段在正常前端流程下都會執行，但其中幾段由**客�
   單筆、清單、圖檔、3D、重建紀錄、以圖搜圖紙、文字搜圖紙、比較、批次辨識、問答與生成前置檢查都用它。
   403 訊息不寫圖紙名稱。`/chat` 指定看不到**或不存在**的圖紙回完全一樣的降級（不透露存在），
   在讀圖、作品卡、段落或呼叫任何模型之前就結束。
+- **以圖辨識圖紙也先授權**（codex-review 01cb3ed 的 finding）：`identify_drawing`／`identify_any` 收 `part_ids`
+  （`identity.visible_part_ids`），索引的 `search_images(owners=…)` 只對看得到的圖紙算 CLIP 相似度
+  （PostgreSQL 版在 `WHERE id = ANY(...)` 過濾），ORB 驗證（`verify.kb_features`）與線條重合（`verify.ink_overlap`）
+  也就只讀授權內的圖檔；看不到的圖紙認不出來，和「知識庫沒有」一樣。`/chat`、`/search/drawing`、`/search/any`、
+  智慧助理的照片、批次辨識、3D 重建、照片建檔都走這條路；事後過濾（`_scope_drawing_result` 等）留著當第二道。
+  照片建檔查重複只在建檔人看得到的圖紙裡比，主管收錄時用主管的範圍再查一次（有重複回 409 `INTAKE_ALREADY_IN_KB`）。
 - 地端規則比對前正規化：NFKC（全形變半形）、去掉零寬與方向控制字元、小寫，另比一次去掉空白標點的版本（擋拆字）。
   第 4 段新增 `sensitive`（內部成本、報價、分機、帳密…）×`directive`（寫進／附上…回覆、順序顛倒也算、中英混用）、
   `wrapper`（「檢核／除錯需求」包裝）；內部、機密段落無法安全判斷就剔除（含看不見的字元、對 AI 下指令）。
@@ -75,7 +81,10 @@ ADR 015 的七段在正常前端流程下都會執行，但其中幾段由**客�
 - SSE `sources`／`done` 新增 `pipeline`（可觀測軌跡，依序列出執行過的段落與結果；擋下之後的段落不執行也不列）。
 
 ## 驗證（2026-10-06，Mac 本機，mock 向量與 mock 生成端，不連 Jev、LLM、正式資料庫）
-- `make ci`：後端測試 544 passed、7 skipped（修補前 344 passed）；新增 `tests/test_security_pipeline.py`
+- 2026-10-06 修正 codex-review 的 finding 後：新增以圖辨識的 spy 測試（6 個入口 × 訪客／業務／部門受限，
+  `verify.kb_features`／`ink_overlap` 只讀到看得到的圖紙；主管對照組會讀到機密圖紙；拿掉修補時 18/19 失敗），
+  數字見 Implementation Report
+- `make ci`（第一版）：後端測試 544 passed、7 skipped（修補前 344 passed）；新增 `tests/test_security_pipeline.py`
   （攻擊矩陣 4 種身分 × 4 份文件（公開／內部兩個部門／機密）× 正常前端／直接 API × Jev 正常／被騙／斷網＝96 組，
   權限合約、繞過參數、Jev 故障 19 種、間接注入 12 種、第 5～7 段、交接票），用 spy 斷言擋下後讀圖、檢索、
   第 4～6 段、組 prompt、Jev 與生成端呼叫數為 0

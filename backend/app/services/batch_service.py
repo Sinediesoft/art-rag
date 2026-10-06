@@ -22,7 +22,7 @@ from app.rag.preprocess import load_image
 from app.repositories.index_store import get_store
 from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
-from app.services.identity import Account, can_view_part
+from app.services.identity import Account, can_view_part, visible_part_ids
 from app.services.search_service import identify, identify_any, identify_drawing, load_upload
 
 STATUS_LABEL = {
@@ -131,9 +131,11 @@ def identify_one(image_id: str, index: int, domain: str | None, account: Account
             if not account.can_read("mfg"):
                 row.update(status="hidden", note="目前身分不能使用工廠圖紙")
                 return row
-            _row_from_drawing(row, identify_drawing(image_id), account)
+            visible = visible_part_ids(account, get_store().parts)
+            _row_from_drawing(row, identify_drawing(image_id, part_ids=visible), account)
         else:
-            found = identify_any(image_id)
+            # 判成圖紙時只在看得到的圖紙裡辨識（docs/adr/019；不能用工廠圖紙的身分是空集合）
+            found = identify_any(image_id, part_ids=visible_part_ids(account, get_store().parts))
             row["route"] = found["route"]
             row["domain"] = found["route"]["domain"]
             if found["artwork_result"] is not None:

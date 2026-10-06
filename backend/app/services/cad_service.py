@@ -34,7 +34,7 @@ from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
-from app.services.identity import Account, require_part
+from app.services.identity import Account, require_part, visible_part_ids
 from app.services.search_service import identify_drawing, load_upload, part_summary, rectify_to_part
 
 CAD_STRATEGIES = {"ortho2cad", "hybrid"}
@@ -152,7 +152,11 @@ async def _reconstruct_stream(
     if image_id:
         photo = load_image(load_upload(image_id))
         if not part:
-            identified = await asyncio.to_thread(identify_drawing, image_id, None, photo)
+            # 只在看得到的圖紙裡辨識（docs/adr/019）：看不到的圖紙不讀，認不出就當未收錄的照片
+            visible = visible_part_ids(account, store.parts) if account is not None else None
+            identified = await asyncio.to_thread(
+                identify_drawing, image_id, None, photo, None, visible
+            )
             if identified["matched"]:
                 part = store.get_part(identified["best_part_id"])
     if not part and not photo:

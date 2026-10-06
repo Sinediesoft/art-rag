@@ -112,7 +112,7 @@ def test_photo_goes_through_domain_router(client, monkeypatch, domain, matched, 
     def result(key, value):
         return {"matched": matched, key: value} if matched else {"matched": False, key: None}
 
-    def fake_any(image_id, top_k=None):
+    def fake_any(image_id, top_k=None, part_ids=None):
         return {
             "route": {"domain": domain, "uncertain": domain == "mfg"},
             "artwork_result": result("best_artwork_id", "npm-000001") if domain == "art" else None,

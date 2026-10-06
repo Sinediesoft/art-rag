@@ -15,6 +15,7 @@ from app.analysis import page
 from app.core.config import REPO_ROOT, get_settings
 from app.rag.chunking import build_part_chunks
 from app.rag.kb import artwork_problems, part_problems
+from app.repositories.index_store import get_store
 from app.services import intake_service
 
 PHOTOS = REPO_ROOT / "eval" / "drawing_photos"
@@ -132,7 +133,7 @@ def test_next_version():
 
 
 # ---------------------------------------------------------------- 建檔流程（圖紙）
-def not_in_kb(image_id=None, top_k=None, domain="mfg", uncertain=False):
+def not_in_kb(image_id=None, top_k=None, part_ids=None, domain="mfg", uncertain=False):
     return {
         "route": {"domain": domain, "margin": 0.3, "uncertain": uncertain},
         "drawing_result": (
@@ -402,6 +403,37 @@ def test_commit_writes_kb_and_bumps_version(client, reads, kb):
     # 收錄過的草稿不能再改
     r = client.put(f"/api/v1/intake/{draft['draft_id']}", json={"values": {"owner": "x"}})
     assert r.status_code == 409 and r.json()["error"]["code"] == "INTAKE_CLOSED"
+
+
+def test_duplicate_check_only_looks_at_drawings_the_requester_can_see(client, monkeypatch):
+    """查「知識庫是不是已經有」只在建檔人看得到的圖紙裡比（docs/adr/019）：
+    業務看不到機密圖紙，辨識時不讀它們，也不會在「已收錄」訊息裡看到名稱。"""
+    seen: list = []
+
+    def fake(image_id, top_k=None, part_ids=None):
+        seen.append(part_ids)
+        return not_in_kb()
+
+    monkeypatch.setattr(intake_service, "identify_any", fake)
+    as_account(client, "sales_a")
+    start(client, PHOTOS / "known" / "mfg-002__glare.jpg")
+    as_account(client, "guest")
+    assert seen == [{"mfg-004", "mfg-005"}]
+
+
+def test_commit_rechecks_duplicates_within_the_managers_scope(client, reads, kb, monkeypatch):
+    draft = ready_draft(client, reads)
+    seen: list = []
+
+    def dup(image_id, top_k=None, img=None, vec=None, part_ids=None):
+        seen.append(part_ids)
+        return {"matched": True, "best_part_id": "mfg-002", "results": []}
+
+    monkeypatch.setattr(intake_service, "identify_drawing", dup)
+    r = commit_as_manager(client, draft["draft_id"])
+    assert r.status_code == 409 and r.json()["error"]["code"] == "INTAKE_ALREADY_IN_KB"
+    assert seen == [{p["id"] for p in get_store().parts}]  # 主管看得到全部
+    assert list((kb / "parts").iterdir()) == []
 
 
 ART = {

@@ -43,7 +43,7 @@ from app.repositories.index_store import get_store
 from app.repositories.production_repo import get_production_repo
 from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
-from app.services.identity import Account, require
+from app.services.identity import Account, require, visible_part_ids
 from app.services.search_service import (
     artwork_summary,
     identify,
@@ -494,19 +494,25 @@ def _parse(text: str) -> dict:
 
 # ---------------------------------------------------------------- 建立草稿（SSE）
 async def intake_stream(
-    image_id: str, request_id: str, domain: str | None = None
+    image_id: str, request_id: str, domain: str | None = None, account: Account | None = None
 ) -> AsyncIterator[str]:
     """照片建檔用到 Chinese-CLIP（辨識）與 Qwen3-VL（讀圖紙標題欄）；記憶體吃緊時先釋放其他模型。
 
     domain＝從哪一邊的頁面進來（圖紙頁 mfg、尋畫 art）；沒給就交給領域路由判斷。
+    account：目前身分。查「知識庫是不是已經有這張圖紙」只在它看得到的圖紙裡比（docs/adr/019）：
+    看不到的圖紙不讀、也不會在「已收錄」訊息裡出現；主管收錄時再用主管的範圍查一次重複。
+    None＝不限（程式內部呼叫）。
     """
     models = {"clip"} if domain == "art" else {"clip", "qwen"}
-    events = _intake_stream(image_id, request_id, domain)
+    visible = visible_part_ids(account, get_store().parts) if account is not None else None
+    events = _intake_stream(image_id, request_id, domain, visible)
     async for e in memory_guard.stream("intake", models, events):
         yield e
 
 
-async def _intake_stream(image_id: str, request_id: str, hint: str | None) -> AsyncIterator[str]:
+async def _intake_stream(
+    image_id: str, request_id: str, hint: str | None, visible: set[str] | None = None
+) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     s, cfg = get_settings(), get_models_config().intake
 
@@ -546,7 +552,7 @@ async def _intake_stream(image_id: str, request_id: str, hint: str | None) -> As
 
     # 2. 領域路由＋辨識：已收錄就不建檔
     yield stage("identify")
-    found = await asyncio.to_thread(identify_any, image_id)
+    found = await asyncio.to_thread(identify_any, image_id, None, visible)
     route = found["route"]
     domain = hint or route["domain"]
     if hint and route["domain"] != hint and not route["uncertain"]:
@@ -581,7 +587,9 @@ async def _intake_stream(image_id: str, request_id: str, hint: str | None) -> As
             else "知識庫沒有畫作"
         )
     else:
-        result = found["drawing_result"] or await asyncio.to_thread(identify_drawing, image_id)
+        result = found["drawing_result"] or await asyncio.to_thread(
+            identify_drawing, image_id, None, None, None, visible
+        )
         if result["matched"]:
             part = get_store().get_part(result["best_part_id"])
             yield err(
@@ -894,6 +902,17 @@ def commit_draft(draft_id: str, account: Account, request_id: str) -> dict:
                 "INTAKE_INVALID", "還有欄位沒通過驗證：" + "、".join(view["blockers"]), 422
             )
         if domain == "mfg":
+            # 建草稿時只和建檔人看得到的圖紙比過（docs/adr/019）；收錄前用主管的範圍再查一次重複
+            photo = load_image(_dir(draft_id) / "photo.jpg")
+            visible = visible_part_ids(account, get_store().parts)
+            dup = identify_drawing(draft_id, None, photo, None, visible)
+            if dup["matched"]:
+                p = get_store().get_part(dup["best_part_id"])
+                raise AppError(
+                    "INTAKE_ALREADY_IN_KB",
+                    f"知識庫已經有這張圖紙：〈{p['name']['zh']}〉{p['part_no']}（{p['id']}），不用收錄。",
+                    409,
+                )
             item_id = _next_id(_spec("mfg").id_prefix, "mfg")
             item = _build_part(d, item_id, account)
             problems = part_problems(item)

@@ -27,17 +27,19 @@ from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard, search_service
-from app.services.identity import Auth, level_rank
+from app.services.identity import Account, Auth, level_rank, visible_part_ids
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 只有照片、沒有文字時，問答模組用的預設問句（交接票綁這句話）
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
 
 
-def _identify_photo(image_id: str) -> dict:
+def _identify_photo(image_id: str, account: Account) -> dict:
     """照片是畫作還是圖紙：和以圖搜圖、問答同一個領域路由（docs/adr/007），只跑該領域的辨識。
-    路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。"""
-    found = search_service.identify_any(image_id)
+    路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。
+    圖紙只在目前身分看得到的圖紙裡辨識（docs/adr/019）：看不到的不讀、不回名稱。"""
+    visible = visible_part_ids(account, get_store().parts)
+    found = search_service.identify_any(image_id, part_ids=visible)
     if found["route"]["domain"] == "art":
         art = found["artwork_result"]
         if not art["matched"]:
@@ -155,7 +157,7 @@ async def route(
     cfg = get_agent_config()
     # 0. 個資遮蔽：之後只看遮蔽後的文字
     question, pii = guard.mask_pii(question.strip())
-    photo = await asyncio.to_thread(_identify_photo, image_id) if image_id else None
+    photo = await asyncio.to_thread(_identify_photo, image_id, account) if image_id else None
     photo_kind = photo["kind"] if photo else None
     index = await asyncio.to_thread(get_index)
     entities = index.find(question)

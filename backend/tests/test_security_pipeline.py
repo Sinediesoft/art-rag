@@ -793,3 +793,123 @@ def test_attack_matrix(client, dept_account, all_chunks, jev_server, spies, acco
                 assert guard.local_leak(s["text"], s["level"]) is None
     for n in names:
         assert n not in text, n
+
+
+# ================================================================ 以圖辨識圖紙：先授權再讀圖
+# （codex-review 01cb3ed 的 finding：原本辨識完才過濾，看不到的圖紙特徵與圖檔已經被讀過）
+PHOTO_OF_HIDDEN = config.REPO_ROOT / "kb/drawings/mfg-002.png"  # 業務、部門受限都看不到的機密圖紙
+VISIBLE_PARTS = {
+    "guest": set(),
+    "sales_a": {"mfg-004", "mfg-005"},
+    "auto_tech": {"mfg-004"},
+    "manager": set(PART_NAMES),
+}
+
+
+@pytest.fixture
+def drawing_reads(monkeypatch):
+    """記下以圖辨識讀了哪些知識庫圖紙（verify.kb_features 的特徵、verify.ink_overlap 的圖檔）。
+    mock 向量的相似度都在門檻以下、平常不會進幾何驗證：把門檻設成 -1，候選全部都會被驗，
+    「沒讀到」才有意義。領域路由固定判成圖紙。"""
+    from pathlib import Path
+
+    from app.rag import verify
+    from app.services import search_service
+
+    read: list[str] = []
+    real_kb, real_ink = verify.kb_features, verify.ink_overlap
+
+    def kb_features(path, mtime, drawing=False):
+        read.append(Path(path).stem)
+        return real_kb(path, mtime, drawing=drawing)
+
+    def ink_overlap(img, h, ref_path):
+        read.append(Path(ref_path).stem)
+        return real_ink(img, h, ref_path)
+
+    class Mfg:
+        domain, uncertain = "mfg", False
+
+        def summary(self):
+            return {"domain": "mfg", "margin": 0.5, "art_score": 0.1, "mfg_score": 0.6,
+                    "min_margin": 0.05, "uncertain": False}  # fmt: skip
+
+    monkeypatch.setattr(verify, "kb_features", kb_features)
+    monkeypatch.setattr(verify, "ink_overlap", ink_overlap)
+    monkeypatch.setitem(config.get_models_config().drawing_retrieval, "image_threshold", -1.0)
+    monkeypatch.setattr(search_service, "route", lambda vec: Mfg())
+    return read
+
+
+def _upload_hidden(client) -> str:
+    r = client.post(
+        "/api/v1/images",
+        files={"file": (PHOTO_OF_HIDDEN.name, PHOTO_OF_HIDDEN.read_bytes(), "image/png")},
+    )
+    return r.json()["image_id"]
+
+
+def _call(channel: str, c: TestClient, image_id: str) -> str:
+    """各個會辨識圖紙照片的入口；回傳回應本文（要檢查有沒有洩漏名稱）。"""
+    if channel == "search_drawing":
+        r = c.post("/api/v1/search/drawing", json={"image_id": image_id, "top_k": 6})
+    elif channel == "search_any":
+        r = c.post("/api/v1/search/any", json={"image_id": image_id, "top_k": 6})
+    elif channel == "chat":
+        r = c.post("/api/v1/chat", json={"question": "這是什麼零件？", "image_id": image_id})
+    elif channel == "route":
+        r = c.post("/api/v1/agent/route", json={"question": "", "image_id": image_id})
+    elif channel == "batch":
+        r = c.post("/api/v1/batch/identify", json={"image_ids": [image_id]})
+    elif channel == "intake":
+        r = c.post("/api/v1/intake", json={"image_id": image_id, "domain": "mfg"})
+    else:
+        raise AssertionError(channel)
+    return r.text
+
+
+@pytest.mark.parametrize(
+    "channel", ["search_drawing", "search_any", "chat", "route", "batch", "intake"]
+)
+@pytest.mark.parametrize("account", ["guest", "sales_a", "auto_tech"])
+def test_photo_identification_never_reads_drawings_outside_scope(
+    client, dept_account, drawing_reads, account, channel
+):
+    image_id = _upload_hidden(client)
+    text = _call(channel, client_as(account), image_id)
+    assert set(drawing_reads) <= VISIBLE_PARTS[account], drawing_reads
+    assert "mfg-002" not in text and "連接法蘭" not in text and "D-24-0203" not in text
+
+
+def test_photo_identification_reads_the_drawings_in_scope(client, drawing_reads):
+    """對照組：看得到全部的主管照樣會驗到機密圖紙（上面的「沒讀到」不是因為根本沒驗）。"""
+    _call("search_drawing", client_as("manager"), _upload_hidden(client))
+    assert "mfg-002" in drawing_reads and set(drawing_reads) <= VISIBLE_PARTS["manager"]
+
+
+def test_reconstruct_photo_identification_is_scoped(client, drawing_reads):
+    """3D 重建用照片時：辨識只驗看得到的圖紙（只跑到第一個事件，不真的重建）。"""
+    from app.services import cad_service
+
+    image_id = _upload_hidden(client)
+
+    async def first_event():
+        gen = cad_service.reconstruct_stream(
+            "req-x", image_id=image_id, account=identity.get_account("sales_a")
+        )
+        try:
+            return await anext(gen)
+        finally:
+            await gen.aclose()
+
+    event = asyncio.run(first_event())
+    assert set(drawing_reads) <= VISIBLE_PARTS["sales_a"]
+    assert "mfg-002" not in event and "連接法蘭" not in event
+
+
+def test_image_search_owner_filter():
+    mfg = chat_service.get_store().mfg
+    q = mfg.image_vecs[0]
+    assert {h.item["id"] for h in mfg.search_images(q, 10, owners={"mfg-004"})} == {"mfg-004"}
+    assert mfg.search_images(q, 10, owners=set()) == []
+    assert len(mfg.search_images(q, 10)) == len(mfg.items)

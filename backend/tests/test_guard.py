@@ -361,7 +361,7 @@ def test_photo_only_skips_guard(client, monkeypatch, fake_jev):
     monkeypatch.setattr(
         search_service,
         "identify_any",
-        lambda image_id, top_k=None: {
+        lambda image_id, top_k=None, part_ids=None: {
             "route": {"domain": "art"},
             "artwork_result": {"matched": True, "best_artwork_id": "npm-000001"},
             "drawing_result": None,

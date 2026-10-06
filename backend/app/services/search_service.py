@@ -162,16 +162,21 @@ def identify_drawing(
     top_k: int | None = None,
     img: Image.Image | None = None,
     vec: np.ndarray | None = None,
+    part_ids: set[str] | None = None,
 ) -> dict:
     """圖紙辨識三道關：Chinese-CLIP 粗篩 → ORB 幾何驗證（遮掉固定版面、排除退化 homography）
-    → 拉正後比對線條重合度。三道都過才算辨識成功。"""
+    → 拉正後比對線條重合度。三道都過才算辨識成功。
+
+    part_ids：目前身分看得到的圖紙（identity.visible_part_ids，docs/adr/019）。先做文件層授權：
+    候選只從這些圖紙裡找，看不到的圖紙不算相似度、不讀特徵與圖檔、也不會出現在結果；
+    None＝不限（程式內部呼叫，例如照片建檔查重複由主管收錄時再確認）。"""
     cfg = get_models_config().drawing_retrieval
     k = top_k or int(cfg["top_k_search"])
     t0 = time.perf_counter()
     img = img or load_image(load_upload(image_id))
     mfg = get_store().mfg
     qvec = embed_image(img) if vec is None else vec
-    hits = mfg.search_images(qvec, max(k, int(cfg["verify_top_n"])))
+    hits = mfg.search_images(qvec, max(k, int(cfg["verify_top_n"])), owners=part_ids)
     threshold, min_inliers = float(cfg["image_threshold"]), int(cfg["verify_min_inliers"])
     min_overlap = float(cfg["verify_min_overlap"])
     query = verify.features(img)
@@ -209,15 +214,19 @@ def identify_drawing(
 
 
 @guarded("search_image", {"clip"})
-def identify_any(image_id: str, top_k: int | None = None) -> dict:
+def identify_any(image_id: str, top_k: int | None = None, part_ids: set[str] | None = None) -> dict:
     """不指定領域的以圖搜圖：領域路由先判斷是畫作還是工廠圖紙，只跑該領域的辨識。
-    照片與 CLIP 向量只算一次，路由與辨識共用。"""
+    照片與 CLIP 向量只算一次，路由與辨識共用。part_ids 同 identify_drawing（看得到的圖紙）。"""
     t0 = time.perf_counter()
     img = load_image(load_upload(image_id))
     vec = embed_image(img)
     r = route(vec)
     art = identify(image_id, top_k, img, vec) if r.domain == "art" else None
-    mfg = identify_drawing(image_id, top_k, img, vec) if r.domain == "mfg" else None
+    mfg = (
+        identify_drawing(image_id, top_k, img, vec, part_ids=part_ids)
+        if r.domain == "mfg"
+        else None
+    )
     return {
         "query_image_id": image_id,
         "route": r.summary(),

@@ -46,7 +46,7 @@ from app.rag.textproc import to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
-from app.services.identity import Account, can_view_part
+from app.services.identity import Account, can_view_part, visible_part_ids
 from app.services.search_service import identify_any, load_upload
 
 # 備援只在本地之間：主推論伺服器 → 本地備援模型；雲端不在任何備援鏈上
@@ -318,11 +318,13 @@ async def _chat_stream(
 
     # 以圖辨識（已指定畫作或圖紙就跳過）。只給照片時先經過領域路由（MMed-RAG 的領域辨識），
     # 判斷是畫作還是圖紙，再走該領域的辨識（和以圖搜圖、智慧助理同一個 identify_any）。
-    # 辨識的是使用者自己上傳的照片；辨識出的文件要先過第 1 段才會讀它的任何內容。
+    # 文件層授權先做（docs/adr/019）：圖紙只在目前身分看得到的圖紙裡辨識，
+    # 看不到的圖紙不算相似度、不讀特徵與圖檔；辨識不到就和「知識庫沒有」一樣。
     # 雲端策略在上面已拒收照片，所以路由成圖紙時不會是雲端。
     route_info = None
     if not artwork_id and not part_id and image_id:
-        found = identify_any(image_id)
+        visible = visible_part_ids(account, store.parts) if account is not None else None
+        found = identify_any(image_id, part_ids=visible)
         route_info = found["route"]
         domain = route_info["domain"]
         identified = found["drawing_result"] if domain == "mfg" else found["artwork_result"]

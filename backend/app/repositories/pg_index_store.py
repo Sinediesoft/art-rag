@@ -149,14 +149,16 @@ class PgCollection(Collection):
         super().__post_init__()
         self._chunk_by_id = {c["chunk_id"]: c for c in self.chunks}
 
-    def search_images(self, query: np.ndarray, k: int) -> list[Hit]:
-        if not self.items:
+    def search_images(self, query: np.ndarray, k: int, owners: set | None = None) -> list[Hit]:
+        """owners：只在這些項目裡找（資料庫查詢階段就過濾，docs/adr/019）；None＝不限。"""
+        if not self.items or (owners is not None and not owners):
             return []
         with self.pool.connection() as conn:
             rows = conn.execute(
                 f"SELECT id, 1 - (image_vec <=> %(q)s) FROM {self.items_table}"
+                " WHERE (%(owners)s::text[] IS NULL OR id = ANY (%(owners)s))"
                 " ORDER BY image_vec <=> %(q)s LIMIT %(k)s",
-                {"q": query, "k": k},
+                {"q": query, "k": k, "owners": sorted(owners) if owners is not None else None},
             ).fetchall()
         # make index 剛換上新資料、快照還沒重載時，略過快照裡沒有的項目
         return [Hit(self.by_id[i], float(s)) for i, s in rows if i in self.by_id]

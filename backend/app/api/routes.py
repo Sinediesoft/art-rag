@@ -303,8 +303,10 @@ def _scope_drawing_result(result: dict, account: identity.Account) -> dict:
 def search_drawing(body: S.DrawingSearchRequest, request: Request):
     account = identity.current(request)
     identity.require_domain(account, "mfg")
+    # 先做文件層授權：只在看得到的圖紙裡辨識（docs/adr/019）；事後過濾留著當第二道
+    visible = identity.visible_part_ids(account, get_store().parts)
     return _scope_drawing_result(
-        search_service.identify_drawing(body.image_id, body.top_k), account
+        search_service.identify_drawing(body.image_id, body.top_k, part_ids=visible), account
     )
 
 
@@ -313,7 +315,9 @@ def search_any(body: S.ImageSearchRequest, request: Request):
     """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
     判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。"""
     account = identity.current(request)
-    result = search_service.identify_any(body.image_id, body.top_k)
+    # 判成圖紙時只在看得到的圖紙裡辨識（訪客是空集合：不讀任何圖紙），之後照樣檢查領域
+    visible = identity.visible_part_ids(account, get_store().parts)
+    result = search_service.identify_any(body.image_id, body.top_k, part_ids=visible)
     if result["drawing_result"] is not None:
         identity.require_domain(account, "mfg")
         result["drawing_result"] = _scope_drawing_result(result["drawing_result"], account)
@@ -479,7 +483,9 @@ async def create_intake(body: S.IntakeRequest, request: Request):
 
     圖紙由本地 Qwen3-VL 讀標題欄；畫作不讀照片，欄位由人在表單填。
     """
-    stream = intake_service.intake_stream(body.image_id, request.state.request_id, body.domain)
+    stream = intake_service.intake_stream(
+        body.image_id, request.state.request_id, body.domain, identity.current(request)
+    )
     return StreamingResponse(
         stream,
         media_type="text/event-stream",
