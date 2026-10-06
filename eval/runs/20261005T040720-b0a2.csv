@@ -1,0 +1,51 @@
+question_id,split,type,artwork_id,source_lang,strategy,model,kb_version,prompt_version,answer_ok,citation_ok,n_sources,rearrange_ms,rearrange_fallback,first_token_ms,total_ms,cost_twd,egress_images,egress_chunks,egress_bytes,error,distractor_kept,distractor_cited,distractor_misled,answer
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,9971,,11389,11739,0.0,0,0,0,,,,,畫家的簽名藏在畫面右下方、騾隊後方的樹叢枝葉間 [1]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,568,,1213,1696,0.0,0,0,0,,,,,1958 年，故宮研究人員李霖燦在畫面右下方的樹叢枝葉間發現了「范寬」二字款 [1]。
+q-npm1-03,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,2,631,,1237,1775,0.0,0,0,0,,,,,范寬在〈谿山行旅圖〉中，以密集、短促的筆觸層層點染山石，這種筆法後世稱為「雨點皴」[1]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,655,,1271,1594,0.0,0,0,0,,,,,畫面近景右下方的山路上，有一支馱著貨物的騾隊正在趕路 [1]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,606,,1180,1665,0.0,0,0,0,,,,,〈谿山行旅圖〉常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑 [1]。
+q-met-01,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,627,,1724,2065,0.0,0,0,0,,,,,這幅畫是在法國南部聖雷米附近的聖保羅療養院周圍的田野現場完成的 [1]。
+q-met-02,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,627,,1262,1510,0.0,0,0,0,,,,,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-met-03,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,3,658,,1280,2265,0.0,0,0,0,,,,,是的，這幅畫有其他版本，其中一幅尺寸相近的藏於倫敦國家美術館，另一幅較小的則是畫給母親與妹妹的 [1]。   目前您看到的這幅收藏於紐約的大都會藝術博物館，該館於 1993 年以安納伯格基金會的捐款購得 [2]。
+q-met-04,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,598,,1217,1471,0.0,0,0,0,,,,,大都會藝術博物館是在 1993 年取得這幅畫的 [1]。
+q-met-05,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,578,,1180,1413,0.0,0,0,0,,,,,遠方的山是阿爾皮耶山丘（Alpilles）[1]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,2,639,,1784,2511,0.0,0,0,0,,,,,秀拉用的是「點描法」，他將純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1][2]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,578,,1181,1338,0.0,0,0,0,,,,,右邊的女子牽著一隻猴子 [1]。
+q-aic-03,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,613,,1229,1516,0.0,0,0,0,,,,,這幅畫第一次在第八屆印象派畫展展出，也是最後一屆印象派畫展 [1]。
+q-aic-04,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,2,639,,1296,1683,0.0,0,0,0,,,,,畫布四周的邊框是在 1888 至 1889 年間由秀拉加上去的 [1]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,647,,1315,1463,0.0,0,0,0,,,,,畫的是塞納河上的島 [1]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,707,,1381,1493,0.0,0,0,0,,,,,知識庫中沒有這方面的資料。
+q-npm1-06,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,733,,1444,1876,0.0,0,0,0,,,,,這幅畫主要使用深褐、褐與黑等中性色，整體以暗調為主，彩度偏低 [1]。
+q-aic-06,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,724,,1419,2256,0.0,0,0,0,,,,,這幅畫整體偏中性色，暖色佔比約 24%，冷色 19%，中性色（接近黑白灰）則高達 56% [1]。   因此，它不偏暖也不偏冷，而是以中性色為主調。
+q-met-06,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,654,,1350,2083,0.0,0,0,0,,,,,這幅畫的彩度中位數為 13，屬於中等彩度，不算特別鮮豔 [1]。整體色彩冷暖並陳，以中間調為主，呈現出沉穩而富有層次的視覺效果 [1]。
+q-dist-npm1-01,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,2,618,,1449,2381,0.0,0,0,0,,True,True,True,1958 年，故宮研究人員李霖燦在畫面右下方、騾隊後方的樹叢枝葉間發現了「范寬」二字款 [2]。   張大千則是在 1962 年於畫面左上角山石縫隙間發現落款 [1]。
+q-dist-met-01,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,1,589,,1368,1637,0.0,0,0,0,,True,True,True,大都會藝術博物館於 1979 年取得這幅畫 [1]。
+q-dist-aic-01,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,670,,1457,1779,0.0,0,0,0,,False,False,False,這幅畫第一次在第八屆印象派畫展展出，也是最後一屆印象派畫展 [1]。
+q-dist-npm1-02,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,2,658,,1365,1890,0.0,0,0,0,,False,False,False,范寬在〈谿山行旅圖〉中，以密集、短促的筆觸層層點染山石，這種筆法後世稱為「雨點皴」[1]。
+q-dist-met-02,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,1,618,,1322,1571,0.0,0,0,0,,False,False,False,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-dist-aic-02,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,True,2,692,,1480,2207,0.0,0,0,0,,False,False,False,秀拉用的是「點描法」，他將純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1][2]。
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,1160,1594,0.0,0,0,0,,,,,畫家簽名藏在畫作右下角，但因年代久遠與裝裱，字跡已難以辨識 [0]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,644,1110,0.0,0,0,0,,,,,這幅畫原無作者簽名，直到1930年代才由故宮博物院學者在畫背發現「范寬」二字款識 [0]。
+q-npm1-03,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,601,949,0.0,0,0,0,,,,,畫中山石主要使用雨點皴與斧劈皴，表現出岩石的堅硬與層次感 [0]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,602,990,0.0,0,0,0,,,,,近景無人無動物，僅見山石、樹木與溪流，強調自然的雄偉與孤寂 [0]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,632,1007,0.0,0,0,0,,,,,常與郭熙《早春圖》、李唐《萬壑松風圖》並稱為「北宋三大家山水」[0]。
+q-met-01,dev,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,1124,1660,0.0,0,0,0,,,,,這幅畫是梵谷在法國聖雷米的精神病院期間所繪，當時他住在院內的療養室，窗外的景緻啟發了這幅作品 [0]。
+q-met-02,dev,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,620,1107,0.0,0,0,0,,,,,梵谷曾形容絲柏是「黑色的塔」，象徵堅毅與孤高，也常在畫中作為視覺焦點與精神象徵 [0]。
+q-met-03,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,608,991,0.0,0,0,0,,,,,"這幅畫確實有其他版本，其中最著名的另一幅收藏於英國國家美術館（The National Gallery, London）[0]。"
+q-met-04,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,610,839,0.0,0,0,0,,,,,大都會藝術博物館於1990年取得這幅畫 [0]。
+q-met-05,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,616,1101,0.0,0,0,0,,,,,畫中遠方的山是法國普羅旺斯的「聖維克多山」，梵谷當時正住在附近療養 [0]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,1156,1735,0.0,0,0,0,,,,,秀拉主要使用點描法（Pointillism），以細小色點堆疊構成畫面，讓觀眾從遠處看時，眼睛會自動混合顏色產生光感 [0]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,602,769,0.0,0,0,0,,,,,右邊的女子牽著一隻小狗 [0]。
+q-aic-03,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,597,1125,0.0,0,0,0,,,,,這幅畫首次於1886年在巴黎的獨立美術展（Salon des Indépendants）展出，當時引起不小爭議 [0]。
+q-aic-04,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,617,931,0.0,0,0,0,,,,,畫布四周的點描邊框是在1888至1889年加上去的 [0]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,601,767,0.0,0,0,0,,,,,畫的是塞納河上的大碗島 [0]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,613,1396,0.0,0,0,0,,,,,這幅畫在1886年完成時並未賣出，秀拉生前也未售出任何作品，直到1983年才以約1億美元的天價成交，是當時最昂貴的畫作之一 [0]。
+q-npm1-06,test,untyped,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,641,943,0.0,0,0,0,,,,,主要以墨色與淡赭石為主，營造出沉穩厚重的山水氣息 [0]。
+q-aic-06,test,untyped,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,658,1155,0.0,0,0,0,,,,,整體偏暖，以黃綠、赭石等溫暖色調為主，營造午後陽光下的休閒氛圍 [0]。
+q-met-06,test,untyped,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,668,1107,0.0,0,0,0,,,,,是的，這幅畫色彩飽和度高，黃色麥田與藍綠天空形成強烈對比，非常鮮豔奪目 [0]。
+q-dist-npm1-01,test,distractor,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,689,1211,0.0,0,0,0,,,,,這幅畫原無作者簽名，直到1930年代才由故宮博物院學者在畫背發現「范寬」二字款識 [0]。
+q-dist-met-01,test,distractor,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,691,986,0.0,0,0,0,,,,,大都會藝術博物館於1990年取得這幅畫 [0]。
+q-dist-aic-01,test,distractor,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,675,1191,0.0,0,0,0,,,,,這幅畫首次於1886年在巴黎的獨立美術展（Salon des Indépendants）展出，當時引起不小爭議 [0]。
+q-dist-npm1-02,test,distractor,npm-000001,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,661,1009,0.0,0,0,0,,,,,畫中山石主要使用雨點皴與斧劈皴，表現出岩石的堅硬與層次感 [0]。
+q-dist-met-02,test,distractor,met-436535,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,False,False,0,,,623,1100,0.0,0,0,0,,,,,梵谷曾形容絲柏是「黑色的塔」，象徵堅毅與孤高，也常在畫中作為視覺焦點與精神象徵 [0]。
+q-dist-aic-02,test,distractor,aic-27992,zh,hybrid_norag,qwen3-vl:8b-instruct-q8_0,2026.10.1,answer_v1,True,False,0,,,625,1210,0.0,0,0,0,,,,,秀拉主要使用點描法（Pointillism），以細小色點堆疊構成畫面，讓觀眾從遠處看時，眼睛會自動混合顏色產生光感 [0]。

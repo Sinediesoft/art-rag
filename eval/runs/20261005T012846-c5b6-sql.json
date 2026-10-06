@@ -1,0 +1,556 @@
+{
+  "run_id": "20261005T012846-c5b6",
+  "created_at": "2026-10-05T01:28:46.676018+00:00",
+  "strategy": "hybrid",
+  "model": "qwen3-vl:8b-instruct",
+  "hybrid_model": "qwen3-vl:8b-instruct",
+  "inventory_as_of": "2026-09-30",
+  "summary": {
+    "n": 20,
+    "execution_accuracy": 0.95,
+    "executable_rate": 1.0,
+    "first_try_rate": 1.0,
+    "repaired": 0,
+    "avg_attempts": 1,
+    "by_type": {
+      "aggregate": 1.0,
+      "date": 1.0,
+      "filter": 1.0,
+      "join": 0.75,
+      "lookup": 1.0
+    },
+    "p50_total_ms": 2525.5,
+    "p95_total_ms": 3510,
+    "p50_sql_ms": 1357.5,
+    "egress_bytes": 0
+  },
+  "rows": [
+    {
+      "id": "sql-01",
+      "type": "lookup",
+      "question": "階梯傳動軸現在可用的有幾件？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT v.available AS 可用庫存\nFROM v_part_stock v\nWHERE v.name LIKE '%階梯傳動軸%'",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 1130,
+        "sql": 1465,
+        "exec": 1,
+        "answer": 743,
+        "total": 2208
+      },
+      "wall_s": 3.4,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-02",
+      "type": "join",
+      "question": "二廠成品倉放了哪些零件？各多少件？",
+      "executable": true,
+      "correct": false,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, s.qty AS 數量, s.status AS 狀態\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE w.name = '二廠成品倉'\nORDER BY 數量 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 6,
+      "latency_ms": {
+        "first_token": 553,
+        "sql": 1294,
+        "exec": 0,
+        "answer": 1402,
+        "total": 2696
+      },
+      "wall_s": 3.9,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-03",
+      "type": "filter",
+      "question": "目前有哪些不良品？數量和原因是什麼？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, w.name AS 倉庫, s.lot_no AS 批號, s.qty AS 數量, s.note AS 原因\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE s.status = '不良'\nORDER BY s.qty DESC",
+      "errors": [],
+      "error": null,
+      "rows": 5,
+      "latency_ms": {
+        "first_token": 556,
+        "sql": 1407,
+        "exec": 0,
+        "answer": 2103,
+        "total": 3510
+      },
+      "wall_s": 4.7,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-04",
+      "type": "filter",
+      "question": "晨峰自動化還有哪些訂單沒出完貨？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT o.so_no AS 訂單號, o.line_no AS 項次, o.customer AS 客戶, p.name AS 品名, o.qty - o.qty_shipped AS 未出貨, o.due_on AS 交期\nFROM sales_orders o\nJOIN parts p ON p.part_id = o.part_id\nWHERE o.customer = '晨峰自動化' AND o.status != '已出貨'\nORDER BY o.due_on",
+      "errors": [],
+      "error": null,
+      "rows": 3,
+      "latency_ms": {
+        "first_token": 562,
+        "sql": 1596,
+        "exec": 0,
+        "answer": 1245,
+        "total": 2841
+      },
+      "wall_s": 4.0,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-05",
+      "type": "date",
+      "question": "10 月 10 日以前到期、還沒出完貨的訂單有哪些？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT o.so_no AS 訂單號, o.line_no AS 項次, o.customer AS 客戶, p.name AS 品名, o.qty - o.qty_shipped AS 未出貨, o.due_on AS 交期\nFROM sales_orders o\nJOIN parts p ON p.part_id = o.part_id\nWHERE o.status != '已出貨' AND o.due_on <= '2026-10-10'\nORDER BY o.due_on",
+      "errors": [],
+      "error": null,
+      "rows": 5,
+      "latency_ms": {
+        "first_token": 526,
+        "sql": 1588,
+        "exec": 0,
+        "answer": 2225,
+        "total": 3813
+      },
+      "wall_s": 5.0,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-06",
+      "type": "join",
+      "question": "哪些訂單的未出貨數量超過該零件目前的可用庫存？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT o.so_no AS 訂單號, o.line_no AS 項次, o.customer AS 客戶, p.name AS 品名, o.qty - o.qty_shipped AS 未出貨數量, v.available AS 可用庫存\nFROM sales_orders o\nJOIN parts p ON p.part_id = o.part_id\nJOIN v_part_stock v ON v.part_id = p.part_id\nWHERE o.qty - o.qty_shipped > v.available\nORDER BY 未出貨數量 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 3,
+      "latency_ms": {
+        "first_token": 546,
+        "sql": 1674,
+        "exec": 0,
+        "answer": 1750,
+        "total": 3424
+      },
+      "wall_s": 4.6,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-07",
+      "type": "aggregate",
+      "question": "各零件未出貨訂單的需求量加總是多少？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, SUM(o.qty - o.qty_shipped) AS 未出貨需求量\nFROM sales_orders o\nJOIN parts p ON p.part_id = o.part_id\nWHERE o.status != '已出貨'\nGROUP BY p.name\nORDER BY 未出貨需求量 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 6,
+      "latency_ms": {
+        "first_token": 527,
+        "sql": 1233,
+        "exec": 0,
+        "answer": 912,
+        "total": 2145
+      },
+      "wall_s": 3.3,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-08",
+      "type": "lookup",
+      "question": "哪個零件的標準成本最高？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT name AS 品名, std_cost_twd AS 標準成本\nFROM parts\nORDER BY std_cost_twd DESC\nLIMIT 1",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 539,
+        "sql": 925,
+        "exec": 0,
+        "answer": 732,
+        "total": 1657
+      },
+      "wall_s": 2.8,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-09",
+      "type": "filter",
+      "question": "待檢的庫存有哪些？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, w.name AS 倉庫, s.bin AS 儲位, s.lot_no AS 批號, s.qty AS 數量\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE s.status = '待檢'\nORDER BY s.qty DESC",
+      "errors": [],
+      "error": null,
+      "rows": 3,
+      "latency_ms": {
+        "first_token": 531,
+        "sql": 1398,
+        "exec": 0,
+        "answer": 1093,
+        "total": 2491
+      },
+      "wall_s": 3.7,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-10",
+      "type": "aggregate",
+      "question": "機密等級為「機密」的零件，庫存總共有幾件？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT SUM(s.qty) AS 總庫存數量\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nWHERE p.confidentiality = '機密'",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 538,
+        "sql": 991,
+        "exec": 0,
+        "answer": 767,
+        "total": 1758
+      },
+      "wall_s": 2.9,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-11",
+      "type": "filter",
+      "question": "T 型槽螺帽有哪些批號？各放在哪個儲位？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT s.lot_no AS 批號, s.bin AS 儲位\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nWHERE p.name LIKE '%T 型槽螺帽%'\nORDER BY s.lot_no",
+      "errors": [],
+      "error": null,
+      "rows": 5,
+      "latency_ms": {
+        "first_token": 514,
+        "sql": 1051,
+        "exec": 0,
+        "answer": 1790,
+        "total": 2841
+      },
+      "wall_s": 4.0,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-12",
+      "type": "filter",
+      "question": "九月底盤點調整了哪些零件？差多少？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, w.name AS 倉庫, m.moved_on AS 盤點日期, m.qty AS 差異數量, m.note AS 備註\nFROM stock_moves m\nJOIN parts p ON p.part_id = m.part_id\nJOIN warehouses w ON w.warehouse_id = m.warehouse_id\nWHERE m.move_type = '盤點調整' AND m.moved_on BETWEEN '2026-09-01' AND '2026-09-30'\nORDER BY m.moved_on DESC",
+      "errors": [],
+      "error": null,
+      "rows": 2,
+      "latency_ms": {
+        "first_token": 535,
+        "sql": 1765,
+        "exec": 0,
+        "answer": 1326,
+        "total": 3091
+      },
+      "wall_s": 4.3,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-13",
+      "type": "aggregate",
+      "question": "八、九月總共報廢了幾件？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT -SUM(m.qty) AS 報廢數量\nFROM stock_moves m\nWHERE m.move_type = '報廢' AND m.moved_on BETWEEN '2026-08-01' AND '2026-09-30'",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 505,
+        "sql": 1140,
+        "exec": 0,
+        "answer": 707,
+        "total": 1847
+      },
+      "wall_s": 3.0,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-14",
+      "type": "filter",
+      "question": "VMC-01 這台機台有哪些還沒完工的工單？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT w.wo_no AS 工單號, p.name AS 品名, w.qty_planned - w.qty_done AS 未完工數量, w.status AS 狀態, w.due_on AS 預計完工日\nFROM work_orders w\nJOIN parts p ON p.part_id = w.part_id\nWHERE w.line = 'VMC-01' AND w.status != '已完工'\nORDER BY w.due_on",
+      "errors": [],
+      "error": null,
+      "rows": 2,
+      "latency_ms": {
+        "first_token": 510,
+        "sql": 1510,
+        "exec": 0,
+        "answer": 1538,
+        "total": 3048
+      },
+      "wall_s": 4.2,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-15",
+      "type": "aggregate",
+      "question": "每個客戶的訂購數量總共是多少？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT o.customer AS 客戶, SUM(o.qty) AS 總訂購數量\nFROM sales_orders o\nGROUP BY o.customer\nORDER BY 總訂購數量 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 4,
+      "latency_ms": {
+        "first_token": 567,
+        "sql": 1047,
+        "exec": 0,
+        "answer": 1064,
+        "total": 2111
+      },
+      "wall_s": 3.3,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-16",
+      "type": "filter",
+      "question": "步進馬達安裝板保留的庫存是保留給哪張訂單？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, w.name AS 倉庫, s.qty AS 數量, s.note AS 備註\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE p.name = '步進馬達安裝板' AND s.status = '保留'\nORDER BY s.qty DESC",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 585,
+        "sql": 1505,
+        "exec": 0,
+        "answer": 955,
+        "total": 2460
+      },
+      "wall_s": 3.7,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-17",
+      "type": "join",
+      "question": "一廠各倉庫目前的庫存總數是多少？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT w.name AS 倉庫, SUM(s.qty) AS 總庫存數量\nFROM stock s\nJOIN warehouses w ON w.warehouse_id = s.warehouse_id\nWHERE w.site = '一廠'\nGROUP BY w.name\nORDER BY 總庫存數量 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 3,
+      "latency_ms": {
+        "first_token": 527,
+        "sql": 1202,
+        "exec": 0,
+        "answer": 1152,
+        "total": 2354
+      },
+      "wall_s": 3.5,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-18",
+      "type": "filter",
+      "question": "哪些工單正在生產中或委外處理中？預計何時完工？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT w.wo_no AS 工單號, p.name AS 品名, w.status AS 狀態, w.due_on AS 預計完工日\nFROM work_orders w\nJOIN parts p ON p.part_id = w.part_id\nWHERE w.status IN ('生產中', '委外處理中')\nORDER BY w.due_on",
+      "errors": [],
+      "error": null,
+      "rows": 4,
+      "latency_ms": {
+        "first_token": 522,
+        "sql": 1317,
+        "exec": 0,
+        "answer": 2087,
+        "total": 3404
+      },
+      "wall_s": 4.6,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-19",
+      "type": "aggregate",
+      "question": "總庫存最多的前三個零件是哪些？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, SUM(s.qty) AS 總庫存\nFROM stock s\nJOIN parts p ON p.part_id = s.part_id\nGROUP BY p.name\nORDER BY 總庫存 DESC\nLIMIT 3",
+      "errors": [],
+      "error": null,
+      "rows": 3,
+      "latency_ms": {
+        "first_token": 544,
+        "sql": 1122,
+        "exec": 0,
+        "answer": 1023,
+        "total": 2145
+      },
+      "wall_s": 3.3,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    },
+    {
+      "id": "sql-20",
+      "type": "join",
+      "question": "立式軸承座的可用庫存扣掉所有未出貨訂單後還剩多少？",
+      "executable": true,
+      "correct": true,
+      "attempts": 1,
+      "sql": "SELECT p.name AS 品名, v.available AS 可用庫存, SUM(o.qty - o.qty_shipped) AS 未出貨訂單數量, v.available - SUM(o.qty - o.qty_shipped) AS 扣除後剩餘庫存\nFROM v_part_stock v\nJOIN parts p ON p.part_id = v.part_id\nJOIN sales_orders o ON o.part_id = p.part_id\nWHERE p.name = '立式軸承座'\nGROUP BY p.name, v.available\nORDER BY 扣除後剩餘庫存 DESC",
+      "errors": [],
+      "error": null,
+      "rows": 1,
+      "latency_ms": {
+        "first_token": 525,
+        "sql": 1778,
+        "exec": 0,
+        "answer": 782,
+        "total": 2560
+      },
+      "wall_s": 3.7,
+      "model": "qwen3-vl:8b-instruct",
+      "egress": {
+        "images": 0,
+        "chunks": 0,
+        "bytes": 0
+      }
+    }
+  ],
+  "type_counts": {
+    "lookup": 2,
+    "join": 4,
+    "filter": 8,
+    "date": 1,
+    "aggregate": 5
+  }
+}

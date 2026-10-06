@@ -265,6 +265,7 @@ export interface paths {
          * @description 圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
          *     智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
          *     放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。
+         *     inject（干擾段落注入）只給評估用，EVAL_INJECTION=false 時 403（docs/adr/019）。
          */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
@@ -1918,6 +1919,16 @@ export interface components {
              * @description 七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）
              */
             post_filter?: ("jev" | "local") | null;
+            /**
+             * Inject
+             * @description 評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403
+             */
+            inject?: components["schemas"]["Distractor"][] | null;
+            /**
+             * Send Image
+             * @description 已辨識（或已指定）、檢索開著時要不要附圖給生成模型（docs/adr/024）；null＝依 .env 的 SEND_IMAGE／models.yaml 的 chat.send_image（預設送）。關檢索時一律送
+             */
+            send_image?: boolean | null;
         };
         /** ChromaStats */
         ChromaStats: {
@@ -2049,6 +2060,35 @@ export interface components {
             license: string;
             /** Attribution */
             attribution?: string | null;
+        };
+        /**
+         * Distractor
+         * @description 干擾段落（評估專用，docs/adr/019）。混進檢索結果後照常經過洩密掃描與段落篩選。
+         */
+        Distractor: {
+            /**
+             * Kind
+             * @description counterfactual＝呼叫端手寫、和正確答案衝突的段落；other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落
+             * @enum {string}
+             */
+            kind: "counterfactual" | "other";
+            /**
+             * Text
+             * @description counterfactual 必填
+             */
+            text?: string | null;
+            /**
+             * Topic
+             * @description counterfactual 的段落主題；留空＝「干擾段落」
+             */
+            topic?: string | null;
+            /**
+             * Position
+             * @description 放在真正段落之前（較難）或之後
+             * @default first
+             * @enum {string}
+             */
+            position: "first" | "last";
         };
         /** DrawingSearchHit */
         DrawingSearchHit: {
@@ -2828,12 +2868,26 @@ export interface components {
             flow: string | null;
             /** Flow Label */
             flow_label: string;
+            /**
+             * Pool
+             * @description 觸發的記憶體池；percent_*、threshold 是這個池的數字
+             * @default ram
+             * @enum {string}
+             */
+            pool: "ram" | "gpu";
             /** Threshold */
             threshold: number;
             /** Percent Before */
             percent_before: number;
             /** Percent After */
             percent_after: number;
+            /**
+             * Gpu Percent Before
+             * @description 有 NVIDIA 顯示卡時
+             */
+            gpu_percent_before?: number | null;
+            /** Gpu Percent After */
+            gpu_percent_after?: number | null;
             /** Released */
             released: components["schemas"]["MemoryReleased"][];
             /** Failed */
@@ -2843,6 +2897,22 @@ export interface components {
              * @description 目前流程或其他請求正在用、所以保留的模型
              */
             kept: string[];
+        };
+        /** MemoryGpu */
+        MemoryGpu: {
+            /** Name */
+            name: string;
+            /**
+             * Percent
+             * @description 顯示記憶體使用率（%，整張卡、含其他程式）
+             */
+            percent: number;
+            /** Threshold */
+            threshold: number;
+            /** Used Mb */
+            used_mb: number;
+            /** Total Mb */
+            total_mb: number;
         };
         /** MemoryModel */
         MemoryModel: {
@@ -2872,6 +2942,13 @@ export interface components {
             in_use: boolean;
             /** Needed By Current Flow */
             needed_by_current_flow: boolean;
+            /**
+             * Pool
+             * @description ram＝系統記憶體；gpu＝顯示記憶體（有 NVIDIA 顯示卡時的 Ollama、llama-server，ADR 021）
+             * @default ram
+             * @enum {string}
+             */
+            pool: "ram" | "gpu";
         };
         /** MemoryReleaseResponse */
         MemoryReleaseResponse: {
@@ -2904,6 +2981,8 @@ export interface components {
             total_mb: number;
             /** Available Mb */
             available_mb: number;
+            /** @description NVIDIA 顯示卡的顯示記憶體；沒有時 null（只看系統記憶體） */
+            gpu?: components["schemas"]["MemoryGpu"] | null;
             /** Current Flow */
             current_flow: string | null;
             /** Current Flow Label */

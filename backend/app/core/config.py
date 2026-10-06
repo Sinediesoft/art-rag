@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # 記憶體管理：系統記憶體使用率超過門檻時，釋放目前流程用不到的模型（services/memory_guard.py）
     memory_guard: bool = True
     memory_high_pct: float = 80.0
+    # 有 NVIDIA 顯示卡時，Ollama 與 llama-server 的模型在 VRAM：改看顯示記憶體使用率（docs/adr/021）
+    memory_gpu_high_pct: float = 90.0
     memory_check_interval_s: float = 5.0
 
     # 智慧助理的 System 1（意圖判斷）：TypeSafe Jev（雲端，只收代號化文字，docs/adr/011）。
@@ -78,11 +80,23 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（例如沒有 GPU 的電腦關掉）
     rearrange: str = ""
 
+    # Ollama 模型閒置多久才卸載（docs/adr/025）：例如 60m；留空＝Ollama 預設 5 分鐘。
+    # 只送給 hybrid／hybrid_fallback／lora；記憶體吃緊時記憶體管理照樣用 keep_alive=0 卸載
+    model_keep_alive: str = ""
+
+    # 問答要不要附圖（docs/adr/024）：留空＝shared/models.yaml 的 chat.send_image；
+    # true／false 覆寫這台主機的設定（例如 4 GB 顯卡設 false）
+    send_image: str = ""
+
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
     # 展示用：在 /admin 模擬主推論伺服器斷線，正式上線請關閉
     demo_controls: bool = True
+
+    # 評估用：/chat 接受 inject（干擾段落注入，docs/adr/019）。等於讓呼叫端把任意文字塞進 prompt，
+    # 只在跑 make eval 的主機打開，正式服務一律 false
+    eval_injection: bool = False
 
     # 身分憑證（JWT，HS256，docs/adr/015 第 1 段）：留空＝每次啟動隨機產生
     # （後端重啟後舊憑證全部失效，前端自動改回訪客）；多台後端共用時要填同一組
@@ -147,10 +161,16 @@ class RearrangeSpec(BaseModel):
     """檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）"""
 
     enabled: bool = False
-    prompt_version: str = "rearrange_v1"
+    prompt_version: str = "rearrange_v2"
     max_candidates: int = 5
     timeout_s: float = 30
     max_tokens: int = 16
+
+
+class ChatSpec(BaseModel):
+    """問答（docs/adr/024）：已辨識、檢索開著時要不要附圖"""
+
+    send_image: bool = True
 
 
 class ColorAnalysisSpec(BaseModel):
@@ -310,6 +330,7 @@ class ModelsConfig(BaseModel):
     # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/007）
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
+    chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()

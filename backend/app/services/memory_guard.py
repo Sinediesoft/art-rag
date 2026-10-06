@@ -19,10 +19,20 @@
 釋放方式：Ollama 送 keep_alive=0、llama-server（router 模式）呼叫 /models/unload、
 後端行程內的 embedding 模型直接卸載、Timefold 排程服務做 GC。下次用到時都會自動重新載入。
 推論伺服器不在本機（例如組員連 5070 Ti）時不動它：釋放遠端記憶體對本機沒有幫助。
+
+兩個記憶體池（docs/adr/021）：有 NVIDIA 顯示卡（nvidia-smi 查得到）時，
+Ollama 與 llama-server 的模型在 VRAM，另外看顯示記憶體使用率（門檻 MEMORY_GPU_HIGH_PCT）；
+系統記憶體超過門檻只釋放系統記憶體裡的模型（Chinese-CLIP、bge-m3、Timefold），
+VRAM 超過門檻只釋放 VRAM 裡的模型。
+否則系統記憶體被其他程式吃滿時，會一直卸載根本不佔系統記憶體的 Qwen3-VL，下次問答又要重新載入。
+沒有 NVIDIA 顯示卡（Mac 統一記憶體）時只有一個池，行為和原本相同。
 """
 
 import asyncio
 import functools
+import shutil
+import subprocess
+import sys
 import threading
 import time
 from collections import deque
@@ -57,6 +67,47 @@ def memory_percent() -> float:
     return float(psutil.virtual_memory().percent)
 
 
+@dataclass
+class GpuMemory:
+    name: str
+    used_mb: int
+    total_mb: int
+
+    @property
+    def percent(self) -> float:
+        return self.used_mb / self.total_mb * 100 if self.total_mb else 0.0
+
+
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
+
+def gpu_memory() -> GpuMemory | None:
+    """第一張 NVIDIA 顯示卡的顯示記憶體；沒有顯示卡、沒有 nvidia-smi 或查詢失敗時 None。
+
+    整張卡的用量（含其他程式），和系統記憶體使用率同一種意思。Windows 上不跳出主控台視窗。"""
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        out = subprocess.run(
+            [exe, "--query-gpu=name,memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            creationflags=_NO_WINDOW,
+        ).stdout
+        name, used, total = (x.strip() for x in out.splitlines()[0].split(","))
+        return GpuMemory(name, int(float(used)), int(float(total)))
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+
+
+@functools.lru_cache(maxsize=1)
+def has_gpu() -> bool:
+    """啟動後第一次查詢決定要不要分兩個池（插拔顯示卡要重啟後端）。"""
+    return gpu_memory() is not None
+
+
 def _root(base_url: str) -> str:
     """OpenAI 相容網址（…/v1）→ 伺服器根網址。"""
     url = base_url.rstrip("/")
@@ -77,6 +128,8 @@ class ManagedModel:
     probe: Callable[[], bool | None]  # 是否載入中；None＝連不上或不在本機
     release: Callable[[], str]  # 回傳說明；失敗丟例外
     worth_releasing: Callable[[], bool] | None = None  # 有載入但不一定值得釋放（JVM 閒置時）
+    # ram＝系統記憶體；gpu＝顯示記憶體（有 NVIDIA 顯示卡時的 Ollama、llama-server）
+    pool: str = "ram"
 
 
 # ------------------------------------------------------------------ 各模型的偵測與釋放
@@ -188,16 +241,56 @@ def _timefold_release() -> str:
     return f"GC：heap {d['before']['committedMb']}→{d['after']['committedMb']} MB"
 
 
+_ollama_sizes: dict[tuple[str, str], int] = {}
+
+
+def _ollama_size_mb(root: str, name: str) -> int:
+    """模型檔大小（MB）＋約 15% 給 KV cache；查不到就用 4B 的估計值 4000（查不到的不快取）。
+
+    主力換成 8B（約 6 GB）時，「進入流程前預估」才不會低估。"""
+    if (root, name) in _ollama_sizes:
+        return _ollama_sizes[(root, name)]
+    try:
+        for m in httpx.get(root + "/api/tags", timeout=1.0).json().get("models", []):
+            if name in (m.get("name"), m.get("model")):
+                _ollama_sizes[(root, name)] = int(m["size"] / (1 << 20) * 1.15)
+                return _ollama_sizes[(root, name)]
+    except (httpx.HTTPError, ValueError, KeyError):
+        pass
+    return 4000
+
+
+def _qwen_mb() -> int:
+    s = get_settings()
+    name = s.hybrid_model or get_models_config().strategies["hybrid"].default_model
+    return _ollama_size_mb(_root(s.hybrid_base_url), name)
+
+
 def _models() -> list[ManagedModel]:
     clip, bge = _embedder("clip"), _embedder("bge")
+    # Ollama、llama-server 在本機而且有 NVIDIA 顯示卡：模型在 VRAM
+    # （不在本機時 probe 回 None，本來就不動它）
+    gpu = "gpu" if has_gpu() else "ram"
     return [
         ManagedModel("clip", "Chinese-CLIP（以圖搜圖）", 750, "後端行程", *clip),
         ManagedModel("bge", "bge-m3（文字檢索）", 2200, "後端行程", *bge),
         ManagedModel(
-            "qwen", "Qwen3-VL（問答、Text-to-SQL）", 4000, "Ollama", _ollama_probe, _ollama_release
+            "qwen",
+            "Qwen3-VL（問答、Text-to-SQL）",
+            _qwen_mb(),
+            "Ollama",
+            _ollama_probe,
+            _ollama_release,
+            pool=gpu,
         ),
         ManagedModel(
-            "ortho2cad", "Ortho2CAD（3D 重建）", 6200, "llama-server", _ortho_probe, _ortho_release
+            "ortho2cad",
+            "Ortho2CAD（3D 重建）",
+            6200,
+            "llama-server",
+            _ortho_probe,
+            _ortho_release,
+            pool=gpu,
         ),
         ManagedModel(
             "timefold",
@@ -228,6 +321,17 @@ class MemoryGuard:
     def threshold(self) -> float:
         return get_settings().memory_high_pct
 
+    @property
+    def gpu_threshold(self) -> float:
+        return float(getattr(get_settings(), "memory_gpu_high_pct", 90.0))
+
+    def usage(self) -> dict[str, tuple[float, float, int]]:
+        """各記憶體池的（使用率 %、門檻 %、總量 MB）。沒有 NVIDIA 顯示卡時只有 ram。"""
+        out = {"ram": (memory_percent(), self.threshold, psutil.virtual_memory().total >> 20)}
+        if has_gpu() and (g := gpu_memory()):
+            out["gpu"] = (g.percent, self.gpu_threshold, g.total_mb)
+        return out
+
     def enter(self, flow: str, models: set[str]) -> None:
         with self._lock:
             for k in models:
@@ -251,11 +355,14 @@ class MemoryGuard:
         with self._lock:
             return {k for k, n in self.in_use.items() if n > 0}
 
-    def projected_percent(self, before: float, keep: set[str]) -> tuple[float, list[str]]:
-        """這個流程要用、但目前沒載入的模型載入後，記憶體大約會到幾 %（模型大小用估計值）。"""
-        total = psutil.virtual_memory().total >> 20
-        models = [m for m in _models() if m.key in keep]
-        if before + sum(m.approx_mb for m in models) / total * 100 < self.threshold:
+    def projected_percent(
+        self, before: float, keep: set[str], pool: str = "ram", total_mb: int | None = None
+    ) -> tuple[float, list[str]]:
+        """這個流程要用、但目前沒載入的模型載入後，這個記憶體池大約會到幾 %（模型大小用估計值）。"""
+        total = total_mb or (psutil.virtual_memory().total >> 20)
+        threshold = self.gpu_threshold if pool == "gpu" else self.threshold
+        models = [m for m in _models() if m.key in keep and m.pool == pool]
+        if before + sum(m.approx_mb for m in models) / total * 100 < threshold:
             return before, []  # 全部都要載入也不會超過門檻：不必逐一詢問
         missing = [m for m in models if m.probe() is False]
         return before + sum(m.approx_mb for m in missing) / total * 100, [m.label for m in missing]
@@ -263,26 +370,39 @@ class MemoryGuard:
     def check(
         self, trigger: str, keep: set[str], force: bool = False, anticipate: bool = False
     ) -> dict | None:
-        """使用率超過門檻（或 force）就釋放 keep 與使用中以外、目前有載入的模型。
+        """有記憶體池超過門檻（或 force）就釋放那個池裡 keep 與使用中以外、目前有載入的模型。
 
-        anticipate=True（進入流程時）：還要載入的模型算進去，預估超過門檻就先釋放，
+        anticipate=True（進入流程時）：還要載入的模型算進它的池，預估超過門檻就先釋放，
         避免載入後才超過、等背景監控才處理。回傳事件；沒有觸發時回 None。
         """
         s = get_settings()
         if not s.memory_guard and not force:
             return None
-        before = memory_percent()
-        projected, loading = self.projected_percent(before, keep) if anticipate else (before, [])
-        if projected < self.threshold and not force:
+        usage = self.usage()
+        hot, notes = set(), []
+        for pool, (before, threshold, total) in usage.items():
+            projected, loading = (
+                self.projected_percent(before, keep, pool, total) if anticipate else (before, [])
+            )
+            if projected >= threshold:
+                hot.add(pool)
+                if loading and before < threshold:
+                    where = "顯示記憶體" if pool == "gpu" else ""
+                    notes.append(f"預估載入 {'、'.join(loading)} 後{where}約 {projected:.0f}%")
+        if force:
+            hot = {"ram", "gpu"}  # 手動釋放：兩個池都放（VRAM 一時查不到也一樣）
+        if not hot:
             return None
-        if loading and before < self.threshold:
-            trigger += f"（預估載入 {'、'.join(loading)} 後約 {projected:.0f}%）"
+        if notes:
+            trigger += f"（{'；'.join(notes)}）"
         if not self._release_lock.acquire(blocking=False):
             return None  # 另一個請求正在釋放
         try:
             protect = set(keep) | self.busy()
             released, failed, kept = [], [], []
             for m in _models():
+                if m.pool not in hot:
+                    continue  # 只動超過門檻的那個池：系統記憶體滿了，卸載 VRAM 裡的模型沒有幫助
                 loaded = m.probe()
                 if not loaded:
                     continue
@@ -305,14 +425,22 @@ class MemoryGuard:
                 self._last_noop = time.monotonic()
             if released:
                 time.sleep(0.8)  # 給作業系統一點時間回收
+            # percent_*／threshold 是觸發的那個池（兩個都超過時以系統記憶體為主）；VRAM 另外記
+            pool = "ram" if "ram" in hot or "gpu" not in usage else "gpu"
+            before, threshold, _ = usage[pool]
+            after = memory_percent() if pool == "ram" else (g.percent if (g := gpu_memory()) else 0)
+            gpu_after = gpu_memory() if "gpu" in usage else None
             event = {
                 "at": datetime.now(UTC).isoformat(),
                 "trigger": trigger,
                 "flow": self.current_flow,
                 "flow_label": FLOWS.get(self.current_flow or "", ""),
-                "threshold": self.threshold,
+                "pool": pool,
+                "threshold": threshold,
                 "percent_before": round(before, 1),
-                "percent_after": round(memory_percent(), 1),
+                "percent_after": round(after, 1),
+                "gpu_percent_before": round(usage["gpu"][0], 1) if "gpu" in usage else None,
+                "gpu_percent_after": round(gpu_after.percent, 1) if gpu_after else None,
                 "released": released,
                 "failed": failed,
                 "kept": kept,
@@ -323,6 +451,7 @@ class MemoryGuard:
                 extra={
                     "fields": {
                         "trigger": trigger,
+                        "pool": pool,
                         "before": event["percent_before"],
                         "after": event["percent_after"],
                         "released": [r["key"] for r in released],
@@ -349,14 +478,25 @@ class MemoryGuard:
                     "loaded": loaded,
                     "in_use": m.key in busy,
                     "needed_by_current_flow": m.key in self.current_models,
+                    "pool": m.pool,
                 }
             )
+        g = gpu_memory() if has_gpu() else None
         return {
             "enabled": get_settings().memory_guard,
             "percent": round(vm.percent, 1),
             "threshold": self.threshold,
             "total_mb": vm.total >> 20,
             "available_mb": vm.available >> 20,
+            "gpu": {
+                "name": g.name,
+                "percent": round(g.percent, 1),
+                "threshold": self.gpu_threshold,
+                "used_mb": g.used_mb,
+                "total_mb": g.total_mb,
+            }
+            if g
+            else None,
             "current_flow": self.current_flow,
             "current_flow_label": FLOWS.get(self.current_flow or ""),
             "flow_at": self.flow_at,

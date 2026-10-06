@@ -1,0 +1,87 @@
+{
+  "run_id": "20261005T055823-2133",
+  "created_at": "2026-10-05T05:58:23.857453+00:00",
+  "base": "http://localhost:8000",
+  "steps": [
+    {
+      "step": "1. 以文字找圖紙",
+      "ok": true,
+      "detail": "「有 6 個螺栓孔的法蘭」→ 連接法蘭（mfg-002）、「L 型固定支架」→ L 型固定支架（mfg-001）、「階梯傳動軸」→ 階梯傳動軸（mfg-003）",
+      "seconds": 0.4,
+      "memory_before": 71.8,
+      "memory_after": 71.8,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "2. 製程問答",
+      "ok": true,
+      "detail": "連接法蘭：「精車內孔需達 Ø30H7（+0.021/0）公差，表面粗糙度 Ra 1.6 [1…」（qwen3-vl:8b-instruct，1.8 秒）",
+      "seconds": 3.0,
+      "memory_before": 71.8,
+      "memory_after": 72.2,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "4. 從圖紙開立工單",
+      "ok": true,
+      "detail": "WO-2610-13 連接法蘭 80 件（急件，AP-2610-04 主管核准，交期 2026-10-16）、WO-2610-14 L 型固定支架 120 件（一般，交期 2026-10-20）、WO-2610-15 階梯傳動軸 50 件（一般，交期 2026-10-21）",
+      "seconds": 0.3,
+      "memory_before": 72.2,
+      "memory_after": 72.1,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "5. 生產排程",
+      "ok": true,
+      "detail": "初始解 0hard/-3819medium/-32540soft → 0hard/0medium/-22939soft，總分核對一致；準時 7/7、換線 20 次、全部完工 2026-10-15 11:35",
+      "seconds": 9.7,
+      "memory_before": 72.2,
+      "memory_after": 72.3,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    },
+    {
+      "step": "6. Text-to-SQL 查排程",
+      "ok": true,
+      "detail": "「WO-2610-13 排程後什麼時候完工？會不會延遲？」→ 1 筆（2.5 秒）\n    SQL：SELECT wo_no AS 工單號, name AS 品名, planned_end AS 排程完工時間, on_time AS 是否延遲\nFROM v_wo_plan\nWHERE wo_no = 'WO-2610-13'\n    回答：工單 WO-2610-13 排程完工時間為 2026-10-14 10:05，目前狀態為準時，不會延遲。",
+      "seconds": 3.7,
+      "memory_before": 72.4,
+      "memory_after": 74.6,
+      "released": [],
+      "loaded_after": [
+        "Chinese-CLIP（以圖搜圖）",
+        "bge-m3（文字檢索）",
+        "Qwen3-VL（問答、Text-to-SQL）",
+        "Timefold 排程服務"
+      ],
+      "events": []
+    }
+  ]
+}

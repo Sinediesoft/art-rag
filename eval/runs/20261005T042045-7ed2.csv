@@ -1,0 +1,26 @@
+question_id,split,type,artwork_id,source_lang,strategy,model,kb_version,prompt_version,answer_ok,citation_ok,n_sources,rearrange_ms,rearrange_fallback,first_token_ms,total_ms,cost_twd,egress_images,egress_chunks,egress_bytes,error,distractor_kept,distractor_cited,distractor_flagged,distractor_misled,answer
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,7062,,8348,8580,0.0,0,0,0,,,,,,畫家的簽名藏在畫面右下方、騾隊後方的樹叢枝葉間 [1]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,540,,1110,1414,0.0,0,0,0,,,,,,1958 年，故宮研究人員李霖燦在畫面右下方的樹叢枝葉間發現了「范寬」二字款 [1]。
+q-npm1-03,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,2,685,,1392,1872,0.0,0,0,0,,,,,,范寬在〈谿山行旅圖〉中，以密集、短促的筆觸層層點染山石，這種筆法後世稱為「雨點皴」 [1]。這也是他畫作中最具代表性的技法之一 [2]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,659,,1254,1616,0.0,0,0,0,,,,,,畫面近景右下方的山路上，有一支馱著貨物的騾隊正在趕路，人與牲口在山勢襯托下顯得極為渺小 [1]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,627,,1236,1551,0.0,0,0,0,,,,,,〈谿山行旅圖〉常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑 [1]。
+q-met-01,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,590,,1706,1927,0.0,0,0,0,,,,,,這幅畫是在法國南部聖雷米附近的聖保羅療養院周圍的田野畫的 [1]。
+q-met-02,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,610,,1233,1406,0.0,0,0,0,,,,,,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-met-03,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,3,612,,1249,2086,0.0,0,0,0,,,,,,是的，這幅畫有其他版本。同年 9 月，梵谷在療養院的畫室裡畫了一幅尺寸相近的版本，現藏倫敦國家美術館；另外還有一幅較小的版本，是畫給母親與妹妹的 [1]。  這幅畫目前收藏於大都會藝術博物館（The Met），該館於 1993 年以安納伯格基金會的捐款購得 [2]。
+q-met-04,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,618,,1219,1390,0.0,0,0,0,,,,,,大都會藝術博物館是在 1993 年取得這幅畫的 [1]。
+q-met-05,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,574,,1176,1341,0.0,0,0,0,,,,,,遠方的山是阿爾皮耶山丘（Alpilles）[1]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,2,625,,1771,2226,0.0,0,0,0,,,,,,秀拉用的是「點描法」，他把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,591,,1205,1314,0.0,0,0,0,,,,,,右邊的女子牽著一隻猴子 [1]。
+q-aic-03,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,626,,1236,1439,0.0,0,0,0,,,,,,這幅畫第一次在第八屆印象派畫展展出，也是最後一屆印象派畫展 [1]。
+q-aic-04,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,2,658,,1302,1616,0.0,0,0,0,,,,,,畫布四周的邊框是在 1888 至 1889 年間，由秀拉重新修改畫面時加上去的 [1]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,606,,1224,1334,0.0,0,0,0,,,,,,畫的是塞納河上的大碗島 [1]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,672,,1297,1391,0.0,0,0,0,,,,,,知識庫中沒有這方面的資料。[1]
+q-npm1-06,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,663,,1268,1759,0.0,0,0,0,,,,,,〈谿山行旅圖〉主要使用深褐、褐與黑等中性色，整體偏暗調且彩度低 [1]。畫面以沉穩的大地色系為主，營造出雄偉山巒的莊重感 [1]。
+q-aic-06,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,647,,1285,1747,0.0,0,0,0,,,,,,這幅畫整體偏中性色，暖色佔比約 24%，冷色 19%，但中性色（接近黑白灰）高達 56%，所以視覺上較為平衡，不偏暖也不偏冷 [1]。
+q-met-06,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,649,,1290,1729,0.0,0,0,0,,,,,,這幅畫的色彩不算特別鮮豔，整體彩度中位數為 13，屬於中等彩度 [1]。畫面以冷色與中性色為主，營造出沉穩的氛圍 [1]。
+q-dist-npm1-01,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,False,False,2,614,,1364,1923,0.0,0,0,0,,True,True,False,True,1958 年，故宮研究人員李霖燦在畫面右下方、騾隊後方的樹叢枝葉間發現了「范寬」二字款 [2]。   同年，張大千也在畫面左上角山石縫隙間發現了相同的款識 [1]。
+q-dist-met-01,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,False,False,1,570,,1283,1450,0.0,0,0,0,,True,True,False,True,大都會藝術博物館是在 1979 年取得這幅畫的 [1]。
+q-dist-aic-01,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,609,,1337,1528,0.0,0,0,0,,False,False,False,False,這幅畫第一次在第八屆印象派畫展展出，也是最後一屆印象派畫展 [1]。
+q-dist-npm1-02,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,2,645,,1320,1770,0.0,0,0,0,,False,False,False,False,范寬在〈谿山行旅圖〉中，以密集、短促的筆觸層層點染山石，這種筆法後世稱為「雨點皴」 [1]。這也是他畫作中最具代表性的技法之一 [2]。
+q-dist-met-02,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,1,603,,1270,1443,0.0,0,0,0,,False,False,False,False,梵谷形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-dist-aic-02,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v1,True,True,2,659,,1382,1864,0.0,0,0,0,,False,False,False,False,秀拉用的是「點描法」，他把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1]。

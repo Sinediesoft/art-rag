@@ -123,6 +123,97 @@ def retrieve(
     return [_source(i, h, store) for i, h in enumerate(hits)]
 
 
+def send_image_enabled(requested: bool | None = None) -> bool:
+    """問答要不要附圖（docs/adr/024）。
+
+    優先順序：請求的 send_image ＞ .env 的 SEND_IMAGE ＞ models.yaml 的 chat.send_image。"""
+    if requested is not None:
+        return requested
+    env = get_settings().send_image.strip().lower()
+    if env in ("true", "1", "on"):
+        return True
+    if env in ("false", "0", "off"):
+        return False
+    return get_models_config().chat.send_image
+
+
+INJECTED_LABEL = "評估注入（干擾段落）"
+
+
+def inject_distractors(
+    question: str,
+    sources: list[dict],
+    specs: list[dict],
+    artwork_id: str | None,
+    part_id: str | None,
+    scope: guard.MetaFilter | None = None,
+) -> list[dict]:
+    """干擾段落注入（評估專用，docs/adr/019）：混進檢索結果，之後照常經過洩密掃描與段落篩選，
+    量「篩選擋不擋得掉」與「模型會不會被帶偏」。
+
+    counterfactual：呼叫端手寫的段落，掛在同一幅畫／同一張圖紙底下（看起來像真的）；
+    score 用它和問題的 bge-m3 相似度，和真正段落同一把尺。
+    other：同領域其他畫作／圖紙中和問題最相近的真實段落；工廠圖紙只從看得到的圖紙取。
+    每段標 injected，chunk_id 以 inject: 開頭，評估腳本靠它判斷有沒有引用到。"""
+    store = get_store()
+    domain_part = bool(part_id)
+    coll, owner = (store.mfg, part_id) if domain_part else (store.art, artwork_id)
+    counter = [s for s in specs if s["kind"] == "counterfactual"]
+    n_other = sum(1 for s in specs if s["kind"] == "other")
+    vecs = embed_text([question] + [s["text"] for s in counter])
+    qvec, cvecs = vecs[0], vecs[1:]
+
+    others = []
+    if n_other:
+        owners = visible_parts(scope) if domain_part else None
+        seen = {s["chunk_id"] for s in sources}
+        for h in coll.search_chunks(qvec, len(seen) + 20, exclude=seen, owners=owners):
+            if h.item[coll.owner_key] != owner:
+                others.append(h)
+            if len(others) >= n_other:
+                break
+
+    first, last = [], []
+    ci = oi = 0
+    for i, spec in enumerate(specs):
+        if spec["kind"] == "counterfactual":
+            s = {
+                "chunk_id": f"inject:{i}",
+                "topic": spec.get("topic") or "干擾段落",
+                "text": spec["text"],
+                "source_url": "",
+                "license": "",
+                "score": round(float(cvecs[ci] @ qvec), 4),
+                "source_label": INJECTED_LABEL,
+            }
+            ci += 1
+            if domain_part:
+                part = store.mfg.by_id[part_id]
+                s |= {
+                    "part_id": part_id,
+                    "title": part["name"]["zh"],
+                    "level": part["confidentiality"],
+                }
+            else:
+                title = store.by_id[artwork_id]["title"]["zh"] if artwork_id else ""
+                s |= {
+                    "artwork_id": artwork_id,
+                    "artwork_title": title,
+                    "title": title,
+                    "level": "公開",
+                }
+        else:
+            if oi >= len(others):
+                continue  # 同領域沒有別的段落可取（知識庫只有一筆）
+            real_id = others[oi].item["chunk_id"]
+            s = _source(0, others[oi], store) | {"chunk_id": f"inject:{i}:{real_id}"}
+            oi += 1
+        s |= {"injected": True, "injected_kind": spec["kind"]}
+        (first if spec.get("position", "first") == "first" else last).append(s)
+    merged = first + sources + last
+    return [{**s, "ref": i + 1} for i, s in enumerate(merged)]
+
+
 async def chat_stream(
     question: str,
     request_id: str,
@@ -135,6 +226,8 @@ async def chat_stream(
     rearrange: bool | None = None,
     account: Account | None = None,
     post_filter: str | None = None,
+    inject: list[dict] | None = None,
+    send_image: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -142,6 +235,8 @@ async def chat_stream(
     account：目前身分（JWT 的資料範圍與 Metadata Filter）；
     None＝不限（評估腳本、單元測試直接呼叫時）。
     post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
+    inject：評估用的干擾段落（docs/adr/019），呼叫端要先確認 EVAL_INJECTION 已開啟。
+    send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -156,6 +251,8 @@ async def chat_stream(
         rearrange,
         account,
         post_filter,
+        inject,
+        send_image,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -173,6 +270,8 @@ async def _chat_stream(
     rearrange: bool | None = None,
     account: Account | None = None,
     post_filter: str | None = None,
+    inject: list[dict] | None = None,
+    send_image: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -283,6 +382,8 @@ async def _chat_stream(
     #    關檢索時仍算一次，供前端比較用，但不放進 prompt）
     meta = guard.MetaFilter.of(account, domain, doc) if account is not None else None
     sources = retrieve(question, artwork_id, part_id, meta)
+    if inject:
+        sources = inject_distractors(question, sources, inject, artwork_id, part_id, meta)
     candidates = len(sources)
     # 第 4～6 段：要放進 prompt 的段落先驗證。每段都用地端規則掃描洩密風險；
     # 智慧助理（post_filter）再做 Jev Noul 雙重驗證 → Jev Score 重排（最多 3 段）→ 生成閘門。
@@ -392,8 +493,14 @@ async def _chat_stream(
 
     # 3. 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
     #    Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
-    #    縮圖省不到時間，模型反而看得比較模糊
-    if image_id:
+    #    縮圖省不到時間，模型反而看得比較模糊。
+    #    走到這裡畫作／圖紙一定已經辨識或指定（辨識不到在第 1 步就回 NOT_IN_KB）；
+    #    檢索開著時答案來自段落與作品卡，可以設定不送圖（docs/adr/024）。
+    #    關檢索的對照組照樣送：檢索增益靠它量
+    attach_image = not (artwork and use_retrieval) or send_image_enabled(send_image)
+    if not attach_image:
+        image_jpeg = None
+    elif image_id:
         image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
@@ -477,6 +584,7 @@ async def _chat_stream(
         "fallback_reason": "；".join(reasons) or None,
         "prompt_version": prompt_version(domain),
         "use_retrieval": use_retrieval,
+        "image_sent": image_jpeg is not None,  # docs/adr/024
         "latency_ms": {
             "retrieval": retrieval_ms,
             "first_token": first_token_ms,

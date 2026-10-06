@@ -228,16 +228,45 @@ guard:
       - {rule: 提示詞注入, pattern: '(忽略|無視|忘掉|忘記|不要理會?)(你|妳)?(之前|以上|前面|先前|原本|所有|全部)?的?(指示|指令|提示詞?|設定|角色)'}
       - {rule: 提示詞注入, pattern: 'ignore\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions|prompts?|rules)'}
       - {rule: 套取系統設定, pattern: '(顯示|列出|印出|告訴我|洩漏|輸出|給我看).{0,6}(系統提示詞?|system\s*prompt|你的(提示詞|指令|設定))'}
+      # 以下到「解除規則」是 2026-10-05 依攻擊類型補的（docs/adr/022）。改之前先跑
+      # make eval-guard 與 python eval/run_guard_eval.py --engines local --file guard_holdout.jsonl，誤擋率要維持 0
+      # 套取系統設定（換句話說）：要複述／貼出「系統訊息、一開始收到的指令」；前後順序都認。
+      # 只寫「完整列出」不算（「完整列出未出貨訂單」是正常查詢），一定要指到系統訊息或最初的指令
+      - {rule: 套取系統設定, pattern: '(複述|重複|重述|原封不動|一字不漏|逐字|貼).{0,12}(系統(訊息|指令|提示詞?|設定)|(一開始|最初|開頭|第一段)(收到)?的?.{0,4}(訊息|指令|提示|設定)|你收到的.{0,6}(訊息|指令))'}
+      - {rule: 套取系統設定, pattern: '(系統(訊息|指令|提示詞?)|(一開始|最初)收到的?(訊息|指令)).{0,12}(原封不動|一字不漏|逐字|貼|複述|重複|給我看|告訴我|輸出)'}
+      - {rule: 套取系統設定, pattern: 'repeat\s+(the\s+)?(text|words|instructions|everything)\s+(above|before)|(print|show|reveal|output)\s+(your\s+)?(system\s+prompt|initial\s+(prompt|instructions))|starting\s+with\s+[''"]?you\s+are'}
       - {rule: 越獄指令, pattern: 'jailbreak|DAN\s*模式|開發者模式|developer\s+mode'}
+      # 角色改寫：要助理換成別的身分或「模式」。「從現在開始」後面一定要接「你」——「從現在開始我要盤點」是正常的
+      - {rule: 角色改寫, pattern: '(從現在(起|開始)|現在開始|從今以後|接下來(的對話)?).{0,6}(你|妳)(是|不是|不再是|變成|就是|要當|進入)'}
+      - {rule: 角色改寫, pattern: '(無限制|不受限制|沒有任何限制|解除限制|上帝|管理員|維護|除錯|god|admin|root)\s*模式'}
+      - {rule: 角色改寫, pattern: '(你|妳)的新(身分|角色|設定)|(你|妳)(現在)?不(再)?是(AI|助理|機器人|導覽助理)|只聽我的(命令|指令|話)'}
+      - {rule: 角色改寫, pattern: '(忘記|忘掉|拋開)(你|妳)(是|的).{0,10}(助理|角色|身分|設定|規則)'}
+      # 角色扮演越獄：扮演／假裝成「不受限制」或有權限的人。只寫「扮演什麼角色」「假設下週停機」不算
+      - {rule: 角色扮演越獄, pattern: '(假裝|扮演|演一個|演個|當作|想像)(你|妳)?(是|成|一個|個)?.{0,12}(不受限制|沒有(任何)?限制|無限制|什麼都能做|為所欲為|超級管理員|管理員|老闆|主管|廠長|root|admin)'}
+      # 解除規則：直接說不用遵守規定
+      - {rule: 解除規則, pattern: '(不需要|不用|不必|無須|無需)(再)?(遵守|理會|管).{0,4}(任何)?(規定|規則|限制|指示|政策)'}
       - {rule: SQL 注入, pattern: '\b(drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\bunion\s+(all\s+)?select\b|''\s*or\s+''?1''?\s*=\s*''?1|;\s*--'}
       - {rule: 指令注入, pattern: 'rm\s+-rf|<script\b|\$\(\s*\w+'}
     suspect:           # 冒充身分、要求略過管控：配上耗時工作或修改資料才擋，只是查詢就提醒
       - {rule: 冒充身分, pattern: '我是(主管|管理員|老闆|廠長|經理|生管|admin|root)|以(主管|管理員)的?身分|sudo'}
-      - {rule: 要求略過管控, pattern: '(忽略|跳過|繞過|略過|不用|不要管|無視).{0,6}(權限|規則|核准|檢查|限制|審核)|bypass'}
+      # 2026-10-05 補（docs/adr/022）：「用／有管理員權限」、聲稱上級已經同意或授權。
+      # 只是查詢時照舊不擋（「主管核准過的報廢單有哪些」是正常查詢）
+      - {rule: 冒充身分, pattern: '(用|以|拿|有)(我的)?\s*(主管|管理員|老闆|廠長|經理|admin|root|最高)\s*的?(身分|權限|帳號)'}
+      - {rule: 聲稱已獲授權, pattern: '(老闆|主管|廠長|經理|上面|上級).{0,6}(同意|授權|批准|核准)了'}
+      - {rule: 要求略過管控, pattern: '(忽略|跳過|繞過|略過|不用|不必|不要管|無視|免)(經過|再|走)?.{0,6}(權限|規則|核准|檢查|限制|審核|確認|流程)|bypass'}
+      - {rule: 要求不留紀錄, pattern: '(不要|不用|不必|別|免)(留|寫|記|進)?.{0,4}(紀錄|記錄|稽核|log|日誌)'}
     # 第 4 段 security_leak_check：文件段落裡明顯的夾帶指令（間接注入）
     indirect: '(給\s*AI|AI\s*助理|系統提示|system\s*prompt).{0,8}[:：]|忽略.{0,8}(規則|指示|指令)|ignore\s+(all\s+)?previous'
     # 第 4 段 security_leak_check：段落要求附上內部資料，或本身含帳密、金鑰
     leak: '(附上|提供|列出|告訴).{0,10}(內部電話|分機|帳號密碼|密碼|金鑰|成本|報價|客戶聯絡)|(password|passwd|api[_-]?key|secret)\s*[:=]'
+
+  # 地端模型備援（docs/adr/023）：叫不到 Jev、地端規則也沒命中時，再請本地 Qwen3-VL 判斷「攻擊／正常」。
+  # 不外送；逾時、連不上、輸出看不懂時只用地端規則的結果。LLM_MODE=mock 時不呼叫
+  local_llm:
+    enabled: true
+    prompt_version: guard_v1   # shared/prompts/guard_v1.md
+    timeout_s: 4
+    max_tokens: 4
 
   # 第 2 段 Jev Choice：一句話是正常查詢、Prompt 注入還是無關閒聊
   input_context: >-

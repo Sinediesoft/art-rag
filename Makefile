@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -26,6 +26,7 @@ help:
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
+	@echo "make eval-send-image 問答附圖／不附圖對照（Issue #2）：正確率、引用、首字與總時間"
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
 	@echo "make eval-style  畫作卡推測評估（不用開後端、不用索引）：風格大類、細分流派、題材、媒材的正確率，「像畫作」把關擋下圖紙照片"
@@ -204,6 +205,10 @@ eval-intake:
 # 檢索段落篩選（MIRA 的 Rearrange）開關對照：同一批題目各跑一次，比正確率、引用、段數與延遲
 eval-rearrange:
 	$(PY) eval/run_eval.py --strategies hybrid_plain,hybrid_rearrange
+
+# 問答附圖／不附圖對照（Issue #2、docs/adr/024）：正確率、引用、首字與總時間
+eval-send-image:
+	$(PY) eval/run_eval.py --strategies hybrid_img,hybrid_noimg
 
 # ---- 展示：現場新增畫作（只加 JSON 與圖片、執行一個指令，不改程式）----
 demo-add:

@@ -303,17 +303,23 @@ item_compare:
 # GTX 1650 每題約多 3–6 秒。各主機可用 .env 的 REARRANGE 覆寫，請求也可用 rearrange 指定。
 rearrange:
   enabled: true
-  prompt_version: rearrange_v1  # 對應 shared/prompts/rearrange_v1.md
+  prompt_version: rearrange_v2  # 對應 shared/prompts/rearrange_v2.md（v2：矛盾的段落一起留下，ADR 020）
   max_candidates: 5             # 最多交給模型判斷幾段
   timeout_s: 30                 # 篩選整體的時間上限，超過就用原本的段落
   max_tokens: 16                # 模型只需要輸出段落編號
+
+# 問答要不要附圖（Issue #2、docs/adr/024）：已辨識（或已指定）畫作／圖紙、檢索也開著時，答案來自段落與作品卡，
+# 圖只是補充；不送可以省約 1,070 token，4 GB 顯卡上明顯變快。關檢索的對照組照樣送圖（檢索增益靠它量）。
+# 預設 true＝和原本相同。各主機用 .env 的 SEND_IMAGE 覆寫（例如 GTX 1650 設 false），請求也可用 send_image 指定
+chat:
+  send_image: true
 
 # 已指定畫作時只取該畫作的段落；問題含下列字詞（比較、背景類）才從全庫補足
 global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作品, 同時代, 背景, 影響]
 
 prompt:
-  version: answer_v1          # 對應 shared/prompts/answer_v1.md
-  drawing_version: drawing_v1 # 工廠圖紙問答，對應 shared/prompts/drawing_v1.md
+  version: answer_v2          # 對應 shared/prompts/answer_v2.md（v2：參考資料矛盾時要指出，ADR 020）
+  drawing_version: drawing_v2 # 工廠圖紙問答，對應 shared/prompts/drawing_v2.md（v2：參考資料矛盾時要指出，ADR 020）
   sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
   sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）
   # 照片建檔讀標題欄的提示詞版本在 intake.prompt_version（intake_v1.md）

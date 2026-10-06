@@ -157,7 +157,7 @@ def test_part_chat_uses_drawing_prompt(client):
     events = parse_sse(r.text)
     sources = events[0][1]["sources"]
     assert sources and all(s["part_id"] == "mfg-001" and s["source_label"] for s in sources)
-    assert events[-1][0] == "done" and events[-1][1]["prompt_version"] == "drawing_v1"
+    assert events[-1][0] == "done" and events[-1][1]["prompt_version"] == "drawing_v2"
 
 
 def test_confidential_drawings_never_go_to_cloud(client):

@@ -191,8 +191,11 @@ def get_artwork_colormap(artwork_id: str):
 async def chat(body: S.ChatRequest, request: Request):
     """圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
     智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
-    放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。"""
+    放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。
+    inject（干擾段落注入）只給評估用，EVAL_INJECTION=false 時 403（docs/adr/019）。"""
     account = identity.current(request)
+    if body.inject and not get_settings().eval_injection:
+        raise AppError("FORBIDDEN", "干擾段落注入只在評估主機開啟（EVAL_INJECTION=true）", 403)
     if body.part_id:
         part = _part_or_404(body.part_id)
         if body.post_filter is None:
@@ -209,6 +212,8 @@ async def chat(body: S.ChatRequest, request: Request):
         rearrange=body.rearrange,
         account=account,
         post_filter=body.post_filter,
+        inject=[d.model_dump() for d in body.inject] if body.inject else None,
+        send_image=body.send_image,
     )
     return StreamingResponse(
         stream,
