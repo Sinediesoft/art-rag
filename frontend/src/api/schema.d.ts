@@ -262,9 +262,9 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description 圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
-         *     智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
-         *     放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。
+         * @description 圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。
+         *     角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
+         *     （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。
          */
         post: operations["chat_api_v1_chat_post"];
         delete?: never;
@@ -282,7 +282,8 @@ export interface paths {
         };
         /**
          * List Parts
-         * @description 只列目前身分看得到的圖紙（業務看不到機密圖紙；訪客不能使用工廠圖紙 → 403）。
+         * @description 只列目前身分看得到的圖紙（機密等級＋部門）：業務看不到機密圖紙；
+         *     訪客不能使用工廠圖紙 → 403。
          */
         get: operations["list_parts_api_v1_parts_get"];
         put?: never;
@@ -394,7 +395,7 @@ export interface paths {
         };
         /**
          * Search Parts
-         * @description 以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter）。
+         * @description 以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter：機密等級＋部門）。
          */
         get: operations["search_parts_api_v1_search_parts_get"];
         put?: never;
@@ -880,7 +881,7 @@ export interface paths {
         /**
          * Reset Production
          * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
-         *     與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。
+         *     與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/019）。
          */
         post: operations["reset_production_api_v1_admin_production_reset_post"];
         delete?: never;
@@ -920,7 +921,7 @@ export interface paths {
         put?: never;
         /**
          * Release Memory
-         * @description 展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。
+         * @description 展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。
          */
         post: operations["release_memory_api_v1_admin_memory_release_post"];
         delete?: never;
@@ -1030,8 +1031,54 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description 公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/019）。
+         *     最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。
+         */
         get: operations["health_api_v1_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * System Status
+         * @description 登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。
+         *     不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/019）。
+         */
+        get: operations["system_status_api_v1_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diagnostics
+         * @description 管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。
+         *     要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/019）。
+         */
+        get: operations["diagnostics_api_v1_admin_diagnostics_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1051,7 +1098,7 @@ export interface paths {
         put?: never;
         /**
          * Simulate Outage
-         * @description 展示用：模擬主推論伺服器斷線，本地備援模型不受影響（DEMO_CONTROLS=false 時停用）。
+         * @description 展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/019）。
          */
         post: operations["simulate_outage_api_v1_admin_outage_post"];
         delete?: never;
@@ -1069,8 +1116,8 @@ export interface paths {
         };
         /**
          * List Accounts
-         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，
-         *     放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。
+         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
+         *     放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。
          */
         get: operations["list_accounts_api_v1_auth_accounts_get"];
         put?: never;
@@ -1092,7 +1139,8 @@ export interface paths {
         put?: never;
         /**
          * Switch Account
-         * @description 展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。
+         * @description 展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
+         *     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/019）。
          */
         post: operations["switch_account_api_v1_auth_switch_post"];
         delete?: never;
@@ -1254,7 +1302,8 @@ export interface paths {
         /**
          * Security Logs
          * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
-         *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。
+         *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
+         *     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/019）。
          */
         get: operations["security_logs_api_v1_security_logs_get"];
         put?: never;
@@ -1275,6 +1324,7 @@ export interface paths {
         /**
          * Audit Log
          * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+         *     要 access.yaml 的 views.audit（docs/adr/019）。
          */
         get: operations["audit_log_api_v1_audit_get"];
         put?: never;
@@ -1334,6 +1384,12 @@ export interface components {
              * @description 機密等級：公開 0、內部 1、機密 2（寫進 JWT）
              */
             clearance: number;
+            /**
+             * Views
+             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/019）
+             * @default []
+             */
+            views: string[];
         };
         /** AccountsResponse */
         AccountsResponse: {
@@ -1894,12 +1950,14 @@ export interface components {
             image_id?: string | null;
             /**
              * Strategy
+             * @description 生成端。mock 只在評估模式（EVAL_CONTROLS＋本機）生效，否則照 hybrid；雲端對照組要伺服器 ALLOW_CLOUD=true，而且不收工廠圖紙與使用者照片
              * @default hybrid
              * @enum {string}
              */
             strategy: "hybrid" | "api_nokb" | "api_kb" | "lora" | "mock";
             /**
              * Use Retrieval
+             * @description false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/019）
              * @default true
              */
             use_retrieval: boolean;
@@ -1910,14 +1968,14 @@ export interface components {
             allow_fallback: boolean;
             /**
              * Rearrange
-             * @description 檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）
+             * @description 地端段落是否由本地 Qwen3-VL 判斷相關性（MIRA 的 Rearrange）；null＝依伺服器設定。開或關都照樣執行第 4～6 段
              */
             rearrange?: boolean | null;
             /**
-             * Post Filter
-             * @description 七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）
+             * Route Ticket
+             * @description /agent/route 回的交接票（docs/adr/019）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位
              */
-            post_filter?: ("jev" | "local") | null;
+            route_ticket?: string | null;
         };
         /** ChromaStats */
         ChromaStats: {
@@ -2049,6 +2107,82 @@ export interface components {
             license: string;
             /** Attribution */
             attribution?: string | null;
+        };
+        /**
+         * DiagnosticsResponse
+         * @description 管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/019）：
+         *     原本放在公開健康檢查裡的完整內容。
+         */
+        DiagnosticsResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "degraded";
+            /** Db */
+            db: boolean;
+            /** Index Consistent */
+            index_consistent: boolean;
+            /** Index Problems */
+            index_problems: string[];
+            /** Kb Version */
+            kb_version: string;
+            /** Manifest */
+            manifest: {
+                [key: string]: unknown;
+            };
+            /** Strategies */
+            strategies: {
+                [key: string]: components["schemas"]["StrategyStatus"];
+            };
+            /** Llm Mode */
+            llm_mode: string;
+            /** Embed Mode */
+            embed_mode: string;
+            /** Allow Cloud */
+            allow_cloud: boolean;
+            /** Outage Simulated */
+            outage_simulated: boolean;
+            /** Demo Controls */
+            demo_controls: boolean;
+            /** Eval Controls */
+            eval_controls: boolean;
+            /** Recent Chats */
+            recent_chats: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Recent Cad
+             * @default []
+             */
+            recent_cad: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Inventory
+             * @description 庫存資料庫：資料日期、各表筆數、資料問題
+             * @default {}
+             */
+            inventory: {
+                [key: string]: unknown;
+            };
+            /**
+             * Recent Sql
+             * @default []
+             */
+            recent_sql: {
+                [key: string]: unknown;
+            }[];
+            scheduler?: components["schemas"]["SchedulerEngine"] | null;
+            memory?: components["schemas"]["MemoryStatus"] | null;
+            system1?: components["schemas"]["System1Status"] | null;
+            /**
+             * Recent Routes
+             * @default []
+             */
+            recent_routes: {
+                [key: string]: unknown;
+            }[];
         };
         /** DrawingSearchHit */
         DrawingSearchHit: {
@@ -2228,75 +2362,38 @@ export interface components {
             fallback_reason: string | null;
             call: components["schemas"]["JevCallInfo"] | null;
         };
-        /** HealthResponse */
+        /**
+         * HealthResponse
+         * @description 公開健康檢查（不用憑證，docs/adr/019）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
+         *     模型端點與內部設定都在需要管理權限的 /admin/diagnostics。
+         */
         HealthResponse: {
             /**
              * Status
              * @enum {string}
              */
             status: "ok" | "degraded";
+            /**
+             * Ready
+             * @description 資料庫可連線而且索引與知識庫一致
+             */
+            ready: boolean;
             /** Db */
             db: boolean;
             /** Index Consistent */
             index_consistent: boolean;
-            /** Index Problems */
-            index_problems: string[];
             /** Kb Version */
             kb_version: string;
-            /** Manifest */
-            manifest: {
-                [key: string]: unknown;
-            };
-            /** Strategies */
-            strategies: {
-                [key: string]: components["schemas"]["StrategyStatus"];
-            };
-            /** Llm Mode */
-            llm_mode: string;
-            /** Embed Mode */
-            embed_mode: string;
-            /** Allow Cloud */
-            allow_cloud: boolean;
-            /** Outage Simulated */
-            outage_simulated: boolean;
-            /** Demo Controls */
+            /**
+             * Demo Controls
+             * @description 展示模式是否開啟（開啟時不可用於正式環境）
+             */
             demo_controls: boolean;
-            /** Recent Chats */
-            recent_chats: {
-                [key: string]: unknown;
-            }[];
             /**
-             * Recent Cad
-             * @default []
+             * Demo Warning
+             * @description 展示模式開啟時的警語
              */
-            recent_cad: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Inventory
-             * @description 庫存資料庫：資料日期、各表筆數、資料問題
-             * @default {}
-             */
-            inventory: {
-                [key: string]: unknown;
-            };
-            /**
-             * Recent Sql
-             * @default []
-             */
-            recent_sql: {
-                [key: string]: unknown;
-            }[];
-            scheduler?: components["schemas"]["SchedulerEngine"] | null;
-            memory?: components["schemas"]["MemoryStatus"] | null;
-            system1?: components["schemas"]["System1Status"] | null;
-            /**
-             * Recent Routes
-             * @default []
-             */
-            recent_routes: {
-                [key: string]: unknown;
-            }[];
+            demo_warning: string | null;
         };
         /** ImageAlignment */
         ImageAlignment: {
@@ -3611,7 +3708,7 @@ export interface components {
             forced_intent?: string | null;
             /**
              * Engine
-             * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則（前端不提供，給 make eval-guard 對照用）
+             * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/019）
              * @default auto
              * @enum {string}
              */
@@ -3700,10 +3797,15 @@ export interface components {
             };
             /**
              * Post Filter
-             * @description 分派到 /chat 時帶的第 4～6 段判斷者
+             * @description 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）
              * @enum {string}
              */
             post_filter: "jev" | "local";
+            /**
+             * Route Ticket
+             * @description 交接票（docs/adr/019）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效
+             */
+            route_ticket?: string | null;
             egress: components["schemas"]["RouteEgress"];
             /** Latency Ms */
             latency_ms: {
@@ -4022,7 +4124,7 @@ export interface components {
              * Stage
              * @enum {integer}
              */
-            stage: 1 | 2 | 4;
+            stage: 1 | 2 | 4 | 7;
             /** Rule */
             rule: string;
             /** Judge */
@@ -4031,20 +4133,23 @@ export interface components {
             account_id: string | null;
             /** Account Label */
             account_label: string | null;
-            /** Text */
+            /**
+             * Text
+             * @description 事件摘要：文件／段落 ID、問句或回覆的雜湊（不存問句、段落與回覆原文）
+             */
             text: string | null;
         };
         /**
          * SecurityLogsResponse
-         * @description 七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求，
-         *     第 4 段剔除的洩密段落。
+         * @description 七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求、
+         *     第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。要 access.yaml 的 views.security_logs。
          */
         SecurityLogsResponse: {
             /** Items */
             items: components["schemas"]["SecurityLogRow"][];
             /**
              * Today
-             * @description 今天（UTC+8）各段筆數：rbac／guard／post
+             * @description 今天（UTC+8）各段筆數：rbac／guard／post／output
              */
             today: {
                 [key: string]: number;
@@ -4084,6 +4189,32 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * StatusResponse
+         * @description 登入後畫面用的系統狀態（要有效 JWT，docs/adr/019）：服務能不能用、記憶體、展示模式。
+         *     不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。
+         */
+        StatusResponse: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "degraded";
+            /** Outage Simulated */
+            outage_simulated: boolean;
+            /** Demo Controls */
+            demo_controls: boolean;
+            /** Demo Warning */
+            demo_warning: string | null;
+            /** Eval Controls */
+            eval_controls: boolean;
+            /** Strategies */
+            strategies: {
+                [key: string]: components["schemas"]["StrategyBrief"];
+            };
+            memory?: components["schemas"]["MemoryStatus"] | null;
+            system1: components["schemas"]["System1Brief"];
+        };
         /** StockLocation */
         StockLocation: {
             /** Warehouse Id */
@@ -4117,6 +4248,20 @@ export interface components {
             ref_no?: string | null;
             /** Note */
             note?: string | null;
+        };
+        /**
+         * StrategyBrief
+         * @description 畫面用的服務狀態：只有能不能用，不含模型端點位址。
+         */
+        StrategyBrief: {
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+            /** Available */
+            available: boolean;
+            /** Detail */
+            detail: string;
         };
         /** StrategyStatus */
         StrategyStatus: {
@@ -4218,6 +4363,18 @@ export interface components {
         SwitchAccountRequest: {
             /** Account Id */
             account_id: string;
+        };
+        /**
+         * System1Brief
+         * @description 畫面用的 Jev 狀態：只說有沒有設定，不含端點、門檻與逾時（那些在 /admin/diagnostics）。
+         */
+        System1Brief: {
+            /** Jev Configured */
+            jev_configured: boolean;
+            /** Detail */
+            detail: string;
+            /** Model */
+            model: string;
         };
         /**
          * System1Status
@@ -6105,6 +6262,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    system_status_api_v1_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    diagnostics_api_v1_admin_diagnostics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosticsResponse"];
                 };
             };
             /** @description Client Error */

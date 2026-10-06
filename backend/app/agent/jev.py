@@ -15,6 +15,7 @@ score（評分題，回 score＝各等級機率加權後的分數）。
 """
 
 import json
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -39,26 +40,54 @@ class JevReply:
     request: dict
     answers: dict = field(default_factory=dict)
 
-    def noul(self, name: str) -> float:
-        """是非題：回答「是」的機率。"""
-        return float((self.answers.get(name) or {}).get("noul") or 0.0)
-
-    def score(self, name: str) -> float:
-        """評分題：各等級機率加權後的分數（0＝最低一級）。"""
-        a = self.answers.get(name) or {}
-        if a.get("score") is None:
+    def _answer(self, name: str) -> dict:
+        a = self.answers.get(name)
+        if not isinstance(a, dict):
             raise JevUnavailable(f"Jev 回應缺少 {name}")
-        return float(a["score"])
+        return a
+
+    def noul(self, name: str) -> float:
+        """是非題：回答「是」的機率。缺欄、不是數字、NaN、無限大或不在 0～1 → JevUnavailable
+        （呼叫端改用地端判斷；不可以把缺欄當成 0 而放行，docs/adr/019）。"""
+        a = self._answer(name)
+        if "noul" not in a:
+            raise JevUnavailable(f"Jev 回應缺少 {name}.noul")
+        return number(a["noul"], f"{name}.noul", 1.0)
+
+    def score(self, name: str, top: float = 3.0) -> float:
+        """評分題：各等級機率加權後的分數（0＝最低一級，最高 top）。檢查同 noul。"""
+        a = self._answer(name)
+        if a.get("score") is None:
+            raise JevUnavailable(f"Jev 回應缺少 {name}.score")
+        return number(a["score"], f"{name}.score", top)
 
     def choice(self, name: str, keys: list[str]) -> tuple[str, float, dict[str, float]]:
-        """選擇題：(機率最高的選項, 它的機率, 各選項機率)。"""
-        a = self.answers.get(name) or {}
-        probs = a.get("probabilities") or ({a["choice"]: 1.0} if a.get("choice") else {})
-        probs = {k: float(probs.get(k, 0.0)) for k in keys}
+        """選擇題：(機率最高的選項, 它的機率, 各選項機率)。機率檢查同 noul；
+        只有 choice 時要是 keys 之一。"""
+        a = self._answer(name)
+        raw = a.get("probabilities")
+        if raw is None:
+            pick = a.get("choice")
+            if pick not in keys:
+                raise JevUnavailable(f"Jev 回應缺少 {name}")
+            raw = {pick: 1.0}
+        if not isinstance(raw, dict):
+            raise JevUnavailable(f"Jev 回應的 {name}.probabilities 格式不對")
+        probs = {k: number(raw.get(k, 0.0), f"{name}.{k}", 1.0) for k in keys}
         if not any(probs.values()):
             raise JevUnavailable(f"Jev 回應缺少 {name}")
         best = max(probs.items(), key=lambda kv: kv[1])
         return best[0], best[1], probs
+
+
+def number(value, name: str, top: float) -> float:
+    """Jev 回來的數字只收 0～top 的有限數；布林、字串、NaN、無限大、超出範圍都當服務異常。"""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise JevUnavailable(f"Jev 回應的 {name} 不是數字")
+    x = float(value)
+    if not math.isfinite(x) or not 0.0 <= x <= top:
+        raise JevUnavailable(f"Jev 回應的 {name} 超出範圍（{value!r}）")
+    return x
 
 
 def status() -> tuple[bool, str]:
@@ -100,13 +129,15 @@ async def ask(state: dict, questions: dict, timeout_s: float | None = None) -> J
         raise JevUnavailable(f"Jev 回應錯誤：{reason.get(r.status_code, f'HTTP {r.status_code}')}")
     try:
         data = r.json()
+        if not isinstance(data, dict):
+            raise ValueError("回應不是物件")
         answers = data.get("answers")
         if not isinstance(answers, dict) or not answers:
             raise ValueError("缺少 answers")
     except (ValueError, KeyError, TypeError) as e:
         raise JevUnavailable(f"Jev 回應無法解析：{e}") from e
     return JevReply(
-        model=data.get("model") or s.jev_model,
+        model=str(data.get("model") or s.jev_model),
         latency_ms=round((time.perf_counter() - t0) * 1000),
         bytes=len(payload),
         request=body,

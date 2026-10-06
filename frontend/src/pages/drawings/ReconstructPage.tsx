@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, assetUrl, type CadStrategy } from "../../api/client";
-import { useHealth, usePart } from "../../api/hooks";
+import { usePart, useStatus } from "../../api/hooks";
 import type { Dims } from "../../api/sse";
 import { ErrorMessage } from "../../components/common/Feedback";
 import { ImageUploader } from "../../components/common/ImageUploader";
@@ -30,7 +30,7 @@ export function ReconstructPage() {
   const imageId = params.get("image");
   const jobId = params.get("job");
   const part = usePart(id);
-  const { data: health } = useHealth();
+  const { data: health } = useStatus();
   const { state, start, load } = useReconstruct();
   const [strategy, setStrategy] = useState<CadStrategy>("ortho2cad");
   const [now, setNow] = useState(Date.now());
@@ -126,7 +126,7 @@ export function ReconstructPage() {
 
       {ortho && !ortho.available && shownStrategy === "ortho2cad" && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
-          Ortho2CAD 推論伺服器未啟動（{ortho.detail}）。在終端機執行 <code className="font-mono">make ortho2cad</code>。
+          Ortho2CAD 推論伺服器未啟動。在終端機執行 <code className="font-mono">make ortho2cad</code>。
         </div>
       )}
 

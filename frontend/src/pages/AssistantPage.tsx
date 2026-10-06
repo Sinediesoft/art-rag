@@ -4,10 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, type RouteResponse } from "../api/client";
 import {
   useAccounts,
-  useHealth,
   usePartTextSearch,
   useParts,
   useProductionOverview,
+  useStatus,
   useSwitchAccount,
   useTextSearch,
 } from "../api/hooks";
@@ -204,7 +204,7 @@ export function AssistantPage({ active }: { active: boolean }) {
 
 /** 還沒開始對話：說明統一入口與七段流程，示範句與展示腳本直接攤開 */
 function Welcome({ demo }: { demo: Demo }) {
-  const { data: health } = useHealth();
+  const { data: health } = useStatus();
   const [logsOpen, setLogsOpen] = useState(false);
   const s1 = health?.system1;
   return (
@@ -226,7 +226,7 @@ function Welcome({ demo }: { demo: Demo }) {
           <p className="mt-4 text-xs text-ink-48">
             <span className="font-semibold">第 2、4～6 段：</span>
             {s1.jev_configured
-              ? `雲端 Jev ${s1.model}（Choice／Noul／Score），只收代號化文字，內部與機密段落一律不出廠；叫不到 Jev（斷網、逾時 ${s1.timeout_s} 秒、出錯）才改用地端規則`
+              ? `雲端 Jev ${s1.model}（Choice／Noul／Score），只收代號化文字，內部與機密段落一律不出廠；地端硬性規則永遠先跑，叫不到 Jev（斷網、逾時、出錯）時只靠地端規則`
               : `Jev 未啟用（${s1.detail}）`}
           </p>
         )}
@@ -708,7 +708,7 @@ function Dispatch({
     case "art_qa":
       return d.artwork_id ? (
         <ChatAnswer
-          request={{ question: d.question || "請介紹這幅畫", artwork_id: d.artwork_id, post_filter: route.post_filter }}
+          request={{ question: d.question || "請介紹這幅畫", artwork_id: d.artwork_id, route_ticket: route.route_ticket }}
           onProgress={progress}
         />
       ) : (
@@ -719,7 +719,7 @@ function Dispatch({
     case "drawing_qa":
       return d.part_id ? (
         <ChatAnswer
-          request={{ question: d.question || "這張圖紙的重點是什麼？", part_id: d.part_id, post_filter: route.post_filter }}
+          request={{ question: d.question || "這張圖紙的重點是什麼？", part_id: d.part_id, route_ticket: route.route_ticket }}
           onProgress={progress}
         />
       ) : (
@@ -919,7 +919,7 @@ function ScheduleBrief() {
 }
 
 function SystemBrief() {
-  const { data } = useHealth();
+  const { data } = useStatus();
   if (!data?.memory) return <Loading />;
   const m = data.memory;
   return (

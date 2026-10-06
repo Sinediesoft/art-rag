@@ -612,7 +612,7 @@
           "chat"
         ],
         "summary": "Chat",
-        "description": "圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；\n智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。\n放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。",
+        "description": "圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。\n角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」\n（兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。",
         "operationId": "chat_api_v1_chat_post",
         "requestBody": {
           "content": {
@@ -650,7 +650,7 @@
           "parts"
         ],
         "summary": "List Parts",
-        "description": "只列目前身分看得到的圖紙（業務看不到機密圖紙；訪客不能使用工廠圖紙 → 403）。",
+        "description": "只列目前身分看得到的圖紙（機密等級＋部門）：業務看不到機密圖紙；\n訪客不能使用工廠圖紙 → 403。",
         "operationId": "list_parts_api_v1_parts_get",
         "responses": {
           "200": {
@@ -897,7 +897,7 @@
           "search"
         ],
         "summary": "Search Parts",
-        "description": "以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter）。",
+        "description": "以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter：機密等級＋部門）。",
         "operationId": "search_parts_api_v1_search_parts_get",
         "parameters": [
           {
@@ -1978,7 +1978,7 @@
           "production"
         ],
         "summary": "Reset Production",
-        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄\n與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。",
+        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄\n與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/019）。",
         "operationId": "reset_production_api_v1_admin_production_reset_post",
         "responses": {
           "200": {
@@ -2042,7 +2042,7 @@
           "system"
         ],
         "summary": "Release Memory",
-        "description": "展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。",
+        "description": "展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。",
         "operationId": "release_memory_api_v1_admin_memory_release_post",
         "responses": {
           "200": {
@@ -2242,6 +2242,7 @@
           "system"
         ],
         "summary": "Health",
+        "description": "公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/019）。\n最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -2267,13 +2268,77 @@
         }
       }
     },
+    "/api/v1/status": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "System Status",
+        "description": "登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/019）。",
+        "operationId": "system_status_api_v1_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/diagnostics": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Diagnostics",
+        "description": "管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。\n要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/019）。",
+        "operationId": "diagnostics_api_v1_admin_diagnostics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosticsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/outage": {
       "post": {
         "tags": [
           "system"
         ],
         "summary": "Simulate Outage",
-        "description": "展示用：模擬主推論伺服器斷線，本地備援模型不受影響（DEMO_CONTROLS=false 時停用）。",
+        "description": "展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/019）。",
         "operationId": "simulate_outage_api_v1_admin_outage_post",
         "requestBody": {
           "content": {
@@ -2315,7 +2380,7 @@
           "agent"
         ],
         "summary": "List Accounts",
-        "description": "展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，\n放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。",
+        "description": "展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，\n放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。",
         "operationId": "list_accounts_api_v1_auth_accounts_get",
         "responses": {
           "200": {
@@ -2347,7 +2412,7 @@
           "agent"
         ],
         "summary": "Switch Account",
-        "description": "展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。",
+        "description": "展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、\n本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/019）。",
         "operationId": "switch_account_api_v1_auth_switch_post",
         "requestBody": {
           "content": {
@@ -2707,7 +2772,7 @@
           "agent"
         ],
         "summary": "Security Logs",
-        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。",
+        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。\n只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/019）。",
         "operationId": "security_logs_api_v1_security_logs_get",
         "parameters": [
           {
@@ -2753,7 +2818,7 @@
           "agent"
         ],
         "summary": "Audit Log",
-        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。",
+        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。\n要 access.yaml 的 views.audit（docs/adr/019）。",
         "operationId": "audit_log_api_v1_audit_get",
         "parameters": [
           {
@@ -2876,6 +2941,15 @@
             "type": "integer",
             "title": "Clearance",
             "description": "機密等級：公開 0、內部 1、機密 2（寫進 JWT）"
+          },
+          "views": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Views",
+            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/019）",
+            "default": []
           }
         },
         "type": "object",
@@ -4453,11 +4527,13 @@
               "mock"
             ],
             "title": "Strategy",
+            "description": "生成端。mock 只在評估模式（EVAL_CONTROLS＋本機）生效，否則照 hybrid；雲端對照組要伺服器 ALLOW_CLOUD=true，而且不收工廠圖紙與使用者照片",
             "default": "hybrid"
           },
           "use_retrieval": {
             "type": "boolean",
             "title": "Use Retrieval",
+            "description": "false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/019）",
             "default": true
           },
           "allow_fallback": {
@@ -4475,23 +4551,20 @@
               }
             ],
             "title": "Rearrange",
-            "description": "檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）"
+            "description": "地端段落是否由本地 Qwen3-VL 判斷相關性（MIRA 的 Rearrange）；null＝依伺服器設定。開或關都照樣執行第 4～6 段"
           },
-          "post_filter": {
+          "route_ticket": {
             "anyOf": [
               {
                 "type": "string",
-                "enum": [
-                  "jev",
-                  "local"
-                ]
+                "maxLength": 64
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Post Filter",
-            "description": "七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）"
+            "title": "Route Ticket",
+            "description": "/agent/route 回的交接票（docs/adr/019）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位"
           }
         },
         "type": "object",
@@ -4824,6 +4897,164 @@
           "license"
         ],
         "title": "Description"
+      },
+      "DiagnosticsResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status"
+          },
+          "db": {
+            "type": "boolean",
+            "title": "Db"
+          },
+          "index_consistent": {
+            "type": "boolean",
+            "title": "Index Consistent"
+          },
+          "index_problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Index Problems"
+          },
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "manifest": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Manifest"
+          },
+          "strategies": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StrategyStatus"
+            },
+            "type": "object",
+            "title": "Strategies"
+          },
+          "llm_mode": {
+            "type": "string",
+            "title": "Llm Mode"
+          },
+          "embed_mode": {
+            "type": "string",
+            "title": "Embed Mode"
+          },
+          "allow_cloud": {
+            "type": "boolean",
+            "title": "Allow Cloud"
+          },
+          "outage_simulated": {
+            "type": "boolean",
+            "title": "Outage Simulated"
+          },
+          "demo_controls": {
+            "type": "boolean",
+            "title": "Demo Controls"
+          },
+          "eval_controls": {
+            "type": "boolean",
+            "title": "Eval Controls"
+          },
+          "recent_chats": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Chats"
+          },
+          "recent_cad": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Cad",
+            "default": []
+          },
+          "inventory": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Inventory",
+            "description": "庫存資料庫：資料日期、各表筆數、資料問題",
+            "default": {}
+          },
+          "recent_sql": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Sql",
+            "default": []
+          },
+          "scheduler": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SchedulerEngine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system1": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/System1Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent_routes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recent Routes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "db",
+          "index_consistent",
+          "index_problems",
+          "kb_version",
+          "manifest",
+          "strategies",
+          "llm_mode",
+          "embed_mode",
+          "allow_cloud",
+          "outage_simulated",
+          "demo_controls",
+          "eval_controls",
+          "recent_chats"
+        ],
+        "title": "DiagnosticsResponse",
+        "description": "管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/019）：\n原本放在公開健康檢查裡的完整內容。"
       },
       "DrawingSearchHit": {
         "properties": {
@@ -5294,6 +5525,11 @@
             ],
             "title": "Status"
           },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready",
+            "description": "資料庫可連線而且索引與知識庫一致"
+          },
           "db": {
             "type": "boolean",
             "title": "Db"
@@ -5302,139 +5538,40 @@
             "type": "boolean",
             "title": "Index Consistent"
           },
-          "index_problems": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Index Problems"
-          },
           "kb_version": {
             "type": "string",
             "title": "Kb Version"
           },
-          "manifest": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Manifest"
-          },
-          "strategies": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/StrategyStatus"
-            },
-            "type": "object",
-            "title": "Strategies"
-          },
-          "llm_mode": {
-            "type": "string",
-            "title": "Llm Mode"
-          },
-          "embed_mode": {
-            "type": "string",
-            "title": "Embed Mode"
-          },
-          "allow_cloud": {
-            "type": "boolean",
-            "title": "Allow Cloud"
-          },
-          "outage_simulated": {
-            "type": "boolean",
-            "title": "Outage Simulated"
-          },
           "demo_controls": {
             "type": "boolean",
-            "title": "Demo Controls"
+            "title": "Demo Controls",
+            "description": "展示模式是否開啟（開啟時不可用於正式環境）"
           },
-          "recent_chats": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Recent Chats"
-          },
-          "recent_cad": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Recent Cad",
-            "default": []
-          },
-          "inventory": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Inventory",
-            "description": "庫存資料庫：資料日期、各表筆數、資料問題",
-            "default": {}
-          },
-          "recent_sql": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Recent Sql",
-            "default": []
-          },
-          "scheduler": {
+          "demo_warning": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SchedulerEngine"
+                "type": "string"
               },
               {
                 "type": "null"
               }
-            ]
-          },
-          "memory": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MemoryStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "system1": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/System1Status"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "recent_routes": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Recent Routes",
-            "default": []
+            ],
+            "title": "Demo Warning",
+            "description": "展示模式開啟時的警語"
           }
         },
         "type": "object",
         "required": [
           "status",
+          "ready",
           "db",
           "index_consistent",
-          "index_problems",
           "kb_version",
-          "manifest",
-          "strategies",
-          "llm_mode",
-          "embed_mode",
-          "allow_cloud",
-          "outage_simulated",
           "demo_controls",
-          "recent_chats"
+          "demo_warning"
         ],
-        "title": "HealthResponse"
+        "title": "HealthResponse",
+        "description": "公開健康檢查（不用憑證，docs/adr/019）：只回存活與就緒。問句、回覆、SQL、路由紀錄、\n模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"
       },
       "ImageAlignment": {
         "properties": {
@@ -8621,7 +8758,7 @@
               "local"
             ],
             "title": "Engine",
-            "description": "第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則（前端不提供，給 make eval-guard 對照用）",
+            "description": "第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/019）",
             "default": "auto"
           }
         },
@@ -8818,7 +8955,19 @@
               "local"
             ],
             "title": "Post Filter",
-            "description": "分派到 /chat 時帶的第 4～6 段判斷者"
+            "description": "第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）"
+          },
+          "route_ticket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Ticket",
+            "description": "交接票（docs/adr/019）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效"
           },
           "egress": {
             "$ref": "#/components/schemas/RouteEgress"
@@ -9800,7 +9949,8 @@
             "enum": [
               1,
               2,
-              4
+              4,
+              7
             ],
             "title": "Stage"
           },
@@ -9850,7 +10000,8 @@
                 "type": "null"
               }
             ],
-            "title": "Text"
+            "title": "Text",
+            "description": "事件摘要：文件／段落 ID、問句或回覆的雜湊（不存問句、段落與回覆原文）"
           }
         },
         "type": "object",
@@ -9882,7 +10033,7 @@
             },
             "type": "object",
             "title": "Today",
-            "description": "今天（UTC+8）各段筆數：rbac／guard／post"
+            "description": "今天（UTC+8）各段筆數：rbac／guard／post／output"
           }
         },
         "type": "object",
@@ -9891,7 +10042,7 @@
           "today"
         ],
         "title": "SecurityLogsResponse",
-        "description": "七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求，\n第 4 段剔除的洩密段落。"
+        "description": "七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求、\n第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。要 access.yaml 的 views.security_logs。"
       },
       "ShortCircuitInfo": {
         "properties": {
@@ -9961,6 +10112,73 @@
           "runs"
         ],
         "title": "SqlEvalRunsResponse"
+      },
+      "StatusResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status"
+          },
+          "outage_simulated": {
+            "type": "boolean",
+            "title": "Outage Simulated"
+          },
+          "demo_controls": {
+            "type": "boolean",
+            "title": "Demo Controls"
+          },
+          "demo_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Demo Warning"
+          },
+          "eval_controls": {
+            "type": "boolean",
+            "title": "Eval Controls"
+          },
+          "strategies": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StrategyBrief"
+            },
+            "type": "object",
+            "title": "Strategies"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system1": {
+            "$ref": "#/components/schemas/System1Brief"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "outage_simulated",
+          "demo_controls",
+          "demo_warning",
+          "eval_controls",
+          "strategies",
+          "system1"
+        ],
+        "title": "StatusResponse",
+        "description": "登入後畫面用的系統狀態（要有效 JWT，docs/adr/019）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"
       },
       "StockLocation": {
         "properties": {
@@ -10065,6 +10283,35 @@
           "qty"
         ],
         "title": "StockMove"
+      },
+      "StrategyBrief": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "model",
+          "available",
+          "detail"
+        ],
+        "title": "StrategyBrief",
+        "description": "畫面用的服務狀態：只有能不能用，不含模型端點位址。"
       },
       "StrategyStatus": {
         "properties": {
@@ -10268,6 +10515,30 @@
           "account_id"
         ],
         "title": "SwitchAccountRequest"
+      },
+      "System1Brief": {
+        "properties": {
+          "jev_configured": {
+            "type": "boolean",
+            "title": "Jev Configured"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jev_configured",
+          "detail",
+          "model"
+        ],
+        "title": "System1Brief",
+        "description": "畫面用的 Jev 狀態：只說有沒有設定，不含端點、門檻與逾時（那些在 /admin/diagnostics）。"
       },
       "System1Status": {
         "properties": {

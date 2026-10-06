@@ -11,13 +11,15 @@
 3～7 由分派到的模組執行（/chat 做 Metadata Filter 檢索、Jev Noul 雙重驗證、Jev Score 重排、
    生成閘門與地端生成；/inventory/ask 唯讀 SQL…），那些 API 自己也驗 JWT 與資料範圍，
    所以前端分派錯了或直接打 API 也繞不過權限。
+   畫作問答、圖紙問答放行時發一張交接票（agent/handoff.py）：/chat 憑票沿用第 2 段的判斷，
+   沒票或票不符就自己重跑第 2 段（docs/adr/019）。
 最後通知記憶體管理預估要用的模型、寫路由紀錄（eval-route 也用同一個端點）。
 """
 
 import asyncio
 import time
 
-from app.agent import gate, guard, local_router
+from app.agent import gate, guard, handoff, local_router
 from app.agent.entities import first, get_index
 from app.agent.types import System1Result
 from app.core.config import get_agent_config
@@ -28,6 +30,8 @@ from app.services import memory_guard, search_service
 from app.services.identity import Auth, level_rank
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
+# 只有照片、沒有文字時，問答模組用的預設問句（交接票綁這句話）
+DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
 
 
 def _identify_photo(image_id: str) -> dict:
@@ -53,7 +57,12 @@ def _dispatch(intent: str, question: str, entities: list, photo: dict | None) ->
     art = first(entities, "artwork") or first(entities, "artist")
     part_id = part.id if part else (photo["id"] if photo and photo["kind"] == "drawing" else None)
     artwork_id = art.id if art else (photo["id"] if photo and photo["kind"] == "art" else None)
-    d: dict = {"module": intent, "part_id": part_id, "artwork_id": artwork_id, "question": question}
+    d: dict = {
+        "module": intent,
+        "part_id": part_id,
+        "artwork_id": artwork_id,
+        "question": question or DEFAULT_QUESTIONS.get(intent, ""),
+    }
     store = get_store()
     if part_id and (p := store.get_part(part_id)):
         d["part_label"] = p["name"]["zh"]
@@ -137,7 +146,10 @@ async def route(
     engine: str = "auto",
 ) -> dict:
     """auth：閘道驗證過的 JWT（帳號＋憑證內容）。engine：第 2、4～6 段由誰判斷。
-    auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用，前端不提供）。"""
+    auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用）。
+    engine 由 API 層決定：只有評估模式（EVAL_CONTROLS＋本機）才會傳 local 進來（docs/adr/019）。
+    forced_intent（澄清按鈕）只改變交給哪個模組，不降低任何關卡：第 2 段照「使用者點的意圖」與
+    「本地分流原本判斷的意圖」裡比較危險的那個判斷冒充身分。"""
     t0 = time.perf_counter()
     account = auth.account
     cfg = get_agent_config()
@@ -151,9 +163,17 @@ async def route(
 
     # 本地分流：判斷要交給哪個模組（第 1 段授權要知道要做什麼；Jev 只判斷是不是查詢）
     t1 = time.perf_counter()
+    natural_risk = None
     if forced_intent:
         if forced_intent not in cfg["intents"]:
             forced_intent = "out_of_scope"
+        if question:
+            # 使用者點的意圖不能把風險變低：本地分流照樣判斷一次，第 2 段取兩者較危險的
+            async with memory_guard.flow("route", {"bge"}):
+                natural = await asyncio.to_thread(
+                    local_router.classify, question, entities, photo_kind
+                )
+            natural_risk = cfg["intents"][natural.intent]["risk"]
         op, op_probs = local_router.classify_op(question)
         result = System1Result(
             engine="user",
@@ -198,7 +218,12 @@ async def route(
         entities,
         domain=domain,
     )
-    logged_text = question if question or not photo else f"（只有照片：{photo['label']}）"
+    # 拒絕並記錄不存問句原文與文件名稱，只存雜湊（docs/adr/019）
+    logged_text = (
+        f"問句雜湊 {guard.fingerprint(question)}"
+        if question or not photo
+        else f"只有照片（{photo['kind']}）"
+    )
     guard_res = None
     blocked = None
     short = None
@@ -219,6 +244,8 @@ async def route(
         # 2. Jev 意圖路由／防護欄：正常查詢／Prompt 注入／無關閒聊
         decided = decision.gate != "clarify" and intent not in ("system", "out_of_scope")
         risk = cfg["intents"][intent]["risk"] if decided else None
+        if risk and natural_risk and guard.RISK_RANK[natural_risk] > guard.RISK_RANK[risk]:
+            risk = natural_risk
         # 還不確定時，地端備援照候選意圖裡最危險的那個判斷冒充身分
         # （「我是主管…改成 0」信心不夠也要擋）
         hint = max(
@@ -270,6 +297,21 @@ async def route(
             memory_guard.guard.check, f"智慧助理預估（{labels[intent]}）", keep, False, True
         )
 
+    # 交接票：問答放行時，/chat 憑票沿用第 1、2 段的判斷（帳號、問句、對象都要相符，10 分鐘內有效）
+    post_filter = "local" if engine == "local" else "jev"
+    ticket = None
+    if outcome == "pass" and intent in guard.QA_INTENTS and dispatch.get("question"):
+        ticket = handoff.issue(
+            account.id,
+            guard.fingerprint(guard.mask_pii(dispatch["question"].strip())[0]),
+            intent,
+            dispatch.get("part_id") if intent == "drawing_qa" else None,
+            dispatch.get("artwork_id") if intent == "art_qa" else None,
+            post_filter,
+            guard_res.engine if guard_res else "skip",
+            request_id,
+        )
+
     egress = guard_res.egress_bytes if guard_res else 0
     out = {
         "request_id": request_id,
@@ -310,8 +352,9 @@ async def route(
         "blocked": blocked,
         "short_circuit": short,
         "dispatch": dispatch,
-        # 第 4～6 段由誰判斷：分派到 /chat 時照這個帶 post_filter
-        "post_filter": "local" if engine == "local" else "jev",
+        # 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；/chat 不收這個參數）
+        "post_filter": post_filter,
+        "route_ticket": ticket,
         "egress": {
             "bytes": egress,
             "to": "TypeSafe Jev" if egress else None,

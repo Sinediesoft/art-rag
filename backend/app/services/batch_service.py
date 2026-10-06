@@ -22,7 +22,7 @@ from app.rag.preprocess import load_image
 from app.repositories.index_store import get_store
 from app.services import memory_guard
 from app.services.chat_service import NO_EGRESS, sse
-from app.services.identity import Account
+from app.services.identity import Account, can_view_part
 from app.services.search_service import identify, identify_any, identify_drawing, load_upload
 
 STATUS_LABEL = {
@@ -75,7 +75,7 @@ def _row_from_drawing(row: dict, result: dict, account: Account) -> None:
     store = get_store()
     if result["matched"]:
         part = store.get_part(result["best_part_id"])
-        if not account.can_see(part["confidentiality"]):
+        if not can_view_part(account, part):
             row["status"] = "hidden"
             row["note"] = "辨識出的圖紙不在你的資料範圍內，不顯示是哪一張"
             return
@@ -89,7 +89,9 @@ def _row_from_drawing(row: dict, result: dict, account: Account) -> None:
         )
         return
     row["status"] = "not_in_kb"
-    visible = [r for r in result["results"] if account.can_see(r["part"]["confidentiality"])]
+    visible = [
+        r for r in result["results"] if can_view_part(account, store.get_part(r["part"]["id"]))
+    ]
     if visible:
         best = visible[0]
         row.update(score=best["score"], inliers=best["inliers"], overlap=best["overlap"])

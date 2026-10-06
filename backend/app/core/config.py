@@ -81,8 +81,16 @@ class Settings(BaseSettings):
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
-    # 展示用：在 /admin 模擬主推論伺服器斷線，正式上線請關閉
-    demo_controls: bool = True
+    # 展示模式（docs/adr/019）：頁首切換身分（/auth/switch 簽發任意帳號的 JWT）、
+    # 模擬斷線、展示還原。預設關閉，只能由人類在本機 .env 明確開啟；
+    # 開啟後也只接受 demo_trusted_hosts 來的請求（預設只有本機 loopback）。不可用於正式環境
+    demo_controls: bool = False
+    demo_trusted_hosts: list[str] = ["127.0.0.1", "::1"]
+
+    # 評估模式（docs/adr/019）：只有開啟時，請求才能指定 engine=local、use_retrieval=false、
+    # strategy=mock 這類「對照組」選項，而且一樣只接受 demo_trusted_hosts 來的請求。
+    # 關閉時這些欄位不會降低任何安全關卡（engine 一律由伺服器決定、關檢索會被生成閘門擋下）
+    eval_controls: bool = False
 
     # 身分憑證（JWT，HS256，docs/adr/015 第 1 段）：留空＝每次啟動隨機產生
     # （後端重啟後舊憑證全部失效，前端自動改回訪客）；多台後端共用時要填同一組

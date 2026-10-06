@@ -97,8 +97,9 @@ def test_cloud_rejects_user_photos(real_llm, monkeypatch):
     assert real_llm == []
 
 
-def test_cloud_egress_is_recorded(real_llm, monkeypatch):
-    """A2（api_kb）送出圖片與段落；A1（api_nokb）不帶任何檢索段落。"""
+def test_cloud_egress_is_recorded(real_llm, monkeypatch, all_chunks):
+    """A2（api_kb）送出圖片與段落；A1（api_nokb）不帶任何檢索段落。
+    A1 是關檢索對照組：只有評估模式才生成，否則第 6 段直接降級（docs/adr/019）。"""
     monkeypatch.setattr(get_settings(), "allow_cloud", True)
     monkeypatch.setattr(get_settings(), "api_key", "test-key")
     kb = event(
@@ -109,11 +110,23 @@ def test_cloud_egress_is_recorded(real_llm, monkeypatch):
     )
     assert kb["egress"]["images"] == 1 and kb["egress"]["chunks"] >= 1 and kb["egress"]["bytes"] > 0
     events = collect(
-        chat_service.chat_stream("技法？", "req_t6", strategy="api_nokb", artwork_id="npm-000001")
+        chat_service.chat_stream(
+            "技法？", "req_t6", strategy="api_nokb", artwork_id="npm-000001", eval_mode=True
+        )
     )
     assert event(events, "sources")["sources"] == []
     nokb = event(events, "done")
     assert nokb["egress"]["chunks"] == 0 and nokb["use_retrieval"] is False
+    assert nokb["degraded"] is False
+    # 不是評估模式：A1 被生成閘門擋下，雲端一次都沒呼叫
+    real_llm.clear()
+    events = collect(
+        chat_service.chat_stream("技法？", "req_t7", strategy="api_nokb", artwork_id="npm-000001")
+    )
+    done = event(events, "done")
+    assert done["degraded"] is True and real_llm == []
+    assert [s["stage"] for s in done["pipeline"]] == [1, 2, 3, 4, 5, 6]
+    assert done["pipeline"][-1]["status"] == "block"
 
 
 @pytest.mark.parametrize(

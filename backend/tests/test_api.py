@@ -24,14 +24,14 @@ def parse_sse(text: str) -> list[tuple[str, dict]]:
 def test_health(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200
-    assert r.json()["index_consistent"] is True
+    assert r.json()["index_consistent"] is True and r.json()["ready"] is True
     # 即時狀態不能被監控、代理或瀏覽器快取
     assert r.headers["cache-control"] == "no-store"
 
 
 def test_health_when_database_is_down(client, monkeypatch):
-    """PostgreSQL 容器停了：ping 失敗就不查任何最近紀錄，狀態頁照樣回得出來（degraded、db=false）。
-    查了會等連線池逾時（每次 5 秒，卡住整個後端）再 500。"""
+    """PostgreSQL 容器停了：ping 失敗就不查任何最近紀錄，健康檢查與診斷頁照樣回得出來
+    （degraded、db=false）。查了會等連線池逾時（每次 5 秒，卡住整個後端）再 500。"""
     from app.api import routes
 
     class DownRepo:
@@ -48,7 +48,11 @@ def test_health_when_database_is_down(client, monkeypatch):
     r = client.get("/api/v1/health")
     assert r.status_code == 200
     body = r.json()
-    assert body["db"] is False and body["status"] == "degraded"
+    assert body["db"] is False and body["status"] == "degraded" and body["ready"] is False
+    assert r.headers["cache-control"] == "no-store"
+    r = client.get("/api/v1/admin/diagnostics")  # 預設身分是主管：看得到診斷
+    body = r.json()
+    assert r.status_code == 200 and body["db"] is False
     assert body["recent_chats"] == body["recent_routes"] == []
     assert r.headers["cache-control"] == "no-store"
 
@@ -124,10 +128,11 @@ def test_chat_rearrange_is_off_by_default_and_reported_when_on(client, monkeypat
     off = parse_sse(client.post("/api/v1/chat", json=body).text)[0][1]
     assert off["rearrange"] is None
     on = parse_sse(client.post("/api/v1/chat", json={**body, "rearrange": True}).text)[0][1]
-    # mock 生成端的輸出不是「1,3」格式 → 退回原本的段落，但要回報篩選資訊
+    # mock 生成端的輸出不是「1,3」格式 → 退回原本的段落，但要回報篩選資訊；
+    # 篩選開或關，第 4～6 段照樣執行（最多 3 段）
     info = on["rearrange"]
-    assert info["candidates"] == 3 and info["fallback"]
-    assert info["kept"] == len(on["sources"]) == 3
+    assert info["candidates"] == 3 and info["fallback"] and info["kept"] == 3
+    assert len(on["sources"]) <= 3 and on["post_filter"]["gate"] is not None
 
 
 def test_unknown_strategy_without_fallback_errors(client):

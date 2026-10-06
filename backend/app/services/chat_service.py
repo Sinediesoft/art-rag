@@ -7,26 +7,31 @@
 工廠圖紙（part_id）走同一條流程，只換知識庫領域與 prompt 模板（drawing_v1）；
 圖紙屬企業機密，雲端對照組一律不接受。
 
-七段權限控管的第 3～7 段（docs/adr/015）也在這裡：
-3. 權限感知檢索：Metadata Filter 只照 JWT 產生（clearance <= 憑證等級 AND dept IN 公開＋憑證部門），
-   過濾在資料庫查詢階段執行，看不到的圖紙段落不會進候選
+七段權限控管（docs/adr/015），2026-10-06 起每一次 /chat 都由伺服器完整執行（docs/adr/019），
+請求裡沒有任何欄位能略過關卡：
+1. 認證與授權：JWT 已在閘道驗過；這裡先做文件層授權
+   （identity.can_view_part：領域＋機密等級＋部門）。看不到或不存在的圖紙一律降級「查無資料」，
+   不讀圖檔、不檢索、不組 prompt、不呼叫任何模型
+2. Jev Choice：有 /agent/route 發的有效交接票（agent/handoff.py）就沿用；
+   沒有、過期或不符就在這裡重跑
+3. 權限感知檢索：Metadata Filter 只照 JWT 產生（clearance <= 憑證等級 AND dept IN 公開＋憑證部門）
 4. Jev Noul 雙重驗證：每段 is_relevant＋security_leak_check，任一不通過就剔除並記錄
-5. Jev Score 評分重排：取前 3 段
-6. 生成閘門：權限內沒有可答內容 → 降級回「查無資料」，不呼叫 LLM、不透露有文件但沒有權限
-7. 地端 LLM 只依留下的段落回答
-第 4～6 段只把公開段落代號化後送 Jev，內部與機密段落留在地端判斷。
-其他頁面的問答（沒帶 post_filter）只做第 4 段的地端洩密掃描，段落數照原本規則。
+5. Jev Score 評分重排：最低分數、最多 3 段
+6. 生成閘門：可答性＋合規；不過就降級回「查無資料」，不呼叫 LLM。關閉檢索也在這裡擋下
+   （只有評估模式的畫作對照組例外）
+7. 地端 LLM 只依留下的段落回答；回覆先在伺服器收齊，通過輸出檢查（guard.check_output）才送出
+第 4～6 段只把公開段落代號化後送 Jev，內部與機密段落留在地端判斷；由誰判斷由伺服器決定。
 """
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
 
-from app.agent import guard
-from app.core.config import REPO_ROOT, get_models_config, get_settings
-from app.core.errors import AppError
+from app.agent import guard, handoff
+from app.agent.entities import get_index
+from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
 from app.core.logging import log
-from app.rag import rearrange as rearrange_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import artwork_card, build_messages, part_card, prompt_version
@@ -41,7 +46,7 @@ from app.rag.textproc import to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
-from app.services.identity import Account, require_part
+from app.services.identity import Account, can_view_part
 from app.services.search_service import identify_any, load_upload
 
 # 備援只在本地之間：主推論伺服器 → 本地備援模型；雲端不在任何備援鏈上
@@ -134,14 +139,17 @@ async def chat_stream(
     part_id: str | None = None,
     rearrange: bool | None = None,
     account: Account | None = None,
-    post_filter: str | None = None,
+    route_ticket: str | None = None,
+    eval_mode: bool = False,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
     記憶體吃緊時先釋放其他模型（services/memory_guard.py）。
     account：目前身分（JWT 的資料範圍與 Metadata Filter）；
-    None＝不限（評估腳本、單元測試直接呼叫時）。
-    post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
+    None＝程式內部呼叫（單元測試、評估腳本直接呼叫），不限資料範圍，但第 2～7 段照樣執行。
+    route_ticket：/agent/route 發的交接票（有效才沿用第 2 段的判斷）。
+    eval_mode：評估模式（EVAL_CONTROLS＋本機，由 API 層判斷）。只有開啟時 strategy=mock 才生效、
+    畫作的關檢索對照組才會生成；關閉時這些選項不會降低任何關卡。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -155,10 +163,18 @@ async def chat_stream(
         part_id,
         rearrange,
         account,
-        post_filter,
+        route_ticket,
+        eval_mode,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
+
+
+def _stage(trace: list[dict], n: int, status: str, by: str, detail: str) -> None:
+    """可觀測軌跡：每一段執行了沒有、結果、由誰判斷（sources／done 事件的 pipeline）。"""
+    trace.append(
+        {"stage": n, "name": guard.STAGE_NAMES[n], "status": status, "by": by, "detail": detail}
+    )
 
 
 async def _chat_stream(
@@ -172,13 +188,101 @@ async def _chat_stream(
     part_id: str | None = None,
     rearrange: bool | None = None,
     account: Account | None = None,
-    post_filter: str | None = None,
+    route_ticket: str | None = None,
+    eval_mode: bool = False,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
+    gcfg = get_agent_config()["guard"]
     identified = None
+    requested = strategy
+    # strategy=mock 只在評估模式生效；否則照一般問答走主推論伺服器（關卡完全一樣）
+    if strategy == "mock" and not eval_mode:
+        strategy = "hybrid"
     cloud = strategy in CLOUD_STRATEGIES
     domain = "mfg" if part_id else "art"
+    trace: list[dict] = []
+    # 個資遮蔽：之後的檢索、prompt、紀錄都用遮蔽後的問句
+    asked = guard.mask_pii(question.strip())[0]
+
+    def finish_without_llm(
+        stage: int, message: str, model: str, sources_event: dict | None = None, egress=None
+    ) -> list[str]:
+        """第 stage 段擋下：回統一的訊息，不讀圖檔、不組 prompt、不呼叫 LLM。"""
+        total_ms = round((time.perf_counter() - t0) * 1000)
+        out = []
+        if sources_event is None:
+            sources_event = {
+                "request_id": request_id,
+                "artwork_id": None,
+                "part_id": None,
+                "strategy": requested,
+                "identified": None,
+                "route": None,
+                "rearrange": None,
+                "use_retrieval": use_retrieval,
+                "sources": [],
+                "filter": None,
+                "candidates": 0,
+                "post_filter": None,
+                "pipeline": list(trace),
+            }
+            out.append(sse("sources", sources_event))
+        out.append(sse("token", {"text": message}))
+        jev_bytes = (egress or {}).get("bytes", 0)
+        done = {
+            "request_id": request_id,
+            "strategy_requested": requested,
+            "strategy_used": strategy,
+            "model": model,
+            "fallback": False,
+            "fallback_reason": None,
+            "prompt_version": prompt_version(domain),
+            "use_retrieval": use_retrieval,
+            "latency_ms": {
+                "retrieval": total_ms,
+                "first_token": None,
+                "generation": 0,
+                "total": total_ms,
+            },
+            "tokens": {"input": 0, "output": 0},
+            "cost_twd": 0.0,
+            "egress": {
+                **NO_EGRESS,
+                "chunks": (egress or {}).get("chunks", 0),
+                "bytes": jev_bytes,
+                "jev_bytes": jev_bytes,
+            },
+            "degraded": True,
+            "pipeline": list(trace),
+        }
+        out.append(sse("done", done))
+        get_logs_repo().add_chat_log(
+            {
+                "request_id": request_id,
+                "created_at": get_logs_repo().now(),
+                "artwork_id": artwork_id if stage > 1 else None,
+                "part_id": part_id if stage > 1 else None,
+                "question": asked,
+                "strategy_requested": requested,
+                "strategy_used": "gate",
+                "model": model,
+                "prompt_version": done["prompt_version"],
+                "use_retrieval": int(use_retrieval),
+                "fallback": 0,
+                "retrieval_ms": total_ms,
+                "first_token_ms": None,
+                "total_ms": total_ms,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_twd": 0.0,
+                "egress_images": 0,
+                "egress_chunks": done["egress"]["chunks"],
+                "egress_bytes": jev_bytes,
+                "answer": message,
+            }
+        )
+        return out
 
     # 工廠圖紙屬企業機密：雲端對照組一律不接受（連知識庫段落也不送出）
     if cloud and domain == "mfg":
@@ -212,9 +316,10 @@ async def _chat_stream(
     if strategy == "api_nokb":
         use_retrieval = False  # A1：只送照片與問題
 
-    # 1. 以圖辨識（已指定畫作或圖紙就跳過）。只給照片時先經過領域路由（MMed-RAG 的領域辨識），
-    #    判斷是畫作還是圖紙，再走該領域的辨識（和以圖搜圖、智慧助理同一個 identify_any）。
-    #    雲端策略在第 0 步已拒收照片，所以路由成圖紙時不會是雲端。
+    # 以圖辨識（已指定畫作或圖紙就跳過）。只給照片時先經過領域路由（MMed-RAG 的領域辨識），
+    # 判斷是畫作還是圖紙，再走該領域的辨識（和以圖搜圖、智慧助理同一個 identify_any）。
+    # 辨識的是使用者自己上傳的照片；辨識出的文件要先過第 1 段才會讀它的任何內容。
+    # 雲端策略在上面已拒收照片，所以路由成圖紙時不會是雲端。
     route_info = None
     if not artwork_id and not part_id and image_id:
         found = identify_any(image_id)
@@ -235,17 +340,16 @@ async def _chat_stream(
             part_id = identified["best_part_id"]
         else:
             artwork_id = identified["best_artwork_id"]
+
+    # ------------------------------------------------------------ 第 1 段：文件層授權
+    # 不存在與看不到的圖紙一律同一個降級回應（不透露有沒有這份文件），
+    # 在讀圖檔、作品卡、段落或呼叫任何模型之前就結束
     if domain == "mfg":
         artwork = store.get_part(part_id)
-        if not artwork:
-            yield sse(
-                "error",
-                {
-                    "code": "PART_NOT_FOUND",
-                    "request_id": request_id,
-                    "message": f"找不到圖紙 {part_id}",
-                },
-            )
+        if artwork is None or (account is not None and not can_view_part(account, artwork)):
+            _stage(trace, 1, "block", "地端", "指定的圖紙不在你的資料範圍內 → 查無資料")
+            for e in finish_without_llm(1, gcfg["degrade_message"], "第 1 段（未呼叫 LLM）"):
+                yield e
             return
     else:
         artwork = store.get_artwork(artwork_id) if artwork_id else None
@@ -259,10 +363,6 @@ async def _chat_stream(
                 },
             )
             return
-
-    # 資料範圍：其他頁面直接指定看不到的圖紙 → 403（和 /parts/{id} 一樣）。
-    # 智慧助理（post_filter）不在這裡透露：
-    # 交給第 3 段 Metadata Filter 濾掉、第 6 段降級成「查無資料」
     doc = None
     if artwork:
         doc = {
@@ -271,128 +371,157 @@ async def _chat_stream(
             "level": artwork.get("confidentiality", "公開") if domain == "mfg" else "公開",
             "dept": artwork.get("owner", "") if domain == "mfg" else "公開",
         }
-    seen = account is None or doc is None or domain == "art" or guard.visible(account, doc)
-    if not seen and post_filter is None:
-        try:
-            require_part(account, artwork)
-        except AppError as e:
-            yield sse("error", {"code": e.code, "request_id": request_id, "message": e.message})
-            return
+    _stage(
+        trace,
+        1,
+        "pass",
+        "地端",
+        "JWT 已在閘道驗過；" + ("指定的文件在資料範圍內" if doc else "沒有指定文件")
+        if account is not None
+        else "程式內部呼叫（不限資料範圍）",
+    )
 
-    # 2. 檢索（第 3 段，Metadata Filter 照 JWT 產生；
-    #    關檢索時仍算一次，供前端比較用，但不放進 prompt）
+    # ------------------------------------------------------------ 第 2 段：Jev Choice
+    fp = guard.fingerprint(asked)
+    ticket = (
+        handoff.redeem(route_ticket, account.id, fp, part_id, artwork_id)
+        if account is not None and not image_id
+        else None
+    )
+    if ticket is not None:
+        post_mode = ticket.engine
+        _stage(trace, 2, "pass", ticket.guard_engine, "沿用智慧助理第 2 段的判斷（交接票有效）")
+    else:
+        index = await asyncio.to_thread(get_index)
+        masked = index.pseudonymize(asked, index.find(asked))
+        g2 = await guard.guard_input(asked, masked.text, masked.mapping, "read", True)
+        note = "交接票無效或不符，重新判斷；" if route_ticket else ""
+        if not g2.passed:
+            judge = "雲端 Jev（只收代號化文字）" if g2.engine == "jev" else "地端規則"
+            guard.log_block(
+                2, g2.tag or "惡意輸入", account, f"/chat 問句雜湊 {fp}", request_id, judge
+            )
+            _stage(trace, 2, "block", g2.engine, f"{note}{g2.reason}")
+            for e in finish_without_llm(
+                2,
+                gcfg["blocked_message"],
+                "第 2 段（未呼叫 LLM）",
+                egress={"bytes": g2.egress_bytes},
+            ):
+                yield e
+            return
+        post_mode = "jev"
+        _stage(trace, 2, "pass", g2.engine, f"{note}{g2.checks[0].detail if g2.checks else ''}")
+
+    # ------------------------------------------------------------ 第 3 段：Metadata Filter 檢索
     meta = guard.MetaFilter.of(account, domain, doc) if account is not None else None
-    sources = retrieve(question, artwork_id, part_id, meta)
+    # 評估模式的畫作關檢索對照組仍檢索一次（供前端比較），但段落不放進 prompt
+    if use_retrieval or (eval_mode and domain == "art"):
+        sources = retrieve(asked, artwork_id, part_id, meta)
+        _stage(
+            trace,
+            3,
+            "pass",
+            "地端",
+            f"{len(sources)} 段候選" + (f"；{meta.text}" if meta else ""),
+        )
+    else:
+        sources = []
+        _stage(trace, 3, "skip", "地端", "關閉檢索")
     candidates = len(sources)
-    # 第 4～6 段：要放進 prompt 的段落先驗證。每段都用地端規則掃描洩密風險；
-    # 智慧助理（post_filter）再做 Jev Noul 雙重驗證 → Jev Score 重排（最多 3 段）→ 生成閘門。
-    # 其他頁面沿用段落篩選（MIRA 的 Rearrange）開關，篩選時間算在 retrieval 裡
-    post = None
-    rearrange_info = None
+
+    # ------------------------------------------------------------ 第 4～6 段
     card = None
-    if seen and artwork:
+    if artwork:
         card = {
             "level": doc["level"],
             "text": part_card(artwork) if domain == "mfg" else artwork_card(artwork),
+            "domain": domain,
         }
-    if use_retrieval and (sources or post_filter):
-        post = await guard.process_passages(
-            question, sources, post_filter or "scan", strategy, card
-        )
+    post = None
+    rearrange_info = None
+    if not use_retrieval:
+        if eval_mode and domain == "art":
+            # 評估模式的對照組（關檢索、雲端・無檢索）：公開畫作只依作品資料與圖回答
+            for n in (4, 5, 6):
+                _stage(trace, n, "skip", "地端", "評估模式：關檢索對照組，不放參考段落")
+        else:
+            _stage(trace, 4, "skip", "地端", "關閉檢索：沒有段落可驗證")
+            _stage(trace, 5, "skip", "地端", "關閉檢索：沒有段落可重排")
+            _stage(trace, 6, "block", "地端", "關閉檢索時無法確認答得出來 → 不讓 LLM 臆測")
+            for e in finish_without_llm(6, gcfg["degrade_message"], "生成閘門（未呼叫 LLM）"):
+                yield e
+            return
+    else:
+        post = await guard.process_passages(asked, sources, post_mode, strategy, card, rearrange)
         sources = post.kept
         for s in post.flagged:
             guard.log_block(
                 4,
                 "洩密風險（段落已剔除）",
                 account,
-                guard.mask_pii(f"〈{s['title']}〉{s['topic']}：{s['text'][:80]}")[0],
+                f"段落 {s['chunk_id']}",
                 request_id,
                 "雲端 Jev" if post.caught_by(s["chunk_id"]) == "Jev" else "地端規則",
             )
         rearrange_info = post.rearrange
-        if post.mode == "scan" and rearrange_mod.enabled(rearrange):
-            sources, rearrange_info = await rearrange_mod.rearrange(question, sources, strategy)
+        judged = len(post.verify.checks) - len(post.flagged)
+        kept = len(post.kept) if post.gate.passed else 0
+        _stage(
+            trace,
+            4,
+            "pass",
+            post.verify.engine,
+            f"剔除洩密 {len(post.flagged)} 段；{judged} 段判斷相關性",
+        )
+        _stage(
+            trace,
+            5,
+            "pass",
+            post.rerank.engine,
+            f"最低分數＋最多 {guard.MAX_CONTEXT} 段：留 {kept} 段",
+        )
+        _stage(
+            trace,
+            6,
+            "pass" if post.gate.passed else "block",
+            post.gate.engine,
+            "；".join(c.detail for c in post.gate.checks),
+        )
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
-    yield sse(
-        "sources",
-        {
-            "request_id": request_id,
-            "artwork_id": artwork_id,
-            "part_id": part_id,
-            "strategy": strategy,
-            "identified": identified,
-            "route": route_info,
-            "rearrange": rearrange_info,
-            "use_retrieval": use_retrieval,
-            "sources": sources if use_retrieval else [],
-            "filter": meta.public() if meta else None,
-            "candidates": candidates,
-            "post_filter": post.public() if post else None,
-        },
-    )
+    sources_event = {
+        "request_id": request_id,
+        "artwork_id": artwork_id,
+        "part_id": part_id,
+        "strategy": requested,
+        "identified": identified,
+        "route": route_info,
+        "rearrange": rearrange_info,
+        "use_retrieval": use_retrieval,
+        "sources": sources if use_retrieval else [],
+        "filter": meta.public() if meta else None,
+        "candidates": candidates,
+        "post_filter": post.public() if post else None,
+        "pipeline": list(trace),
+    }
+    yield sse("sources", sources_event)
 
     # 第 6 段生成閘門沒過：降級回應，不呼叫 LLM（不讓模型臆測，也不透露有文件但沒有權限）
     if post and post.degraded:
-        total_ms = round((time.perf_counter() - t0) * 1000)
-        message = post.gate.message or ""
-        yield sse("token", {"text": message})
-        jev_bytes = post.egress_bytes
-        done = {
-            "request_id": request_id,
-            "strategy_requested": strategy,
-            "strategy_used": strategy,
-            "model": "生成閘門（未呼叫 LLM）",
-            "fallback": False,
-            "fallback_reason": None,
-            "prompt_version": prompt_version(domain),
-            "use_retrieval": use_retrieval,
-            "latency_ms": {
-                "retrieval": retrieval_ms,
-                "first_token": None,
-                "generation": 0,
-                "total": total_ms,
-            },
-            "tokens": {"input": 0, "output": 0},
-            "cost_twd": 0.0,
-            "egress": {
-                **NO_EGRESS,
-                "chunks": post.cloud if post.calls else 0,
-                "bytes": jev_bytes,
-                "jev_bytes": jev_bytes,
-            },
-            "degraded": True,
-        }
-        yield sse("done", done)
-        get_logs_repo().add_chat_log(
-            {
-                "request_id": request_id,
-                "created_at": get_logs_repo().now(),
-                "artwork_id": artwork_id,
-                "part_id": part_id,
-                "question": question,
-                "strategy_requested": strategy,
-                "strategy_used": "gate",
-                "model": done["model"],
-                "prompt_version": done["prompt_version"],
-                "use_retrieval": int(use_retrieval),
-                "fallback": 0,
-                "retrieval_ms": retrieval_ms,
-                "first_token_ms": None,
-                "total_ms": total_ms,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "cost_twd": 0.0,
-                "egress_images": 0,
-                "egress_chunks": done["egress"]["chunks"],
-                "egress_bytes": jev_bytes,
-                "answer": message,
-            }
-        )
+        for e in finish_without_llm(
+            6,
+            post.gate.message or gcfg["degrade_message"],
+            "生成閘門（未呼叫 LLM）",
+            sources_event,
+            egress={"bytes": post.egress_bytes, "chunks": post.cloud if post.calls else 0},
+        ):
+            yield e
         return
 
-    # 3. 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
-    #    Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
-    #    縮圖省不到時間，模型反而看得比較模糊
+    # ------------------------------------------------------------ 第 7 段：本地 LLM 生成
+    # 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
+    # Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
+    # 縮圖省不到時間，模型反而看得比較模糊
     if image_id:
         image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
     elif domain == "mfg":
@@ -401,20 +530,24 @@ async def _chat_stream(
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["image"]["path"]))
     else:
         image_jpeg = None
+    # 關檢索對照組檢索出的段落只給前端比較，不交給生成端；引用編號也只能指向這裡的段落
+    given = sources if use_retrieval else []
     messages = build_messages(
-        question,
+        asked,
         artwork,
-        sources,
+        given,
         image_jpeg,
         use_retrieval,
         include_card=strategy != "api_nokb",
         domain=domain,
     )
 
-    # 4. 依 strategy 生成；失敗依本地備援鏈改走下一個
+    # 依 strategy 生成；失敗依本地備援鏈改走下一個。
+    # 回覆先在伺服器收齊：通過輸出檢查才送給使用者（不合規的原輸出不可以先流出去）
     chain = [strategy] + (FALLBACK_CHAIN.get(strategy, []) if allow_fallback else [])
     reasons: list[str] = []
-    answer, first_token_ms, provider = "", None, None
+    pieces: list[str] = []
+    first_token_ms, provider = None, None
     for current in chain:
         attempts = 1 + get_settings().retries
         for attempt in range(attempts):
@@ -423,18 +556,17 @@ async def _chat_stream(
                 async for piece in provider.stream(messages):
                     if first_token_ms is None:
                         first_token_ms = round((time.perf_counter() - t0) * 1000)
-                    text = to_taiwan(piece)
-                    answer += text
-                    yield sse("token", {"text": text})
+                    pieces.append(to_taiwan(piece))
                 break
             except ProviderUnavailable as e:
                 provider = None
                 # 連線失敗直接換下一個生成端（5 秒內改走備援）；逾時與 5xx 重試一次
-                if answer or not e.retryable or attempt == attempts - 1:
+                if pieces or not e.retryable or attempt == attempts - 1:
                     reasons.append(f"{current}：{e}")
                     break
-        if provider is not None or answer:  # 成功，或已輸出一半就不換生成端
+        if provider is not None or pieces:  # 成功，或已輸出一半就不換生成端
             break
+    answer = "".join(pieces)
     if provider is None or not answer:
         suspended = strategy in FALLBACK_CHAIN and allow_fallback and not answer
         message = "；".join(reasons) or "生成失敗"
@@ -450,7 +582,33 @@ async def _chat_stream(
         )
         return
 
-    # 5. 完成事件＋紀錄
+    # 第 7 段輸出檢查：未授權文件識別資訊、帳密／金鑰、個資、內部資料、被剔除段落的內容、無效引用
+    hidden = guard.hidden_terms(account, store.parts)
+    problems = guard.check_output(answer, given, hidden, post.flagged if post else [])
+    if problems:
+        guard.log_block(
+            7,
+            "輸出不合規（原輸出未送出）",
+            account,
+            f"違規：{'、'.join(problems)}；回覆雜湊 {guard.fingerprint(answer)}",
+            request_id,
+            "地端輸出檢查",
+        )
+        _stage(trace, 7, "block", "地端", f"輸出檢查沒過（{'、'.join(problems)}）→ 原輸出不送出")
+        for e in finish_without_llm(
+            7,
+            gcfg["output_blocked_message"],
+            f"{provider.model}（第 7 段輸出檢查擋下）",
+            sources_event,
+            egress={"bytes": post.egress_bytes if post else 0},
+        ):
+            yield e
+        return
+    _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過")
+    for piece in pieces:
+        yield sse("token", {"text": piece})
+
+    # 完成事件＋紀錄
     total_ms = round((time.perf_counter() - t0) * 1000)
     used = provider.strategy
     egress = dict(NO_EGRESS)
@@ -470,7 +628,7 @@ async def _chat_stream(
     }
     done = {
         "request_id": request_id,
-        "strategy_requested": strategy,
+        "strategy_requested": requested,
         "strategy_used": used,
         "model": provider.model,
         "fallback": used != strategy,
@@ -487,6 +645,7 @@ async def _chat_stream(
         "cost_twd": estimate_cost_twd(used, provider.usage),
         "egress": egress,
         "degraded": False,
+        "pipeline": list(trace),
     }
     yield sse("done", done)
     get_logs_repo().add_chat_log(
@@ -495,8 +654,8 @@ async def _chat_stream(
             "created_at": get_logs_repo().now(),
             "artwork_id": artwork_id,
             "part_id": part_id,
-            "question": question,
-            "strategy_requested": strategy,
+            "question": asked,
+            "strategy_requested": requested,
             "strategy_used": used,
             "model": provider.model,
             "prompt_version": done["prompt_version"],

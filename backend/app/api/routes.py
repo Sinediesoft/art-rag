@@ -10,7 +10,7 @@ from fastapi import APIRouter, File, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from app.agent import jev
+from app.agent import guard, jev
 from app.api import schemas as S
 from app.core.config import (
     REPO_ROOT,
@@ -189,14 +189,12 @@ def get_artwork_colormap(artwork_id: str):
     },
 )
 async def chat(body: S.ChatRequest, request: Request):
-    """圖文問答。工廠圖紙要看 JWT 的資料範圍：其他頁面看不到的回 403 DATA_SCOPE_DENIED；
-    智慧助理（post_filter）不透露，交給第 3 段 Metadata Filter 與第 6 段降級成「查無資料」。
-    放進 prompt 前先剔除有洩密風險的段落（docs/adr/015）。"""
+    """圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。
+    角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
+    （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。"""
     account = identity.current(request)
     if body.part_id:
-        part = _part_or_404(body.part_id)
-        if body.post_filter is None:
-            identity.require_part(account, part)
+        identity.require_domain(account, "mfg")
     stream = chat_service.chat_stream(
         question=body.question,
         request_id=request.state.request_id,
@@ -208,7 +206,8 @@ async def chat(body: S.ChatRequest, request: Request):
         part_id=body.part_id,
         rearrange=body.rearrange,
         account=account,
-        post_filter=body.post_filter,
+        route_ticket=body.route_ticket,
+        eval_mode=identity.eval_allowed(request),
     )
     return StreamingResponse(
         stream,
@@ -226,7 +225,7 @@ def _part_or_404(part_id: str) -> dict:
 
 
 def _visible_part(part_id: str, request: Request) -> dict:
-    """圖紙存在、而且目前身分看得到（資料範圍：領域＋機密等級）。"""
+    """圖紙存在、而且目前身分看得到（identity.can_view_part：領域＋機密等級＋部門）。"""
     p = _part_or_404(part_id)
     identity.require_part(identity.current(request), p)
     return p
@@ -234,11 +233,12 @@ def _visible_part(part_id: str, request: Request) -> dict:
 
 @router.get("/parts", response_model=S.PartListResponse, tags=["parts"])
 def list_parts(request: Request):
-    """只列目前身分看得到的圖紙（業務看不到機密圖紙；訪客不能使用工廠圖紙 → 403）。"""
+    """只列目前身分看得到的圖紙（機密等級＋部門）：業務看不到機密圖紙；
+    訪客不能使用工廠圖紙 → 403。"""
     account = identity.current(request)
     identity.require_domain(account, "mfg")
     store = get_store()
-    items = [p for p in store.parts if account.can_see(p["confidentiality"])]
+    items = [p for p in store.parts if identity.can_view_part(account, p)]
     return {
         "kb_version": store.manifest.get("kb_version", ""),
         "items": [search_service.part_summary(p) for p in items],
@@ -285,12 +285,17 @@ def get_part_model(part_id: str, ext: str, request: Request):
 
 
 def _scope_drawing_result(result: dict, account: identity.Account) -> dict:
-    """以圖搜圖紙的結果只留看得到的圖紙；照片辨識出的正是看不到的圖紙 → 403。"""
+    """以圖搜圖紙的結果只留看得到的圖紙（機密等級＋部門）；照片辨識出的正是看不到的圖紙 → 403。"""
+    store = get_store()
     if result["matched"]:
-        identity.require_part(account, get_store().get_part(result["best_part_id"]))
+        identity.require_part(account, store.get_part(result["best_part_id"]))
     return {
         **result,
-        "results": [r for r in result["results"] if account.can_see(r["part"]["confidentiality"])],
+        "results": [
+            r
+            for r in result["results"]
+            if identity.can_view_part(account, store.get_part(r["part"]["id"]))
+        ],
     }
 
 
@@ -321,10 +326,13 @@ def search_parts(
     q: str = Query(min_length=1, max_length=200),
     top_k: int | None = None,
 ):
-    """以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter）。"""
+    """以文字找圖紙：只檢索目前身分看得到的圖紙段落（Metadata Filter：機密等級＋部門）。"""
     account = identity.current(request)
     identity.require_domain(account, "mfg")
-    return search_service.search_parts_text(q, top_k, account.levels)
+    scope = guard.MetaFilter.of(account, "mfg")
+    return search_service.search_parts_text(
+        q, top_k, identity.visible_part_ids(account, get_store().parts), scope.text
+    )
 
 
 @router.post(
@@ -725,9 +733,8 @@ def schedule_run(run_id: str, request: Request):
 @router.post("/admin/production/reset", response_model=S.OkResponse, tags=["production"])
 def reset_production(request: Request):
     """展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
-    與五段防護的攔截紀錄（DEMO_CONTROLS=false 時停用；生管或主管才可以）。"""
-    if not get_settings().demo_controls:
-        raise AppError("FORBIDDEN", "展示控制已停用", 403)
+    與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/019）。"""
+    identity.require_demo(request, "展示還原")
     identity.require(identity.current(request), "demo_reset", "展示還原")
     schedule_service.reset()
     return S.OkResponse()
@@ -741,10 +748,9 @@ def memory_status():
 
 
 @router.post("/admin/memory/release", response_model=S.MemoryReleaseResponse, tags=["system"])
-def release_memory():
-    """展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型。"""
-    if not get_settings().demo_controls:
-        raise AppError("FORBIDDEN", "展示控制已停用", 403)
+def release_memory(request: Request):
+    """展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。"""
+    identity.require_demo(request, "手動釋放模型")
     g = memory_guard.guard
     event = g.check("手動釋放", set(g.current_models), force=True)
     return {"event": event, "status": g.status()}
@@ -810,16 +816,88 @@ def route_eval_runs():
     return {"runs": runs}
 
 
-@router.get("/health", response_model=S.HealthResponse, tags=["system"])
-async def health(response: Response):
-    # 即時狀態：禁止監控、代理或瀏覽器重用舊結果
-    response.headers["Cache-Control"] = "no-store"
-    s = get_settings()
-    cfg = get_models_config().strategies
+DEMO_WARNING = "展示模式已開啟：可以不用密碼切換任何身分，不可用於正式環境"
+
+
+def _index_problems() -> list[str]:
     store = get_store()
     problems = store.check_manifest(store.manifest) if store.manifest else ["索引未載入"]
     if store.manifest and not problems and current_kb_hash() != store.manifest.get("kb_hash"):
         problems.append("kb/ 內容已變更但尚未重建索引（請執行 make index）")
+    return problems
+
+
+@router.get("/health", response_model=S.HealthResponse, tags=["system"])
+async def health(response: Response):
+    """公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/019）。
+    最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。"""
+    # 即時狀態：禁止監控、代理或瀏覽器重用舊結果
+    response.headers["Cache-Control"] = "no-store"
+    s = get_settings()
+    problems = _index_problems()
+    db_ok = await run_in_threadpool(get_logs_repo().ping)
+    if s.llm_mode == "mock":
+        hybrid_ok = True
+    else:
+        hybrid_ok, _ = await providers.ping_ollama(s.hybrid_base_url)
+    return S.HealthResponse(
+        status="ok" if db_ok and not problems and hybrid_ok else "degraded",
+        ready=db_ok and not problems,
+        db=db_ok,
+        index_consistent=not problems,
+        kb_version=kb_version(),
+        demo_controls=s.demo_controls,
+        demo_warning=DEMO_WARNING if s.demo_controls else None,
+    )
+
+
+@router.get("/status", response_model=S.StatusResponse, tags=["system"])
+async def system_status(request: Request, response: Response):
+    """登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。
+    不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/019）。"""
+    response.headers["Cache-Control"] = "no-store"
+    d = await diagnostics_data(with_logs=False)
+    s = get_settings()
+    ok, _ = jev.status()
+    return S.StatusResponse(
+        status=d.status,
+        outage_simulated=d.outage_simulated,
+        demo_controls=identity.demo_allowed(request),
+        demo_warning=DEMO_WARNING if s.demo_controls else None,
+        eval_controls=identity.eval_allowed(request),
+        strategies={
+            k: S.StrategyBrief(
+                label=v.label,
+                model=v.model,
+                available=v.available,
+                detail="可以使用" if v.available else "目前無法使用",
+            )
+            for k, v in d.strategies.items()
+        },
+        memory=d.memory,
+        system1=S.System1Brief(
+            jev_configured=ok,
+            detail="已設定" if ok else "未設定或已停用：第 2、4～6 段改用地端規則",
+            model=s.jev_model,
+        ),
+    )
+
+
+@router.get("/admin/diagnostics", response_model=S.DiagnosticsResponse, tags=["system"])
+async def diagnostics(request: Request, response: Response):
+    """管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。
+    要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/019）。"""
+    identity.require_view(identity.current(request), "diagnostics", "系統診斷")
+    response.headers["Cache-Control"] = "no-store"
+    return await diagnostics_data()
+
+
+async def diagnostics_data(with_logs: bool = True) -> S.DiagnosticsResponse:
+    """with_logs=False（/status 用）：不查最近的問答、3D、SQL、路由紀錄。"""
+    s = get_settings()
+    cfg = get_models_config().strategies
+    store = get_store()
+    problems = _index_problems()
 
     hybrid_model = s.hybrid_model or cfg["hybrid"].default_model
     fallback_model = s.hybrid_fallback_model or cfg["hybrid_fallback"].default_model
@@ -882,7 +960,7 @@ async def health(response: Response):
     inv_ok = inv.ping()
     scheduler = await schedule_service.engine_status()
     memory = await asyncio.to_thread(memory_guard.guard.status)
-    return S.HealthResponse(
+    return S.DiagnosticsResponse(
         status="ok" if db_ok and not problems and hybrid_ok else "degraded",
         db=db_ok,
         index_consistent=not problems,
@@ -895,19 +973,20 @@ async def health(response: Response):
         allow_cloud=s.allow_cloud,
         outage_simulated=providers.OUTAGE["enabled"],
         demo_controls=s.demo_controls,
-        recent_chats=logs.recent_chats(10) if db_ok else [],
-        recent_cad=logs.recent_cad(10) if db_ok else [],
+        eval_controls=s.eval_controls,
+        recent_chats=logs.recent_chats(10) if db_ok and with_logs else [],
+        recent_cad=logs.recent_cad(10) if db_ok and with_logs else [],
         inventory={
             "ok": inv_ok,
             "as_of": inv.as_of,
             "tables": inv.manifest.get("tables", {}),
             "problems": inv.problems,
         },
-        recent_sql=logs.recent_sql(10) if db_ok else [],
+        recent_sql=logs.recent_sql(10) if db_ok and with_logs else [],
         scheduler=scheduler,
         memory=memory,
         system1=_system1_status(),
-        recent_routes=logs.recent_routes(10) if db_ok else [],
+        recent_routes=logs.recent_routes(10) if db_ok and with_logs else [],
     )
 
 
@@ -926,20 +1005,20 @@ def _system1_status() -> S.System1Status:
 
 
 @router.post("/admin/outage", response_model=S.OkResponse, tags=["system"])
-def simulate_outage(body: S.OutageRequest):
-    """展示用：模擬主推論伺服器斷線，本地備援模型不受影響（DEMO_CONTROLS=false 時停用）。"""
-    if not get_settings().demo_controls:
-        raise AppError("FORBIDDEN", "展示控制已停用", 403)
+def simulate_outage(body: S.OutageRequest, request: Request):
+    """展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/019）。"""
+    identity.require_demo(request, "模擬斷線")
     providers.OUTAGE["enabled"] = body.enabled
     return S.OkResponse()
 
 
 # ---------------------------------------------------------------- 智慧助理（docs/adr/011、015）
-def _accounts(auth: identity.Auth) -> dict:
+def _accounts(auth: identity.Auth, request: Request) -> dict:
     return {
         "current": auth.account.public(),
         "accounts": [a.public() for a in identity.accounts().values()],
-        "demo_controls": get_settings().demo_controls,
+        # 前端照這個決定要不要顯示切換身分：展示模式開啟而且是本機來的請求
+        "demo_controls": identity.demo_allowed(request),
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
         "token": auth.public(),
     }
@@ -947,15 +1026,16 @@ def _accounts(auth: identity.Auth) -> dict:
 
 @router.get("/auth/accounts", response_model=S.AccountsResponse, tags=["agent"])
 def list_accounts(request: Request, response: Response):
-    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客）的憑證，
-    放在 HttpOnly cookie；這是唯二不用憑證的端點之一（另一個是切換身分）。"""
-    return _accounts(identity.ensure(request, response))
+    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
+    放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。"""
+    return _accounts(identity.ensure(request, response), request)
 
 
 @router.post("/auth/switch", response_model=S.AccountsResponse, tags=["agent"])
 def switch_account(body: S.SwitchAccountRequest, request: Request, response: Response):
-    """展示版切換身分：簽發新的 JWT（不用密碼；DEMO_CONTROLS=false 時停用）。"""
-    return _accounts(identity.switch(request, response, body.account_id))
+    """展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
+    本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/019）。"""
+    return _accounts(identity.switch(request, response, body.account_id), request)
 
 
 @router.post("/agent/route", response_model=S.RouteResponse, tags=["agent"])
@@ -966,13 +1046,15 @@ async def agent_route(body: S.RouteRequest, request: Request):
     擋下就拒絕並記錄、閒聊快速短路回覆。"""
     if not body.question.strip() and not body.image_id:
         raise AppError("VALIDATION_ERROR", "請輸入一句話或附一張照片", 422)
+    # engine=local（只用地端規則）只在評估模式生效；其他情況由伺服器決定（docs/adr/019）
+    engine = body.engine if identity.eval_allowed(request) else "auto"
     return await agent_service.route(
         body.question,
         identity.auth_of(request),
         request.state.request_id,
         image_id=body.image_id,
         forced_intent=body.forced_intent,
-        engine=body.engine,
+        engine=engine,
     )
 
 
@@ -1025,21 +1107,30 @@ def return_approval(ap_no: str, body: S.ReturnRequest, request: Request):
 
 
 @router.get("/security/logs", response_model=S.SecurityLogsResponse, tags=["agent"])
-def security_logs(limit: int = Query(default=20, ge=1, le=200)):
+def security_logs(request: Request, limit: int = Query(default=20, ge=1, le=200)):
     """七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
-    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。"""
+    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
+    只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/019）。"""
+    identity.require_view(identity.current(request), "security_logs", "拒絕並記錄")
     repo = get_logs_repo()
     tz = timezone(timedelta(hours=8))
     midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
     counts = repo.count_security(midnight.astimezone(UTC).isoformat())
     return {
         "items": repo.recent_security(limit),
-        "today": {"rbac": counts.get(1, 0), "guard": counts.get(2, 0), "post": counts.get(4, 0)},
+        "today": {
+            "rbac": counts.get(1, 0),
+            "guard": counts.get(2, 0),
+            "post": counts.get(4, 0),
+            "output": counts.get(7, 0),
+        },
     }
 
 
 @router.get("/audit", response_model=S.AuditResponse, tags=["agent"])
-def audit_log(limit: int = Query(default=30, ge=1, le=200)):
-    """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。"""
+def audit_log(request: Request, limit: int = Query(default=30, ge=1, le=200)):
+    """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+    要 access.yaml 的 views.audit（docs/adr/019）。"""
+    identity.require_view(identity.current(request), "audit", "稽核紀錄")
     prod = get_production_repo()
     return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}

@@ -67,8 +67,15 @@ export const useTextSearch = (q: string | null) =>
     staleTime: 60_000,
   });
 
-export const useHealth = () =>
-  useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
+/** 畫面用的系統狀態（要 JWT）：服務能不能用、記憶體、展示模式（docs/adr/019） */
+export const useStatus = () =>
+  useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 5000 });
+
+/** 管理診斷（主管）：最近的問答、SQL、路由紀錄、模型端點與內部設定 */
+export const useDiagnostics = () => {
+  const enabled = useCanView("diagnostics");
+  return useQuery({ queryKey: ["diagnostics"], queryFn: api.diagnostics, refetchInterval: 5000, enabled });
+};
 
 export const useEvalRuns = () => useQuery({ queryKey: ["eval-runs"], queryFn: api.evalRuns });
 
@@ -170,11 +177,27 @@ export function useSwitchAccount() {
 export const useApprovals = () =>
   useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });
 
-export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit });
+/** 目前身分看不看得到某個管理與診斷畫面（access.yaml 的 views；後端一樣會擋，這裡只是不發會 403 的請求） */
+export function useCanView(view: "diagnostics" | "security_logs" | "audit") {
+  const { data } = useAccounts();
+  return !!data?.current.views?.includes(view);
+}
 
-/** 七段權限控管的拒絕並記錄（認證與授權、Jev Choice 擋下的請求，Jev Noul 剔除的洩密段落） */
-export const useSecurityLogs = (limit = 20) =>
-  useQuery({ queryKey: ["security-logs", limit], queryFn: () => api.securityLogs(limit), refetchInterval: 10_000 });
+export const useAudit = () => {
+  const enabled = useCanView("audit");
+  return useQuery({ queryKey: ["audit"], queryFn: api.audit, enabled });
+};
+
+/** 七段權限控管的拒絕並記錄（認證與授權、Jev Choice 擋下的請求、Jev Noul 剔除的洩密段落、輸出檢查） */
+export const useSecurityLogs = (limit = 20) => {
+  const enabled = useCanView("security_logs");
+  return useQuery({
+    queryKey: ["security-logs", limit],
+    queryFn: () => api.securityLogs(limit),
+    refetchInterval: 10_000,
+    enabled,
+  });
+};
 
 export const useRouteEvalRuns = () => useQuery({ queryKey: ["route-eval-runs"], queryFn: api.routeEvalRuns });
 

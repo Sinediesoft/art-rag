@@ -53,8 +53,18 @@ export interface SourcesEvent {
   filter?: MetaFilterInfo;
   /** 第 3 段檢索出的候選段落數（第 4 段過濾前） */
   candidates?: number;
-  /** 第 4～6 段：雙重驗證、評分重排、生成閘門（docs/adr/015）；關檢索時為 null */
+  /** 第 4～6 段：雙重驗證、評分重排、生成閘門（docs/adr/015）；關檢索或第 1、2 段就擋下時為 null */
   post_filter?: PostFilterInfo | null;
+  /** 可觀測軌跡：每一段執行了沒有、結果、由誰判斷（docs/adr/019）；sources 事件只到第 6 段 */
+  pipeline?: PipelineStage[];
+}
+
+export interface PipelineStage {
+  stage: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  name: string;
+  status: "pass" | "block" | "skip";
+  by: string;
+  detail: string;
 }
 
 export type MetaFilterInfo = Schemas["MetaFilterInfo"];
@@ -77,8 +87,8 @@ export interface GateInfo extends StageInfo {
 }
 
 export interface PostFilterInfo {
-  /** jev／local：智慧助理的第 4～6 段；scan：其他頁面，只用地端規則剔除有洩密風險的段落 */
-  mode: "jev" | "local" | "scan";
+  /** 第 4～6 段由誰判斷（伺服器決定）。2026-10-06 起每次問答都完整跑第 4～6 段，沒有只掃描的模式 */
+  mode: "jev" | "local";
   engine: "jev" | "local";
   candidates: number;
   kept: number;
@@ -91,9 +101,9 @@ export interface PostFilterInfo {
   local: number;
   /** 第 4 段 Jev Noul 雙重驗證（is_relevant／security_leak_check） */
   verify: StageInfo;
-  /** 第 5 段 Jev Score 評分重排（scan 模式沒有） */
+  /** 第 5 段 Jev Score 評分重排（最低分數、最多 3 段） */
   rerank: StageInfo | null;
-  /** 第 6 段生成閘門（scan 模式沒有） */
+  /** 第 6 段生成閘門 */
   gate: GateInfo | null;
   /** 不送 Jev 的段落由本地 Qwen3-VL 判斷 is_relevant（段落篩選開著才有；candidates ≤ 1 時沒有呼叫模型） */
   rearrange?: SourcesEvent["rearrange"];

@@ -66,7 +66,7 @@ const SOURCE_STYLE: Record<string, string> = {
 };
 
 /** 收錄後要重新抓的資料：清單、單筆、狀態頁（知識庫版本）、稽核紀錄 */
-const STALE = ["parts", "part", "artworks", "artwork", "health", "audit"];
+const STALE = ["parts", "part", "artworks", "artwork", "status", "diagnostics", "audit"];
 
 /**
  * 照片建檔（docs/adr/013）：拍照 → 擋模糊 → 確認知識庫還沒有 → 填欄位 → 主管收錄。

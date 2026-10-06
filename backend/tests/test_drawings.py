@@ -152,7 +152,7 @@ def test_reconstruct_stream_mock_returns_ground_truth(client):
     assert client.get("/api/v1/cad/jobs/cad_nope/model.step").status_code == 404
 
 
-def test_part_chat_uses_drawing_prompt(client):
+def test_part_chat_uses_drawing_prompt(client, all_chunks):
     r = client.post("/api/v1/chat", json={"question": "加工製程是什麼？", "part_id": "mfg-001"})
     events = parse_sse(r.text)
     sources = events[0][1]["sources"]
