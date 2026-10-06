@@ -36,6 +36,23 @@ PHOTO_BOOST: dict[str, dict[str, float]] = {
     "drawing": {"drawing_qa": 1.5, "drawing_search": 1.0, "reconstruct": 0.5},
 }
 
+COMPARE_PAIR_BOOST = 3.0
+COMPARE_ALONE_FACTOR = 0.3
+TWO_ITEMS = re.compile(r"兩(張|幅|件|個)|並排")
+
+
+def pair(entities: list[Entity]) -> tuple[str, list[str]] | None:
+    """句子裡有兩件以上同一類的作品（兩張圖紙，或兩幅畫／兩位畫家）
+    → (artwork|part, 依出現順序的 id)。兩類都有時以圖紙為準（機密側）。"""
+    parts = list(dict.fromkeys(e.id for e in entities if e.kind == "part"))
+    arts = list(dict.fromkeys(e.id for e in entities if e.kind in ("artwork", "artist")))
+    if len(parts) >= 2:
+        return "part", parts
+    if len(arts) >= 2:
+        return "artwork", arts
+    return None
+
+
 _lock = threading.Lock()
 
 
@@ -145,6 +162,15 @@ def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -
             logits[k] += w
     for k, w in PHOTO_BOOST.get(photo_kind or "", {}).items():
         logits[k] += w
+    if logits["compare"] > 0:
+        # 「比較連接法蘭和軸承座」：比較的字眼加上兩件同一類的作品，才是並排比較（docs/adr/017）；
+        # 沒有兩件（「這幅畫和同時代的作品相比」）多半是在問內容，比較的字眼只算一點
+        if pair(entities):
+            logits["compare"] += COMPARE_PAIR_BOOST
+        elif TWO_ITEMS.search(text):  # 「兩張圖紙並排比較」沒說是哪兩張，也是並排比較
+            logits["compare"] += COMPARE_PAIR_BOOST / 2
+        else:
+            logits["compare"] *= COMPARE_ALONE_FACTOR
     if write_hit and not question:
         # 祈使句又有修改動詞：「法蘭庫存改成 120」裡的「庫存」不代表要查詢
         logits = {k: (v + 1.0 if k == "modify" else v * 0.5) for k, v in logits.items()}

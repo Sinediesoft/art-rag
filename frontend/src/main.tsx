@@ -7,9 +7,11 @@ import "./index.css";
 import { AdminPage } from "./pages/AdminPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { ArtworkPage } from "./pages/ArtworkPage";
+import { BatchPage } from "./pages/BatchPage";
 import { ChatPage } from "./pages/ChatPage";
 import { ComparePage } from "./pages/ComparePage";
 import { IntakePage } from "./pages/IntakePage";
+import { ItemComparePage } from "./pages/ItemComparePage";
 import { InventoryPage } from "./pages/InventoryPage";
 import { PhotoDiffPage } from "./pages/PhotoDiffPage";
 import { SchedulePage } from "./pages/SchedulePage";
@@ -49,6 +51,8 @@ createRoot(document.getElementById("root")!).render(
             <Route path="approvals" element={<ApprovalsPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="photo-diff" element={<PhotoDiffPage />} />
+            <Route path="batch" element={<BatchPage />} />
+            <Route path="compare-items" element={<ItemComparePage />} />
             <Route path="admin" element={<AdminPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

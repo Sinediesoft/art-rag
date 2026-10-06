@@ -168,6 +168,49 @@ class ColorAnalysisSpec(BaseModel):
     chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
 
 
+class GuessTaskSpec(BaseModel):
+    """畫作卡推測的一欄：標籤 → 別名（別名只用來算標籤向量，不顯示）。"""
+
+    templates: list[str]
+    labels: dict[str, list[str]] = {}
+
+
+class StyleGroupSpec(BaseModel):
+    name: str
+    period: str
+    labels: dict[str, list[str]]
+
+
+class StyleTaskSpec(BaseModel):
+    templates: list[str]
+    groups: list[StyleGroupSpec]
+
+
+class StyleHeadSpec(BaseModel):
+    """畫作卡推測的線性分類頭（docs/adr/018「線性分類頭」）：列在 fields 的欄位改用
+    pipelines/train_style_head.py 訓練的多標籤分類頭
+    （Chinese-CLIP 照片向量 → 每個標籤 sigmoid＋各自的門檻）。"""
+
+    path: str  # 相對專案根目錄
+    fields: list[Literal["genre", "media"]] = []
+
+
+class StyleGuessSpec(BaseModel):
+    """畫作卡推測（docs/adr/018）：Chinese-CLIP 零樣本推測風格大類、題材、媒材
+    （head 列出的欄位改用線性分類頭）。不影響索引，改了不用重建。"""
+
+    method: str = "clip-zeroshot-v1"
+    temperature: float = 100
+    painting_min: float = 0.6
+    painting_prompts: list[str] = ["一幅畫"]
+    other_prompts: list[str] = ["一張生活照片"]
+    min_confidence: float = 0.4
+    style: StyleTaskSpec | None = None
+    genre: GuessTaskSpec | None = None
+    media: GuessTaskSpec | None = None
+    head: StyleHeadSpec | None = None
+
+
 class CompareSpec(BaseModel):
     """影像對位與比對（docs/adr/012），一個領域一份。不影響索引，改了不用重建。"""
 
@@ -235,6 +278,20 @@ class IntakeSpec(BaseModel):
     art: IntakeDomainSpec | None = None
 
 
+class BatchSpec(BaseModel):
+    """批次辨識（docs/adr/017）。模糊門檻沿用 intake.max_blur。不影響索引，改了不用重建。"""
+
+    max_images: int = 100  # 一批最多幾張（每張約 0.6 秒，100 張約 1 分鐘）
+
+
+class ItemCompareSpec(BaseModel):
+    """兩件並排比較的差異摘要（docs/adr/017）：只走本地生成端。不影響索引，改了不用重建。"""
+
+    prompt_version: str = "compare_v1"
+    max_tokens: int = 400
+    chunks_per_item: int = 3  # 每件作品放幾段知識段落進上下文
+
+
 class ModelsConfig(BaseModel):
     embeddings: dict[str, EmbeddingSpec]
     chunking: dict[str, int]
@@ -254,8 +311,11 @@ class ModelsConfig(BaseModel):
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
+    style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
     intake: IntakeSpec = IntakeSpec()
+    batch: BatchSpec = BatchSpec()
+    item_compare: ItemCompareSpec = ItemCompareSpec()
 
 
 @lru_cache

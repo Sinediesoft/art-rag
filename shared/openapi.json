@@ -159,6 +159,49 @@
         }
       }
     },
+    "/api/v1/images/{image_id}/style": {
+      "get": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Get Photo Style",
+        "description": "知識庫沒有這幅畫時的畫作卡：Chinese-CLIP 零樣本推測風格大類、題材、媒材（docs/adr/018）。\n只是推測、沒有出處，不寫進知識庫、不放進問答的 prompt。",
+        "operationId": "get_photo_style_api_v1_images__image_id__style_get",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StyleGuess"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/images/{image_id}/align": {
       "get": {
         "tags": [
@@ -932,6 +975,184 @@
             "description": "SSE：meta／token／result／done／error（見 shared/sse_events.md）",
             "content": {
               "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/batch/identify": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "summary": "Batch Identify",
+        "description": "一次辨識一批照片（典藏盤點、舊圖紙歸檔）。每張照片照資料範圍處理：\n看不到的圖紙那一列標「目前身分看不到」、不透露是哪一張，不讓整批失敗。",
+        "operationId": "batch_identify_api_v1_batch_identify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchIdentifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：每張照片一個 row，最後 done（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/compare/items": {
+      "get": {
+        "tags": [
+          "tools"
+        ],
+        "summary": "Compare Items",
+        "description": "兩幅畫或兩張圖紙並排比較：逐欄並排、標出不同、每格附出處；直接讀知識庫，不呼叫模型。\n圖紙照資料範圍（訪客不能用工廠圖紙、業務看不到機密圖紙 → 403）。",
+        "operationId": "compare_items_api_v1_compare_items_get",
+        "parameters": [
+          {
+            "name": "a",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(artwork|part):([a-z0-9][a-z0-9-]*)$",
+              "examples": [
+                "part:mfg-001"
+              ],
+              "title": "A"
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(artwork|part):([a-z0-9][a-z0-9-]*)$",
+              "examples": [
+                "part:mfg-002"
+              ],
+              "title": "B"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemComparison"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/compare/summary": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "summary": "Compare Summary",
+        "description": "兩件並排比較的差異摘要：本地生成端依比較表與兩邊的知識段落寫一段，每句附 [編號]。",
+        "operationId": "compare_summary_api_v1_compare_summary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareSummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SSE：sources／token／done／error（見 shared/sse_events.md）",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exports": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "summary": "Log Export",
+        "description": "前端匯出 CSV、比較表或問答報告時記一筆稽核（action＝匯出）。\n涉及的圖紙也要看得到：看不到的 id 不會出現在前端，出現了就是有人繞過畫面 → 403。",
+        "operationId": "log_export_api_v1_exports_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportAuditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
             }
           },
           "4XX": {
@@ -3626,6 +3847,40 @@
         ],
         "title": "AxisDay"
       },
+      "BatchIdentifyRequest": {
+        "properties": {
+          "image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Image Ids",
+            "description": "上傳的照片（POST /images），依序辨識；上限見 shared/models.yaml 的 batch.max_images"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "art",
+                  "mfg"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "art／mfg＝只跑該領域的辨識；null＝每張先交給領域路由判斷"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_ids"
+        ],
+        "title": "BatchIdentifyRequest"
+      },
       "BlockedInfo": {
         "properties": {
           "stage": {
@@ -4350,6 +4605,120 @@
         ],
         "title": "ColorAnalysis"
       },
+      "CompareRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "group": {
+            "type": "string",
+            "title": "Group",
+            "description": "分區：基本資料、典藏與授權、色彩分析、材料與表面、外形…"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "same": {
+            "type": "boolean",
+            "title": "Same",
+            "description": "兩邊相同（都沒有資料也算相同）"
+          },
+          "source_a": {
+            "$ref": "#/components/schemas/CompareSource"
+          },
+          "source_b": {
+            "$ref": "#/components/schemas/CompareSource"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "group",
+          "label",
+          "a",
+          "b",
+          "same",
+          "source_a",
+          "source_b"
+        ],
+        "title": "CompareRow"
+      },
+      "CompareSource": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "這一格的出處：知識庫 JSON、標準模型計算、色彩分析…"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url",
+            "description": "畫作的典藏頁（資料出處）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "CompareSource"
+      },
+      "CompareSummaryRequest": {
+        "properties": {
+          "a": {
+            "type": "string",
+            "pattern": "^(artwork|part):[a-z0-9][a-z0-9-]*$",
+            "title": "A",
+            "examples": [
+              "part:mfg-001"
+            ]
+          },
+          "b": {
+            "type": "string",
+            "pattern": "^(artwork|part):[a-z0-9][a-z0-9-]*$",
+            "title": "B",
+            "examples": [
+              "part:mfg-002"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "title": "CompareSummaryRequest"
+      },
       "ConstraintScore": {
         "properties": {
           "constraint": {
@@ -4679,6 +5048,54 @@
           "runs"
         ],
         "title": "EvalRunsResponse"
+      },
+      "ExportAuditRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "batch_csv",
+              "compare",
+              "qa_report"
+            ],
+            "title": "Kind"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Refs",
+            "description": "匯出內容涉及的畫作／圖紙 id（看得到的才會出現在前端）",
+            "default": []
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Rows",
+            "description": "CSV 列數、比較欄位數或問答則數",
+            "default": 0
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ExportAuditRequest",
+        "description": "前端匯出（CSV、比較表、問答報告）時記一筆稽核：檔案在瀏覽器裡產生，但匯出了哪些資料要留紀錄。"
       },
       "FeedbackRequest": {
         "properties": {
@@ -5684,8 +6101,8 @@
               {
                 "type": "string",
                 "enum": [
-                  "mfg",
-                  "art"
+                  "art",
+                  "mfg"
                 ]
               },
               {
@@ -5997,6 +6414,75 @@
           "columns"
         ],
         "title": "InventoryTable"
+      },
+      "ItemComparison": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "artwork",
+              "part"
+            ],
+            "title": "Kind"
+          },
+          "a": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "A",
+            "description": "ArtworkSummary 或 PartSummary，加上 ref（artwork:<id>／part:<id>）"
+          },
+          "b": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "B"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "公開",
+              "內部",
+              "機密"
+            ],
+            "title": "Level",
+            "description": "兩件裡最高的機密等級（匯出時印在頁首）"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/CompareRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "differences": {
+            "type": "integer",
+            "title": "Differences",
+            "description": "有資料、而且兩邊不同的欄位數"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "egress": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Egress",
+            "description": "外送資料量：表格直接讀知識庫，恆為 0"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "a",
+          "b",
+          "level",
+          "rows",
+          "differences",
+          "latency_ms",
+          "egress"
+        ],
+        "title": "ItemComparison"
       },
       "JevAnswerRow": {
         "properties": {
@@ -8070,6 +8556,22 @@
           "label": {
             "type": "string",
             "title": "Label"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "art",
+                  "mfg"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "領域路由判斷的領域；辨識不到（unknown）時用來分辨是沒收錄的畫作還是圖紙（畫作可以顯示畫作卡推測，docs/adr/018）"
           }
         },
         "type": "object",
@@ -9591,6 +10093,168 @@
           "detail"
         ],
         "title": "StrategyStatus"
+      },
+      "StyleCandidate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prob": {
+            "type": "number",
+            "title": "Prob",
+            "description": "這個標籤的機率 0–1（零樣本：同一欄所有標籤加總為 1；線性分類頭：每個標籤各自的機率）"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group",
+            "description": "風格才有：細分流派所屬的大類"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "prob"
+        ],
+        "title": "StyleCandidate"
+      },
+      "StyleField": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "style",
+              "genre",
+              "media"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "風格／題材／媒材"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "推測結果；風格是大類（同一大類的細分流派機率加總）"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period",
+            "description": "風格才有：大類的年代"
+          },
+          "prob": {
+            "type": "number",
+            "title": "Prob"
+          },
+          "uncertain": {
+            "type": "boolean",
+            "title": "Uncertain",
+            "description": "零樣本：機率低於 style_guess.min_confidence；線性分類頭：沒有任何標籤過各自的門檻。畫面上標「看不太出來」"
+          },
+          "also": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Also",
+            "description": "線性分類頭（多標籤）才有：name 之外也過了門檻的標籤，例如同時像油畫和蛋彩畫"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "zero_shot",
+              "head"
+            ],
+            "title": "Source",
+            "description": "zero_shot＝Chinese-CLIP 零樣本；head＝大都會館藏訓練的線性分類頭（style_guess.head）",
+            "default": "zero_shot"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/StyleCandidate"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "description": "前 3 名；風格是細分流派"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "name",
+          "prob",
+          "uncertain",
+          "candidates"
+        ],
+        "title": "StyleField"
+      },
+      "StyleGuess": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "is_painting": {
+            "type": "boolean",
+            "title": "Is Painting",
+            "description": "像不像畫作；不像（圖紙、文件、生活照）就不推測，fields 為空"
+          },
+          "painting_score": {
+            "type": "number",
+            "title": "Painting Score",
+            "description": "像畫作的程度 0–1，低於 style_guess.painting_min 視為不是畫作"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/StyleField"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "is_painting",
+          "painting_score",
+          "fields",
+          "summary",
+          "notes",
+          "latency_ms"
+        ],
+        "title": "StyleGuess"
       },
       "SwitchAccountRequest": {
         "properties": {

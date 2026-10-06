@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -28,7 +28,12 @@ help:
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
-	@echo "make eval-align  影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、畫作找不同、圖紙找不同、兩張照片互比的偵出率與假差異"
+	@echo "make eval-style  畫作卡推測評估（不用開後端、不用索引）：風格大類、細分流派、題材、媒材的正確率，「像畫作」把關擋下圖紙照片"
+	@echo "make eval-style-met 畫作卡推測＋大都會評估集（555 件，第一次會從 Met 開放 API 抓圖到 data/met_eval/，約 56 MB）：畫作 340 幅、雕塑陶瓷器物與老照片 215 件，門檻掃描"
+	@echo "make style-head  重訓畫作卡的媒材分類頭（大都會館藏 2,010 幅，第一次會抓圖約 215 MB）：輸出 shared/style_head_v1.npz 與和零樣本的比較；換 Chinese-CLIP 後要重跑"
+	@echo "make eval-versions 以圖搜圖「同系列、不同版本」評估（不用開後端、不用索引；第一次會從 Wikimedia Commons 抓 46 張圖到 data/version_eval/，連模擬照約 50 MB）：畫家的別版、習作、同系列有沒有被認成知識庫的畫，同一幅畫的實拍照認不認得出來"
+	@echo "make eval-met-photos 以圖搜圖「觀眾實拍照」評估（不用開後端、不用索引；第一次會抓 The Met Dataset 的照片與標註約 40 MB、館藏圖與 Flickr 原圖（存下來約 60 MB）到 data/，沒跑過 eval-style-met／style-head 的還要抓干擾項約 270 MB；算 2,467 幅的 CLIP 向量約 15 分鐘（之後有快取）、ORB 比對約 50 分鐘）：真實手機照認不認得出來、沒收錄的畫與器物會不會被認錯、知識庫變大時第一階段找不找得到"
+	@echo "make eval-align 影像對位與比對評估（不用開後端、不用索引）：畫作位置框誤差、畫作找不同、圖紙找不同、兩張照片互比的偵出率與假差異"
 	@echo "make demo-add    展示用：加入第 4、5 筆畫作（早春圖、睡蓮）與第 7 張圖紙（治具定位板，含庫存與途程）並重建索引"
 	@echo "make demo-reset  展示用：移除上述展示資料、清掉開立的工單、排程結果、智慧助理的異動與核准單，並重建索引"
 	@echo "make demo-test   展示前測試：查圖紙 → 開立工單 → 生產排程 → Text-to-SQL 查排程，逐步顯示記憶體與釋放的模型"
@@ -162,6 +167,31 @@ eval-router:
 # 色彩分析（docs/adr/010）：在程序內執行，不用開後端
 eval-color:
 	$(PY) eval/run_color_eval.py
+
+# 畫作卡推測（docs/adr/018）：在程序內執行，不用開後端、不用索引；正解在 eval/style_truth.json
+eval-style:
+	$(PY) eval/run_style_eval.py
+
+# 加跑大都會評估集（eval/met_set.json，Q-2026-10-04-04）：缺的圖從 Met 開放 API（CC0）補抓到 data/met_eval/
+# 要換一批或改正解的對應規則：$(PY) eval/make_met_set.py（重抽）／--relabel（只重算正解）
+eval-style-met:
+	$(PY) eval/run_style_eval.py --met
+
+# 畫作卡推測的線性分類頭（docs/adr/018「線性分類頭」）：eval/met_train.json（大都會館藏 2,010 幅，和評估集不重疊）
+# → shared/style_head_v1.npz＋eval/runs/*-style-head.json（和零樣本的比較）；缺的圖從 Met 補抓。換 Chinese-CLIP 要重跑
+style-head:
+	$(PY) pipelines/train_style_head.py
+
+# 以圖搜圖「同系列、不同版本」（docs/adr/002，Q-2026-10-04-05 第 2 項）：清單與正解在 eval/version_set.json，
+# 缺的圖從 Wikimedia Commons 補抓到 data/version_eval/（不 commit）。改 image_threshold、verify_min_inliers 時要跑
+eval-versions:
+	$(PY) eval/run_version_eval.py
+
+# 以圖搜圖「觀眾實拍照」（docs/adr/002，Q-2026-10-04-06）：The Met Dataset 的 Met queries（觀眾在大都會拍的照片）。
+# 清單與正解在 eval/met_photo_set.json（重做：$(PY) eval/make_met_photo_set.py）；照片、館藏圖、向量都在 data/（不 commit）。
+# 改 image_threshold、verify_min_inliers、verify_top_n，或知識庫變大時要跑
+eval-met-photos:
+	$(PY) eval/run_met_photo_eval.py
 
 # 影像對位與比對（docs/adr/012）：在程序內執行，不用開後端；照片由 eval/make_align_photos.py 產生（已附在 repo）
 eval-align:

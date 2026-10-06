@@ -486,3 +486,98 @@ export function streamIntake(imageId: string, domain: "mfg" | "art", h: IntakeHa
     signal,
   );
 }
+
+// ---- 批次辨識（POST /batch/identify，docs/adr/017）
+export type BatchStatus = "matched" | "not_in_kb" | "blurry" | "hidden" | "error";
+
+export interface BatchItem {
+  kind: "artwork" | "part";
+  id: string;
+  label: string;
+  detail: string;
+  url: string;
+  level: string;
+}
+
+export interface BatchRow {
+  index: number;
+  image_id: string;
+  domain: "art" | "mfg" | null;
+  route: { domain: "art" | "mfg"; margin: number; uncertain: boolean } | null;
+  blur: number | null;
+  status: BatchStatus;
+  /** 認得時：比對到的畫作或圖紙 */
+  item: BatchItem | null;
+  /** 不在知識庫時：最相近、但沒通過驗證的那一件（看不到的圖紙不會出現） */
+  closest: BatchItem | null;
+  score: number | null;
+  inliers: number | null;
+  overlap: number | null;
+  note: string | null;
+  latency_ms: number;
+}
+
+export interface BatchDone {
+  request_id: string;
+  total: number;
+  counts: Record<BatchStatus, number>;
+  domains: { art: number; mfg: number };
+  latency_ms: { total: number; per_image: number };
+  egress: { images: number; chunks: number; bytes: number };
+}
+
+export interface BatchHandlers {
+  onRow?: (r: BatchRow) => void;
+  onDone?: (d: BatchDone) => void;
+  onError?: (e: ErrorEvent) => void;
+}
+
+export function streamBatch(
+  imageIds: string[],
+  domain: "art" | "mfg" | null,
+  h: BatchHandlers,
+  signal?: AbortSignal,
+) {
+  return streamSSE(
+    "/batch/identify",
+    { image_ids: imageIds, domain },
+    { row: h.onRow, done: h.onDone, error: h.onError },
+    signal,
+  );
+}
+
+// ---- 兩件並排比較的差異摘要（POST /compare/summary，docs/adr/017）
+export interface CompareSource {
+  ref: number;
+  chunk_id: string;
+  side: "甲" | "乙";
+  title: string;
+  topic: string;
+  text: string;
+  source_url: string | null;
+  source_label: string | null;
+  license: string | null;
+}
+
+export interface CompareSummaryHandlers {
+  onSources?: (e: { request_id: string; kind: string; sources: CompareSource[]; dropped: number }) => void;
+  onToken?: (text: string) => void;
+  onDone?: (e: {
+    request_id: string;
+    model: string;
+    strategy_used: string;
+    fallback: boolean;
+    prompt_version: string;
+    latency_ms: { first_token: number | null; total: number };
+  }) => void;
+  onError?: (e: ErrorEvent) => void;
+}
+
+export function streamCompareSummary(a: string, b: string, h: CompareSummaryHandlers, signal?: AbortSignal) {
+  return streamSSE(
+    "/compare/summary",
+    { a, b },
+    { sources: h.onSources, token: (d) => h.onToken?.(d.text), done: h.onDone, error: h.onError },
+    signal,
+  );
+}

@@ -1,0 +1,13 @@
+{
+  "_說明": "畫作卡推測（docs/adr/018）的正解。key 是知識庫畫作 id 或 eval/photos/unknown 的檔名；每欄列可接受的答案（第一個是最佳答案），風格分大類（style_group）與細分流派（style）。eval/photos/known 的模擬照沿用原畫作的正解。",
+  "aic-27992": {"title": "秀拉〈大碗島的星期天下午〉", "style_group": ["印象派一脈"], "style": ["新印象派"], "genre": ["風俗畫"], "media": ["油畫"]},
+  "met-436535": {"title": "梵谷〈有絲柏的麥田〉", "style_group": ["印象派一脈"], "style": ["後印象派"], "genre": ["風景畫"], "media": ["油畫"]},
+  "npm-000001": {"title": "范寬〈谿山行旅圖〉", "style_group": ["中國傳統繪畫"], "style": ["中國傳統繪畫"], "genre": ["山水畫"], "media": ["水墨畫"]},
+  "aic-16568": {"title": "莫內〈睡蓮〉", "style_group": ["印象派一脈"], "style": ["印象派"], "genre": ["風景畫"], "media": ["油畫"]},
+  "npm-000002": {"title": "郭熙〈早春圖〉", "style_group": ["中國傳統繪畫"], "style": ["中國傳統繪畫"], "genre": ["山水畫"], "media": ["水墨畫"]},
+  "unknown-01": {"title": "葛飾北齋〈神奈川沖浪裏〉", "style_group": ["日本浮世繪"], "style": ["浮世繪"], "genre": ["海景畫", "風景畫"], "media": ["木刻版畫"]},
+  "unknown-02": {"title": "老彼得．布勒哲爾〈收割者〉", "style_group": ["文藝復興"], "style": ["北方文藝復興"], "genre": ["風俗畫", "風景畫"], "media": ["油畫"]},
+  "unknown-03": {"title": "梵谷〈亞爾的臥室〉", "style_group": ["印象派一脈"], "style": ["後印象派"], "genre": ["室內畫"], "media": ["油畫"]},
+  "unknown-04": {"title": "卡玉伯特〈巴黎街道，雨天〉", "style_group": ["印象派一脈", "新古典、浪漫與寫實主義"], "style": ["印象派", "寫實主義"], "genre": ["城市街景", "風俗畫"], "media": ["油畫"]},
+  "unknown-05": {"title": "李唐〈萬壑松風圖〉", "style_group": ["中國傳統繪畫"], "style": ["中國傳統繪畫"], "genre": ["山水畫"], "media": ["水墨畫"]}
+}

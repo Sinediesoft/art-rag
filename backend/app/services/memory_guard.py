@@ -47,6 +47,8 @@ FLOWS: dict[str, str] = {
     "route": "智慧助理路由",
     "intake": "照片建檔",
     "intake_index": "照片建檔：重建索引",
+    "batch_identify": "批次辨識",
+    "compare_summary": "兩件並排比較：差異摘要",
     "manual": "手動釋放",
 }
 

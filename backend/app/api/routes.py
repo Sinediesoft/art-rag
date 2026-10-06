@@ -30,6 +30,7 @@ from app.repositories.logs_repo import get_logs_repo
 from app.repositories.production_repo import get_production_repo
 from app.services import (
     agent_service,
+    batch_service,
     cad_service,
     change_service,
     chat_service,
@@ -37,10 +38,12 @@ from app.services import (
     compare_service,
     identity,
     intake_service,
+    item_compare_service,
     memory_guard,
     schedule_service,
     search_service,
     sql_service,
+    style_service,
 )
 
 router = APIRouter(prefix="/api/v1", responses={"4XX": {"model": S.ErrorResponse}})
@@ -80,6 +83,13 @@ def get_photo_colors(image_id: str):
 @router.get("/images/{image_id}/colormap.png", response_class=Response, tags=["images"])
 def get_photo_colormap(image_id: str):
     return Response(color_service.photo_colormap(image_id), media_type="image/png")
+
+
+@router.get("/images/{image_id}/style", response_model=S.StyleGuess, tags=["images"])
+def get_photo_style(image_id: str):
+    """知識庫沒有這幅畫時的畫作卡：Chinese-CLIP 零樣本推測風格大類、題材、媒材（docs/adr/018）。
+    只是推測、沒有出處，不寫進知識庫、不放進問答的 prompt。"""
+    return style_service.photo_style(image_id)
 
 
 _TARGET = Query(
@@ -347,6 +357,101 @@ async def reconstruct(body: S.ReconstructRequest, request: Request):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）
+@router.post(
+    "/batch/identify",
+    tags=["tools"],
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE：每張照片一個 row，最後 done（見 shared/sse_events.md）",
+        }
+    },
+)
+async def batch_identify(body: S.BatchIdentifyRequest, request: Request):
+    """一次辨識一批照片（典藏盤點、舊圖紙歸檔）。每張照片照資料範圍處理：
+    看不到的圖紙那一列標「目前身分看不到」、不透露是哪一張，不讓整批失敗。"""
+    account = identity.current(request)
+    limit = get_models_config().batch.max_images
+    if len(body.image_ids) > limit:
+        n = len(body.image_ids)
+        raise AppError("VALIDATION_ERROR", f"一批最多 {limit} 張（這批 {n} 張）", 422)
+    if body.domain == "mfg":
+        identity.require_domain(account, "mfg")
+    stream = batch_service.batch_stream(
+        body.image_ids, body.domain, account, request.state.request_id
+    )
+    return StreamingResponse(
+        stream,
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/compare/items", response_model=S.ItemComparison, tags=["tools"])
+def compare_items(
+    request: Request,
+    a: str = Query(pattern=item_compare_service.REF_PATTERN, examples=["part:mfg-001"]),
+    b: str = Query(pattern=item_compare_service.REF_PATTERN, examples=["part:mfg-002"]),
+):
+    """兩幅畫或兩張圖紙並排比較：逐欄並排、標出不同、每格附出處；直接讀知識庫，不呼叫模型。
+    圖紙照資料範圍（訪客不能用工廠圖紙、業務看不到機密圖紙 → 403）。"""
+    return item_compare_service.table(a, b, identity.current(request))
+
+
+@router.post(
+    "/compare/summary",
+    tags=["tools"],
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "content": {"text/event-stream": {}},
+            "description": "SSE：sources／token／done／error（見 shared/sse_events.md）",
+        }
+    },
+)
+async def compare_summary(body: S.CompareSummaryRequest, request: Request):
+    """兩件並排比較的差異摘要：本地生成端依比較表與兩邊的知識段落寫一段，每句附 [編號]。"""
+    stream = item_compare_service.summary_stream(
+        body.a, body.b, identity.current(request), request.state.request_id
+    )
+    first = await anext(stream)  # 權限、找不到在這裡就丟 AppError（回 4xx，不是串流裡的 error）
+    return StreamingResponse(
+        _prepend(first, stream),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _prepend(first: str, rest):
+    yield first
+    async for e in rest:
+        yield e
+
+
+@router.post("/exports", response_model=S.OkResponse, tags=["tools"])
+def log_export(body: S.ExportAuditRequest, request: Request):
+    """前端匯出 CSV、比較表或問答報告時記一筆稽核（action＝匯出）。
+    涉及的圖紙也要看得到：看不到的 id 不會出現在前端，出現了就是有人繞過畫面 → 403。"""
+    account = identity.current(request)
+    store = get_store()
+    for ref in body.refs:
+        if (p := store.get_part(ref)) is not None:
+            identity.require_part(account, p)
+    labels = {"batch_csv": "批次辨識 CSV", "compare": "兩件並排比較", "qa_report": "問答報告"}
+    unit = {"batch_csv": "列", "compare": "欄", "qa_report": "則"}[body.kind]
+    get_production_repo().add_audit(
+        {"actor_id": account.id, "actor_label": account.label, "action": "匯出",
+         "op": f"export_{body.kind}", "ref_no": ",".join(body.refs[:5]) or None,
+         "summary": f"匯出{labels[body.kind]}" + (f"〈{body.title}〉" if body.title else "")
+         + f"（{body.rows} {unit}）",
+         "detail": {"refs": body.refs, "rows": body.rows},
+         "request_id": request.state.request_id}
+    )  # fmt: skip
+    return S.OkResponse()
 
 
 # ---------------------------------------------------------------- 照片建檔（docs/adr/013）
@@ -656,7 +761,9 @@ def eval_runs():
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
-        # 五段防護第 2 段（-guard）、影像比對（-align）與照片建檔（-intake）的評估另有格式
+        # 五段防護第 2 段（-guard）、影像比對（-align）、照片建檔（-intake）、
+        # 畫作卡推測（-style、線性分類頭的訓練報告 -style-head）
+        # 與以圖搜圖同系列不同版本（-versions）、觀眾實拍照（-met-photos）的評估另有格式
         if not p.name.endswith(
             (
                 "-cad.json",
@@ -668,6 +775,10 @@ def eval_runs():
                 "-guard.json",
                 "-align.json",
                 "-intake.json",
+                "-style.json",
+                "-style-head.json",
+                "-versions.json",
+                "-met-photos.json",
             )
         ):
             runs.append(json.loads(p.read_text(encoding="utf-8")))

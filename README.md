@@ -22,6 +22,7 @@ security_leak_check）→ ⑤ **Jev Score** 評分重排（最多 3 段）→ �
 照片 ─► 領域路由（與畫作／圖紙原型比 CLIP 相似度，MMed-RAG 的領域辨識）─► 畫作走下一行、圖紙走「工廠圖紙」那行
 照片 ─► 前處理（EXIF 轉正、1024px）─► Chinese-CLIP 粗篩 ─► ORB 幾何驗證 ─► 辨識結果／「知識庫中沒有這幅畫」
 照片／畫作 ─► 色彩分析（CIELAB k-means 主色、冷暖、明度／彩度、色塊分布圖；建索引時算好並寫成可引用的段落）
+辨識失敗（畫作）─► 畫作卡推測（同一個 Chinese-CLIP 零樣本：風格大類＋年代、題材、媒材；標明推測、沒有出處，不進知識庫與 prompt；不像畫作就不推測）
 辨識成功 ─► 影像對位（ORB 單應矩陣）─► 畫作：原圖上框出拍到的範圍，比形狀與顏色標出不同的地方｜圖紙：拉正後比三視圖線條，標出和知識庫圖紙不同的地方
 兩張照片（同一幅畫、同光線）─► 對齊 ─► 比形狀（SSIM）與顏色（Lab 色差）─► 標出修復前後、真跡與複製品不同的地方
 問題 ─► bge-m3 ─► 只取該畫作段落（門檻＋最多 5 段；比較／背景題才從全庫補足）
@@ -177,6 +178,7 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 1c | 兩張照片互比 | 輸入框 📷 附 `eval/align_photos/pair/aic-27992__tint-1__A.jpg` 送出 → 回答下方「和另一張照片比對」（附的這張就是照片 A）→ 照片 B 上傳同名的 `__B.jpg`（中間一塊補了顏色）：標出 1 處「顏色不同」；換成 `__same-1__` 那組則是「形狀和顏色都一致」 | 修復前後、真跡與複製品（同光線各拍一張，ADR 012 第 3 步） |
 | 2 | 拒答 | 附李唐〈萬壑松風圖〉（`eval/photos/unknown/unknown-05.jpg`）：對話回「比對不到」→「看照片辨識細節」：CLIP 相似度 0.96 仍判定「知識庫中沒有這幅畫」 | 拒答率 ≥ 80% |
 | 2b | 沒收錄也能分析色彩 | 第 2 步的辨識細節頁往下捲：「色彩分析（依你的照片）」——色盤、冷暖、明度／彩度、色塊分布圖 | 對應圖紙的「沒收錄也能重建 3D」 |
+| 2c | 沒收錄也能推測風格 | 第 2 步的對話回覆裡（辨識細節頁也有）「畫作卡（推測）」：〈萬壑松風圖〉推測為宋元明清的中國傳統繪畫、山水畫、水墨畫；再附 `eval/photos/unknown/unknown-03.jpg`（梵谷〈亞爾的臥室〉）：大類「印象派一脈」對、細分卻是新印象派，媒材標「看不太出來」 | 借鑒 ArtSeek 的畫作卡：不硬湊答案，但給標明沒有出處的推測（ADR 018） |
 | 3 | 圖文問答 | 第 1 步的回答下方「繼續問這幅畫」→ 點建議問題；點 [1] 標籤看出處；問「當年賣了多少錢？」看它說不知道 | 引用正確率、防幻覺 |
 | 3b | 色彩分析 | 「打開〈谿山行旅圖〉」畫作頁的「色彩分析」：點色票看色塊分布圖；再到問答頁問「這幅畫主要用了哪些顏色？」，[n] 的出處是「系統計算」 | 數字交給計算、不靠模型目測 |
 | 4 | 以文搜圖 | 輸入「水邊草地上撐陽傘的人群」→ 對話裡列前 3 名，「看完整搜尋結果」看全部 | 中文以文搜圖 |
@@ -200,6 +202,13 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 15 | 擴充 | `make demo-add` 同時加入第 7 張圖紙〈治具定位板〉，重新整理就辨識得出 | 新增圖紙不改程式 |
 | 15b | 照片建檔 | （身分切成「生管」）輸入框 📷 附 `eval/drawing_photos/unknown/unknown-03__glare.jpg`（〈皮帶輪輪轂〉，知識庫沒有）送出 → 辨識不到，回答下方「拍照建檔：這是一張圖紙」：看清晰度、拉正、Qwen3-VL 逐字抄標題欄 → 跳出的表單對照照片確認（讀錯直接改）、補「類別」「負責單位」→ 切到「主管」按「收錄」→ 約 2 分鐘後再上傳 `unknown-03__tilt.jpg` 就辨識得出 | 模型讀、規則驗、人確認；糊照（`*__blur.jpg`）直接請重拍；收錄只有主管能按（ADR 013）。展示完刪 `kb/parts`、`kb/drawings` 裡那一張再 `make index` |
 | 15c | 畫作照片建檔 | 輸入框 📷 附 `eval/photos/unknown/unknown-01.jpg`（〈神奈川沖浪裏〉，知識庫沒有）送出 → 回答下方「拍照建檔：這是一幅畫」：表單自動跳出 → 填畫名、作者、年代、典藏單位（The Met → ID 自動帶 `met-…`）、典藏頁網址、授權 → 主管收錄 → 約 1.5 分鐘後換一張同一幅畫的照片就辨識得出；上傳 `eval/photos/known/*__blur.jpg` 直接被擋 | 畫作不讀展牌（館方著作）、資料由人填；圖紙與畫作同一個模糊門檻。展示完刪 `kb/artworks`、`kb/images` 裡那一筆再 `make index` |
+
+### 兩個領域共用的小工具：批次辨識、並排比較、匯出報告（約 4 分鐘，ADR 017）
+| # | 步驟 | 操作 | 看點 |
+|---|---|---|---|
+| 15d | 批次辨識 | （身分「主管」）說「批次辨識一批照片」→「打開批次辨識」→ 一次選 `eval/photos/known/aic-27992__glare.jpg`、`npm-000001__dim.jpg`、`met-436535__blur.jpg`、`eval/photos/unknown/unknown-01.jpg`、`eval/drawing_photos/known/mfg-002__glare.jpg`、`eval/drawing_photos/unknown/unknown-02__dim.jpg` → 結果一列一列出現 → 匯出 CSV | 畫作典藏盤點、圖紙歸檔同一個頁面；糊照標「太模糊」不硬判；「不在知識庫」那一列直接拍照建檔。切成「業務・甲」再跑一次：機密的〈連接法蘭〉只標「看不到」 |
+| 15e | 並排比較 | 說「比較連接法蘭和步進馬達安裝板」→ 對話裡先列不同的欄位 →「看完整比較表、差異摘要與匯出」→ 按「請本地模型寫一段」→ 匯出報告；再說「有絲柏的麥田跟谿山行旅圖有什麼不同」 | 每格附出處（知識庫、典藏頁、標準模型計算、色彩分析）；兩張圖紙有一張機密時報告頁首印「機密」；業務比較同一句 → 降級「查無資料」 |
+| 15f | 匯出報告 | 任一則問答下方「匯出報告」，或問答頁上方「匯出整段問答」（畫作是導覽講稿、圖紙是檢驗紀錄草稿）→「列印／存成 PDF」 | 單一 HTML 檔、圖片內嵌；[編號] 連到引用段落全文、授權、出處；三種匯出都記一筆稽核（系統狀態的稽核紀錄看得到「匯出」） |
 
 ### 工廠庫存 Text-to-SQL（約 3 分鐘）
 
@@ -314,6 +323,42 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 2026-10-01 起 `eval/qa.jsonl` 多了 3 題顏色題（已收錄的 3 幅畫從 16 題變成 19 題），所以上表（16 題）和之後
 `make eval` 的數字不能直接比較。
 
+### 以圖搜圖：同系列、不同版本（`make eval-versions`）
+
+不用開後端、不用索引。同一位畫家畫好幾版的作品，觀眾拍到別館的那一版時，系統不能回答「這是知識庫裡的那幅」。
+清單與正解在 `eval/version_set.json`（Wikimedia Commons 46 張：梵谷〈麥田〉的倫敦版與小版、秀拉〈大碗島〉的習作、
+莫內同系列的〈睡蓮〉，以及這三幅原作本身的展場實拍），第一次跑會抓圖到 `data/version_eval/`（連模擬照約 50 MB）。
+2026-10-04 在我的筆電上的結果（run_id `20261004T125357-dc7a`，細節見 ADR 002 文末）：
+
+| | 張數（含模擬照） | 結果 |
+|---|---|---|
+| 畫家的別版、習作、同系列 | 143 | 0 張被認成知識庫的畫（CLIP 全部過門檻，inlier 最多 10） |
+| 同一幅畫的其他照片 | 43 | 41 張認得出來（inlier 最少 158）；局部近拍、前面擠滿觀眾的各 1 張回「知識庫中沒有這幅畫」 |
+
+### 以圖搜圖：觀眾實拍照、知識庫變大（`make eval-met-photos`）
+
+不用開後端、不用索引。用 The Met Dataset 的觀眾實拍照（觀眾在大都會用手機拍的照片，標了拍到哪件館藏）量真實照片認不認得出來，
+並把評估用知識庫從 3 幅放大到 2,467 幅（大都會的畫，只在記憶體裡、不進 `kb/`），看 CLIP 粗篩還找不找得到正解。
+清單與正解在 `eval/met_photo_set.json`（重做：`eval/make_met_photo_set.py`）。第一次跑會抓：
+- Met Dataset 的照片與標註（約 40 MB），從 `ptak.felk.cvut.cz` 抓；官網 `cmp.felk.cvut.cz` 從筆電連不上；
+- 館藏圖與 Flickr 原圖到 `data/met_photo/`；Flickr 連抓一百多張會限流，遇到就先用 500 px 版，下次再跑會補抓；
+- 沒跑過 `eval-style-met`／`style-head` 的話，另外抓干擾項約 270 MB。
+
+2,467 幅的 CLIP 向量第一次要算約 15 分鐘，之後有快取；ORB 比對約 50 分鐘。
+2026-10-05 在我的筆電上的結果（run_id `20261004T165452-a7ba`，門檻照舊、已加退化 homography 檢查，細節見 ADR 002 文末）：
+
+| | 張數 | 知識庫 3 幅 | 知識庫 2,467 幅 |
+|---|---|---|---|
+| 一般觀眾的照片（Flickr 原圖） | 160 | 認對 86% | 認對 71%，認錯 0 |
+| 研究團隊刻意拍難的照片 | 46 | 認對 59% | 認對 41%，認錯 0 |
+| 未收錄：拿掉正解、器物雕塑 | 366＋926 | — | 0 張被認錯 |
+
+- 知識庫小的時候，認不出來的都是 ORB 對不上：局部近拍、屏風、手卷、朦朧的畫。
+- 知識庫上百幅以後 CLIP 開始漏（2,467 幅時正解在前 3 名的只剩 79%），`verify_top_n` 要調到 10–20。
+- 畫框上重複的花紋曾讓不相干的畫對上 65–79 個點（退化的 homography），已在幾何驗證擋掉
+  （`shared/models.yaml` 的 `verify_min_det`、`verify_max_persp`、`verify_min_spread`）。
+  加上之後，各種知識庫大小、`verify_top_n` 3–20 都沒有認錯（之前最多 0.6%）。
+
 ### 色彩分析（`make eval-color`）
 
 不用開後端，要先 `make index`；約 20 秒。2026-10-01 在學校電腦（CPU）上的結果
@@ -327,6 +372,54 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 | 顏色題取到色彩段落 | 3/3 |
 | 其他題混進色彩段落／段落被擠掉 | 2/16 題；有段落被擠掉 2 題（被擠掉的段落都不屬於該題主題，與主題相關 0 題） |
 | 延遲 P50／P95 | 248／326 ms（評估時 demo 後端也開著，P95 隨負載有出入：三次跑從 452 降到 326 ms，取收錄的那一次） |
+
+### 畫作卡推測（`make eval-style`）
+
+不用開後端、不用索引（要有 Chinese-CLIP）；約 1 分鐘。正解在 `eval/style_truth.json`。
+2026-10-04 在 Windows 筆電（CPU）上的結果（run_id `20261004T054442-dad2`，細節見 ADR 018）：
+
+| 指標 | 原圖 10 幅（其中知識庫外 5 幅） | 模擬照 25 張 |
+|---|---|---|
+| 風格大類第一名 | 10/10（5/5） | 23/25 |
+| 細分流派第一名／前三名 | 7/10／10/10 | 18/25／25/25 |
+| 題材第一名 | 10/10（5/5） | 25/25 |
+| 媒材第一名 | 9/10（4/5） | 22/25 |
+| 錯了卻沒標「看不太出來」 | 0 | 風格 2、媒材 2 |
+| 圖紙照片被擋下（不推測） | 65/65 | |
+
+細分流派分不清印象派／新印象派／後印象派，畫面以大類為主；正解只有 10 幅畫，數字只能說明方向。
+
+`make eval-style-met` 另跑大都會評估集：從 Met 開放 API（CC0）抽的 340 幅畫、215 件雕塑、陶瓷、器物與老照片。
+清單與正解在 `eval/met_set.json`，第一次跑會抓圖到 `data/met_eval/`（約 56 MB）。
+題材、媒材依館方的畫面標籤與媒材欄；歐洲繪畫沒有流派標籤，只評大類和年代對不對得上。
+2026-10-04 依這份資料替把關補了「雕塑、陶瓷器物、古代器物、老照片」4 句提示，媒材「濕壁畫」拿掉別名「壁畫」
+（run_id `20261004T073634-f8f5`，改之前的數字與細節見 ADR 018）：
+
+| 指標 | 結果 |
+|---|---|
+| 畫作通過把關 | 312/340（擋下的多是象牙、羊皮紙上的肖像微型畫） |
+| 雕塑、陶瓷、器物被擋下 | 184/190（改之前 148；歐洲雕塑 4/30 → 28/30） |
+| 老照片被擋下 | 22/25（改之前 14） |
+| 風格大類（中國畫＋浮世繪） | 115/119 |
+| 大類和年代對得上（歐洲繪畫） | 143/192 |
+| 題材第一名 | 150/192 |
+| 媒材第一名 | 222/298（改之前 213/304，最大的錯是老油畫被判成濕壁畫） |
+| 領域路由 | 555 件全部分到畫作 |
+
+**媒材改用線性分類頭**（`make style-head`）：
+- 訓練資料：大都會館藏 2,010 幅（`eval/met_train.json`，和評估集不重疊；第一次跑會抓圖約 215 MB）。
+- 方法：用 Chinese-CLIP 照片向量，每種媒材一個 logistic regression，門檻依 F0.5 調，可以同時列出兩種。
+- 權重檔：`shared/style_head_v1.npz`（42 KB），換 Chinese-CLIP 要重跑。
+- 題材也試過，但館方沒有「風俗畫」「城市街景」標籤，自己的 35 張從 35 掉到 18，所以題材維持零樣本。
+
+和零樣本的比較見 run `20261004T085950-8644`，上線後的結果是 run `20261004T092015-481a`（細節見 ADR 018）：
+
+| 媒材第一名（錯了卻沒標「看不太出來」） | 零樣本 | 分類頭 |
+|---|---|---|
+| 大都會評估集（過了把關的） | 222/298（67） | 291/298（5） |
+| 大都會評估集做成的模擬照（不經過把關） | 240/305（51） | 290/305（9） |
+| 自己的原圖 10 幅 | 9/10（0） | 9/10（0） |
+| 自己的模擬照 25 張 | 22/25（2） | 25/25（0） |
 
 ### 影像對位與比對（`make eval-align`）
 
@@ -437,7 +530,7 @@ MacBook Air 無風扇，連續運算數分鐘後降頻到約 15–18 token/s（�
 
 ### 智慧助理路由（`make eval-route`）
 
-`eval/route_qa.jsonl` 44 句中文（與 `shared/agent.yaml` 的範例句完全不重複），對執行中的後端呼叫 `/agent/route`。
+`eval/route_qa.jsonl` 51 句中文（與 `shared/agent.yaml` 的範例句完全不重複），對執行中的後端呼叫 `/agent/route`。
 2026-10-02 起要交給哪個模組一律由本地分流判斷（ADR 014、015），`--engines local,jev` 比較第 2 段由誰判斷；
 每題先切換成做得了這件事的身分，讓第 1 段角色授權不擋。
 指標：意圖正確率、直接處理率（不必再問）、修改誤判（查詢↔修改，代價最高）、修改操作正確率、第 2 段誤擋、
@@ -450,7 +543,10 @@ MacBook Air 無風扇，連續運算數分鐘後降頻到約 15–18 token/s（�
 | 2026-10-02 | Jev（jev-1.13.0） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0 | 73 ms | 303 ms | 53 KB（每句約 1.2 KB） |
 | 2026-10-03 | 地端規則（七段，ADR 015） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0（誤短路 0） | 65 ms | 0 ms | 0 B |
 | 2026-10-03 | Jev Choice（jev-1.13.0） | 100%（44/44） | 95% | 0 | 100%（11/11） | 0（誤短路 0） | 73 ms | 260 ms | 53 KB |
+| 2026-10-04 | 地端規則（加批次辨識、並排比較，ADR 017） | 100%（51/51） | 96% | 0 | 100%（11/11） | 0（誤短路 0） | 149 ms | 0 ms | 0 B |
 
+10/4 加了兩個意圖與 7 句（r45–r51），第一次跑 98%（50/51）：「這幅畫和同時代的作品相比有什麼特色」判成並排比較；
+改成「比較的字眼要配上兩件同一類的作品（或說了兩張、兩幅、並排）才加分，否則只算 0.3 倍」後 100%。分流 p50 變慢是因為同時開了兩個後端、bge-m3 被記憶體管理釋放後重新載入。
 10/1 第一次跑是 93%（41/44），依錯的三題補關鍵字與「只有名稱就出澄清按鈕」規則後才到 100%，數字偏樂觀；需要再加沒看過的句子。
 10/2 套用五段防護時，第一次跑 Jev 把「工單都重新排一次」判成修改資料而誤擋 1 題，改成「耗時工作與修改資料之間不一致只提醒」後為 0。
 同日修了本地分流把畫名當成畫面描述的問題（「有絲柏的麥田收藏在哪裡？」原本判成以文搜畫）。
@@ -504,7 +600,8 @@ art-rag/
 ├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
 │   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）、
 │   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）、
-│   │                     page（照片建檔：清晰度、找紙張四角拉正、對齊標題欄外框、去陰影）
+│   │                     page（照片建檔：清晰度、找紙張四角拉正、對齊標題欄外框、去陰影）、
+│   │                     style（畫作卡推測：Chinese-CLIP 零樣本推測風格大類、題材、媒材）
 │   ├── rag/           C  embedders（Chinese-CLIP、bge-m3）、router（領域路由）、verify（ORB＋線條重合）、prompt、providers、textproc
 │   ├── cad/           C  drawing（三視圖產生器）、sandbox／runner（CadQuery 沙箱）、metrics（IoU）、preprocess
 │   ├── rag/text2sql   C  庫存 Text-to-SQL：prompt、SQL 擷取與靜態檢查；執行在 repositories/inventory_repo（唯讀＋白名單）
@@ -512,14 +609,16 @@ art-rag/
 │   ├── services/memory_guard  記憶體管理：超過 80% 時釋放目前流程用不到的模型
 │   ├── agent/         C  智慧助理：guard（七段權限控管：個資遮蔽、角色授權、Jev Choice、Jev Noul／Score、生成閘門、拒絕並記錄）、entities（代號化）、jev、local_router（本地分流）、gate（信心閘門）、extract（參數抽取）
 │   ├── services/change_service  修改資料流程：權限判定、試算、額度、確認寫入、主管核准（repositories/data_changes 白名單操作）
-│   └── services/intake_service  照片建檔：讀標題欄、規則驗證、草稿（data/intake/）、主管收錄寫 kb/ 並重建索引
+│   ├── services/intake_service  照片建檔：讀標題欄、規則驗證、草稿（data/intake/）、主管收錄寫 kb/ 並重建索引
+│   ├── services/batch_service   批次辨識：逐張擋模糊、領域路由＋辨識、依資料範圍標「看不到」（SSE）
+│   └── services/item_compare_service  兩件並排比較：逐欄並排與出處、本地模型的差異摘要（SSE）
 ├── scheduler/         C  Timefold Solver 排程服務（Java 21、Maven）：domain/（機台、工序、影子變數）、solver/（限制條件）
-├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py
+├── pipelines/         C  build_index.py（make index）、build_inventory.py（make inventory）、bump_version.py、make_drawings.py、setup_ortho2cad.py、setup_scheduler.py、reset_production.py、import_sqlite_logs.py、train_style_head.py（make style-head）
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
-├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_demo_test.py、runs/
+├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_version_eval.py（＋version_set.json 同系列不同版本）、make_met_photo_set.py＋run_met_photo_eval.py（＋met_photo_set.json 觀眾實拍照）、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
 ├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
-├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md
+├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md、style_head_v1.npz（畫作卡媒材的線性分類頭）
 ├── docs/adr/          技術決策紀錄
 └── .github/workflows/ CI：知識庫、lint、型別、單元測試、openapi 同步、前端建置
 ```

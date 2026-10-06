@@ -42,3 +42,10 @@
 {"id": "r42", "question": "推薦我一部好看的電影", "intent": "out_of_scope"}
 {"id": "r43", "question": "法蘭", "intent": "drawing_search", "gate": "clarify"}
 {"id": "r44", "question": "軸承座", "intent": "drawing_search", "gate": "clarify"}
+{"id": "r45", "question": "館藏盤點要怎麼開始", "intent": "batch_identify"}
+{"id": "r46", "question": "想一次辨識好幾張圖紙照片", "intent": "batch_identify"}
+{"id": "r47", "question": "把舊圖紙歸檔，對回料號", "intent": "batch_identify"}
+{"id": "r48", "question": "立式軸承座跟 T 型槽螺帽差在哪", "intent": "compare"}
+{"id": "r49", "question": "谿山行旅圖和大碗島的星期天下午比一比", "intent": "compare"}
+{"id": "r50", "question": "梵谷和秀拉的作品有何不同", "intent": "compare"}
+{"id": "r51", "question": "這幅畫和同時代的作品相比有什麼特色", "intent": "art_qa"}

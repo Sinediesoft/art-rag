@@ -161,6 +161,52 @@ class ColorAnalysis(BaseModel):
     latency_ms: int = Field(description="計算耗時；知識庫畫作為建索引時算好的，回 0")
 
 
+# ---------------------------------------------------------------- 畫作卡推測（docs/adr/018）
+class StyleCandidate(BaseModel):
+    name: str
+    prob: float = Field(
+        description="這個標籤的機率 0–1"
+        "（零樣本：同一欄所有標籤加總為 1；線性分類頭：每個標籤各自的機率）"
+    )
+    group: str | None = Field(None, description="風格才有：細分流派所屬的大類")
+
+
+class StyleField(BaseModel):
+    key: Literal["style", "genre", "media"]
+    label: str = Field(description="風格／題材／媒材")
+    name: str = Field(description="推測結果；風格是大類（同一大類的細分流派機率加總）")
+    period: str | None = Field(None, description="風格才有：大類的年代")
+    prob: float
+    uncertain: bool = Field(
+        description="零樣本：機率低於 style_guess.min_confidence；"
+        "線性分類頭：沒有任何標籤過各自的門檻。畫面上標「看不太出來」"
+    )
+    also: list[str] = Field(
+        default_factory=list,
+        description="線性分類頭（多標籤）才有：name 之外也過了門檻的標籤，例如同時像油畫和蛋彩畫",
+    )
+    source: Literal["zero_shot", "head"] = Field(
+        "zero_shot",
+        description="zero_shot＝Chinese-CLIP 零樣本；"
+        "head＝大都會館藏訓練的線性分類頭（style_guess.head）",
+    )
+    candidates: list[StyleCandidate] = Field(description="前 3 名；風格是細分流派")
+
+
+class StyleGuess(BaseModel):
+    method: str
+    is_painting: bool = Field(
+        description="像不像畫作；不像（圖紙、文件、生活照）就不推測，fields 為空"
+    )
+    painting_score: float = Field(
+        description="像畫作的程度 0–1，低於 style_guess.painting_min 視為不是畫作"
+    )
+    fields: list[StyleField]
+    summary: str
+    notes: list[str]
+    latency_ms: int
+
+
 # ---------------------------------------------------------------- 影像對位與比對（docs/adr/012）
 class AlignTarget(BaseModel):
     kind: Literal["artwork", "part", "image"] = Field(
@@ -944,6 +990,11 @@ class RoutePhoto(BaseModel):
     kind: Literal["art", "drawing", "unknown"]
     id: str | None
     label: str
+    domain: Literal["art", "mfg"] | None = Field(
+        None,
+        description="領域路由判斷的領域；辨識不到（unknown）時用來分辨是沒收錄的畫作還是圖紙"
+        "（畫作可以顯示畫作卡推測，docs/adr/018）",
+    )
 
 
 class GuardCheck(BaseModel):
@@ -1315,3 +1366,64 @@ class IntakeUpdate(BaseModel):
 
 
 HealthResponse.model_rebuild()
+
+
+# ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）
+class BatchIdentifyRequest(BaseModel):
+    image_ids: list[str] = Field(
+        min_length=1,
+        description="上傳的照片（POST /images），依序辨識；"
+        "上限見 shared/models.yaml 的 batch.max_images",
+    )
+    domain: Literal["art", "mfg"] | None = Field(
+        default=None, description="art／mfg＝只跑該領域的辨識；null＝每張先交給領域路由判斷"
+    )
+
+
+class CompareSource(BaseModel):
+    label: str = Field(description="這一格的出處：知識庫 JSON、標準模型計算、色彩分析…")
+    url: str | None = Field(default=None, description="畫作的典藏頁（資料出處）")
+
+
+class CompareRow(BaseModel):
+    key: str
+    group: str = Field(description="分區：基本資料、典藏與授權、色彩分析、材料與表面、外形…")
+    label: str
+    a: str | None
+    b: str | None
+    same: bool = Field(description="兩邊相同（都沒有資料也算相同）")
+    source_a: CompareSource
+    source_b: CompareSource
+
+
+class ItemComparison(BaseModel):
+    kind: Literal["artwork", "part"]
+    a: dict = Field(
+        description="ArtworkSummary 或 PartSummary，加上 ref（artwork:<id>／part:<id>）"
+    )
+    b: dict
+    level: Literal["公開", "內部", "機密"] = Field(
+        description="兩件裡最高的機密等級（匯出時印在頁首）"
+    )
+    rows: list[CompareRow]
+    differences: int = Field(description="有資料、而且兩邊不同的欄位數")
+    latency_ms: int
+    egress: dict[str, int] = Field(description="外送資料量：表格直接讀知識庫，恆為 0")
+
+
+class CompareSummaryRequest(BaseModel):
+    a: str = Field(pattern=r"^(artwork|part):[a-z0-9][a-z0-9-]*$", examples=["part:mfg-001"])
+    b: str = Field(pattern=r"^(artwork|part):[a-z0-9][a-z0-9-]*$", examples=["part:mfg-002"])
+
+
+class ExportAuditRequest(BaseModel):
+    """前端匯出（CSV、比較表、問答報告）時記一筆稽核：檔案在瀏覽器裡產生，但匯出了哪些資料要留紀錄。"""
+
+    kind: Literal["batch_csv", "compare", "qa_report"]
+    refs: list[str] = Field(
+        default=[],
+        max_length=200,
+        description="匯出內容涉及的畫作／圖紙 id（看得到的才會出現在前端）",
+    )
+    rows: int = Field(default=0, ge=0, description="CSV 列數、比較欄位數或問答則數")
+    title: str | None = Field(default=None, max_length=200)

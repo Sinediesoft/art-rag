@@ -1,0 +1,5285 @@
+{
+  "run_id": "20261004T165147-b160",
+  "created_at": "2026-10-04T16:53:15.873327+00:00",
+  "config": {
+    "image_threshold": 0.7,
+    "verify_min_inliers": 20,
+    "verify_top_n": 3,
+    "set": "Wikimedia Commons（commons.wikimedia.org），2026-10-04 挑選"
+  },
+  "summary": {
+    "all": {
+      "same": {
+        "n": 43,
+        "recognized": 41,
+        "inliers": {
+          "min": 0,
+          "median": 483,
+          "max": 1242
+        },
+        "clip": {
+          "min": 0.6718,
+          "median": 0.9449,
+          "max": 0.9982
+        }
+      },
+      "versions": {
+        "n": 143,
+        "false_accepts": 0,
+        "clip_passed": 143,
+        "inliers": {
+          "min": 0,
+          "median": 0,
+          "max": 10
+        },
+        "clip": {
+          "min": 0.7702,
+          "median": 0.9185,
+          "max": 0.9683
+        }
+      }
+    },
+    "by_target": {
+      "met-436535": {
+        "same": {
+          "n": 18,
+          "recognized": 18,
+          "inliers": {
+            "min": 158,
+            "median": 464.5,
+            "max": 689
+          },
+          "clip": {
+            "min": 0.9133,
+            "median": 0.9531,
+            "max": 0.9784
+          }
+        },
+        "versions": {
+          "n": 57,
+          "false_accepts": 0,
+          "clip_passed": 57,
+          "inliers": {
+            "min": 0,
+            "median": 0,
+            "max": 6
+          },
+          "clip": {
+            "min": 0.7702,
+            "median": 0.9255,
+            "max": 0.9683
+          }
+        }
+      },
+      "aic-27992": {
+        "same": {
+          "n": 6,
+          "recognized": 4,
+          "inliers": {
+            "min": 0,
+            "median": 545.5,
+            "max": 654
+          },
+          "clip": {
+            "min": 0.6718,
+            "median": 0.9029,
+            "max": 0.9433
+          }
+        },
+        "versions": {
+          "n": 37,
+          "false_accepts": 0,
+          "clip_passed": 37,
+          "inliers": {
+            "min": 0,
+            "median": 0,
+            "max": 10
+          },
+          "clip": {
+            "min": 0.8003,
+            "median": 0.8624,
+            "max": 0.9359
+          }
+        }
+      },
+      "aic-16568": {
+        "same": {
+          "n": 19,
+          "recognized": 19,
+          "inliers": {
+            "min": 223,
+            "median": 504,
+            "max": 1242
+          },
+          "clip": {
+            "min": 0.8575,
+            "median": 0.9475,
+            "max": 0.9982
+          }
+        },
+        "versions": {
+          "n": 49,
+          "false_accepts": 0,
+          "clip_passed": 49,
+          "inliers": {
+            "min": 0,
+            "median": 0,
+            "max": 4
+          },
+          "clip": {
+            "min": 0.8381,
+            "median": 0.9324,
+            "max": 0.9647
+          }
+        }
+      }
+    },
+    "by_relation": {
+      "same": {
+        "n": 43,
+        "ok": 41,
+        "inliers": {
+          "min": 0,
+          "median": 483,
+          "max": 1242
+        },
+        "clip": {
+          "min": 0.6718,
+          "median": 0.9449,
+          "max": 0.9982
+        }
+      },
+      "replica": {
+        "n": 45,
+        "ok": 45,
+        "inliers": {
+          "min": 0,
+          "median": 0,
+          "max": 6
+        },
+        "clip": {
+          "min": 0.8626,
+          "median": 0.9277,
+          "max": 0.9683
+        }
+      },
+      "study": {
+        "n": 43,
+        "ok": 43,
+        "inliers": {
+          "min": 0,
+          "median": 0,
+          "max": 10
+        },
+        "clip": {
+          "min": 0.7702,
+          "median": 0.859,
+          "max": 0.9359
+        }
+      },
+      "series": {
+        "n": 49,
+        "ok": 49,
+        "inliers": {
+          "min": 0,
+          "median": 0,
+          "max": 4
+        },
+        "clip": {
+          "min": 0.8381,
+          "median": 0.9324,
+          "max": 0.9647
+        }
+      },
+      "motif": {
+        "n": 6,
+        "ok": 6,
+        "inliers": {
+          "min": 0,
+          "median": 0.0,
+          "max": 0
+        },
+        "clip": {
+          "min": 0.9019,
+          "median": 0.9177,
+          "max": 0.9353
+        }
+      }
+    },
+    "photos_only": {
+      "same": {
+        "n": 13,
+        "recognized": 11,
+        "inliers": {
+          "min": 0,
+          "median": 580,
+          "max": 1225
+        },
+        "clip": {
+          "min": 0.6718,
+          "median": 0.9322,
+          "max": 0.991
+        }
+      },
+      "versions": {
+        "n": 5,
+        "false_accepts": 0,
+        "clip_passed": 5,
+        "inliers": {
+          "min": 0,
+          "median": 0,
+          "max": 8
+        },
+        "clip": {
+          "min": 0.8474,
+          "median": 0.9262,
+          "max": 0.9631
+        }
+      }
+    },
+    "failures": [
+      {
+        "id": "gj-aic-05",
+        "variant": "實拍",
+        "relation": "same",
+        "work": "芝加哥藝術博物館的原作（局部：狗）",
+        "clip": 0.8573,
+        "inliers": 0,
+        "predicted": null
+      },
+      {
+        "id": "gj-aic-06",
+        "variant": "實拍",
+        "relation": "same",
+        "work": "芝加哥藝術博物館的原作（前面有觀眾）",
+        "clip": 0.6718,
+        "inliers": 8,
+        "predicted": null
+      }
+    ]
+  },
+  "rows": [
+    {
+      "id": "vg-met-01",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9615,
+      "inliers": 681,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9615,
+          "inliers": 681
+        },
+        "aic-27992": {
+          "clip": 0.7769,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8392,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-02",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9237,
+      "inliers": 689,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9237,
+          "inliers": 689
+        },
+        "aic-27992": {
+          "clip": 0.7773,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8038,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-03",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9322,
+      "inliers": 580,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9322,
+          "inliers": 580
+        },
+        "aic-27992": {
+          "clip": 0.7823,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8125,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-04",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9549,
+      "inliers": 622,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9549,
+          "inliers": 622
+        },
+        "aic-27992": {
+          "clip": 0.771,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8294,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-05",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9141,
+      "inliers": 560,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9141,
+          "inliers": 560
+        },
+        "aic-27992": {
+          "clip": 0.7835,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8145,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-06",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "photo",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9423,
+      "inliers": 458,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9423,
+          "inliers": 458
+        },
+        "aic-27992": {
+          "clip": 0.7675,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8259,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9772,
+      "inliers": 382,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9772,
+          "inliers": 382
+        },
+        "aic-27992": {
+          "clip": 0.7913,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.838,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9597,
+      "inliers": 363,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9597,
+          "inliers": 363
+        },
+        "aic-27992": {
+          "clip": 0.7815,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8456,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9711,
+      "inliers": 366,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9711,
+          "inliers": 366
+        },
+        "aic-27992": {
+          "clip": 0.7873,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8354,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9514,
+      "inliers": 197,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9514,
+          "inliers": 197
+        },
+        "aic-27992": {
+          "clip": 0.771,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8369,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9784,
+      "inliers": 367,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9784,
+          "inliers": 367
+        },
+        "aic-27992": {
+          "clip": 0.7962,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8436,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-07",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9514,
+      "inliers": 390,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9514,
+          "inliers": 390
+        },
+        "aic-27992": {
+          "clip": 0.7903,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.822,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9712,
+      "inliers": 496,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9712,
+          "inliers": 496
+        },
+        "aic-27992": {
+          "clip": 0.7925,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8436,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9449,
+      "inliers": 475,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9449,
+          "inliers": 475
+        },
+        "aic-27992": {
+          "clip": 0.7628,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.818,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9705,
+      "inliers": 458,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9705,
+          "inliers": 458
+        },
+        "aic-27992": {
+          "clip": 0.7866,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8366,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9133,
+      "inliers": 158,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9133,
+          "inliers": 158
+        },
+        "aic-27992": {
+          "clip": 0.7595,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8428,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9724,
+      "inliers": 483,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9724,
+          "inliers": 483
+        },
+        "aic-27992": {
+          "clip": 0.8004,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8471,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-met-08",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "same",
+      "kind": "repro",
+      "work": "大都會版（F717，1889 年 6 月）",
+      "clip": 0.9351,
+      "inliers": 471,
+      "threshold": 0.7,
+      "predicted": "met-436535",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9351,
+          "inliers": 471
+        },
+        "aic-27992": {
+          "clip": 0.7817,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8073,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9637,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9637,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7806,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8352,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9378,
+      "inliers": 6,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9378,
+          "inliers": 6
+        },
+        "aic-27992": {
+          "clip": 0.7607,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8082,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9203,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9203,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7526,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8096,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.8988,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8988,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.777,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8263,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9683,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9683,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7889,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8403,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-01",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9292,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9292,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7762,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8239,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.958,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.958,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.7767,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8318,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9265,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9265,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.7601,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8312,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9289,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9289,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7533,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8154,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9131,
+      "inliers": 6,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9131,
+          "inliers": 6
+        },
+        "aic-27992": {
+          "clip": 0.7716,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8204,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9677,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9677,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7854,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8356,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-02",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9146,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9146,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.764,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8085,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9369,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9369,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7712,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8151,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.947,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.947,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7803,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8346,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9465,
+      "inliers": 4,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9465,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.7867,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8311,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9268,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9268,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7945,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8489,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9426,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9426,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7808,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8275,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-03",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9177,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9177,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.781,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8035,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9171,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9171,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.76,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8067,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.909,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.909,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7596,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8141,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.8626,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8626,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.7059,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7462,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9284,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9284,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7887,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8403,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9148,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9148,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7641,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8083,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-04",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.8692,
+      "inliers": 6,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8692,
+          "inliers": 6
+        },
+        "aic-27992": {
+          "clip": 0.7317,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7549,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9357,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9357,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7721,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8199,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9417,
+      "inliers": 4,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9417,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.7712,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8231,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9255,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9255,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7757,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8156,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9197,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9197,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7883,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8327,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9356,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9356,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7785,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8267,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-05",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9157,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9157,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.7806,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8156,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9267,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9267,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7515,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8211,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9143,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9143,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7455,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.821,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.914,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.914,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7569,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8161,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9114,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9114,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7854,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8503,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9456,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9456,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7813,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8349,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-06",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9069,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9069,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.7653,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8162,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-07",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "photo",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9234,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9234,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.782,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8102,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-08",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "photo",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9277,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9277,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7702,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8079,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-ng-09",
+      "variant": "實拍",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "photo",
+      "work": "倫敦國家藝廊版（F615，1889 年 9 月）",
+      "clip": 0.9631,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9631,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7934,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8381,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9345,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9345,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7927,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8107,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9438,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9438,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.792,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8172,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9458,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9458,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7997,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8292,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9286,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9286,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8052,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8218,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9391,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9391,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8125,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8255,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-f743",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "replica",
+      "kind": "repro",
+      "work": "私人收藏的小版（F743，1889 年 9 月）",
+      "clip": 0.9157,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9157,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8085,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8086,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7955,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7955,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7307,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7427,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7702,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7702,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7448,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7751,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7751,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7128,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7248,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7796,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7796,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.6997,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.729,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7779,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7779,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7326,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7512,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-drawing",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "study",
+      "kind": "repro",
+      "work": "梵谷美術館的蘆葦筆素描（1889 年 6 月）",
+      "clip": 0.7794,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7794,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7288,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.739,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "原圖",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9334,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9334,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.782,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8405,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "tilt",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9132,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9132,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7675,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8386,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "glare",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9192,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9192,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8062,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.829,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "crop",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9019,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9019,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7948,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8531,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "dim",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9353,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9353,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7886,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8395,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "vg-prague",
+      "variant": "blur",
+      "target": "met-436535",
+      "relation": "motif",
+      "kind": "repro",
+      "work": "〈有絲柏的綠色麥田〉（布拉格國家美術館，1889 年 6 月）",
+      "clip": 0.9161,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.9161,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7721,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.821,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "gj-aic-01",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作",
+      "clip": 0.9201,
+      "inliers": 541,
+      "threshold": 0.7,
+      "predicted": "aic-27992",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7742,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9201,
+          "inliers": 541
+        },
+        "aic-16568": {
+          "clip": 0.7423,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-aic-02",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作",
+      "clip": 0.9433,
+      "inliers": 623,
+      "threshold": 0.7,
+      "predicted": "aic-27992",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7731,
+          "inliers": 5
+        },
+        "aic-27992": {
+          "clip": 0.9433,
+          "inliers": 623
+        },
+        "aic-16568": {
+          "clip": 0.7579,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-aic-03",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作",
+      "clip": 0.8856,
+      "inliers": 550,
+      "threshold": 0.7,
+      "predicted": "aic-27992",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7098,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8856,
+          "inliers": 550
+        },
+        "aic-16568": {
+          "clip": 0.7033,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-aic-04",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作",
+      "clip": 0.9354,
+      "inliers": 654,
+      "threshold": 0.7,
+      "predicted": "aic-27992",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7639,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9354,
+          "inliers": 654
+        },
+        "aic-16568": {
+          "clip": 0.735,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "gj-aic-05",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作（局部：狗）",
+      "clip": 0.8573,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": false,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7252,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8573,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7151,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-aic-06",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的原作（前面有觀眾）",
+      "clip": 0.6718,
+      "inliers": 8,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": false,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.5984,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.6718,
+          "inliers": 8
+        },
+        "aic-16568": {
+          "clip": 0.5817,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9359,
+      "inliers": 10,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8384,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.9359,
+          "inliers": 10
+        },
+        "aic-16568": {
+          "clip": 0.8092,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9257,
+      "inliers": 10,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8119,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9257,
+          "inliers": 10
+        },
+        "aic-16568": {
+          "clip": 0.7934,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9226,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8157,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9226,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7864,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8979,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8418,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8979,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8534,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9248,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8442,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9248,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8078,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-01",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.881,
+      "inliers": 7,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7731,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.881,
+          "inliers": 7
+        },
+        "aic-16568": {
+          "clip": 0.7514,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9103,
+      "inliers": 6,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.862,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9103,
+          "inliers": 6
+        },
+        "aic-16568": {
+          "clip": 0.8252,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.904,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8001,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.904,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7921,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9017,
+      "inliers": 7,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.819,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9017,
+          "inliers": 7
+        },
+        "aic-16568": {
+          "clip": 0.7991,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8822,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8601,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8822,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8336,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9149,
+      "inliers": 6,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8593,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9149,
+          "inliers": 6
+        },
+        "aic-16568": {
+          "clip": 0.8224,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-02",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8632,
+      "inliers": 9,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7611,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8632,
+          "inliers": 9
+        },
+        "aic-16568": {
+          "clip": 0.7281,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.909,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8249,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.909,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8062,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9079,
+      "inliers": 5,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8196,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9079,
+          "inliers": 5
+        },
+        "aic-16568": {
+          "clip": 0.7861,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9167,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8069,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9167,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7783,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8721,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8577,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8721,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.819,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.9196,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8355,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.9196,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8183,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-03",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8621,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.747,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8621,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.73,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-study-04",
+      "variant": "實拍",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "photo",
+      "work": "最後一幅全構圖習作（大都會，1884）",
+      "clip": 0.8474,
+      "inliers": 8,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.783,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8474,
+          "inliers": 8
+        },
+        "aic-16568": {
+          "clip": 0.7519,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8624,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8176,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8624,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8319,
+          "inliers": 5
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8305,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7996,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8305,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8221,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8302,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7978,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8302,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8126,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8327,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8835,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8327,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.877,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8686,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.824,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8686,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8361,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-01",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8091,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.766,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8091,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7672,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.859,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8671,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.859,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8722,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8199,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7877,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8199,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8521,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8261,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8041,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8261,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8431,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8003,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8204,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8003,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8393,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8623,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.863,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8623,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8713,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-land-02",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "〈大碗島風景〉（同一個場景、沒有人物，1884）",
+      "clip": 0.8015,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7621,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8015,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.7907,
+          "inliers": 5
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "原圖",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8342,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8742,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8342,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8535,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "tilt",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8474,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8242,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8474,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8285,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "glare",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8499,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8542,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8499,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8343,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "crop",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8305,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8538,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8305,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8537,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "dim",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8424,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8734,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8424,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8522,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "gj-sketch",
+      "variant": "blur",
+      "target": "aic-27992",
+      "relation": "study",
+      "kind": "repro",
+      "work": "木板油彩小稿（大都會雷曼收藏，1884）",
+      "clip": 0.8479,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8491,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.8479,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.837,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9982,
+      "inliers": 1242,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.824,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7665,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9982,
+          "inliers": 1242
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9159,
+      "inliers": 770,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7296,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7205,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9159,
+          "inliers": 770
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9304,
+      "inliers": 539,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7587,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.752,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9304,
+          "inliers": 539
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9663,
+      "inliers": 531,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8168,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7559,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9663,
+          "inliers": 531
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9922,
+      "inliers": 1091,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8097,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7589,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9922,
+          "inliers": 1091
+        }
+      }
+    },
+    {
+      "id": "wl-aic-01",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.874,
+      "inliers": 552,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7506,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7472,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.874,
+          "inliers": 552
+        }
+      }
+    },
+    {
+      "id": "wl-aic-02",
+      "variant": "實拍",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "photo",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.991,
+      "inliers": 1225,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8084,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.763,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.991,
+          "inliers": 1225
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.966,
+      "inliers": 688,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7776,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7381,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.966,
+          "inliers": 688
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9253,
+      "inliers": 464,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7455,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7291,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9253,
+          "inliers": 464
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9344,
+      "inliers": 386,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7455,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7281,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9344,
+          "inliers": 386
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9603,
+      "inliers": 301,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.791,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.748,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9603,
+          "inliers": 301
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9568,
+      "inliers": 672,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7616,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7284,
+          "inliers": 5
+        },
+        "aic-16568": {
+          "clip": 0.9568,
+          "inliers": 672
+        }
+      }
+    },
+    {
+      "id": "wl-aic-03",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.8736,
+      "inliers": 227,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7223,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.718,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8736,
+          "inliers": 227
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9707,
+      "inliers": 503,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8356,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7784,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9707,
+          "inliers": 503
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.93,
+      "inliers": 343,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7646,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7486,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.93,
+          "inliers": 343
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9238,
+      "inliers": 281,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7635,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7364,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9238,
+          "inliers": 281
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9475,
+      "inliers": 254,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8142,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7553,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9475,
+          "inliers": 254
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.9635,
+      "inliers": 504,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8243,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7878,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9635,
+          "inliers": 504
+        }
+      }
+    },
+    {
+      "id": "wl-aic-04",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "same",
+      "kind": "repro",
+      "work": "芝加哥藝術博物館的〈睡蓮〉（W1683，1906）",
+      "clip": 0.8575,
+      "inliers": 223,
+      "threshold": 0.7,
+      "predicted": "aic-16568",
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7553,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7461,
+          "inliers": 6
+        },
+        "aic-16568": {
+          "clip": 0.8575,
+          "inliers": 223
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.9623,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8211,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7768,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9623,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.908,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7791,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7645,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.908,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.8971,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7539,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7523,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8971,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.8983,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7208,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8983,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.9463,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7989,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7585,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9463,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-yamagata",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1906（山形美術館）",
+      "clip": 0.8838,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7787,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7536,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8838,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.9386,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8494,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.761,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9386,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.9324,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8471,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.766,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9324,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.9528,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8546,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7766,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9528,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.9551,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8054,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7652,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9551,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.9458,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8751,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7725,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9458,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-asahi",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（朝日集團大山崎山莊美術館，W1690）",
+      "clip": 0.8381,
+      "inliers": 4,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7925,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7517,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8381,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.9524,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8333,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7663,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9524,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.9008,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7421,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7245,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9008,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.921,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7592,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7415,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.921,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.937,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7652,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.738,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.937,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.9527,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.814,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7536,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9527,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-wadsworth",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（沃茲沃思雅典娜美術館，W1696）",
+      "clip": 0.8676,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7652,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7517,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8676,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.9556,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8367,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7506,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9556,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.9409,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7757,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.7288,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9409,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.9438,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7982,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7409,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9438,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.9574,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8083,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.729,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9574,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.9581,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8369,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7488,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9581,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-pola",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（箱根寶麗美術館）",
+      "clip": 0.8912,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.772,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7554,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8912,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.959,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8264,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7496,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.959,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.9446,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7726,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7328,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9446,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.9471,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8011,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7556,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9471,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.9554,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.785,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7343,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9554,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.9647,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8191,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.748,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9647,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-boston",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（波士頓美術館）",
+      "clip": 0.9324,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7964,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7645,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9324,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.9189,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8099,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7347,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9189,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.8869,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7738,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.7133,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8869,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.9064,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7462,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7082,
+          "inliers": 5
+        },
+        "aic-16568": {
+          "clip": 0.9064,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.938,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8271,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7656,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.938,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.9256,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8161,
+          "inliers": 4
+        },
+        "aic-27992": {
+          "clip": 0.7352,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9256,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-houston",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（休士頓美術館）",
+      "clip": 0.8837,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7862,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7308,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8837,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.9424,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7951,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7331,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9424,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.9185,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7578,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7288,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9185,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.9376,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7847,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7374,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9376,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.9363,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7589,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7273,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9363,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.9439,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.793,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7255,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9439,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1698",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1698）",
+      "clip": 0.8901,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7784,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7595,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8901,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "原圖",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.9159,
+      "inliers": 4,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8331,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.745,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9159,
+          "inliers": 4
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "tilt",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.9285,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8105,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7508,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9285,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "glare",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.905,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8248,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.756,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.905,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "crop",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.9284,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7927,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7309,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9284,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "dim",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.9197,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8409,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7481,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9197,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-w1723",
+      "variant": "blur",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "repro",
+      "work": "〈睡蓮〉1907（私人收藏，W1723）",
+      "clip": 0.8585,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.7951,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.765,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.8585,
+          "inliers": 0
+        }
+      }
+    },
+    {
+      "id": "wl-private",
+      "variant": "實拍",
+      "target": "aic-16568",
+      "relation": "series",
+      "kind": "photo",
+      "work": "〈睡蓮〉1907（私人收藏，展場實拍）",
+      "clip": 0.9262,
+      "inliers": 0,
+      "threshold": 0.7,
+      "predicted": null,
+      "ok": true,
+      "all_targets": {
+        "met-436535": {
+          "clip": 0.8076,
+          "inliers": 0
+        },
+        "aic-27992": {
+          "clip": 0.7451,
+          "inliers": 0
+        },
+        "aic-16568": {
+          "clip": 0.9262,
+          "inliers": 0
+        }
+      }
+    }
+  ]
+}

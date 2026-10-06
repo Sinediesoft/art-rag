@@ -52,7 +52,10 @@ def identify(
     k = top_k or int(cfg["top_k_search"])
     t0 = time.perf_counter()
     img = img or load_image(load_upload(image_id))
-    hits = get_store().search_images(embed_image(img) if vec is None else vec, k)
+    # 取 max(k, verify_top_n) 名：verify_top_n 比 top_k_search 大時，多出來的也要驗（和圖紙一樣）
+    hits = get_store().search_images(
+        embed_image(img) if vec is None else vec, max(k, int(cfg["verify_top_n"]))
+    )
 
     threshold = float(cfg["image_threshold"])
     min_inliers = int(cfg["verify_min_inliers"])
@@ -62,8 +65,9 @@ def identify(
         inliers = None
         if rank < int(cfg["verify_top_n"]) and h.score >= threshold:
             path = REPO_ROOT / h.item["image"]["path"]
+            # 退化的 homography（畫框花紋對成一點、鏡像）不算對上：docs/adr/002「退化的 homography」
             inliers = verify.count_inliers(
-                query_feats, verify.kb_features(path, path.stat().st_mtime)
+                query_feats, verify.kb_features(path, path.stat().st_mtime), geometry=cfg
             )
         results.append(
             {
@@ -83,7 +87,7 @@ def identify(
         "matched": matched,
         "best_artwork_id": results[0]["artwork"]["id"] if matched else None,
         "latency_ms": round((time.perf_counter() - t0) * 1000),
-        "results": results,
+        "results": results[:k],
     }
 
 

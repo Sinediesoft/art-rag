@@ -169,11 +169,25 @@ export function buildStages(route: RouteResponse, mod: ModuleProgress): Stage[] 
   const none = (msg: string) => [stage("verify", "skip", msg), stage("rerank", "skip", msg), stage("gate", "skip", msg)];
 
   if (r.photo?.kind === "unknown" && !r.question) {
-    out.push(stage("retrieve", "skip", "照片比對不到知識庫，沒有檢索"), ...none("沒有段落"), reply("請你補一句說明"));
+    // 沒收錄的畫作：本機推測風格、題材、媒材（ADR 018），不檢索、不生成
+    const guess = r.photo.domain === "art" ? "本機推測風格、題材、媒材（沒有出處）；" : "";
+    out.push(stage("retrieve", "skip", "照片比對不到知識庫，沒有檢索"), ...none("沒有段落"), reply(`${guess}請你補一句說明`));
   } else if (r.intent === "out_of_scope") {
     out.push(stage("retrieve", "skip", "不需檢索"), ...none("沒有段落"), reply("固定回覆系統能做的事"));
   } else if (r.intent === "system") {
     out.push(stage("retrieve", "skip", "不需檢索"), ...none("沒有段落"), reply("讀取記憶體、服務狀態與攔截紀錄"));
+  } else if (r.intent === "batch_identify") {
+    out.push(
+      stage("retrieve", "skip", "照片在功能頁上一次選一批，不在對話裡檢索"),
+      ...none("沒有段落"),
+      handoff("交給批次辨識：每張照片用 Chinese-CLIP＋幾何驗證，照你的資料範圍顯示", "批次辨識", "批次辨識"),
+    );
+  } else if (r.intent === "compare") {
+    out.push(
+      stage("retrieve", "ok", `讀取兩件的知識庫資料・${filterText ?? ""}`, { title: "權限感知檢索・讀取兩件", short: "讀資料" }),
+      ...none("比較表直接讀知識庫欄位，不放進生成上下文"),
+      handoff("並排比較表（不經生成）；差異摘要要在比較頁按了才請本地模型寫", "兩件並排比較", "並排比較"),
+    );
   } else if (isChat(r)) {
     const { sources, done, error } = mod;
     const pf = sources?.post_filter;
