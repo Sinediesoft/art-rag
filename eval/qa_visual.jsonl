@@ -1,0 +1,6 @@
+{"id": "q-vis-npm1-04", "split": "test", "type": "visual", "artwork_id": "npm-000001", "question": "主峰右邊那道瀑布看起來是什麼顏色？", "keywords": [["白", "淺", "亮"]], "topics": [], "visual_note": "瀑布是一道明亮的白色細線，在深色山壁上很醒目；文字只說有細長瀑布，未提顏色。"}
+{"id": "q-vis-met-04", "split": "test", "type": "visual", "artwork_id": "met-436535", "question": "麥田左邊中間那一大叢樹叢是什麼顏色？", "keywords": [["綠"]], "topics": [], "visual_note": "左側中景有一大團綠色（偏銀綠）的樹叢；文字只說中景有橄欖樹與灌木叢，未提位置在左或其顏色。"}
+{"id": "q-vis-aic-01", "split": "test", "type": "visual", "artwork_id": "aic-27992", "question": "河水在畫面的哪一邊？", "keywords": [["左"]], "topics": [], "visual_note": "塞納河水面位於畫面左側（左上方）；文字只說河面上有船，未提河在哪一側。"}
+{"id": "q-vis-aic-02", "split": "test", "type": "visual", "artwork_id": "aic-27992", "question": "畫面前景中間那隻在草地上低頭的大狗是什麼顏色？", "keywords": [["黑", "深色"]], "topics": [], "visual_note": "前景中央有一隻明顯的黑狗；文字只提到有狗，未提顏色。"}
+{"id": "q-vis-aic-03", "split": "test", "type": "visual", "artwork_id": "aic-27992", "question": "右邊那位牽著猴子的女士，撐的陽傘是什麼顏色？", "keywords": [["黑", "深色", "暗"]], "topics": [], "visual_note": "右側女士頭上撐著一把黑色陽傘；文字只說女子牽猴子，未提她的陽傘或顏色。"}
+{"id": "q-vis-aic-04", "split": "test", "type": "visual", "artwork_id": "aic-27992", "question": "畫面正中間站著的那個小女孩穿什麼顏色的衣服？", "keywords": [["白"]], "topics": [], "visual_note": "畫面中央有一位穿白色洋裝、戴帽的小女孩；文字只提到奔跑的小女孩，未提衣服顏色。"}
