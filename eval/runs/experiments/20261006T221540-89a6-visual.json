@@ -1,0 +1,191 @@
+{
+ "run_id": "20261006T221540-89a6",
+ "summary": {
+  "img": {
+   "n": 6,
+   "correct": 6,
+   "refused": 0,
+   "wrong_claim": 0,
+   "correct_and_image_cited": 3,
+   "mis_cited": 3
+  },
+  "noimg": {
+   "n": 6,
+   "correct": 0,
+   "refused": 4,
+   "wrong_claim": 2,
+   "correct_and_image_cited": 0,
+   "mis_cited": 0
+  }
+ },
+ "rows": [
+  {
+   "answer": "從畫面看，那道瀑布呈現出近乎白色的垂直線條，與深色的山體形成對比 [畫面]。   （根據色彩分析，畫作整體以中性色與暗調為主，瀑布的白色在低彩度的畫面中顯得特別突出 [1]。）",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "色彩分析"
+   ],
+   "id": "q-vis-npm1-04",
+   "send_image": true
+  },
+  {
+   "answer": "根據色彩分析，〈谿山行旅圖〉整體以中性色為主，暗調佔比高，且畫中瀑布部分屬於山體陰影與水墨渲染的範疇，並未明確標示為某種鮮明色彩 [1]。因此，瀑布在畫中呈現的是深褐或黑的暗調色系，接近畫面的主色之一 [1]。  不過，實際觀賞時因展場光線與原作保存狀況，顏色可能與數位分析結果略有不同 [1]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": true,
+   "image_sent": false,
+   "topics": [
+    "色彩分析"
+   ],
+   "id": "q-vis-npm1-04",
+   "send_image": false
+  },
+  {
+   "answer": "那叢樹叢是綠色的，帶有白色與淺綠色的筆觸，看起來像橄欖樹 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "mis_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-met-04",
+   "send_image": true
+  },
+  {
+   "answer": "根據資料，畫面中景有橄欖樹與灌木叢，但未明確說明「麥田左邊中間那一大叢樹叢」的顏色 [1]。   知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-met-04",
+   "send_image": false
+  },
+  {
+   "answer": "河水在畫面的左邊 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "mis_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-01",
+   "send_image": true
+  },
+  {
+   "answer": "河水在畫面的右側，畫中可見帆船與划槳的小船在河面上 [1]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": true,
+   "image_sent": false,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-01",
+   "send_image": false
+  },
+  {
+   "answer": "畫面前景中間那隻在草地上低頭的大狗是黑色的 [畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-02",
+   "send_image": true
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。[1]",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-02",
+   "send_image": false
+  },
+  {
+   "answer": "右邊那位牽著猴子的女士撐著一把黑色的陽傘 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "mis_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-03",
+   "send_image": true
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。[1] 記載畫中右側一對男女，女子手裡牽著一隻猴子，但未提及她撐的陽傘顏色。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-03",
+   "send_image": false
+  },
+  {
+   "answer": "畫面正中間的小女孩穿著白色的洋裝 [畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-04",
+   "send_image": true
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "mis_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "topics": [
+    "畫面"
+   ],
+   "id": "q-vis-aic-04",
+   "send_image": false
+  }
+ ]
+}

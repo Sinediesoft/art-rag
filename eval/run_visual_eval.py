@@ -11,6 +11,7 @@
 
 import argparse
 import json
+import re
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -41,10 +42,14 @@ def ask(client: httpx.Client, q: dict, send_image: bool) -> dict:
     ans = "".join(text).replace("\n", " ")
     refused = REFUSAL in ans
     ok = not refused and all(any(k in ans for k in g) for g in q["keywords"])
+    image_cited = "[畫面]" in ans
     return {
         "answer": ans,
         "ok": ok,
         "refused": refused,
+        # 出處（docs/adr/026）：答案只在畫面上，應標 [畫面]；只標段落編號＝出處標錯
+        "image_cited": image_cited,
+        "mis_cited": ok and not image_cited and bool(re.search(r"\[\d+\]", ans)),
         # 沒拒答、也沒答對＝自己編了一個答案（例如沒附圖還說出河在哪一邊）
         "wrong_claim": not ok and not refused,
         "image_sent": done.get("image_sent"),
@@ -76,6 +81,8 @@ def main() -> int:
             "correct": sum(r["ok"] for r in rs),
             "refused": sum(r["refused"] for r in rs),
             "wrong_claim": sum(r["wrong_claim"] for r in rs),
+            "correct_and_image_cited": sum(r["ok"] and r["image_cited"] for r in rs),
+            "mis_cited": sum(r["mis_cited"] for r in rs),
         }
     print(json.dumps(summary, ensure_ascii=False))
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]

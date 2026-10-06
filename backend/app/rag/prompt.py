@@ -1,6 +1,8 @@
 """共用 prompt 模板組裝：三種策略用同一份（shared/prompts/<version>.md）。
 
-畫作用 answer_v2，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
+畫作用 answer_v3，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
+模板可以多一段 ===SYSTEM_IMAGE===：有附圖時改用這段 system
+（answer_v3 的 [畫面] 出處，docs/adr/026）。
 """
 
 import base64
@@ -19,8 +21,10 @@ NO_CARD = "（未提供畫作資料，請從照片判斷）"
 def load_template(version: str) -> dict[str, str]:
     raw = (get_settings().shared_dir / "prompts" / f"{version}.md").read_text(encoding="utf-8")
     raw = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
-    _, system, user = re.split(r"^===(?:SYSTEM|USER)===\s*$", raw, flags=re.M)
-    return {"system": system.strip(), "user": user.strip()}
+    parts = re.split(r"^===(SYSTEM|SYSTEM_IMAGE|USER)===\s*$", raw, flags=re.M)
+    tpl = {k.lower(): v.strip() for k, v in zip(parts[1::2], parts[2::2], strict=True)}
+    tpl.setdefault("system_image", tpl["system"])
+    return tpl
 
 
 def prompt_version(domain: str = "art") -> str:
@@ -67,7 +71,7 @@ def build_messages(
     """
     tpl = load_template(prompt_version(domain))
     card = part_card(artwork) if domain == "mfg" else artwork_card(artwork)
-    system = tpl["system"]
+    system = tpl["system_image" if image_jpeg else "system"]
     if not use_retrieval:
         # 檢索增益對照組：同模型、同問題，只拿掉參考資料與「只根據資料」規則
         system = system.split("\n")[0] + "\n請用繁體中文（台灣用語）簡潔回答 2–5 句。"
