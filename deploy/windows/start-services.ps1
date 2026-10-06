@@ -103,7 +103,26 @@ else {
     "… 啟動後端：$(Wait-Http 'http://127.0.0.1:8000/api/v1/health' 120)"
 }
 
-# 5. 健康檢查
+# 5. 預熱主力模型（docs/adr/025）：開機後第一題不用等載入（冷啟動首字 6–16 秒）
+$envFile = Join-Path $Repo '.env'
+$envVars = @{}
+if (Test-Path $envFile) {
+    Get-Content $envFile -Encoding utf8 | Where-Object { $_ -match '^\s*([A-Z_]+)=(.*)$' } |
+        ForEach-Object { $envVars[$Matches[1]] = $Matches[2].Trim() }
+}
+$model = if ($envVars['HYBRID_MODEL']) { $envVars['HYBRID_MODEL'] } else { 'qwen3-vl:4b-instruct' }
+$keep = if ($envVars['MODEL_KEEP_ALIVE']) { $envVars['MODEL_KEEP_ALIVE'] } else { '5m' }
+# 用 Invoke-RestMethod：Windows PowerShell 5.1 把 JSON 傳給 curl.exe 時會吃掉雙引號（HTTP 400）
+$warm = @{ model = $model; keep_alive = $keep } | ConvertTo-Json -Compress
+try {
+    Invoke-RestMethod -Method Post -Uri http://127.0.0.1:11434/api/generate -ContentType 'application/json' `
+        -Body ([Text.Encoding]::UTF8.GetBytes($warm)) -TimeoutSec 120 | Out-Null
+    "… 預熱 $model（keep_alive $keep）：✓"
+} catch {
+    "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+}
+
+# 6. 健康檢查
 ''
 '健康檢查（http://127.0.0.1:8000/api/v1/health）'
 try {

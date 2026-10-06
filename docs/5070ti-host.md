@@ -25,6 +25,7 @@ HYBRID_FALLBACK_MODEL=qwen3-vl:4b-instruct
 HF_OFFLINE=true
 MEMORY_HIGH_PCT=92          # 這台常同時開其他大型程式；VRAM 另外看（ADR 021）
 EVAL_INJECTION=true         # 評估主機才開（ADR 019）
+MODEL_KEEP_ALIVE=60m        # 閒置 60 分鐘才卸載，避免冷啟動首字 6–16 秒（ADR 025）
 DATABASE_URL=               # 還沒裝 Docker：檔案索引＋SQLite
 ```
 

@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（例如沒有 GPU 的電腦關掉）
     rearrange: str = ""
 
+    # Ollama 模型閒置多久才卸載（docs/adr/025）：例如 60m；留空＝Ollama 預設 5 分鐘。
+    # 只送給 hybrid／hybrid_fallback／lora；記憶體吃緊時記憶體管理照樣用 keep_alive=0 卸載
+    model_keep_alive: str = ""
+
     # 問答要不要附圖（docs/adr/024）：留空＝shared/models.yaml 的 chat.send_image；
     # true／false 覆寫這台主機的設定（例如 4 GB 顯卡設 false）
     send_image: str = ""
