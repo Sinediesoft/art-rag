@@ -143,8 +143,9 @@ uv run python ..\pipelines\import_sqlite_logs.py
    模型版本鎖在 `shared/models.yaml`，embedding 一律用 CPU 算，所以各自建出來的內容相同。
 
 **直接在 Windows 執行（不在 WSL 裡）時**：`make index` 可以照常重建（Windows 沒有 `resource` 模組，
-知識庫自己的標準模型改成不限制 CPU 與檔案大小執行）；但 **Ortho2CAD 3D 重建不能用**——限制不了子行程，
-模型產生的程式碼一律拒絕執行，請在 macOS、Linux 或 WSL 上重建。沒有 `make` 時：
+知識庫自己的標準模型改成不限制 CPU 與檔案大小執行）；但 Windows 限制不了子行程，**模型產生的 3D 重建程式碼
+要在 WSL2 執行**：在 Ubuntu 裡建一個只有 CadQuery 的環境，`.env` 設 `CAD_WSL_PYTHON`（做法見 `docs/5070ti-host.md`，
+ADR 027）；沒設時一律拒絕執行。沒有 `make` 時：
 `cd backend; uv run python ..\pipelines\build_index.py`。
 
 **要把使用紀錄給別人**（例如問答紀錄給 D 做評估）：只匯出紀錄表，對方還原到另一個資料庫，不會蓋掉自己的紀錄。
@@ -376,7 +377,7 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
   現在有 NVIDIA 顯示卡時 Qwen3-VL、Ortho2CAD 另外看顯示記憶體（`MEMORY_GPU_HIGH_PCT`，預設 90）；
   系統記憶體 98.8% 時 8B 不再被卸載，只釋放 Chinese-CLIP、bge-m3。
 - 直接在 Windows 執行：排程服務可用（`pipelines/setup_scheduler.py` 已支援 `java.exe`／`mvn.cmd`，`make demo-test` 排程 7/7 準時），
-  Ortho2CAD 3D 重建不能用（見上方「直接在 Windows 執行」），要等 WSL2。
+  Ortho2CAD 3D 重建產生的程式碼 2026-10-07 起在 WSL2 執行（ADR 027），展示頁、`make eval-cad`、`make demo-test` 第 3 步都能直接跑。
 
 **Ortho2CAD 生成速度**（llama.cpp b11382 Windows CUDA 13.4 版、`deploy/llama-router.ini` 同一組參數、知識庫 6 張圖紙、
 後端同一套前處理與 prompt；只量生成，Windows 不能執行產生的程式碼，所以沒有 IoU）：
@@ -408,6 +409,8 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 - 5070 Ti 比 Mac 低 0.08，差在**生成的程式碼不同**（硬體浮點差異），T 型槽螺帽這台較好（0.46 對 0.29）、
   立式軸承座較差（0.37 對 0.70）——是硬體帶來的變異，不是哪台的模型比較好。報告引用時兩台都列。
 - 和**同樣 8B 的未微調模型**比，最能看出微調的效果：可執行 33% → 100%、平均 IoU 0.18 → 0.46。
+- 2026-10-07 起產生的程式碼在 WSL2 執行（ADR 027），改成經後端直接跑 `make eval-cad`（run_id `20261006T224124-ca3e`）：
+  6 張的 IoU 和上表拆兩半量的逐位相同（平均 0.463）。
 
 **冷啟動**（ADR 025）：Ollama 預設閒置 5 分鐘就卸載，之後第一題首字 6–16 秒（載入中是 1.5 秒）。這台 `.env` 設 `MODEL_KEEP_ALIVE=60m`，`start-services.ps1` 開機後預熱主力模型；顯示記憶體不夠時記憶體管理照樣會卸載，所以展示時請關掉其他吃顯示記憶體的程式。
 

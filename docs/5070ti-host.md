@@ -28,6 +28,8 @@ MEMORY_HIGH_PCT=92          # 這台常同時開其他大型程式；VRAM 另外
 EVAL_INJECTION=true         # 評估主機才開（ADR 019）
 MODEL_KEEP_ALIVE=60m        # 閒置 60 分鐘才卸載，避免冷啟動首字 6–16 秒（ADR 025）
 DATABASE_URL=postgresql://artrag:artrag@127.0.0.1:5432/artrag   # Docker Desktop 的 PostgreSQL＋pgvector（ADR 009）
+CAD_WSL_PYTHON=/home/<WSL 使用者>/artrag-cad/bin/python        # 3D 重建產生的程式碼在 WSL2 執行（ADR 027）
+CAD_WSL_DISTRO=Ubuntu-24.04
 ```
 
 ## 第一次安裝（已做過，換電腦時參考）
@@ -44,11 +46,31 @@ DATABASE_URL=postgresql://artrag:artrag@127.0.0.1:5432/artrag   # Docker Desktop
    - llama.cpp 從官方 GitHub release 下載 **`llama-bXXXXX-bin-win-cuda-13.x-x64.zip` 與 `cudart-llama-bin-win-cuda-13.x-x64.zip`**
      （核對 release 頁的 SHA-256），解壓到 `%USERPROFILE%\tools\llama.cpp-bXXXXX\`。winget 的 `ggml.llamacpp` 是 Vulkan 版，比較慢
    - 模型：`uv run --project backend python pipelines/setup_ortho2cad.py`（約 6.2 GB；`LLAMA_CPP_TAG` 設成和 llama-server 同版）
+7. 3D 重建執行環境（ADR 027）：Windows 限制不了子行程，模型產生的 CadQuery 程式碼改到 WSL2 執行。
+   `wsl --install -d Ubuntu-24.04`，在 Ubuntu 裡建一個只有 CadQuery 的環境（不碰 repo 裡 Windows 的 `.venv`）：
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   uv venv ~/artrag-cad --python 3.12
+   uv pip install --python ~/artrag-cad/bin/python cadquery==2.8.0 cadquery-ocp==7.9.3.1.1 numpy pillow opencv-python-headless
+   ```
+   `.env` 設 `CAD_WSL_PYTHON`（`wsl -d Ubuntu-24.04 --exec whoami` 查使用者名稱）、`CAD_WSL_DISTRO`，重啟後端。
+   確認：`cd backend; uv run pytest tests/test_drawings.py`，原本跳過的 3 個沙箱測試要變成通過。
 
-## 3D 重建評估：Windows 產生程式碼、WSL 算 IoU
+## 3D 重建：產生的程式碼在 WSL2 執行（ADR 027）
 
-Windows 限制不了子行程，**不能執行模型產生的 CadQuery 程式碼**（`app/cad/sandbox.py`），但 GPU 推論在 Windows 最快。
-所以拆兩半，算法和 `make eval-cad` 相同（同一個 `extract_code`→`run_cad`、同一份標準模型 STEP）：
+後端、Ortho2CAD 都在 Windows；只有「執行模型產生的程式碼」這一步經 `wsl.exe` 到 Ubuntu 裡跑同一支
+`app/cad/runner.py`（Linux 才限制得了 CPU 時間與檔案大小），外面再包 `timeout`（時間到一定結束）、
+`unshare -rn`（沒有網路）、`env -i`（不帶環境變數）。工作目錄用 `/mnt/c/...` 共用，結果檔直接寫回 Windows。
+
+- 展示頁的 3D 重建、`make eval-cad`（`uv run --project backend python eval/run_cad_eval.py`）、`make demo-test` 第 3 步都能直接在這台跑。
+- WSL 閒置一陣子後會停，下一次 3D 重建多等幾秒開機。
+- 程式碼被 CPU 時間限制砍掉時不會留 core dump：WSL 預設會把每次的記憶體傾印（約 370 MB）存到
+  `%LOCALAPPDATA%\Temp\wsl-crashes`，runner 已把行程設成不可傾印。
+
+### 舊做法：Windows 產生程式碼、WSL 算 IoU
+
+ADR 027 之前 Windows 不能執行模型產生的程式碼，評估拆兩半，算法和 `make eval-cad` 相同
+（同一個 `extract_code`→`run_cad`、同一份標準模型 STEP）。現在不需要了，留著給只想重算 IoU 的情況：
 
 ```powershell
 # Windows：產生程式碼 → data\cad_codes\<label>\
@@ -57,10 +79,7 @@ uv run --project backend python eval/cad_generate.py qwen3-vl:8b-instruct --base
 ```
 
 ```bash
-# WSL（Ubuntu 24.04）：一次性準備只有 CadQuery 的環境（不碰 repo 裡 Windows 的 .venv）
-uv venv ~/artrag-cad --python 3.12
-uv pip install --python ~/artrag-cad/bin/python cadquery==2.8.0 cadquery-ocp==7.9.3.1.1 numpy pillow opencv-python-headless
-# 計分 → eval/runs/experiments/<run_id>-cadscore.json
+# WSL（Ubuntu 24.04，環境見上方「第一次安裝」第 7 步）：計分 → eval/runs/experiments/<run_id>-cadscore.json
 cd /mnt/c/Users/<你>/Desktop/art-rag && ~/artrag-cad/bin/python eval/cad_score.py ortho2cad qwen3-vl_8b-instruct
 ```
 

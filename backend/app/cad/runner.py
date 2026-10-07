@@ -7,7 +7,9 @@ Windows 沒有 resource 模組：只執行知識庫自己的標準模型（trust
 """
 
 import builtins
+import ctypes
 import json
+import signal
 import sys
 import time
 import traceback
@@ -42,6 +44,25 @@ def _limit(cpu_s: int, trusted: bool) -> None:
         return
     resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s + 5))
     resource.setrlimit(resource.RLIMIT_FSIZE, (200 * 1024 * 1024, 200 * 1024 * 1024))
+    # 超過 CPU 時間（軟限制送 SIGXCPU）時寫出逾時的結果再結束；預設動作是 core dump。
+    # 程式碼自己吞掉這個例外時，硬限制（+5 秒）的 SIGKILL 不會留 core dump
+    signal.signal(signal.SIGXCPU, _cpu_exceeded(cpu_s))
+    # 不留 core dump：WSL 會把每次的記憶體傾印（約 370 MB）存到 Windows 的暫存資料夾
+    # （docs/adr/027）。core_pattern 開頭是 | 時核心不看 RLIMIT_CORE，要另外把行程設成不可傾印
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    if sys.platform == "linux":
+        ctypes.CDLL(None).prctl(4, 0, 0, 0, 0)  # PR_SET_DUMPABLE＝0
+
+
+CPU_LIMIT_HIT: list[str] = []  # 收到 SIGXCPU 後放逾時訊息
+
+
+def _cpu_exceeded(cpu_s: int):
+    def handler(signum, frame):
+        CPU_LIMIT_HIT.append(f"執行超過 CPU 時間限制（{cpu_s} 秒），已中止")
+        raise RuntimeError(CPU_LIMIT_HIT[0])
+
+    return handler
 
 
 def _to_shape(obj):
@@ -130,7 +151,12 @@ def main() -> None:
         result["ok"] = True
     except Exception as e:  # 錯誤訊息回給使用者看
         result["error"] = (
-            str(e) if isinstance(e, (RuntimeError, ValueError)) else f"{type(e).__name__}: {e}"
+            # 逾時發生在 import 途中時，例外會變成看不懂的 ImportError，一律改說逾時
+            CPU_LIMIT_HIT[0]
+            if CPU_LIMIT_HIT
+            else str(e)
+            if isinstance(e, (RuntimeError, ValueError))
+            else f"{type(e).__name__}: {e}"
         )
     result["total_ms"] = round((time.perf_counter() - t0) * 1000)
     (out / "result.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")

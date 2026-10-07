@@ -1,0 +1,103 @@
+{
+  "run_id": "20261006T224124-ca3e",
+  "created_at": "2026-10-06T22:41:24.370211+00:00",
+  "kb_version": "2026.10.1",
+  "kind": "cad",
+  "health": {
+    "hybrid": "qwen3-vl:8b-instruct",
+    "hybrid_fallback": "qwen3-vl:4b-instruct",
+    "api_nokb": "gemini-2.5-flash",
+    "api_kb": "gemini-2.5-flash",
+    "ortho2cad": "ortho2cad",
+    "lora": "qwen3-vl-art-lora:4b"
+  },
+  "reconstruction": {
+    "ortho2cad": {
+      "valid_rate": 1.0,
+      "mean_iou": 0.4634247857574052,
+      "mean_iou_bbox": 0.6437856775664634,
+      "median_total_ms": 55137.5,
+      "rows": [
+        {
+          "part_id": "mfg-001",
+          "name": "L 型固定支架",
+          "ok": true,
+          "error": null,
+          "iou": 0.13894827531191167,
+          "iou_bbox": 0.6679494337214866,
+          "max_dim_error": 0.19389978213507603,
+          "job_id": "cad_68dd9698b74242dd",
+          "first_token_ms": 16040,
+          "total_ms": 50032,
+          "output_tokens": 1201
+        },
+        {
+          "part_id": "mfg-002",
+          "name": "連接法蘭",
+          "ok": true,
+          "error": null,
+          "iou": 0.8140698507083873,
+          "iou_bbox": 0.8212859594569336,
+          "max_dim_error": 0.12935975488464765,
+          "job_id": "cad_20c5d322278242c4",
+          "first_token_ms": 881,
+          "total_ms": 24893,
+          "output_tokens": 709
+        },
+        {
+          "part_id": "mfg-003",
+          "name": "階梯傳動軸",
+          "ok": true,
+          "error": null,
+          "iou": 0.24732079259211293,
+          "iou_bbox": 0.28905315604926457,
+          "max_dim_error": 0.5825514475143786,
+          "job_id": "cad_688981e8a85c4446",
+          "first_token_ms": 807,
+          "total_ms": 42861,
+          "output_tokens": 1491
+        },
+        {
+          "part_id": "mfg-004",
+          "name": "步進馬達安裝板",
+          "ok": true,
+          "error": null,
+          "iou": 0.7528044429732612,
+          "iou_bbox": 0.8564958958392301,
+          "max_dim_error": 0.17897401805848812,
+          "job_id": "cad_70045b4a8f684f4e",
+          "first_token_ms": 800,
+          "total_ms": 68505,
+          "output_tokens": 2578
+        },
+        {
+          "part_id": "mfg-005",
+          "name": "T 型槽螺帽",
+          "ok": true,
+          "error": null,
+          "iou": 0.45564277088593697,
+          "iou_bbox": 0.7384112191406424,
+          "max_dim_error": 0.45951946808125044,
+          "job_id": "cad_8804cdc64caa4a4b",
+          "first_token_ms": 888,
+          "total_ms": 74731,
+          "output_tokens": 2911
+        },
+        {
+          "part_id": "mfg-006",
+          "name": "立式軸承座",
+          "ok": true,
+          "error": null,
+          "iou": 0.371762582072821,
+          "iou_bbox": 0.4895184011912235,
+          "max_dim_error": 0.13261254826813876,
+          "job_id": "cad_52d0badfa7f1470a",
+          "first_token_ms": 862,
+          "total_ms": 60243,
+          "output_tokens": 2765
+        }
+      ]
+    }
+  },
+  "elapsed_s": 340
+}

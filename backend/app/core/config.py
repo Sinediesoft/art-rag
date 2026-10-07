@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     ortho2cad_base_url: str = "http://localhost:8081/v1"
     ortho2cad_model: str = ""
     ortho2cad_api_key: str = "none"
+    # Windows 主機在 WSL2 執行模型產生的 CadQuery 程式碼（docs/adr/027）：
+    # WSL 裡裝好 CadQuery 的 Python，例如 /home/me/artrag-cad/bin/python；
+    # 留空＝Windows 上不執行。macOS、Linux、WSL 裡跑後端時不用設
+    cad_wsl_python: str = ""
+    cad_wsl_distro: str = ""  # 留空＝wsl.exe 的預設發行版
 
     # 生產排程：Timefold Solver 排程服務（make scheduler 啟動，只聽本機）；
     # 連不上時改用簡易排程（交期優先派工）。mock＝一律用簡易排程（CI、沒有 Java 的電腦）

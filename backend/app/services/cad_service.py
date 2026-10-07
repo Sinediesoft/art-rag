@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from PIL import Image
 
 from app.cad.preprocess import model_input
-from app.cad.sandbox import extract_code, run_cad
+from app.cad.sandbox import WslTarget, extract_code, run_cad
 from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.errors import AppError
 from app.core.logging import log
@@ -50,6 +50,12 @@ DIMS_PROMPT = (
     "讀不到的填 null。"
 )
 MOCK_CODE = 'import cadquery as cq\nsolid = cq.Workplane("XY").box(1.0, 0.6, 0.4)\n'
+
+
+def wsl_target() -> WslTarget | None:
+    """.env 有設 CAD_WSL_PYTHON：Windows 主機在 WSL2 執行模型產生的程式碼（docs/adr/027）。"""
+    s = get_settings()
+    return WslTarget(s.cad_wsl_python, s.cad_wsl_distro) if s.cad_wsl_python else None
 
 
 def _image_part(img: Image.Image, fmt: str = "PNG") -> dict:
@@ -254,6 +260,7 @@ async def _reconstruct_stream(
         scale_to=scale_to,
         gt_step=gt_step if gt_step and gt_step.exists() else None,
         timeout_s=float(cfg["exec_timeout_s"]),
+        wsl=wsl_target(),
     )
     d = run.data
     result = {
