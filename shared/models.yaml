@@ -303,7 +303,7 @@ item_compare:
 # GTX 1650 每題約多 3–6 秒。各主機可用 .env 的 REARRANGE 覆寫，請求也可用 rearrange 指定。
 rearrange:
   enabled: true
-  prompt_version: rearrange_v2  # 對應 shared/prompts/rearrange_v2.md（v2：矛盾的段落一起留下，ADR 020）
+  prompt_version: rearrange_v3  # 對應 shared/prompts/rearrange_v3.md（v2：矛盾的段落一起留下，ADR 020；v3：問某個東西的顏色時不留色彩分析，ADR 029）
   max_candidates: 5             # 最多交給模型判斷幾段
   timeout_s: 30                 # 篩選整體的時間上限，超過就用原本的段落
   max_tokens: 16                # 模型只需要輸出段落編號

@@ -1,0 +1,403 @@
+{
+ "run_id": "20261007T034104-a53e",
+ "file": "qa_visual_holdout.jsonl",
+ "prompt_version": "answer_v4",
+ "summary": {
+  "img": {
+   "n": 15,
+   "correct": 11,
+   "refused": 0,
+   "wrong_claim": 4,
+   "correct_and_image_cited": 11,
+   "mis_cited": 0
+  },
+  "img_passage": {
+   "n": 8,
+   "correct": 8,
+   "refused": 0,
+   "wrong_claim": 0,
+   "passage_cited": 8,
+   "image_only": 0
+  }
+ },
+ "rows": [
+  {
+   "answer": "岸邊垂釣的女子穿著一襲紅棕色的長裙 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-aic-01",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面左側那位戴黑色高帽、坐在草地上的紳士，手裡拿著一根手杖 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-aic-02",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面右下方、猴子旁邊那隻小狗，頭是朝向畫面左方 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-aic-03",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "河面上最顯眼的那艘帆船，船帆是白色的 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-aic-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面中央偏右、坐在草地上撐傘的那位女子，她的陽傘是橙色的 [1][畫面]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": true,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-aic-05",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "右側那對特別醒目的男女，女子手裡牽著一隻猴子 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-aic-06",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "畫布四周的彩色邊框，是用點描法畫成的 [1][2]。   這與畫面主體的技法一致，都是秀拉用純色小點並排、讓觀者視覺混合的分色主義手法 [2]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "外框與收藏",
+    "技法"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-aic-07",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "雲朵之間露出來的天空底色是藍色 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-met-01",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "前景麥田最下緣那幾朵零星的小花，最顯眼的是紅色 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-met-02",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "右側那株高大的絲柏旁邊，緊挨著一棵比較矮的深綠色樹，它在高大絲柏的左側 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-met-03",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "那株高大絲柏底部前方的淺綠色灌木，長成低矮、圓滾滾的形狀 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-met-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "右側那株高大的絲柏，樹梢大約延伸到畫面的右上角附近 [1][畫面]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": true,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-met-05",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "遠方的山丘是藍紫色的 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-met-06",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "畫中那株高大的絲柏位於畫面的右側 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-met-07",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "天空中的雲朵被畫成漩渦狀，翻捲著白色與淡綠色 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-met-08",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "在主峰的左側 [1][畫面]。   這座矮山崖與主峰並列，崖頂同樣覆蓋深色樹叢，從畫面比例看，其高度約為主峰的一半。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "構圖"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-npm-01",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "主峰山腳的雲霧是暗調，上方的山體也是暗調，但雲霧的明暗更淺，整體更偏向中間調 [1]。   畫面中雲霧的顏色以深褐與褐為主，與上方山體的深色岩石相比，雲霧的色調較淺，但整體仍屬暗調 [1][畫面]。   根據色彩分析，畫面以暗調為主（58%），雲霧與山體都屬此範疇，但雲霧的明度較高，屬於中間調（42%）[2]。   所以，雲霧比上方山體稍亮，但整體仍偏暗。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "構圖",
+    "色彩分析"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-npm-02",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面上方那座巨大的主峰，大約從畫面左邊三分之一處延伸到右邊三分之二處 [1]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": true,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "構圖"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-npm-03",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫中景樹林裡的樹幹與枝條，是用勁挺的線條勾勒出來的 [1]，從畫面看，這些線條呈現出樹木挺拔、枝幹分明的樣子 [畫面]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": true,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "技法"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-npm-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面中間偏右那座山丘最頂上的樹冠，從畫面看是尖頂狀，像小塔一樣 [畫面]。   （註：參考資料 [1] 講的是整幅畫的技法與山頂灌木，未提及這座山丘頂上樹的具體形狀，故答案依畫面判斷。）",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "技法"
+   ],
+   "mis_cited": false,
+   "id": "q-vish-npm-05",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "那道細長的瀑布在主峰的右側 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "構圖"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-npm-06",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "那支馱著貨物的騾隊在畫面近景右下方的山路上 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "構圖"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-npm-07",
+   "send_image": true,
+   "expect": "passage"
+  },
+  {
+   "answer": "這幅畫整體的色調主要偏深褐色 [1]，畫面中也以中性色為主、低彩度、以暗調為主 [1]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "色彩分析"
+   ],
+   "passage_cited": true,
+   "image_only": false,
+   "id": "q-vish-npm-08",
+   "send_image": true,
+   "expect": "passage"
+  }
+ ]
+}
