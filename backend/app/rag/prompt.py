@@ -1,8 +1,8 @@
 """共用 prompt 模板組裝：三種策略用同一份（shared/prompts/<version>.md）。
 
-畫作用 answer_v3，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
+畫作用 answer_v4，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
 模板可以多一段 ===SYSTEM_IMAGE===：有附圖時改用這段 system
-（answer_v3 的 [畫面] 出處，docs/adr/026）。
+（answer_v3 起的 [畫面] 出處，docs/adr/026）。
 """
 
 import base64
