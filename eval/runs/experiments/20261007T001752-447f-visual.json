@@ -1,0 +1,217 @@
+{
+ "run_id": "20261007T001752-447f",
+ "file": "qa_visual.jsonl",
+ "prompt_version": "answer_v4",
+ "summary": {
+  "img": {
+   "n": 6,
+   "correct": 5,
+   "refused": 0,
+   "wrong_claim": 1,
+   "correct_and_image_cited": 5,
+   "mis_cited": 0
+  },
+  "noimg": {
+   "n": 6,
+   "correct": 0,
+   "refused": 5,
+   "wrong_claim": 1,
+   "correct_and_image_cited": 0,
+   "mis_cited": 0
+  }
+ },
+ "rows": [
+  {
+   "answer": "主峰右邊那道瀑布看起來是深褐色的 [1][畫面]。   （根據色彩分析，畫面中瀑布區域的顏色屬於深褐系，且整幅畫以暗調為主，瀑布在畫面中呈現為深色的垂直線條。）",
+   "ok": false,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": true,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "色彩分析"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-npm1-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "根據參考資料，〈谿山行旅圖〉整體以中性色為主、低彩度、暗調為主，色彩主要為深褐、褐與黑等色系 [1]。但資料並未明確說明主峰右邊瀑布的具體顏色，也未提供該區域的色彩分析。  因此，知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "色彩分析"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-npm1-04",
+   "send_image": false,
+   "expect": "image"
+  },
+  {
+   "answer": "麥田左邊中間那一大叢樹叢是綠色的 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-met-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "根據資料，畫面中景有橄欖樹與灌木叢，但未明確說明「麥田左邊中間那一大叢樹叢」的顏色 [1]。   知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-met-04",
+   "send_image": false,
+   "expect": "image"
+  },
+  {
+   "answer": "河水在畫面的左邊 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-01",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "河水在畫面的右側，畫中可見帆船與划槳的小船在河面上 [1]。",
+   "ok": false,
+   "refused": false,
+   "image_cited": false,
+   "wrong_claim": true,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-01",
+   "send_image": false,
+   "expect": "image"
+  },
+  {
+   "answer": "前景中間那隻在草地上低頭的大狗是黑色的 [畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-02",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-02",
+   "send_image": false,
+   "expect": "image"
+  },
+  {
+   "answer": "右邊那位牽著猴子的女士撐的陽傘是黑色的 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-03",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。[1] 記載畫中右側一對男女，女子手裡牽著一隻猴子，但未提及她撐的陽傘顏色。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-03",
+   "send_image": false,
+   "expect": "image"
+  },
+  {
+   "answer": "畫面正中間站著的小女孩穿著白色的洋裝 [1][畫面]。",
+   "ok": true,
+   "refused": false,
+   "image_cited": true,
+   "wrong_claim": false,
+   "image_sent": true,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-04",
+   "send_image": true,
+   "expect": "image"
+  },
+  {
+   "answer": "知識庫中沒有這方面的資料。",
+   "ok": false,
+   "refused": true,
+   "image_cited": false,
+   "wrong_claim": false,
+   "image_sent": false,
+   "prompt_version": "answer_v4",
+   "topics": [
+    "畫面"
+   ],
+   "mis_cited": false,
+   "id": "q-vis-aic-04",
+   "send_image": false,
+   "expect": "image"
+  }
+ ]
+}

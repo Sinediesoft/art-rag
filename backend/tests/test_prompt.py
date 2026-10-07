@@ -6,6 +6,8 @@
 
 import asyncio
 
+import pytest
+
 from app.rag.prompt import build_messages, load_template
 from app.rag.providers import MockProvider
 
@@ -50,12 +52,13 @@ def test_mock_provider_reads_text_part_after_image():
     assert "簽名藏在右下方的樹叢裡" in answer and "[1]" in answer
 
 
-def test_image_rule_only_when_image_attached():
-    """answer_v3（docs/adr/026）：[畫面] 規則只放在有附圖的 system；沒附圖時和 answer_v2 相同。
+@pytest.mark.parametrize("version", ["answer_v3", "answer_v4"])
+def test_image_rule_only_when_image_attached(version):
+    """answer_v3 起（docs/adr/026）：[畫面] 規則只放在有附圖的 system；沒附圖時和 answer_v2 相同。
 
     只有一份「有圖」的規則時，沒附圖模型也會說「畫面上…」並標 [畫面]，自己編答案。
     """
-    v3, v2 = load_template("answer_v3"), load_template("answer_v2")
-    assert "[畫面]" in v3["system_image"] and "[畫面]" not in v3["system"]
-    assert v3["system"] == v2["system"] and v3["user"] == v2["user"]
+    tpl, v2 = load_template(version), load_template("answer_v2")
+    assert "[畫面]" in tpl["system_image"] and "[畫面]" not in tpl["system"]
+    assert tpl["system"] == v2["system"] and tpl["user"] == v2["user"]
     assert v2["system_image"] == v2["system"]  # 沒有 SYSTEM_IMAGE 段的模板兩邊一樣

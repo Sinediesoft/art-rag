@@ -1,0 +1,41 @@
+{
+  "run_id": "20261007T002141-101b",
+  "created_at": "2026-10-07T00:23:23.154633+00:00",
+  "kb_version": "2026.10.1",
+  "prompt_version": "answer_v4",
+  "summary": {
+    "image_top1": 1.0,
+    "image_top5": 1.0,
+    "reject_rate": 1.0,
+    "n_known": 15,
+    "n_unknown": 15,
+    "split": "all"
+  },
+  "by_strategy": {
+    "hybrid": {
+      "n": 31,
+      "errors": 0,
+      "answer_ok": 0.967741935483871,
+      "citation_ok": 0.967741935483871,
+      "mean_sources": 1.6129032258064515,
+      "rearrange_fallbacks": 1,
+      "p95_first_token_ms": 1386,
+      "p95_total_ms": 2567,
+      "median_total_ms": 1696,
+      "cost_twd": 0.0,
+      "egress_bytes": 0,
+      "by_type": {
+        "distractor": 0.9166666666666666,
+        "no_answer": 1.0,
+        "untyped": 1.0
+      },
+      "distractor": {
+        "n": 12,
+        "filtered_out": 0.5,
+        "cited": 0.5,
+        "flagged": 0.4166666666666667,
+        "misled": 0.08333333333333333
+      }
+    }
+  }
+}

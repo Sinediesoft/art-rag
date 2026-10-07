@@ -31,7 +31,8 @@ export function CitationTag({
   );
 }
 
-/** 出處是「附上的畫作圖片」而不是知識庫段落（answer_v3 第 6 條，docs/adr/026）：不能點，沒有段落可看 */
+/** 出處是「附上的畫作圖片」而不是知識庫段落（answer_v3 起，docs/adr/026）：不能點，沒有段落可看。
+ *  可以和段落編號並列，例如 [1][畫面]（東西是段落寫的、顏色或位置是看圖的，answer_v4） */
 export function ImageCitationTag() {
   return (
     <span
