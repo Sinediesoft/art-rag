@@ -49,6 +49,8 @@ export interface SourcesEvent {
   sources: SourceItem[];
   /** 檢索段落篩選（MIRA 的 Rearrange）；沒有篩選時為 null。fallback 有值代表篩選失敗、用原本的段落 */
   rearrange?: { candidates: number; kept: number; ms: number; fallback: string | null } | null;
+  /** 參考資料矛盾檢查（docs/adr/028）；沒開或不到 2 段時為 null。conflict 為 true 時回答會指出說法不一致 */
+  conflict_check?: { conflict: boolean; refs: number[]; ms: number; fallback: string | null } | null;
   /** 第 3 段：Metadata Filter（依目前身分的資料範圍產生） */
   filter?: MetaFilterInfo;
   /** 第 3 段檢索出的候選段落數（第 4 段過濾前） */

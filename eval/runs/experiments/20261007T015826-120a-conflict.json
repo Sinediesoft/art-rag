@@ -1,0 +1,189 @@
+{
+ "run_id": "20261007T015826-120a",
+ "file": "qa_conflict.jsonl",
+ "split": "holdout",
+ "no_rearrange": false,
+ "prompt_version": "answer_v4",
+ "summary": {
+  "exclusive/holdout": {
+   "n": 6,
+   "flagged": 2,
+   "merged": 4,
+   "injected_kept": 6
+  },
+  "compatible/holdout": {
+   "n": 4,
+   "ok": 4,
+   "injected_kept": 0
+  },
+  "natural/holdout": {
+   "n": 2,
+   "ok": 2,
+   "injected_kept": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "q-conf-aic-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "這幅畫是巴特雷（Frederic Clay Bartlett）在 1920 年代購得後，以「海倫．伯奇．巴特雷紀念收藏」的名義捐贈給芝加哥藝術博物館的 [2]。  不過，也有資料提到帕瑪（Potter Palmer）家族在 1920 年代捐贈此畫 [1]。   參考資料的說法不一致：   - [1] 說是帕瑪家族捐贈。   - [2] 說是巴特雷捐贈。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "外框與收藏"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "畫裡的大碗島位於巴黎東南郊的馬恩河上 [1]，也有人說是在塞納河上 [2]。   參考資料的說法不一致，一段說馬恩河 [1]，一段說塞納河 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "〈大碗島的星期天下午〉現藏於芝加哥藝術博物館 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "基本資料"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "梵谷確實畫過一幅尺寸較小的〈有絲柏的麥田〉版本，是送給療養院院長佩隆醫生的謝禮 [1]。  另外，同年 9 月他也畫了一幅尺寸相近的版本，現藏倫敦國家美術館 [2]；還有一幅較小的版本是畫給母親與妹妹的 [2]。   （注意：兩段資料都提到「尺寸較小的版本」，但收件人不同，請確認您想問的是哪一版。）",
+   "injected_kept": true,
+   "topics": [
+    "其他版本",
+    "其他版本"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "畫面遠方那排藍紫色的山是聖維克多山 [1]，這座山也是塞尚常畫的題材 [1]。  （補充：參考資料 [2] 提到遠方是「阿爾皮耶山丘（Alpilles）」，但這與 [1] 的說法不同，請注意兩段資料的差異。）",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-05",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "梵谷是在 1889 年 5 月自願住進聖雷米療養院的 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "創作背景"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-07",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "梵谷在寫給弟弟西奧的信中，把絲柏比喻成埃及方尖碑 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "技法與絲柏"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "根據資料，這幅畫是在 1889 年 7 月初完成的 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "創作背景"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "畫幅上方那行「北宋范中立谿山行旅圖」是清代乾隆皇帝親筆題的 [1]。   （另，明代董其昌也曾在畫幅上方題過相同內容，但乾隆的題字在上方，董其昌的在下方 [2]。）",
+   "injected_kept": true,
+   "topics": [
+    "落款與發現",
+    "落款與發現"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "范寬是華原人 [2]，也就是今陝西耀州一帶 [2]。   （補充：他與李成是同鄉，都是山東營丘人 [1]，但這是指李成，不是范寬的籍貫。）",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "這幅畫是在 1958 年確認作者是范寬的 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "落款與發現"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "范寬與李成、關仝並稱為北宋初期山水畫三大家 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "畫家"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  }
+ ]
+}

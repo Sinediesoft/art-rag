@@ -1,0 +1,237 @@
+{
+ "run_id": "20261007T015932-a66b",
+ "file": "qa_conflict.jsonl",
+ "split": "holdout",
+ "no_rearrange": true,
+ "prompt_version": "answer_v4",
+ "summary": {
+  "exclusive/holdout": {
+   "n": 6,
+   "flagged": 2,
+   "merged": 3,
+   "misled": 1,
+   "injected_kept": 6
+  },
+  "compatible/holdout": {
+   "n": 4,
+   "ok": 3,
+   "false_alarm": 1,
+   "injected_kept": 4
+  },
+  "natural/holdout": {
+   "n": 2,
+   "ok": 2,
+   "injected_kept": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "q-conf-aic-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據參考資料，這幅畫在1920年代由芝加哥的帕瑪（Potter Palmer）家族購得並捐贈給芝加哥藝術博物館 [1]。  但另一段資料提到，1888至1889年秀拉加了外框後，1920年代由巴特雷（Frederic Clay Bartlett）購得並捐贈 [2]。  所以，參考資料的說法不一致：   - 一段說是帕瑪家族捐贈 [1]；   - 另一段說是巴特雷捐贈 [2]。  實際上，這幅畫在1920年代由巴特雷購得並捐贈給芝加哥藝術博物館 [2]，而帕瑪家族是在1920年代之前就已擁有這幅畫 [1]，但最終捐贈者是巴特雷 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "外框與收藏",
+    "創作與展出",
+    "基本資料",
+    "畫面"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "畫裡的大碗島位於巴黎東南郊的馬恩河上 [1]，也是巴黎市民假日划船、野餐的熱門去處 [1]。   （補充：根據另一段資料，畫中描繪的是塞納河上的大碗島 [2]，但這與 [1] 的「馬恩河」有出入，因此我們不能單獨採信其中一段。）",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面",
+    "創作與展出",
+    "基本資料",
+    "色彩分析"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "〈大碗島的星期天下午〉現在收藏在芝加哥藝術博物館 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "基本資料",
+    "畫面",
+    "創作與展出",
+    "色彩分析",
+    "外框與收藏"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "梵谷確實畫過一幅尺寸較小的〈有絲柏的麥田〉版本，這幅是送給療養院院長佩隆醫生（Dr. Peyron）的謝禮 [1]。  另外，同年 9 月他在療養院畫室裡還畫了一幅尺寸相近的版本，現藏倫敦國家美術館 [2]；而另一幅尺寸較小的版本則是畫給母親與妹妹的 [2]。  所以，您聽到的「尺寸比較小的版本」可能指不同幅數，其中一幅是畫給佩隆醫生的 [1]，另一幅是畫給母親與妹妹的 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "其他版本",
+    "其他版本",
+    "觀眾留言（未審核）",
+    "技法與絲柏",
+    "創作背景",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "畫面遠方那排藍紫色的山是聖維克多山 [1]，這座山也是塞尚常畫的題材 [1]。  （補充：根據另一段資料，中景的山丘被稱為阿爾皮耶山丘 [2]，但遠方那排藍紫色的山，資料明確指出是聖維克多山 [1]。）",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面",
+    "觀眾留言（未審核）",
+    "創作背景",
+    "其他版本",
+    "色彩分析"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-05",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "false_alarm",
+   "answer": "根據參考資料，梵谷是在 1889 年 5 月自願住進聖雷米附近的聖保羅療養院 [2]。  不過，參考資料 [1] 提到他是在 1890 年 5 月離開療養院，這與 [2] 的時間點不一致。   [1] 說 1890 年 5 月離開，[2] 說 1889 年 5 月入院。",
+   "injected_kept": true,
+   "topics": [
+    "創作背景",
+    "創作背景",
+    "觀眾留言（未審核）",
+    "其他版本"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-07",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "梵谷在寫給弟弟西奧的信中，形容絲柏的線條與比例像埃及方尖碑一樣美 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "技法與絲柏",
+    "技法與絲柏",
+    "創作背景",
+    "其他版本",
+    "基本資料",
+    "觀眾留言（未審核）"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "根據資料，這幅畫是在 1889 年 7 月初完成的 [3]。",
+   "injected_kept": false,
+   "topics": [
+    "基本資料",
+    "收藏",
+    "創作背景",
+    "技法與絲柏",
+    "畫面"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "misled",
+   "answer": "畫幅上方那行「北宋范中立谿山行旅圖」是清代乾隆皇帝親筆題的 [1]。   這行題字是乾隆皇帝在宮中賞畫時寫下的 [1]，與後來在畫面右下方發現的「范寬」款不同 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "落款與發現",
+    "落款與發現",
+    "基本資料",
+    "地位",
+    "畫家",
+    "技法"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "根據資料，范寬是華原（今陝西耀州一帶）人 [2]。  不過，資料 [1] 也提到他與李成是同鄉，都是山東營丘人，但這是指他們的籍貫或出生地，並未明確說明范寬本人的出生地或主要活動地點。  因此，最明確的資料是 [2]，指出他是華原人。",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "落款與發現",
+    "技法",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "這幅畫是在 1958 年確認作者是范寬的 [2]。當時故宮研究人員李霖燦在畫面右下方發現了「范寬」二字款 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "地位",
+    "落款與發現",
+    "畫家",
+    "技法",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "范寬與李成、關仝並稱為北宋初期山水畫三大家 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "畫家",
+    "基本資料",
+    "技法",
+    "落款與發現",
+    "地位"
+   ],
+   "prompt_version": "answer_v4",
+   "error": null
+  }
+ ]
+}

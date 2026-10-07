@@ -44,6 +44,9 @@ STRATEGY_BODY = {
     # 明確指定，不受伺服器預設影響
     "hybrid_img": {"strategy": "hybrid", "send_image": True},
     "hybrid_noimg": {"strategy": "hybrid", "send_image": False},
+    # 參考資料矛盾檢查開／關對照（docs/adr/028）：明確指定，不受伺服器預設影響
+    "hybrid_cc": {"strategy": "hybrid", "conflict_check": True},
+    "hybrid_nocc": {"strategy": "hybrid", "conflict_check": False},
     "api_nokb": {"strategy": "api_nokb"},
     "api_kb": {"strategy": "api_kb"},
     "lora": {"strategy": "lora"},
@@ -95,7 +98,14 @@ def eval_images(client: httpx.Client, kb_ids: set[str]) -> dict:
 
 
 def run_chat(client: httpx.Client, body: dict) -> dict:
-    out = {"answer": "", "sources": [], "rearrange": None, "done": None, "error": None}
+    out = {
+        "answer": "",
+        "sources": [],
+        "rearrange": None,
+        "conflict_check": None,
+        "done": None,
+        "error": None,
+    }
     with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
         if resp.status_code != 200:
             resp.read()
@@ -110,6 +120,7 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
                 if event == "sources":
                     out["sources"] = data["sources"]
                     out["rearrange"] = data.get("rearrange")
+                    out["conflict_check"] = data.get("conflict_check")
                 elif event == "token":
                     out["answer"] += data["text"]
                 elif event == "done":
@@ -264,6 +275,14 @@ def main() -> int:
                 "n_sources": len(res["sources"]),
                 "rearrange_ms": ra.get("ms"),
                 "rearrange_fallback": ra.get("fallback") or "",
+                # 矛盾檢查（docs/adr/028）：conflict＝判為有矛盾、加了提醒；none＝沒有；空白＝沒檢查
+                "conflict_check": ""
+                if not res["conflict_check"]
+                else "fallback"
+                if res["conflict_check"]["fallback"]
+                else "conflict"
+                if res["conflict_check"]["conflict"]
+                else "none",
                 "first_token_ms": (done.get("latency_ms") or {}).get("first_token"),
                 "total_ms": (done.get("latency_ms") or {}).get("total")
                 or round((time.time() - t0) * 1000),

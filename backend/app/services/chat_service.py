@@ -26,6 +26,7 @@ from app.agent import guard
 from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.errors import AppError
 from app.core.logging import log
+from app.rag import conflict_check as conflict_mod
 from app.rag import rearrange as rearrange_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
@@ -153,12 +154,13 @@ def inject_distractors(
 
     counterfactual：呼叫端手寫的段落，掛在同一幅畫／同一張圖紙底下（看起來像真的）；
     score 用它和問題的 bge-m3 相似度，和真正段落同一把尺。
+    compatible：同樣是手寫段落，但和正確答案可以同時成立（量模型會不會誤報不一致，docs/adr/028）。
     other：同領域其他畫作／圖紙中和問題最相近的真實段落；工廠圖紙只從看得到的圖紙取。
     每段標 injected，chunk_id 以 inject: 開頭，評估腳本靠它判斷有沒有引用到。"""
     store = get_store()
     domain_part = bool(part_id)
     coll, owner = (store.mfg, part_id) if domain_part else (store.art, artwork_id)
-    counter = [s for s in specs if s["kind"] == "counterfactual"]
+    counter = [s for s in specs if s["kind"] != "other"]  # 手寫段落：counterfactual、compatible
     n_other = sum(1 for s in specs if s["kind"] == "other")
     vecs = embed_text([question] + [s["text"] for s in counter])
     qvec, cvecs = vecs[0], vecs[1:]
@@ -176,7 +178,7 @@ def inject_distractors(
     first, last = [], []
     ci = oi = 0
     for i, spec in enumerate(specs):
-        if spec["kind"] == "counterfactual":
+        if spec["kind"] != "other":
             s = {
                 "chunk_id": f"inject:{i}",
                 "topic": spec.get("topic") or "干擾段落",
@@ -228,6 +230,7 @@ async def chat_stream(
     post_filter: str | None = None,
     inject: list[dict] | None = None,
     send_image: bool | None = None,
+    conflict_check: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -237,6 +240,7 @@ async def chat_stream(
     post_filter：第 4～6 段由誰判斷（jev／local，智慧助理帶）；None＝只用地端規則掃描洩密風險。
     inject：評估用的干擾段落（docs/adr/019），呼叫端要先確認 EVAL_INJECTION 已開啟。
     send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
+    conflict_check：回答前先檢查參考資料有沒有互相矛盾（docs/adr/028）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -253,6 +257,7 @@ async def chat_stream(
         post_filter,
         inject,
         send_image,
+        conflict_check,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -272,6 +277,7 @@ async def _chat_stream(
     post_filter: str | None = None,
     inject: list[dict] | None = None,
     send_image: bool | None = None,
+    conflict_check: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -390,6 +396,8 @@ async def _chat_stream(
     # 其他頁面沿用段落篩選（MIRA 的 Rearrange）開關，篩選時間算在 retrieval 裡
     post = None
     rearrange_info = None
+    conflict_info = None
+    context_note = None
     card = None
     if seen and artwork:
         card = {
@@ -413,6 +421,12 @@ async def _chat_stream(
         rearrange_info = post.rearrange
         if post.mode == "scan" and rearrange_mod.enabled(rearrange):
             sources, rearrange_info = await rearrange_mod.rearrange(question, sources, strategy)
+        # 矛盾檢查（docs/adr/028）：要放進 prompt 的段落還有 2 段以上才問；
+        # 有矛盾就在參考資料後面加提醒
+        if not post.degraded and conflict_mod.enabled(conflict_check):
+            conflict_info = await conflict_mod.check(question, sources, strategy)
+            if conflict_info and conflict_info["conflict"]:
+                context_note = conflict_mod.note(conflict_info["refs"])
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     yield sse(
         "sources",
@@ -424,6 +438,7 @@ async def _chat_stream(
             "identified": identified,
             "route": route_info,
             "rearrange": rearrange_info,
+            "conflict_check": conflict_info,
             "use_retrieval": use_retrieval,
             "sources": sources if use_retrieval else [],
             "filter": meta.public() if meta else None,
@@ -516,6 +531,7 @@ async def _chat_stream(
         use_retrieval,
         include_card=strategy != "api_nokb",
         domain=domain,
+        note=context_note,
     )
 
     # 4. 依 strategy 生成；失敗依本地備援鏈改走下一個

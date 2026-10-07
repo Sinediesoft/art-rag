@@ -98,8 +98,29 @@ def test_other_on_drawing_comes_from_another_part(client, injection_on):
     assert got[0]["injected"] is True and got[0]["part_id"] != "mfg-002"
 
 
-def test_counterfactual_needs_text(client, injection_on):
-    body = {"question": "q", "artwork_id": "npm-000001", "inject": [{"kind": "counterfactual"}]}
+def test_compatible_is_written_like_counterfactual(client, injection_on):
+    """compatible（docs/adr/028）：手寫、和正確答案可以同時成立的段落。
+
+    注入方式和 counterfactual 相同，只是用途不同（量會不會誤報不一致）。
+    """
+    text = "1980 年代起，這幅畫多次隨故宮的北宋山水特展展出。"
+    got = sources_of(
+        client,
+        {
+            "question": "簽名藏在哪裡？",
+            "artwork_id": "npm-000001",
+            "inject": [{"kind": "compatible", "text": text, "topic": "展出"}],
+        },
+    )
+    first = got[0]
+    assert first["injected"] is True and first["injected_kind"] == "compatible"
+    assert first["text"] == text and first["topic"] == "展出"
+    assert first["artwork_id"] == "npm-000001" and first["chunk_id"] == "inject:0"
+
+
+@pytest.mark.parametrize("kind", ["counterfactual", "compatible"])
+def test_written_distractors_need_text(client, injection_on, kind):
+    body = {"question": "q", "artwork_id": "npm-000001", "inject": [{"kind": kind}]}
     assert client.post("/api/v1/chat", json=body).status_code == 422
 
 
