@@ -1,0 +1,162 @@
+[
+ {
+  "id": "q-conf-aic-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"三個月\", \"2\": \"兩年\", \"3\": null}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-aic-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"1912 年\", \"2\": \"1920 年代\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-aic-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"獨立藝術家沙龍\", \"2\": \"印象派畫展\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-aic-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"點描法\", \"2\": \"點描法\"}, \"conflict\": false}"
+ },
+ {
+  "id": "q-conf-aic-08",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"1888 至 1889 年間\", \"2\": \"1888–1889 年\"}, \"conflict\": false}"
+ },
+ {
+  "id": "q-conf-met-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"亞爾\", \"2\": \"聖雷米\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-met-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"洛克斐勒（Rockefeller）家族\", \"2\": \"安納伯格基金會（The Annenberg Foundation）\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-met-06",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"1993\", \"2\": null, \"3\": null}, \"conflict\": false}"
+ },
+ {
+  "id": "q-conf-met-09",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"療養院的畫室裡\", \"2\": \"戶外現場\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-npm-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"主峰右側瀑布下方的石縫中\", \"2\": \"畫面右下方、騾隊後方的樹叢枝葉間\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-npm-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"澄心堂紙\", \"2\": \"絹本\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-conf-npm-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"李成、荊浩\", \"2\": null, \"3\": null}, \"conflict\": false}"
+ },
+ {
+  "id": "q-conf-npm-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"范寬\", \"2\": \"名中正\", \"3\": \"范中立\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-dist-npm1-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"張大千\", \"2\": \"李霖燦\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-dist-met-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"1979\", \"2\": \"1993\"}, \"conflict\": true}"
+ },
+ {
+  "id": "q-dist-aic-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"answers\": {\"1\": \"巴黎沙龍\", \"2\": \"第八屆印象派畫展\"}, \"conflict\": true}"
+ }
+]

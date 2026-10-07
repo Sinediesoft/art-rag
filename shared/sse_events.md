@@ -20,6 +20,13 @@
 `candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
 `sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
 
+`sources` 另帶 `conflict_check`（docs/adr/028）：開啟參考資料矛盾檢查（請求的 `conflict_check`、`.env` 的
+`CONFLICT_CHECK` 或 `models.yaml` 的 `conflict_check.enabled`）而且要放進 prompt 的段落有 2 段以上時為
+`{"conflict", "refs", "ms", "fallback"}`——有沒有矛盾、互相矛盾的段落 `ref`、檢查花幾毫秒、失敗原因
+（成功為 `null`；失敗時當成沒檢查）；沒開、不到 2 段、策略是 `mock` 時為 `null`。`conflict` 為 `true` 時，
+送給模型的參考資料後面多一句「系統比對：參考資料 [1]、[2] 對這個問題的說法不一致…」，回答會明白指出說法不一致。
+檢查只問本地模型、只送文字；時間也算在 `done.latency_ms.retrieval` 裡。
+
 `sources` 另帶七段權限控管（docs/adr/015）的第 3～6 段：
 - `filter`：Metadata Filter `{"domain", "domain_label", "clearance", "depts", "levels", "doc_id", "doc_label", "doc_level", "text"}`，
   只照 JWT 的 `clearance` 與 `depts` 產生（`text` 例：`domain = "工廠圖紙" AND clearance <= 1 AND dept IN ("公開", …) AND doc_id = "mfg-002"`）；

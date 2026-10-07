@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（例如沒有 GPU 的電腦關掉）
     rearrange: str = ""
 
+    # 參考資料矛盾檢查（docs/adr/028）：留空＝shared/models.yaml 的 conflict_check.enabled；
+    # true／false 覆寫這台主機的設定（多一次本地模型呼叫，慢的主機可以關掉）
+    conflict_check: str = ""
+
     # Ollama 模型閒置多久才卸載（docs/adr/025）：例如 60m；留空＝Ollama 預設 5 分鐘。
     # 只送給 hybrid／hybrid_fallback／lora；記憶體吃緊時記憶體管理照樣用 keep_alive=0 卸載
     model_keep_alive: str = ""
@@ -170,6 +174,16 @@ class RearrangeSpec(BaseModel):
     max_candidates: int = 5
     timeout_s: float = 30
     max_tokens: int = 16
+
+
+class ConflictCheckSpec(BaseModel):
+    """參考資料矛盾檢查（docs/adr/028）：段落篩選後還有 2 段以上時，先只問本地模型「這幾段對這個問題
+    有沒有互相矛盾」；有的話在參考資料後面加一句提醒，回答時明白指出說法不一致"""
+
+    enabled: bool = False
+    prompt_version: str = "conflict_check_v1"
+    max_tokens: int = 60
+    timeout_s: float = 10
 
 
 class ChatSpec(BaseModel):
@@ -335,6 +349,7 @@ class ModelsConfig(BaseModel):
     # 領域路由：照片先判斷是畫作還是工廠圖紙（MMed-RAG 的領域辨識，見 docs/adr/007）
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
+    conflict_check: ConflictCheckSpec = ConflictCheckSpec()
     chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()

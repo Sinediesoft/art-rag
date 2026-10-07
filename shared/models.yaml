@@ -308,6 +308,15 @@ rearrange:
   timeout_s: 30                 # 篩選整體的時間上限，超過就用原本的段落
   max_tokens: 16                # 模型只需要輸出段落編號
 
+# 參考資料矛盾檢查（docs/adr/028）：段落篩選後還有 2 段以上時，先只問本地模型「這幾段對這個問題有沒有互相矛盾」，
+# 有的話在參考資料後面加一句提醒，回答時明白指出說法不一致。只送文字、只呼叫本地主推論伺服器；
+# 逾時或輸出看不懂就當成沒檢查。開關優先順序：請求的 conflict_check ＞ .env 的 CONFLICT_CHECK ＞ 這裡
+conflict_check:
+  enabled: true                 # 2026-10-07 起預設開（ADR 028）；慢的主機在 .env 設 CONFLICT_CHECK=false
+  prompt_version: conflict_check_v1  # 對應 shared/prompts/conflict_check_v1.md
+  max_tokens: 60                # 一行 JSON {"conflict": …, "refs": […]}
+  timeout_s: 10                 # 超過就當成沒檢查，照常回答
+
 # 問答要不要附圖（Issue #2、docs/adr/024）：已辨識（或已指定）畫作／圖紙、檢索也開著時，答案來自段落與作品卡，
 # 圖只是補充；不送可以省約 1,070 token，4 GB 顯卡上明顯變快。關檢索的對照組照樣送圖（檢索增益靠它量）。
 # 預設 true＝和原本相同。各主機用 .env 的 SEND_IMAGE 覆寫（例如 GTX 1650 設 false），請求也可用 send_image 指定

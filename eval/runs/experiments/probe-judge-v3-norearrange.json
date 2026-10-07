@@ -1,0 +1,162 @@
+[
+ {
+  "id": "q-conf-aic-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"三個月\", \"about\": \"〈大碗島的星期天下午〉的創作時間\"}, \"2\": {\"answer\": \"兩年\", \"about\": \"〈大碗島的星期天下午〉的創作時間\"}, \"3\": null, \"4\""
+ },
+ {
+  "id": "q-conf-aic-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"1912 年\", \"about\": \"巴特雷買下這幅畫的時間\"}, \"2\": {\"answer\": \"1920 年代\", \"about\": \"巴特雷買下這幅畫的時間\"}, \"3\": null, \"4\": "
+ },
+ {
+  "id": "q-conf-aic-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"獨立藝術家沙龍\", \"about\": \"這幅畫第一次公開展出的展覽\"}, \"2\": {\"answer\": \"印象派畫展\", \"about\": \"這幅畫第一次公開展出的展覽\"}, \"3\": null, \"4"
+ },
+ {
+  "id": "q-conf-aic-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"1\": null, \"2\": null, \"3\": {\"answer\": \"點描法\", \"about\": \"〈大碗島的星期天下午〉的技法\"}, \"4\": {\"answer\": \"點描法\", \"about\": \"〈大碗島的星期天下午〉外框"
+ },
+ {
+  "id": "q-conf-aic-08",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"1888 至 1889 年\", \"about\": \"〈大碗島的星期天下午〉的點描外框加上年份\"}, \"2\": null, \"3\": null, \"4\": {\"answer\": \"1888–1889 年\","
+ },
+ {
+  "id": "q-conf-met-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"亞爾\", \"about\": \"〈有絲柏的麥田〉的創作地點\"}, \"2\": null, \"3\": {\"answer\": \"聖雷米\", \"about\": \"〈有絲柏的麥田〉的創作地點\"}, \"conflict"
+ },
+ {
+  "id": "q-conf-met-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"洛克斐勒（Rockefeller）家族\", \"about\": \"大都會購藏〈有絲柏的麥田〉的經費來源\"}, \"2\": {\"answer\": \"安納伯格基金會（The Annenberg Foundatio"
+ },
+ {
+  "id": "q-conf-met-06",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"1949\", \"about\": \"〈有絲柏的麥田〉的購入年份\"}, \"2\": {\"answer\": \"1993\", \"about\": \"〈有絲柏的麥田〉的購入年份\"}, \"3\": null, \"4\": n"
+ },
+ {
+  "id": "q-conf-met-09",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"療養院的畫室\", \"about\": \"倫敦國家美術館收藏版本的創作地點\"}, \"2\": null, \"3\": {\"answer\": \"聖雷米的療養院附近\", \"about\": \"〈有絲柏的麥田〉的創作地點"
+ },
+ {
+  "id": "q-conf-npm-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"主峰右側瀑布下方的石縫中\", \"about\": \"范寬的簽名位置\"}, \"2\": {\"answer\": \"畫面右下方、騾隊後方的樹叢枝葉間\", \"about\": \"范寬的簽名位置\"}, \"3\": null"
+ },
+ {
+  "id": "q-conf-npm-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"澄心堂紙\", \"about\": \"〈谿山行旅圖〉的材質\"}, \"2\": {\"answer\": \"絹本\", \"about\": \"〈谿山行旅圖〉的材質\"}, \"3\": null, \"4\": null, \"5\""
+ },
+ {
+  "id": "q-conf-npm-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": null,
+  "raw": "{\"1\": null, \"2\": {\"answer\": \"李成、荊浩\", \"about\": \"范寬早年學的是哪些畫家的畫法\"}, \"3\": null, \"4\": null, \"5\": null, \"conflict\": false}"
+ },
+ {
+  "id": "q-conf-npm-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"范寬\", \"about\": \"范寬的本名\"}, \"2\": {\"answer\": \"中正\", \"about\": \"范寬的本名\"}, \"3\": null, \"4\": null, \"5\": null, \"con"
+ },
+ {
+  "id": "q-dist-npm1-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"張大千\", \"about\": \"發現作者簽名的時間與人\"}, \"2\": {\"answer\": \"李霖燦\", \"about\": \"發現作者簽名的時間與人\"}, \"3\": null, \"conflict\": "
+ },
+ {
+  "id": "q-dist-met-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"1979年\", \"about\": \"大都會博物館取得〈有絲柏的麥田〉的年份\"}, \"2\": {\"answer\": \"1993年\", \"about\": \"大都會博物館取得〈有絲柏的麥田〉的年份\"}, \"3\""
+ },
+ {
+  "id": "q-dist-aic-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": null,
+  "raw": "{\"1\": {\"answer\": \"巴黎沙龍\", \"about\": \"這幅畫第一次展出\"}, \"2\": {\"answer\": \"第八屆印象派畫展\", \"about\": \"這幅畫第一次展出\"}, \"3\": null, \"4\": null, \""
+ }
+]

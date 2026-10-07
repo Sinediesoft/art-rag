@@ -267,16 +267,24 @@ class ImageAlignment(BaseModel):
     latency_ms: int = Field(description="對位與比對的計算時間（不含讀檔）")
 
 
-class Distractor(BaseModel):
-    """干擾段落（評估專用，docs/adr/019）。混進檢索結果後照常經過洩密掃描與段落篩選。"""
+WRITTEN_DISTRACTORS = {"counterfactual", "compatible"}  # 呼叫端手寫 text 的干擾段落
 
-    kind: Literal["counterfactual", "other"] = Field(
+
+class Distractor(BaseModel):
+    """干擾段落（評估專用，docs/adr/019、028）。混進檢索結果後照常經過洩密掃描與段落篩選。"""
+
+    kind: Literal["counterfactual", "compatible", "other"] = Field(
         description="counterfactual＝呼叫端手寫、和正確答案衝突的段落；"
+        "compatible＝呼叫端手寫、看起來相近但和正確答案可以同時成立的段落（量會不會誤報不一致）；"
         "other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落"
     )
-    text: str | None = Field(default=None, max_length=2000, description="counterfactual 必填")
+    text: str | None = Field(
+        default=None, max_length=2000, description="counterfactual、compatible 必填"
+    )
     topic: str | None = Field(
-        default=None, max_length=50, description="counterfactual 的段落主題；留空＝「干擾段落」"
+        default=None,
+        max_length=50,
+        description="counterfactual、compatible 的段落主題；留空＝「干擾段落」",
     )
     position: Literal["first", "last"] = Field(
         default="first", description="放在真正段落之前（較難）或之後"
@@ -284,8 +292,8 @@ class Distractor(BaseModel):
 
     @model_validator(mode="after")
     def _text_for_counterfactual(self):
-        if self.kind == "counterfactual" and not (self.text or "").strip():
-            raise ValueError("counterfactual 干擾段落要有 text")
+        if self.kind in WRITTEN_DISTRACTORS and not (self.text or "").strip():
+            raise ValueError(f"{self.kind} 干擾段落要有 text")
         return self
 
 
@@ -300,6 +308,11 @@ class ChatRequest(BaseModel):
     rearrange: bool | None = Field(
         default=None,
         description="檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）",
+    )
+    conflict_check: bool | None = Field(
+        default=None,
+        description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
+        "（docs/adr/028）；null＝依伺服器設定",
     )
     post_filter: Literal["jev", "local"] | None = Field(
         default=None,

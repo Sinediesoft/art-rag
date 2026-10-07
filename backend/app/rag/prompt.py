@@ -64,10 +64,12 @@ def build_messages(
     use_retrieval: bool = True,
     include_card: bool = True,
     domain: str = "art",
+    note: str | None = None,
 ) -> list[dict]:
     """include_card=False 給 A1 對照組（api_nokb）：只送照片與問題，不帶任何知識庫內容。
 
     domain="mfg" 時 artwork 傳的是零件，改用圖紙模板與零件卡。
+    note：接在參考資料後面的系統提醒（矛盾檢查，docs/adr/028）；關檢索時不加。
     """
     tpl = load_template(prompt_version(domain))
     card = part_card(artwork) if domain == "mfg" else artwork_card(artwork)
@@ -78,7 +80,12 @@ def build_messages(
     user_text = (
         tpl["user"]
         .replace("{{artwork_card}}", card if include_card else NO_CARD)
-        .replace("{{context}}", format_context(sources) if use_retrieval else NO_CONTEXT)
+        .replace(
+            "{{context}}",
+            format_context(sources) + (f"\n\n{note}" if note else "")
+            if use_retrieval
+            else NO_CONTEXT,
+        )
         .replace("{{question}}", question)
     )
     # 圖放在文字前面：推論伺服器會沿用和前一個 prompt 開頭相同那段的計算，同一張圖的追問

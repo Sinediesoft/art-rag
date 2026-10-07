@@ -1915,6 +1915,11 @@ export interface components {
              */
             rearrange?: boolean | null;
             /**
+             * Conflict Check
+             * @description 回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定
+             */
+            conflict_check?: boolean | null;
+            /**
              * Post Filter
              * @description 七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。null＝只用地端規則剔除有洩密風險的段落（其他頁面）
              */
@@ -2063,23 +2068,23 @@ export interface components {
         };
         /**
          * Distractor
-         * @description 干擾段落（評估專用，docs/adr/019）。混進檢索結果後照常經過洩密掃描與段落篩選。
+         * @description 干擾段落（評估專用，docs/adr/019、028）。混進檢索結果後照常經過洩密掃描與段落篩選。
          */
         Distractor: {
             /**
              * Kind
-             * @description counterfactual＝呼叫端手寫、和正確答案衝突的段落；other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落
+             * @description counterfactual＝呼叫端手寫、和正確答案衝突的段落；compatible＝呼叫端手寫、看起來相近但和正確答案可以同時成立的段落（量會不會誤報不一致）；other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落
              * @enum {string}
              */
-            kind: "counterfactual" | "other";
+            kind: "counterfactual" | "compatible" | "other";
             /**
              * Text
-             * @description counterfactual 必填
+             * @description counterfactual、compatible 必填
              */
             text?: string | null;
             /**
              * Topic
-             * @description counterfactual 的段落主題；留空＝「干擾段落」
+             * @description counterfactual、compatible 的段落主題；留空＝「干擾段落」
              */
             topic?: string | null;
             /**
