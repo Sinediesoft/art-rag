@@ -12,13 +12,20 @@ import { account, accounts, baseHandlers, done, factoryRoute, json, liveSse, moc
 vi.mock("./lib/image", () => ({ preprocessImage: async (f: File) => f }));
 
 let where = "/";
+let whereSearch = "";
 function Where() {
-  where = useLocation().pathname;
+  const l = useLocation();
+  where = l.pathname;
+  whereSearch = l.search;
   return null;
 }
 
+/** 最近一次 renderApp 的 QueryClient（檢查共用快取有沒有被舊回應寫回） */
+let lastQc!: QueryClient;
+
 function renderApp(path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  lastQc = qc;
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
@@ -750,7 +757,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
   };
 
   /** 進工廠模組、試算一筆修改，停在「確認寫入」 */
-  const changeReady = async () => {
+  const changeReady = async (over: Record<string, unknown> = {}) => {
     const t = factoryBackend();
     let current = "planner";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
@@ -764,7 +771,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
         return json(factoryRoute({ question: q, intent: "modify", intent_label: "修改資料", gate: "modify", dispatch: { op: "adjust_stock", part_id: "mfg-002", part_label: "連接法蘭", artwork_id: null, question: q } }));
       return json(factoryRoute({ question: q }));
     });
-    t.on("POST", "/changes/preview", () => json(preview));
+    t.on("POST", "/changes/preview", () => json({ ...preview, ...over }));
     renderApp();
     await ask("連接法蘭有哪些公差要求？");
     await idle();
@@ -772,7 +779,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
     await ask("連接法蘭庫存加 5");
     await idle();
-    await screen.findByRole("button", { name: "確認寫入" });
+    await screen.findByRole("button", { name: over.next === "approval" ? "送主管核准" : "確認寫入" });
     return { t, setCurrent: (id: string) => (current = id) };
   };
   const committed = { change_no: "CH-1", text: "SYNTH_COMMITTED", rows: [], moves: 1, op: "adjust_stock", summary: "", account: account() };
@@ -836,5 +843,168 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     await waitFor(() => expect(document.body.textContent).toContain("試算已過期（PENDING_EXPIRED）"));
     expect(document.body.textContent).not.toContain("結果未確認");
     expect(screen.getByRole("button", { name: "確認寫入" })).toBeTruthy();
+  });
+
+  // 第 8 次 code review F1：沒有重新整理、沒有換身分，直接按最後一輪的「重新產生」
+  const lastAi = () => [...document.querySelectorAll(".msg--ai")].at(-1) as HTMLElement;
+  const routeCalls = (t: ReturnType<typeof mockTransport>) => t.calls.filter((c) => c.path === "/agent/route").length;
+
+  it("寫入送出中：最後一輪沒有「重新產生」，也不能重跑（不會重新試算）", async () => {
+    const { t } = await changeReady();
+    expect(within(lastAi()).getByLabelText("重新產生")).toBeTruthy();
+    t.on("POST", "/changes/pend-1/commit", () => new Promise<Response>(() => undefined));
+    fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
+    await screen.findByRole("button", { name: "寫入中…" });
+    expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
+    const before = routeCalls(t);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(routeCalls(t)).toBe(before);
+    expect(t.calls.filter((c) => c.path === "/changes/preview")).toHaveLength(1);
+  });
+
+  it.each([
+    ["確認寫入", {}, "/changes/pend-1/commit"],
+    ["送主管核准", { next: "approval", reasons: ["超過額度"] }, "/changes/pend-1/request-approval"],
+  ])("「%s」連線中斷 → 結果未確認：沒有「重新產生」，提示與送出的紀錄留著", async (label, over, path) => {
+    const { t } = await changeReady(over);
+    t.on("POST", path, () => Promise.reject(new TypeError("network down")));
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => expect(lastAi().textContent).toContain(`${label}已經送出、沒有收到結果`));
+    expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    expect(t.calls.filter((c) => c.path === "/changes/preview")).toHaveLength(1);
+    expect(t.calls.filter((c) => c.path === path)).toHaveLength(1);
+  });
+
+  // 第 8 次 code review F2：後端先 commit 交易再讀回／寫稽核，後面出錯一樣回 500
+  it.each([
+    ["確認寫入", {}, "/changes/pend-1/commit"],
+    ["送主管核准", { next: "approval", reasons: ["超過額度"] }, "/changes/pend-1/request-approval"],
+  ])("「%s」回 500：不能當成確定失敗——結果未確認、不給再按、不能重跑，存檔也是 unconfirmed", async (label, over, path) => {
+    const { t } = await changeReady(over);
+    t.on("POST", path, () => json({ error: { code: "INTERNAL", message: "伺服器錯誤", request_id: "r" } }, 500));
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => expect(lastAi().textContent).toContain("結果未確認"));
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
+    expect(t.calls.filter((c) => c.path === path)).toHaveLength(1);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).convs[0].turns.at(-1).archived.outcome).toBe("unconfirmed"));
+  });
+});
+
+describe("建檔頁卸載後的晚到回應（第 8 次 code review F3：共用快取與網址）", () => {
+  const field = (over: Record<string, unknown> = {}) => ({
+    key: "title_zh",
+    label: "中文標題",
+    value: "SYNTH_TITLE",
+    source: "人",
+    note: null,
+    hint: null,
+    group: null,
+    read: true,
+    required: true,
+    kind: "text",
+    options: [],
+    suggestions: [],
+    status: "ok",
+    message: null,
+    ...over,
+  });
+  const draft = (over: Record<string, unknown> = {}) => ({
+    draft_id: "draft-1",
+    domain: "art",
+    status: "draft",
+    created_at: "2026-10-09T00:00:00Z",
+    updated_at: null,
+    image_id: "img-1",
+    photo_url: "/api/v1/images/img-1",
+    kb_image_url: "/api/v1/images/img-1",
+    item_id: "art-new-1",
+    fields: [field()],
+    checks: [],
+    extraction: { model: null, strategy: null, ms: null, raw: null, error: null },
+    can_commit: true,
+    blockers: [],
+    commit: null,
+    item_url: null,
+    egress: {},
+    ...over,
+  });
+  /** 能收錄的身分（kb_intake）；憑證更新後改成訪客 */
+  const intakeBackend = () => {
+    const t = factoryBackend();
+    let current = "manager";
+    t.on("GET", "/auth/accounts", () => {
+      const a = accounts(current);
+      return json(current === "manager" ? { ...a, current: account("manager", { ops: ["kb_intake"] }) } : a);
+    });
+    return { t, setCurrent: (id: string) => (current = id) };
+  };
+  const renew = () =>
+    act(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
+    });
+  const cached = () => JSON.stringify(lastQc.getQueryData(["intake", "draft-1"]) ?? null);
+
+  it("建草稿的串流：離開頁面後才到的草稿，不改網址、不寫進共用快取", async () => {
+    const { t } = intakeBackend();
+    const live = liveSse();
+    // 傳輸層不理會中止：資料照樣送到
+    t.on("POST", "/intake", () => live.respond(null));
+    renderApp("/artworks/intake?image=img-1");
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/intake")).toBe(true));
+    fireEvent.click(document.querySelector(".mtop__back")!);
+    await waitFor(() => expect(where).toBe("/"));
+    act(() => {
+      live.push("draft", draft());
+      live.close();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(where).toBe("/");
+    expect(whereSearch).toBe("");
+    expect(cached()).toBe("null");
+  });
+
+  it("收錄送出中憑證更新：舊的收錄回應晚到，不寫回共用快取；頁首照樣記下伺服器回覆", async () => {
+    const { t, setCurrent } = intakeBackend();
+    t.on("GET", "/intake/draft-1", () => json(draft()));
+    let release!: () => void;
+    t.on("POST", "/intake/draft-1/commit", () => new Promise<Response>((ok) => (release = () => ok(json(draft({ status: "done", fields: [field({ value: "SYNTH_COMMITTED" })] }))))));
+    renderApp("/artworks/intake?draft=draft-1");
+    fireEvent.click(await screen.findByRole("button", { name: "收錄進知識庫（art-new-1）" }));
+    await screen.findByRole("button", { name: "收錄中…" });
+    const gets = () => t.calls.filter((c) => c.method === "GET" && c.path === "/intake/draft-1").length;
+    const before = gets();
+    setCurrent("guest");
+    renew();
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toContain("〈照片建檔入庫〉還在等伺服器回覆"));
+    // 等身分重新確認、功能頁以新身分重建並重新讀過草稿（快取已重設），舊的收錄回應才到
+    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await waitFor(() => expect(gets()).toBeGreaterThan(before));
+    await screen.findByRole("button", { name: "收錄進知識庫（art-new-1）" });
+    await act(async () => release());
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toContain("〈照片建檔入庫〉伺服器回覆已完成"));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(cached()).not.toContain("SYNTH_COMMITTED");
+    expect(document.body.textContent).not.toContain("SYNTH_COMMITTED");
+  });
+
+  it("儲存修改期間換了身分：存檔回應晚到，不接著送出收錄", async () => {
+    const { t, setCurrent } = intakeBackend();
+    t.on("GET", "/intake/draft-1", () => json(draft()));
+    let release!: () => void;
+    t.on("PUT", "/intake/draft-1", () => new Promise<Response>((ok) => (release = () => ok(json(draft({ fields: [field({ value: "SYNTH_SAVED" })] }))))));
+    t.on("POST", "/intake/draft-1/commit", () => json(draft({ status: "done" })));
+    renderApp("/artworks/intake?draft=draft-1");
+    const commitBtn = await screen.findByRole("button", { name: "收錄進知識庫（art-new-1）" });
+    fireEvent.change(screen.getByDisplayValue("SYNTH_TITLE"), { target: { value: "改過的標題" } });
+    fireEvent.click(commitBtn);
+    await waitFor(() => expect(t.calls.some((c) => c.method === "PUT" && c.path === "/intake/draft-1")).toBe(true));
+    setCurrent("guest");
+    renew();
+    await act(async () => release());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(t.calls.some((c) => c.path === "/intake/draft-1/commit")).toBe(false);
+    expect(cached()).not.toContain("SYNTH_SAVED");
   });
 });

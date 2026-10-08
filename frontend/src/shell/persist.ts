@@ -197,6 +197,8 @@ export const REJECTED: Record<string, string> = {
 
 /** 從紀錄還原的一輪能不能重新查詢：被拒絕的、只剩佔位文字的不行（不能把佔位文字當問句送出） */
 export function canRerun(t: Turn) {
+  // 寫入送出中或結果未確認（還在畫面上、沒有重新整理）：重跑會清掉這一輪、重新試算，再按一次就可能是第二筆
+  if (t.part?.kind === "change" && (t.part.status === "committing" || t.part.status === "unconfirmed")) return false;
   if (!t.archived) return true;
   if (t.archived.outcome && REJECTED[t.archived.outcome]) return false;
   // 結果未確認的寫入：重跑會重新試算、再按一次就可能變成第二筆

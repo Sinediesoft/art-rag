@@ -6,6 +6,7 @@ import { useAccounts, useIntakeDraft } from "../api/hooks";
 import { streamIntake, type IntakeErrorEvent, type IntakeStage } from "../api/sse";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
 import { ImageUploader } from "../components/common/ImageUploader";
+import { useAlive } from "../hooks/useAlive";
 
 type Domain = "mfg" | "art";
 
@@ -109,6 +110,8 @@ export function IntakePage({ domain }: { domain: Domain }) {
       onStage: (e) => setStage(e.stage),
       onToken: (t) => setRaw((r) => r + t),
       onDraft: (d) => {
+        // 已中止（離開頁面、換了身分、重新拍）：晚到的草稿不寫共用快取、不改網址
+        if (c.signal.aborted) return;
         qc.setQueryData(["intake", d.draft_id], d);
         setParams({ draft: d.draft_id }, { replace: true });
       },
@@ -425,6 +428,8 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
   const [view, setView] = useState<0 | 1>(0);
   const [formOpen, setFormOpen] = useState(false);
   const autoOpened = useRef(false);
+  /** 卸載後（離開頁面、身分改變時功能頁重建）舊回應不寫回共用快取、不接著送下一個請求、不改網址 */
+  const alive = useAlive();
 
   // 收錄完成：清單、知識庫版本都變了
   const status = d?.status;
@@ -465,6 +470,7 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
     : d.fields.some((f) => f.value !== null && f.value !== "");
 
   const apply = (next: IntakeDraft) => {
+    if (!alive()) return next;
     qc.setQueryData(["intake", draftId], next);
     setEdits({});
     return next;
@@ -499,11 +505,14 @@ function DraftView({ draftId, domain, onRestart }: { draftId: string; domain: Do
   const commit = () =>
     run("commit", async () => {
       if (dirty) await saveEdits(); // 沒儲存的修改先存，驗證沒過後端會擋
+      // 存檔期間離開或換了身分：不接著入庫
+      if (!alive()) return;
       apply(await api.commitIntake(draftId));
     });
   const discard = () =>
     run("discard", async () => {
       await api.discardIntake(draftId);
+      if (!alive()) return;
       qc.removeQueries({ queryKey: ["intake", draftId] });
       onRestart();
     });

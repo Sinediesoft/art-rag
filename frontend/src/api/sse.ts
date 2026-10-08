@@ -163,6 +163,7 @@ export async function streamSSE(path: string, body: unknown, handlers: Handlers,
     handlers.error?.({ code: "NETWORK_ERROR", message: "連不上伺服器", request_id: "" });
     return;
   }
+  if (signal?.aborted) return;
   if (!res.ok || !res.body) {
     const data = await res.json().catch(() => null);
     handlers.error?.({
@@ -187,15 +188,20 @@ export async function streamSSE(path: string, body: unknown, handlers: Handlers,
   try {
     for (;;) {
       const { value, done } = await reader.read();
+      // 已經中止：read() 早一步拿到的資料也不再交給 handler（呼叫端可能已經卸載、換了身分）
+      if (signal?.aborted) {
+        void reader.cancel().catch(() => undefined);
+        return;
+      }
       if (done) break;
       buffer += value.replace(/\r\n/g, "\n");
       let idx;
-      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      while ((idx = buffer.indexOf("\n\n")) >= 0 && !signal?.aborted) {
         dispatch(buffer.slice(0, idx));
         buffer = buffer.slice(idx + 2);
       }
     }
-    if (buffer.trim()) dispatch(buffer);
+    if (buffer.trim() && !signal?.aborted) dispatch(buffer);
   } catch (err) {
     if ((err as Error).name !== "AbortError") {
       handlers.error?.({ code: "STREAM_ERROR", message: "串流中斷", request_id: "" });

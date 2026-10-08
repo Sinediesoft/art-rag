@@ -1089,7 +1089,7 @@ function Actions({ turn, isLast }: { turn: Turn; isLast: boolean }) {
           <Icon name={copied ? "check" : "copy"} />
         </button>
       )}
-      {isLast && !turn.archived && (
+      {isLast && !turn.archived && canRerun(turn) && (
         <button type="button" className="icon-btn" title="重新產生" aria-label="重新產生" onClick={th.regenerate}>
           <Icon name="refresh" />
         </button>

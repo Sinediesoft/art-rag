@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { api, ApiError } from "../../api/client";
+import { useAlive } from "../../hooks/useAlive";
 import { preprocessImage } from "../../lib/image";
 
 /** 拍照／上傳：手機直接開後鏡頭；上傳前先在瀏覽器轉正、壓縮、去除 EXIF。
@@ -19,6 +20,7 @@ export function ImageUploader({
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const alive = useAlive();
 
   const handle = async (file?: File) => {
     if (!file) return;
@@ -27,7 +29,8 @@ export function ImageUploader({
     try {
       const blob = await preprocessImage(file);
       const { image_id } = await api.uploadImage(blob);
-      onUploaded(image_id);
+      // 上傳期間離開頁面或換了身分：不再交給呼叫端（它可能會改網址、開始辨識）
+      if (alive()) onUploaded(image_id);
     } catch (e) {
       setError(e instanceof ApiError ? `${e.message}（${e.requestId}）` : (e as Error).message);
     } finally {

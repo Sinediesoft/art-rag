@@ -27,10 +27,14 @@ const set = (next: WriteEntry[]) => {
   emit();
 };
 
-/** 連不上、閘道逾時：請求可能已經到了伺服器，結果不能確定 */
+/**
+ * 寫入的結果能不能確定沒有落地：只有伺服器明確拒絕（4xx，例如權限不足、試算過期、驗證沒過）才算確定沒寫。
+ * 連不上、閘道逾時、5xx 都算「結果不能確定」——後端是先 commit 交易、再重建庫存／讀回結果／寫稽核，
+ * 後面這幾步出錯一樣回 500，交易不會回滾（change_service、production_repo）
+ */
 export const resultUnknown = (e: unknown) => {
   const status = (e as { status?: number } | null)?.status;
-  return status === undefined || status === 0 || status === 502 || status === 503 || status === 504;
+  return status === undefined || status === 0 || status >= 500;
 };
 
 export function trackWrite<T>(label: string, p: Promise<T>): Promise<T> {
