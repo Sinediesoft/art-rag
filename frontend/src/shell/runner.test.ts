@@ -56,7 +56,7 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
     const s = run.get();
     expect(s.phase).toBe("done");
     expect((s.part as ChatPart).status).toBe("done");
-    const stages = buildStages(s.route!, progressOf(s.part));
+    const stages = buildStages(s.route!, progressOf(s.part, s.phase));
     expect(stages.map((x) => x.short)).toEqual(["認證授權", "Jev Choice", "Metadata Filter", "Jev Noul", "Jev Score", "生成閘門", "本地 LLM"]);
     expect(stages.every((x) => x.state === "ok" || x.state === "warn")).toBe(true);
     expect(ctaOf(s)?.domain).toBe("art");
@@ -187,7 +187,7 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
     const s = run.get();
     expect(domainOf(s)).toBeNull();
     expect(ctaOf(s)).toBeNull();
-    const stages = buildStages(s.route!, progressOf(s.part));
+    const stages = buildStages(s.route!, progressOf(s.part, s.phase));
     expect(stages.find((x) => x.key === "gate")!.state).toBe("block");
     expect(stages.find((x) => x.key === "gen")!.state).toBe("skip");
   });

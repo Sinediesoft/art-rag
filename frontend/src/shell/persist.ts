@@ -84,23 +84,31 @@ export function archive(t: Turn): ArchivedTurn {
       redacted: false,
     };
   }
-  const mod = progressOf(t.part);
+  const mod = progressOf(t.part, t.phase);
+  const p0 = t.part;
+  // 第 6 段生成閘門降級、試算被拒絕：/agent/route 放行了，但這一輪一樣是「被關卡拒絕」
+  const outcome =
+    r.outcome === "pass" && p0?.kind === "chat" && (p0.done?.degraded || p0.sources?.post_filter?.gate?.passed === false)
+      ? "degraded"
+      : r.outcome === "pass" && p0?.kind === "change" && p0.preview?.next === "rejected"
+        ? "rejected"
+        : r.outcome;
   const base: ArchivedTurn = {
     intentLabel: r.intent_label,
     domain: domainOf(t),
-    outcome: r.outcome,
+    outcome,
     stages: buildStages(r, mod).map(({ key, short, state }) => ({ key, short, state })),
     summary: summaryOf(r, mod),
     redacted: false,
   };
-  if (r.outcome !== "pass") return base;
+  if (outcome !== "pass") return { ...base, redacted: outcome !== "short_circuit" };
   if (!isPublicTurn(t)) return { ...base, redacted: true, refs: base.domain === "factory" ? factoryRefs(t) : undefined };
   const p = t.part;
   const d = dispatchOf(r);
   if (d.artwork_id) Object.assign(base, { artworkId: d.artwork_id, artworkLabel: d.artwork_label ?? d.artwork_id });
   else if (r.photo?.kind === "art" && r.photo.id) Object.assign(base, { artworkId: r.photo.id, artworkLabel: r.photo.label });
   if (p?.kind === "chat" && p.status === "done" && !p.done?.degraded) {
-    base.answer = p.text;
+    base.answer = scrubSecrets(p.text);
     base.sources = (p.sources?.sources ?? []).filter((s) => PUBLIC(s.level));
   }
   if (p?.kind === "artSearch" && p.status === "done") base.artResults = p.items.slice(0, 12);
@@ -121,14 +129,53 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
   return Object.keys(refs).length ? refs : undefined;
 }
 
+/**
+ * 帳密、金鑰、憑證型式的字串：後端的 mask_pii 只遮電話、Email、身分證，存進瀏覽器前再遮一次。
+ * 「密碼是 xxx」「api key: xxx」的值、JWT、常見金鑰前綴、32 字以上的不透明字串都換成［已遮蔽］。
+ */
+const SECRET_PATTERNS: [RegExp, string][] = [
+  [/(密碼|口令|密鑰|金鑰|帳密|憑證|權杖|password|passwd|pwd|api[\s_-]?key|access[\s_-]?key|secret|token)(\s*(?:是|為|:|：|=)?\s*)[^\s，。、,;；」）)]+/gi, "$1$2［已遮蔽］"],
+  [/\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g, "［已遮蔽］"],
+  [/\b(?:sk|pk|rk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{8,}/g, "［已遮蔽］"],
+  [/\bAKIA[0-9A-Z]{16}\b/g, "［已遮蔽］"],
+  [/[A-Za-z0-9_\-+/=]{32,}/g, "［已遮蔽］"],
+];
+export function scrubSecrets(s: string) {
+  return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), s);
+}
+
+/** 被關卡拒絕的一輪：問句本身可能就是敏感內容（注入、套取帳密、看不到的文件），不存原文 */
+export const REJECTED: Record<string, string> = {
+  blocked_auth: "（第 1 段認證與授權擋下的提問，內容沒有保存）",
+  blocked_guard: "（第 2 段 Jev Choice 擋下的提問，內容沒有保存）",
+  degraded: "（降級回應「查無資料」的提問，內容沒有保存）",
+  rejected: "（試算被拒絕的修改，內容沒有保存）",
+  gateway_denied: "（閘道拒絕連線的提問，內容沒有保存）",
+};
+
+/** 從紀錄還原的一輪能不能重新查詢：被拒絕的、只剩佔位文字的不行（不能把佔位文字當問句送出） */
+export function canRerun(t: Turn) {
+  if (!t.archived) return true;
+  if (t.archived.outcome && REJECTED[t.archived.outcome]) return false;
+  return !!t.text && !/^（.*）$/.test(t.text);
+}
+
+function savedText(t: Turn, a: ArchivedTurn) {
+  const placeholder = a.outcome ? REJECTED[a.outcome] : undefined;
+  if (placeholder) return placeholder;
+  if (!t.archived && !t.route) return "（沒有送達伺服器的提問）";
+  // 有 route 才存（後端遮蔽個資後的問句）；從紀錄還原的那一輪 text 就是當時存的問句
+  const q = t.archived ? t.text : t.route!.question;
+  return q ? scrubSecrets(q) : "（只有照片）";
+}
+
 function saveTurn(t: Turn): SavedTurn | null {
   // 還沒送達伺服器（或送出前就停止）的那一輪不存；閘道拒絕、連不上的只留流程摘要
   if (!t.archived && !t.route && !t.failure) return null;
   const archived = archive(t);
   return {
     id: t.id,
-    // 有 route 才存（後端遮蔽個資後的問句）；閘道拒絕、連不上的原始輸入不存
-    text: t.archived ? t.text : t.route ? t.route.question || "（只有照片）" : "（沒有送達伺服器的提問）",
+    text: savedText(t, archived),
     imageId: t.imageId,
     forced: t.forced,
     at: t.at,
@@ -207,8 +254,27 @@ export function load(): { convs: Conv[]; prefs: Omit<Saved, "v" | "convs"> } {
 /** 切換身分後：其他身分問到的非公開內容從畫面上收起來（只留問句與流程摘要），要看就以目前身分重新查詢 */
 export function redactForeign(t: Turn, accountId: string): Turn {
   if (t.archived || !t.account || t.account.id === accountId) return t;
-  if (t.phase === "routing" || t.phase === "running" || isPublicTurn(t)) return t;
+  if (isPublicTurn(t)) return t;
   return { ...t, text: t.route?.question || t.text, route: null, part: null, failure: null, archived: archive(t) };
+}
+
+/**
+ * 切換身分時還在跑的一輪（第 1～7 段或 3D／排程任務）：請求用的是舊身分的 JWT，
+ * store 會中止請求並讓舊的 callback 失效，這裡把已經收到的內容收起來（只留問句與流程摘要）。
+ */
+export function interruptForAccount(t: Turn): Turn {
+  const a = archive({ ...t, archived: undefined });
+  const hide = !isPublicTurn(t) || !t.route;
+  return {
+    ...t,
+    // 還沒經過後端遮蔽個資的原始輸入不留
+    text: t.route ? t.route.question || "（只有照片）" : "（切換身分時中止的提問）",
+    phase: "stopped",
+    route: null,
+    part: null,
+    failure: null,
+    archived: { ...a, outcome: a.outcome === "pass" ? "interrupted" : a.outcome, summary: "切換身分，已中止這一輪", redacted: hide || a.redacted, answer: undefined, sources: undefined, artResults: undefined },
+  };
 }
 
 /** 紀錄清單上的標題：第一句問題 */

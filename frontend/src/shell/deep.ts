@@ -1,5 +1,6 @@
 import type { RouteResponse } from "../api/client";
 import { dispatchOf } from "./runner";
+import type { Turn } from "./types";
 
 /**
  * 回答下方的「在功能頁打開」連結（原 ADR 016 的「深入」按鈕，邏輯不變）：七段流程交給哪個功能，就提供那個功能的完整頁面。
@@ -10,6 +11,18 @@ export interface DeepAction {
   label: string;
   to: string;
   primary?: boolean;
+}
+
+/**
+ * 這一輪要給的功能頁連結：出錯、第 6 段生成閘門降級「查無資料」、問答失敗都不給（ADR 016：降級不給按鈕），
+ * 其他依 deepActions 的規則
+ */
+export function deepActionsFor(t: Turn): DeepAction[] {
+  const r = t.route;
+  if (!r || t.phase === "error" || t.phase === "routing" || t.phase === "running") return [];
+  const p = t.part;
+  if (p?.kind === "chat" && (p.done?.degraded || p.sources?.post_filter?.gate?.passed === false || p.error)) return [];
+  return deepActions(r, t.imageId);
 }
 
 export function deepActions(route: RouteResponse, imageId: string | null): DeepAction[] {

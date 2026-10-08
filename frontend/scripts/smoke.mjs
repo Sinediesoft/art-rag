@@ -273,6 +273,9 @@ try {
   await js("[...document.querySelectorAll('.strip__item')].find((b) => /查詢|庫存/.test(b.textContent))?.click()");
   await sleep(300);
   await check("重新整理後：查詢結果沒有存進瀏覽器，提供「以目前身分重新查詢」", "(document.querySelector('.showcase')?.textContent ?? '').includes('以目前身分重新查詢')");
+  await js("[...document.querySelectorAll('.strip__item')].find((b) => b.textContent.includes('3D'))?.click()");
+  await waitFor("!!document.querySelector('.view__canvas--model canvas')", 15000);
+  await check("重新整理後：3D 依工作編號重新讀取，畫布可以旋轉縮放", `${showcaseKind}.includes('3D') && !!document.querySelector('.view__canvas--model canvas')`);
   await shot("factory-reload");
 
   // ------------------------------------------------------------ 藝術

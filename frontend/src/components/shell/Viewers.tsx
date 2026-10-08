@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiError, assetUrl, type ArtworkSummary, type PlannedWorkOrder } from "../../api/client";
 import { useArtwork, useArtworkColors, useArtworks, usePart, useProductionOverview, useTextSearch } from "../../api/hooks";
 import type { CadDoneEvent, CadResultEvent } from "../../api/sse";
@@ -17,16 +17,22 @@ import { ZoomPan } from "./ZoomPan";
  */
 const short = (s: string) => s.split("（")[0];
 
-function useSize<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+/**
+ * 量容器大小：用 callback ref，元素什麼時候掛上（例如先顯示讀取中、資料回來才出現）就什麼時候開始量，
+ * 換掉或卸載時停止觀察
+ */
+export function useSize<T extends HTMLElement>() {
   const [size, setSize] = useState({ w: 0, h: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
-    ro.observe(el);
-    setSize({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
+  const observer = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: T | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) return;
+    const measure = () => setSize((s) => (s.w === el.clientWidth && s.h === el.clientHeight ? s : { w: el.clientWidth, h: el.clientHeight }));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    observer.current = new ResizeObserver(measure);
+    observer.current.observe(el);
   }, []);
   return [ref, size] as const;
 }

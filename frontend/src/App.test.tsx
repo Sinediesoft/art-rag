@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { STORAGE_KEY } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
-import { baseHandlers, done, factoryRoute, json, mockTransport, route, sources, sse } from "./test/transport";
+import { accounts, baseHandlers, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
+
+// 照片前處理用 canvas，jsdom 沒有：直接把檔案交給上傳
+vi.mock("./lib/image", () => ({ preprocessImage: async (f: File) => f }));
 
 let where = "/";
 function Where() {
@@ -138,6 +141,104 @@ describe("入口：對話紀錄欄與抽屜", () => {
     fireEvent.click(screen.getByLabelText("打開對話紀錄"));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "對話紀錄" })).toBeNull();
+  });
+});
+
+describe("切換身分時還在跑的請求（舊 JWT）", () => {
+  it("串流中切成訪客：中止並收起，之後舊串流再送來的資料不會出現在畫面與存檔；切換後的新提問照常完成", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    t.on("POST", "/auth/switch", ({ body }) => {
+      current = (body as { account_id: string }).account_id;
+      return json(accounts(current));
+    });
+    const live = liveSse();
+    t.on("POST", "/inventory/ask", ({ signal }) => live.respond(signal));
+    renderApp();
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await ask("法蘭還剩幾件可以出貨？");
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
+    live.push("sql", { attempt: 1, sql: "SELECT 1", ok: true, error: null });
+    live.push("result", { columns: ["倉庫", "可用"], rows: [["SYNTH_WAREHOUSE", 99999]], row_count: 1, truncated: false, exec_ms: 2 });
+    await waitFor(() => expect(document.querySelector(".msg--ai")?.textContent).toContain("1 筆"));
+    // 切成訪客
+    fireEvent.click(document.querySelector(".topbar__account")!);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+    });
+    await waitFor(() => expect(document.querySelector(".thread")?.textContent).toContain("進行中的請求已中止"));
+    // 舊串流晚到的事件
+    act(() => {
+      live.push("token", { text: "SYNTH_ANSWER 還有 99999 件。" });
+      live.push("done", { request_id: "r" });
+      live.close();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("SYNTH_ANSWER");
+    expect(text).not.toContain("99999");
+    expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped");
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("切換身分，已中止這一輪"));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain("99999");
+    // 切換之後才送出的提問用的是新身分的 JWT，不會被中止
+    await ask("梵谷畫這幅畫的時候在哪裡？");
+    await idle();
+    expect([...document.querySelectorAll(".msg--ai")].at(-1)?.getAttribute("data-phase")).toBe("done");
+    expect(document.querySelector(".thread")?.textContent).toContain("1889 年在聖雷米");
+  });
+});
+
+describe("入口：沒有模組可以跳轉時，功能頁的交接連結要在", () => {
+  it("批次辨識：入口給「打開批次辨識」，點了到 /batch", async () => {
+    const t = factoryBackend();
+    t.on("POST", "/agent/route", () =>
+      json(route({ question: "批次辨識一批照片", intent: "batch_identify", intent_label: "批次辨識", dispatch: { artwork_id: null, part_id: null, path: "/batch", question: "批次辨識一批照片" } })),
+    );
+    renderApp();
+    await ask("批次辨識一批照片");
+    await idle();
+    const last = [...document.querySelectorAll(".msg--ai")].at(-1)!;
+    expect(last.querySelector(".jump")).toBeNull();
+    const link = within(last as HTMLElement).getByText("打開批次辨識").closest("a")!;
+    expect(link.getAttribute("href")).toBe("/batch");
+    fireEvent.click(link);
+    await waitFor(() => expect(where).toBe("/batch"));
+  });
+
+  it("比對不到的照片：入口給「看照片辨識細節」與「拍照建檔」兩邊（能用工廠領域的身分才有圖紙）", async () => {
+    const t = factoryBackend();
+    t.on("POST", "/images", () => json({ image_id: "img-9" }));
+    t.on("POST", "/agent/route", () =>
+      json(route({ question: "", intent: "art_search", photo: { kind: "unknown", id: null, label: "", domain: "mfg" }, dispatch: { artwork_id: null, question: "" } })),
+    );
+    renderApp();
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("composer-file"), { target: { files: [new File(["x"], "a.jpg", { type: "image/jpeg" })] } });
+    });
+    await screen.findByAltText("附加的照片");
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("送出"));
+    });
+    await idle();
+    const last = [...document.querySelectorAll(".msg--ai")].at(-1) as HTMLElement;
+    expect(last.querySelector(".jump")).toBeNull();
+    expect(within(last).getByText(/看照片辨識細節/).closest("a")!.getAttribute("href")).toBe("/search?image=img-9");
+    expect(within(last).getByText("拍照建檔：這是一幅畫").closest("a")!.getAttribute("href")).toBe("/artworks/intake?image=img-9");
+    expect(within(last).getByText("拍照建檔：這是一張圖紙").closest("a")!.getAttribute("href")).toBe("/drawings/intake?image=img-9");
+  });
+
+  it("降級「查無資料」：沒有跳轉，也沒有功能頁連結", async () => {
+    const t = factoryBackend();
+    const src = sources("機密");
+    src.post_filter.gate = { ...src.post_filter.gate, passed: false, message: "查無資料" };
+    t.on("POST", "/chat", () => sse([["sources", src], ["token", { text: "查無資料" }], ["done", done({ degraded: true })]]));
+    renderApp();
+    await ask("連接法蘭有哪些公差要求？");
+    await idle();
+    const last = [...document.querySelectorAll(".msg--ai")].at(-1)!;
+    expect(last.querySelector(".jump")).toBeNull();
+    expect(last.querySelector(".deeplinks")).toBeNull();
   });
 });
 

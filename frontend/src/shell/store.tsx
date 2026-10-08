@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { accountSwitch } from "../api/hooks";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Domain, View } from "./design";
-import { load, redactForeign, save, serialize } from "./persist";
+import { canRerun, interruptForAccount, load, redactForeign, save, serialize } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -57,6 +58,13 @@ export function useShell() {
 
 const RUNNING = new Set<Turn["phase"]>(["routing", "running"]);
 
+/** 這一輪有沒有使用者按了才開始、還在跑的任務（3D 重建、排程、寫入） */
+function taskRunning(t: Turn) {
+  const p = t.part;
+  if (p?.kind === "reconstruct" || p?.kind === "schedule") return !!p.job && !["done", "error", "stopped"].includes(p.job.status);
+  return p?.kind === "change" && p.status === "committing";
+}
+
 export function ShellProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const initial = useMemo(load, []);
@@ -68,6 +76,12 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   convsRef.current = convs;
   /** 每一輪（以及它的 3D／排程任務）的 AbortController */
   const controllers = useRef(new Map<string, AbortController>());
+  /**
+   * 每一次執行的世代：callback 只在自己的世代還有效時才寫回狀態。
+   * 切換身分、刪除對話時讓舊世代失效，舊 JWT 的串流就算還有事件進來也不會回填畫面。
+   */
+  const runs = useRef(new Map<string, number>());
+  const generation = useRef(0);
 
   // 存檔：串流中每個字都會更新狀態，等 400 ms 沒有變化再寫
   useEffect(() => {
@@ -89,15 +103,37 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     return ctrl;
   };
 
+  /** 這一次執行專用的 update：世代失效後的呼叫一律丟掉 */
+  const guarded = useCallback(
+    (convId: string, turnId: string, key: string) => {
+      const g = ++generation.current;
+      runs.current.set(key, g);
+      const update = updateTurn(convId, turnId);
+      return (f: (t: Turn) => Turn) => {
+        if (runs.current.get(key) === g) update(f);
+      };
+    },
+    [updateTurn],
+  );
+
+  /** 中止並讓這一輪（與它的任務）的 callback 失效 */
+  const invalidate = (turnId: string) => {
+    for (const k of [turnId, `${turnId}:task`]) {
+      controllers.current.get(k)?.abort();
+      controllers.current.delete(k);
+      runs.current.delete(k);
+    }
+  };
+
   const start = useCallback(
     (convId: string, turn: Turn, token?: string) => {
       const ctrl = control(turn.id);
-      void runTurn(turn, updateTurn(convId, turn.id), { signal: ctrl.signal, token }).finally(() => {
+      void runTurn(turn, guarded(convId, turn.id, turn.id), { signal: ctrl.signal, token }).finally(() => {
         if (controllers.current.get(turn.id) === ctrl) controllers.current.delete(turn.id);
         updateConv(convId, (c) => ({ ...c, updatedAt: Date.now() }));
       });
     },
-    [updateConv, updateTurn],
+    [guarded, updateConv],
   );
 
   const busyOf = useCallback((convId: string | null) => {
@@ -152,7 +188,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (busyOf(convId)) return;
       const c = convsRef.current.find((x) => x.id === convId);
       const t = c?.turns.find((x) => x.id === turnId);
-      if (!t) return;
+      if (!t || !canRerun(t)) return;
       // 重跑同一句（已遮蔽個資的問句）：後端依目前的憑證重新判斷第 1～7 段
       const fresh: Turn = { ...t, account: null, phase: "routing", route: null, failure: null, part: null, archived: undefined, tamper: false, ts: Date.now() };
       updateTurn(convId, turnId)(() => fresh);
@@ -172,12 +208,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const remove = useCallback((convId: string) => {
     const c = convsRef.current.find((x) => x.id === convId);
-    for (const t of c?.turns ?? []) {
-      for (const k of [t.id, `${t.id}:task`]) {
-        controllers.current.get(k)?.abort();
-        controllers.current.delete(k);
-      }
-    }
+    for (const t of c?.turns ?? []) invalidate(t.id);
     setConvs((cs) => cs.filter((x) => x.id !== convId));
   }, []);
 
@@ -194,16 +225,29 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   );
 
   const onAccountChanged = useCallback((accountId: string, label: string, currentConvId: string | null) => {
-    setConvs((cs) =>
-      cs.map((c) => {
+    // 還在跑的一輪與任務用的是舊身分的 JWT：先中止並讓 callback 失效（之後再有事件也不會回填），再收起已經收到的內容
+    const live = new Set<string>();
+    const oldJwt = (t: Turn) =>
+      t.route ? t.route.account.id !== accountId : !accountSwitch.startedAt || t.ts <= accountSwitch.startedAt;
+    for (const c of convsRef.current)
+      for (const t of c.turns)
+        if ((RUNNING.has(t.phase) || taskRunning(t)) && oldJwt(t)) {
+          invalidate(t.id);
+          live.add(t.id);
+        }
+    setConvs((cs) => {
+      const next = cs.map((c) => {
         // 每一段對話裡其他身分查到的非公開內容都收起來；提示只留在正在看的那一段
-        const turns = c.turns.map((t) => redactForeign(t, accountId));
+        const turns = c.turns.map((t) => (live.has(t.id) ? interruptForAccount(t) : redactForeign(t, accountId)));
+        const stopped = c.turns.some((t) => live.has(t.id));
         const changed = turns.some((t, i) => t !== c.turns[i]);
-        const text = `已切換身分為〈${label}〉：之後每一句都改用這張 JWT 判斷權限${changed ? "；其他身分查到的內部資料已收起" : ""}`;
+        const text = `已切換身分為〈${label}〉：之後每一句都改用這張 JWT 判斷權限${stopped ? "；進行中的請求已中止" : ""}${changed ? "；其他身分查到的內部資料已收起" : ""}`;
         const notices = c.id === currentConvId && c.turns.length ? [...c.notices, { id: uid(), ts: Date.now(), text }] : c.notices;
         return { ...c, turns, notices };
-      }),
-    );
+      });
+      convsRef.current = next;
+      return next;
+    });
   }, []);
 
   const task = (convId: string, turnId: string) => {
@@ -216,13 +260,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const t = task(convId, turnId);
       if (t?.part?.kind !== "reconstruct") return;
       const ctrl = control(`${turnId}:task`);
-      const update = updateTurn(convId, turnId);
+      const update = guarded(convId, turnId, `${turnId}:task`);
       void runReconstruct(t.part as ReconstructPart, update, ctrl.signal).finally(() => {
         void qc.invalidateQueries({ queryKey: ["part-reconstructions"] });
         updateConv(convId, (c) => ({ ...c, updatedAt: Date.now() }));
       });
     },
-    [qc, updateConv, updateTurn],
+    [guarded, qc, updateConv],
   );
 
   const startSchedule = useCallback(
@@ -230,12 +274,12 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const t = task(convId, turnId);
       if (t?.part?.kind !== "schedule") return;
       const ctrl = control(`${turnId}:task`);
-      void runSchedule(updateTurn(convId, turnId), ctrl.signal).finally(() => {
+      void runSchedule(guarded(convId, turnId, `${turnId}:task`), ctrl.signal).finally(() => {
         void qc.invalidateQueries({ queryKey: ["production-overview"] });
         updateConv(convId, (c) => ({ ...c, updatedAt: Date.now() }));
       });
     },
-    [qc, updateConv, updateTurn],
+    [guarded, qc, updateConv],
   );
 
   const cancelTask = useCallback(
@@ -250,9 +294,9 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     (convId: string, turnId: string, note: string | null) => {
       const t = task(convId, turnId);
       if (t?.part?.kind !== "change") return;
-      void runCommit(t.part as ChangePart, updateTurn(convId, turnId), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
+      void runCommit(t.part as ChangePart, guarded(convId, turnId, `${turnId}:task`), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
     },
-    [qc, updateTurn],
+    [guarded, qc],
   );
 
   const value: Shell = {

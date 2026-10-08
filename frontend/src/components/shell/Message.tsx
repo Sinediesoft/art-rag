@@ -4,8 +4,9 @@ import { api, assetUrl } from "../../api/client";
 import { useStatus, useSwitchAccount } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
-import { deepActions } from "../../shell/deep";
-import { KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
+import { deepActionsFor } from "../../shell/deep";
+import { canRerun, REJECTED } from "../../shell/persist";
+import { ctaOf, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
 import { dispatchOf } from "../../shell/runner";
 import { buildStages, egressOf, gatewayStages, progressOf, summaryOf } from "../../shell/stages";
 import type { ChangePart, ChatPart, ComparePart, ReconstructPart, SchedulePart, SqlPart, Turn } from "../../shell/types";
@@ -52,7 +53,7 @@ export function AssistantMessage({ turn, isLast, after }: { turn: Turn; isLast: 
   const th = useThread();
   const [open, setOpen] = useState(false);
   const r = turn.route;
-  const mod = progressOf(turn.part);
+  const mod = progressOf(turn.part, turn.phase);
   const running = turn.phase === "routing" || turn.phase === "running";
   const stopped = turn.phase === "stopped";
   const blocked = !!r?.blocked || turn.failure?.status === 401;
@@ -74,7 +75,8 @@ export function AssistantMessage({ turn, isLast, after }: { turn: Turn; isLast: 
   }, [turn, r, mod]);
 
   const finished = !running && !stopped && !turn.failure;
-  const deep = r && finished && th.mode === "full" ? deepActions(r, turn.imageId) : [];
+  // 模組裡一律給功能頁連結；入口只在沒有模組跳轉時給（批次辨識、比對不到的照片、系統狀態），交接才有下一步
+  const deep = finished && (th.mode === "full" || !ctaOf(turn)) ? deepActionsFor(turn) : [];
 
   return (
     <div className={`msg msg--ai${blocked ? " is-blocked" : ""}`} data-phase={turn.phase}>
@@ -352,7 +354,12 @@ function Archived({ turn }: { turn: Turn }) {
       {a.answer && <RichText text={a.answer} activeRef={cite} onCite={setCite} />}
       {a.sources && a.sources.length > 0 && <Sources sources={a.sources} active={cite} onActive={setCite} />}
       {a.artResults && th.mode === "brief" && <Works items={a.artResults.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
-      {a.redacted && (
+      {a.outcome && REJECTED[a.outcome] ? (
+        <p className="hint">
+          <Icon name="lock" />
+          {a.summary}・被關卡拒絕的提問不保存內容
+        </p>
+      ) : a.redacted && canRerun(turn) && (
         <div className="callout">
           <Icon name="lock" />
           <span>這一輪含工廠內部或非公開資料，沒有存進瀏覽器（也不會留給下一個使用這台電腦的人）。</span>
@@ -362,7 +369,7 @@ function Archived({ turn }: { turn: Turn }) {
           </button>
         </div>
       )}
-      {!a.redacted && !a.answer && !a.artResults && a.outcome !== "pass" && <p className="hint">{a.summary}</p>}
+      {!(a.outcome && REJECTED[a.outcome]) && (!a.redacted || !canRerun(turn)) && !a.answer && !a.artResults && a.outcome !== "pass" && <p className="hint">{a.summary}</p>}
     </div>
   );
 }

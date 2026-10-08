@@ -165,10 +165,17 @@ export const useAccounts = () =>
  * 圖紙的辨識結果會依資料範圍過濾（docs/adr/014），所以 search-any、search-drawing 要重抓 */
 const IDENTITY_FREE = new Set(["search-image", "photo-colors", "artwork-colors"]);
 
+/**
+ * 最近一次開始切換身分的時間：對話裡在這之前送出、還在跑的請求用的是舊身分的 JWT，
+ * 身分換掉時要中止並收起（frontend/src/shell/store.tsx 的 onAccountChanged）
+ */
+export const accountSwitch = { startedAt: 0 };
+
 /** 切換展示身分，其他查詢（帳號、待核准、庫存、排程…）全部重抓 */
 export function useSwitchAccount() {
   const qc = useQueryClient();
   return async (accountId: string) => {
+    accountSwitch.startedAt = Date.now();
     await api.switchAccount(accountId);
     await qc.invalidateQueries({ predicate: (q) => !IDENTITY_FREE.has(String(q.queryKey[0])) });
   };

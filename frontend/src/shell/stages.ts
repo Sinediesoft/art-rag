@@ -1,6 +1,6 @@
 import type { RouteResponse } from "../api/client";
 import type { DoneEvent, ErrorEvent, GuardCheck, JevCallInfo, PipelineStage, PostFilterInfo, SourcesEvent } from "../api/sse";
-import type { Part } from "./types";
+import type { Part, Turn } from "./types";
 
 /**
  * 七段權限控管（docs/adr/015、030）的處理軌跡：
@@ -26,6 +26,10 @@ export interface ModuleProgress {
   done?: DoneEvent | null;
   error?: ErrorEvent | null;
   parts?: { found: number; hidden: number; filter: string | null } | null;
+  /** 分派到的模組目前的狀態（搜尋、SQL、比較、3D、排程、試算）：只有收到成功回應才算通過 */
+  part?: Part | null;
+  /** 這一輪已經停止或出錯：還在「執行中／等待中」的段落改成「沒有執行」 */
+  halted?: boolean;
 }
 
 const kb = (b: number) => `${(b / 1024).toFixed(1)} KB`;
@@ -83,12 +87,18 @@ function verifyDetail(pf: PostFilterInfo) {
 }
 
 /** 這一輪的模組進度（給第 3～7 段用） */
-export function progressOf(part: Part | null): ModuleProgress {
-  if (!part) return {};
-  if (part.kind === "chat") return { sources: part.sources, done: part.done, error: part.error };
-  if (part.kind === "partSearch" && part.status === "done") return { parts: { found: part.items.length, hidden: part.hidden, filter: part.filter } };
-  return {};
+export function progressOf(part: Part | null, phase?: Turn["phase"]): ModuleProgress {
+  const halted = phase === "stopped" || phase === "error";
+  if (!part) return { halted };
+  if (part.kind === "chat") return { sources: part.sources, done: part.done, error: part.error, part, halted };
+  if (part.kind === "partSearch" && part.status === "done") return { parts: { found: part.items.length, hidden: part.hidden, filter: part.filter }, part, halted };
+  return { part, halted };
 }
+
+type Job = { status: string; error?: { message: string; code?: string } | null } | null;
+/** 任務的狀態：沒開始＝等待中、跑完＝通過、出錯＝擋下、停止＝沒有執行 */
+const jobState = (j: Job, waiting: StageState = "todo"): StageState =>
+  !j ? waiting : j.status === "done" ? "ok" : j.status === "error" ? "block" : j.status === "stopped" ? "skip" : "doing";
 
 export function buildStages(route: RouteResponse, mod: ModuleProgress): Stage[] {
   const r = route;
@@ -166,54 +176,131 @@ export function buildStages(route: RouteResponse, mod: ModuleProgress): Stage[] 
       handoff("交給批次辨識：每張照片用 Chinese-CLIP＋幾何驗證，照你的資料範圍顯示", "批次辨識", "批次辨識"),
     );
   } else if (r.intent === "compare") {
+    // 讀取兩件：/compare/items 回來才算通過
+    const p = mod.part?.kind === "compare" ? mod.part : null;
+    const st: StageState = !p ? "todo" : p.status === "single" ? "skip" : p.status === "loading" ? "doing" : p.status === "error" ? "block" : "ok";
+    const detail =
+      st === "skip"
+        ? "只提到一件，等你在比較頁選另一件"
+        : st === "block"
+          ? `讀取失敗：${p!.error?.message}（${p!.error?.code}）`
+          : st === "ok"
+            ? `讀取兩件的知識庫資料・${filterText ?? ""} → ${p!.data?.differences ?? 0} 個欄位不同`
+            : `讀取兩件的知識庫資料・${filterText ?? ""}`;
     out.push(
-      stage("retrieve", "ok", `讀取兩件的知識庫資料・${filterText ?? ""}`, { title: "權限感知檢索・讀取兩件", short: "讀資料" }),
+      stage("retrieve", st, detail, { title: "權限感知檢索・讀取兩件", short: "讀資料" }),
       ...none("比較表直接讀知識庫欄位，不放進生成上下文"),
-      handoff("並排比較表（不經生成）；差異摘要要在比較頁按了才請本地模型寫", "兩件並排比較", "並排比較"),
+      stage("gen", st === "ok" ? "skip" : st === "doing" ? "todo" : "skip", "並排比較表不經生成；差異摘要要在比較頁按了才請本地模型寫", { title: "兩件並排比較", short: "並排比較" }),
     );
   } else if (isChat(r)) {
     out.push(...chatStages(r, mod, filterText));
   } else if (r.intent === "art_search" || r.intent === "art_qa") {
+    // 以文搜畫：/search/text 回來才算通過；失敗就是擋下（403、連不上…）
+    const p = mod.part?.kind === "artSearch" ? mod.part : null;
+    const st: StageState = !p || p.status === "loading" ? "doing" : p.status === "error" ? "block" : "ok";
     out.push(
-      stage("retrieve", "ok", `Chinese-CLIP＋bge-m3 以文搜畫・${filterText ?? ""}`),
+      stage(
+        "retrieve",
+        st,
+        st === "ok"
+          ? `Chinese-CLIP＋bge-m3 以文搜畫・${filterText ?? ""} → ${p!.items.length} 幅`
+          : st === "block"
+            ? `以文搜畫失敗：${p!.error?.message}（${p!.error?.code}）`
+            : `Chinese-CLIP＋bge-m3 以文搜畫・${filterText ?? ""}`,
+      ),
       ...none("搜尋結果直接列出畫作，不放進生成上下文"),
-      stage("gen", "skip", "直接列出最符合的畫作，不經生成"),
+      stage("gen", st === "doing" ? "todo" : "skip", "直接列出最符合的畫作，不經生成"),
     );
   } else if (r.intent === "drawing_search" || r.intent === "drawing_qa") {
-    const p = mod.parts;
+    const p = mod.part?.kind === "partSearch" ? mod.part : null;
+    const found = mod.parts;
+    const st: StageState = p?.status === "error" ? "block" : found ? "ok" : "doing";
     out.push(
-      p
-        ? stage("retrieve", "ok", `bge-m3 檢索製程文件・${p.filter ?? filterText ?? ""} → ${p.found} 張${p.hidden ? `（另有 ${p.hidden} 張不在你的資料範圍，檢索時就被濾掉）` : ""}`)
-        : stage("retrieve", "doing", `bge-m3 檢索製程文件・${filterText ?? ""}`),
+      st === "ok"
+        ? stage("retrieve", "ok", `bge-m3 檢索製程文件・${found!.filter ?? filterText ?? ""} → ${found!.found} 張${found!.hidden ? `（另有 ${found!.hidden} 張不在你的資料範圍，檢索時就被濾掉）` : ""}`)
+        : st === "block"
+          ? stage("retrieve", "block", `圖紙查找失敗：${p!.error?.message}（${p!.error?.code}）`)
+          : stage("retrieve", "doing", `bge-m3 檢索製程文件・${filterText ?? ""}`),
       ...none("搜尋結果直接列出圖紙，不放進生成上下文"),
-      stage("gen", "skip", "直接列出圖紙，不經生成"),
+      stage("gen", st === "doing" ? "todo" : "skip", "直接列出圖紙，不經生成"),
     );
   } else if (r.intent === "data_query") {
+    // Text-to-SQL：有結果表才算查詢通過；回答串流完才算生成通過
+    const p = mod.part?.kind === "sql" ? mod.part : null;
+    const q: StageState = !p ? "todo" : p.result ? "ok" : p.status === "error" ? "block" : p.status === "stopped" ? "skip" : "doing";
+    const g: StageState = !p || !p.result ? (q === "block" || q === "skip" ? "skip" : "todo") : p.status === "done" ? "ok" : p.status === "error" ? "block" : p.status === "stopped" ? "skip" : "doing";
     out.push(
-      stage("retrieve", "handoff", "地端 LLM 產生 SQL → 唯讀檢查 → 執行（資料庫查詢，不經向量檢索）", { title: "權限感知檢索・唯讀資料庫查詢", short: "查詢" }),
+      stage(
+        "retrieve",
+        q,
+        q === "ok"
+          ? `地端 LLM 產生 SQL → 唯讀檢查 → 執行 → ${p!.result!.row_count} 筆（資料庫查詢，不經向量檢索）`
+          : q === "block"
+            ? `查詢失敗：${p!.error?.message}（${p!.error?.code}）`
+            : "地端 LLM 產生 SQL → 唯讀檢查 → 執行（資料庫查詢，不經向量檢索）",
+        { title: "權限感知檢索・唯讀資料庫查詢", short: "查詢" },
+      ),
       ...none("查詢結果是資料庫數字，由唯讀 SQL 檢查把關，不經文件驗證"),
-      handoff("地端 LLM 依查詢結果回答", "本地 LLM 生成・System 2", "本地 LLM"),
+      stage("gen", g, g === "ok" ? `地端 LLM（${p!.done?.model ?? ""}）依查詢結果回答` : g === "block" ? `回答失敗：${p!.error?.message}` : "地端 LLM 依查詢結果回答"),
     );
   } else if (r.intent === "reconstruct") {
+    // 3D 重建：按「開始轉換」前是等待中；讀到圖紙（meta）才算讀取通過，Ortho2CAD 跑完才算完成
+    const p = mod.part?.kind === "reconstruct" ? mod.part : null;
+    const j = p?.job ?? null;
+    const waiting: StageState = p?.cancelled ? "skip" : "todo";
+    const read: StageState = !j ? waiting : j.meta ? "ok" : jobState(j);
+    const gen: StageState = !j ? waiting : j.status === "done" && j.result && !j.result.ok ? "block" : jobState(j);
     out.push(
-      d.part_id
-        ? stage("retrieve", "ok", `讀取〈${d.part_label}〉的圖紙（第 1 段已允許）`, { title: "權限感知檢索・讀取圖紙", short: "讀圖紙" })
+      d.part_id || p?.imageId
+        ? stage("retrieve", read, read === "ok" ? `讀取${d.part_label ? `〈${d.part_label}〉的` : "附上的"}圖紙` : read === "skip" ? "已取消" : read === "block" ? `讀取失敗：${j?.error?.message}` : "等你按「開始轉換」", {
+            title: "權限感知檢索・讀取圖紙",
+            short: "讀圖紙",
+          })
         : stage("retrieve", "skip", "等你選圖紙", { title: "權限感知檢索・讀取圖紙", short: "讀圖紙" }),
       ...none("圖紙影像直接交給 Ortho2CAD，不經文字驗證"),
-      handoff("等你確認後交給 Ortho2CAD（地端）", "Ortho2CAD 3D 重建", "3D 重建"),
+      stage(
+        "gen",
+        gen,
+        gen === "ok" ? `Ortho2CAD（${j?.done?.model ?? ""}）產生模型並通過驗證` : gen === "block" ? `3D 重建失敗：${j?.error?.message ?? j?.result?.error ?? ""}` : gen === "todo" ? "等你確認後交給 Ortho2CAD（地端）" : gen === "skip" ? "沒有執行" : "Ortho2CAD 產生中",
+        { title: "Ortho2CAD 3D 重建", short: "3D 重建" },
+      ),
     );
   } else if (r.intent === "schedule") {
-    out.push(stage("retrieve", "skip", "不需檢索"), ...none("沒有段落"), handoff("等你確認後交給 Timefold（地端）", "Timefold 排程", "排程"));
+    const p = mod.part?.kind === "schedule" ? mod.part : null;
+    const st = jobState(p?.job ?? null, p?.cancelled ? "skip" : "todo");
+    out.push(
+      stage("retrieve", "skip", "不需檢索"),
+      ...none("沒有段落"),
+      stage(
+        "gen",
+        st,
+        st === "ok" ? `${p?.job?.meta?.engine_label ?? "排程"}求解完成，結果已寫回` : st === "block" ? `排程失敗：${p?.job?.error?.message}` : st === "todo" ? "等你確認後交給 Timefold（地端）" : st === "skip" ? "沒有執行" : "求解中",
+        { title: "Timefold 排程", short: "排程" },
+      ),
+    );
   } else if (r.intent === "modify") {
+    const p = mod.part?.kind === "change" ? mod.part : null;
+    const st: StageState = !p || p.status === "previewing" ? "doing" : !p.preview ? "block" : p.preview.next === "rejected" ? "block" : "ok";
     out.push(
       stage("retrieve", "skip", "不需檢索（試算時讀取目前資料）"),
       ...none("沒有段落；修改資料另有範圍／欄位／上限／額度檢查"),
-      handoff("參數抽取 → 範圍／欄位／上限 → 副本試算 → 額度判斷", "修改資料流程", "試算"),
+      stage(
+        "gen",
+        st,
+        st === "ok" ? `試算完成：${p!.preview!.message}` : st === "block" ? (p?.preview ? `已拒絕：${p.preview.message}` : `試算失敗：${p?.error ?? ""}`) : "參數抽取 → 範圍／欄位／上限 → 副本試算 → 額度判斷",
+        { title: "修改資料流程", short: "試算" },
+      ),
     );
   } else {
     out.push(...rest("retrieve", "skip", "沒有執行"));
   }
-  return out;
+  return halt(out, mod);
+}
+
+/** 這一輪已經停止或出錯：還沒有結果的段落一律是「沒有執行」，不會一直轉圈或被當成通過 */
+function halt(stages: Stage[], mod: ModuleProgress): Stage[] {
+  if (!mod.halted) return stages;
+  return stages.map((s) => (s.state === "doing" || s.state === "todo" ? { ...s, state: "skip", detail: `沒有完成（已停止或出錯）・${s.detail}` } : s));
 }
 
 function chatStages(r: RouteResponse, mod: ModuleProgress, filterText: string | undefined): Stage[] {
