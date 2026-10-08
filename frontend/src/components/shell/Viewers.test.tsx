@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Output } from "../../shell/outputs";
 import { ShellProvider, useShell, type Shell } from "../../shell/store";
 import { json, mockTransport } from "../../test/transport";
-import { ModelView } from "./Viewers";
+import { ModelView, SimilarView } from "./Viewers";
 
 // three.js 在 jsdom 畫不出來：換成記錄參數的替身，只驗證「容器量到高度、檢視器有建立」
 vi.mock("../LazyModelViewer", () => ({
@@ -142,5 +142,94 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
     );
     expect(await screen.findByText(/目前身分看不到這份資料/)).toBeTruthy();
     expect(screen.queryByTestId("model-viewer")).toBeNull();
+  });
+});
+
+describe("展示區相似作品：以目前畫作找相近（要先讀到基準畫作）", () => {
+  const similar: Output = {
+    key: "similar:t1",
+    kind: "similar",
+    domain: "art",
+    turnId: "t1",
+    artworkId: "met-436535",
+    title: "與〈麥田與柏樹〉相近的作品",
+    meta: "以文搜畫・依風格標籤",
+  };
+  const detail = {
+    id: "met-436535",
+    title: { zh: "麥田與柏樹", en: "Wheat Field with Cypresses" },
+    artist: { zh: "梵谷", en: "Vincent van Gogh" },
+    date_text: "1889",
+    medium: "油彩",
+    collection: "Met",
+    image: { width: 1, height: 1 },
+    source_url: "",
+    descriptions: [],
+    style_tags: ["後印象派", "厚塗"],
+    image_url: "/api/v1/images/met-436535.jpg",
+    thumb_url: "/api/v1/images/met-436535.jpg",
+  };
+  const summary = (id: string, title: string) => ({
+    id,
+    title_zh: title,
+    artist_zh: "梵谷",
+    date_text: "1889",
+    collection: "Met",
+    image_url: `/api/v1/images/${id}.jpg`,
+    thumb_url: `/api/v1/images/${id}.jpg`,
+    style_tags: [],
+  });
+  const view = () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <SimilarView o={similar} onAsk={() => {}} />
+      </QueryClientProvider>,
+    );
+  };
+
+  it.each([
+    [403, "DATA_SCOPE_DENIED", /目前身分看不到這份資料/],
+    [404, "NOT_FOUND", /找不到這份資料/],
+    [500, "INTERNAL", /讀取失敗/],
+  ])("基準畫作第一次讀取就失敗（%i）：顯示錯誤，不停在「搜尋相近作品…」，也不送搜尋", async (status, code, msg) => {
+    const t = mockTransport();
+    t.on("GET", "/artworks/met-436535", () => json({ error: { code, message: code, request_id: "r" } }, status));
+    view();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText(msg)).toBeTruthy();
+    expect(screen.queryByText("搜尋相近作品…")).toBeNull();
+    expect(t.calls.some((c) => c.path.startsWith("/search/text"))).toBe(false);
+  });
+
+  it("基準畫作讀取中：顯示「搜尋相近作品…」", () => {
+    const t = mockTransport();
+    t.on("GET", "/artworks/met-436535", () => new Promise<Response>(() => {}));
+    view();
+    expect(screen.getByText("搜尋相近作品…")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("基準畫作讀到後才以風格標籤＋媒材搜尋，結果排除本作", async () => {
+    const t = mockTransport();
+    t.on("GET", "/artworks/met-436535", () => json(detail));
+    t.on("GET", "/search/text", () =>
+      json({ results: [{ artwork: summary("met-436535", "麥田與柏樹"), score: 0.99 }, { artwork: summary("met-437980", "柏樹"), score: 0.8 }] }),
+    );
+    view();
+    expect(await screen.findByText("柏樹")).toBeTruthy();
+    expect(screen.getByText("比對基準")).toBeTruthy();
+    const q = t.calls.find((c) => c.path.startsWith("/search/text"))?.path ?? "";
+    expect(decodeURIComponent(q)).toContain("後印象派 厚塗 油彩");
+    expect(screen.getAllByText("並排比較")).toHaveLength(1);
+  });
+
+  it("基準畫作讀到、搜尋失敗：顯示搜尋的錯誤", async () => {
+    const t = mockTransport();
+    t.on("GET", "/artworks/met-436535", () => json(detail));
+    t.on("GET", "/search/text", () => json({ error: { code: "INTERNAL", message: "INTERNAL", request_id: "r" } }, 500));
+    view();
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText(/讀取失敗/)).toBeTruthy();
   });
 });

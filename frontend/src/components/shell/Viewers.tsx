@@ -567,7 +567,8 @@ function Score({ value }: { value: number }) {
  * 並排比較用 /compare/items（直接讀知識庫欄位，不經生成）。
  */
 export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => void }) {
-  const { data: base } = useArtwork(o.search ? undefined : o.artworkId);
+  const artwork = useArtwork(o.search ? undefined : o.artworkId);
+  const base = artwork.data;
   const q = base ? [...base.style_tags.slice(0, 3), base.medium ?? ""].filter(Boolean).join(" ") || base.title.zh : null;
   const search = useTextSearch(o.items ? null : q);
   const items: { artwork: ArtworkSummary; score: number }[] = o.items ?? (search.data?.results ?? []).filter((r) => r.artwork.id !== base?.id).map((r) => ({ artwork: r.artwork, score: r.score }));
@@ -578,6 +579,16 @@ export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => voi
     enabled: !!base && !!cmp,
   });
 
+  // 「與〈作品〉相近」要先讀到基準畫作才能組搜尋句：基準讀取失敗（403／404／500）優先顯示錯誤，不停在搜尋中
+  if (!o.items && !o.search) {
+    if (artwork.error) return <Failed error={artwork.error} />;
+    if (!o.artworkId)
+      return (
+        <div className="view view--empty">
+          <p className="empty">沒有比對基準。</p>
+        </div>
+      );
+  }
   if (!o.items && (search.isLoading || !base)) return <Loading label="搜尋相近作品…" />;
   if (search.error) return <Failed error={search.error} />;
 
