@@ -38,8 +38,10 @@
    第 4 段剔除的段落、本機檔案（照片先上傳，只存 `image_id`）。工廠內部資料只存編號（圖紙 id、3D 工作編號、排程結果編號），
    重新整理後展示區以目前的 JWT 重新讀取，查詢結果要「以目前身分重新查詢」。
    被關卡拒絕的一輪（第 1、2 段擋下、降級「查無資料」、試算被拒絕、閘道 401）連問句都不存，只存佔位文字與流程摘要，
-   也不能拿佔位文字重送；其餘問句與回答只要提到帳密類關鍵字（密碼、金鑰、token、api key、credentials、private key…；程式識別字先拆成單字再比對，
-   `secret_key`、`SECRET_KEY`、`secretKey`、`clientSecret`、`x-api-key` 都算，`secretary`、`tokenizer` 不算），整段不保存，
+   也不能拿佔位文字重送；其餘問句與回答只要提到帳密類關鍵字（密碼、金鑰、token、api key、credentials、private key…；原文與拆成單字後的識別字各比對一次，
+   關鍵字前面可以黏著前綴：`secret_key`、`SECRET_KEY`、`secretKey`、`clientSecret`、`x-api-key`、`dbpassword`、
+   `CLIENTSECRET`、`refreshtoken` 都算；password、credential、apikey 這類不會出現在一般單字裡的，後面黏著字也算
+   （`dbpasswordhash`、`awsaccesskeyid`）；`secretary`、`tokenizer` 不算），整段不保存，
    只存佔位文字（`sanitizeForStorage`）——值的邊界（多行、YAML 區塊、JSON 陣列、跳脫引號）無法逐一解析完整，
    寧可整段不存；沒有關鍵字的文字再遮掉 JWT、金鑰前綴、PEM 區塊與 32 字以上的不透明字串。
 8. **切換身分**：不推定某個請求帶的是哪一張 JWT，改用「身分世代」：
@@ -75,5 +77,5 @@
 
 - 重新整理後工廠成果要重新讀取或重新查詢：換來瀏覽器裡沒有任何內部資料，換人使用這台電腦也看不到。
 - 功能頁沿用原本的 Tailwind 元件，只換色票與外框，不逐頁重畫；所有功能（照片建檔、批次辨識、核准、管理）都保留。
-- 驗證：`npm test`（35 項，jsdom＋mock transport，不連後端）、`frontend/scripts/smoke.mjs`（真瀏覽器、本機 mock 後端，
+- 驗證：`npm test`（vitest，jsdom＋mock transport，不連後端）、`frontend/scripts/smoke.mjs`（真瀏覽器、本機 mock 後端，
   1440×900 與 390×844）。

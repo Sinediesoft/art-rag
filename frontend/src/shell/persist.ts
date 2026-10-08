@@ -131,12 +131,16 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
 
 const MASK = "［已遮蔽］";
 /**
- * 帳密類關鍵字：中文直接比對；英文比對前先把識別字拆成單字（見 splitIdentifiers），
- * 所以 secret_key、SECRET_KEY、secretKey、clientSecret、db_password、x-api-key 都會變成獨立的單字，
- * 再要求整個字比對（secretary、tokenizer 這類一般單字不算），後面可以是複數（tokens、passwords）
+ * 帳密類關鍵字，原文與拆成單字後的文字（見 splitIdentifiers）各比對一次：
+ * - 中文直接比對
+ * - 不會出現在一般單字裡的（password、passwd、passphrase、passcode、credential、apikey、accesskey、secretkey、privatekey）
+ *   出現在哪裡都算：dbpasswordhash、PASSWORDSALT、awsaccesskeyid
+ * - 其餘英文關鍵字前面可以黏著前綴、後面要是字的結尾（可以加複數 s）：dbpassword、clientsecret、refreshtoken、userpwd 算，
+ *   secretary、tokenizer 這類一般單字不算
+ * - 有分隔的識別字（secret_key、secretKey、x-api-key）拆開後就是獨立的單字
  */
 const SECRET_KEY = new RegExp(
-  String.raw`密碼|口令|密鑰|私鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|安全碼|\b(?:password|passwd|passcode|passphrase|pwd|api\s?key|access\s?key|secret\s?key|secret|token|credential|private\s?key|authorization|bearer|cookie|session\s?id)s?\b`,
+  String.raw`密碼|口令|密鑰|私鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|安全碼|password|passwd|passphrase|passcode|credential|apikey|accesskey|secretkey|privatekey|\b[\w-]*?(?:pwd|api[\s_-]?key|access[\s_-]?key|secret[\s_-]?key|secret|token|private[\s_-]?key|authorization|bearer|cookie|session[\s_-]?id)s?\b`,
   "i",
 );
 

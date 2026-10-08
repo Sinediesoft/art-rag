@@ -285,6 +285,18 @@ describe("帳密：提到就整段不存（審查報告的單行、JSON、多行
     "AWS_SECRET_ACCESS_KEY=SYNTH_AWS",
     "refreshToken: SYNTH_RT",
     "auth.token = SYNTH_DOTTED",
+    // 第 6 次審查：沒有分隔的全小寫／全大寫欄位名（前綴黏在關鍵字前面、或關鍵字後面還有字）
+    '{"dbpassword":"SYNTH_DB_VALUE"}',
+    "DBPASSWORD=SYNTH_DB_VALUE",
+    '{"clientsecret":"SYNTH_CLIENT_VALUE"}',
+    '{"refreshtoken":"SYNTH_REFRESH_VALUE"}',
+    "CLIENTSECRET=SYNTH_CS_UPPER",
+    "accesstoken: SYNTH_AT",
+    "mysecretkey=SYNTH_MSK",
+    "awsaccesskeyid=SYNTH_AKID",
+    "dbpasswordhash=SYNTH_HASH",
+    "PASSWORDSALT=SYNTH_SALT",
+    "userpwd=SYNTH_U",
   ];
 
   it.each(identifiers)("欄位名「%s」：認得出是帳密，整段不存", (s) => {
