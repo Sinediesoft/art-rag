@@ -108,7 +108,7 @@ export function archive(t: Turn): ArchivedTurn {
   if (d.artwork_id) Object.assign(base, { artworkId: d.artwork_id, artworkLabel: d.artwork_label ?? d.artwork_id });
   else if (r.photo?.kind === "art" && r.photo.id) Object.assign(base, { artworkId: r.photo.id, artworkLabel: r.photo.label });
   if (p?.kind === "chat" && p.status === "done" && !p.done?.degraded) {
-    base.answer = scrubSecrets(p.text);
+    base.answer = sanitizeForStorage(p.text, SECRET_ANSWER);
     base.sources = (p.sources?.sources ?? []).filter((s) => PUBLIC(s.level));
   }
   if (p?.kind === "artSearch" && p.status === "done") base.artResults = p.items.slice(0, 12);
@@ -129,46 +129,41 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
   return Object.keys(refs).length ? refs : undefined;
 }
 
-/**
- * 帳密、金鑰、憑證型式的字串：後端的 mask_pii 只遮電話、Email、身分證，存進瀏覽器前再遮一次。
- * 「密碼是 xxx」「api key: xxx」的值、JWT、常見金鑰前綴、32 字以上的不透明字串都換成［已遮蔽］。
- */
 const MASK = "［已遮蔽］";
 /**
  * 帳密類關鍵字：中文直接比對；英文要整個字，前面可以有前綴（db_password、access_token、client_secret），
  * 後面可以是複數（tokens、passwords）
  */
-const SECRET_KEY = String.raw`(?:密碼|口令|密鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|\b[\w-]*?(?:password|passwd|passcode|pwd|api[\s_-]?key|access[\s_-]?key|secret|token|credential|private[\s_-]?key)s?\b)`;
-/** 引號裡的值：可以有跳脫的引號（\"）、逗號、空白；少了結尾引號就一路到行尾 */
-const QUOTED_VALUE = String.raw`(?:"(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?|「[^」\n]*」?|『[^』\n]*』?|“[^”\n]*”?)`;
-/** 鍵值對（JSON、設定檔、口語）：鍵名可以帶引號，值是引號字串時整串遮掉，例如 {"password":"a,b"}、password: 'x' */
-const SECRET_PAIR = new RegExp(String.raw`(["'“「『]?)(${SECRET_KEY})(["'”」』]?)(\s*(?:[:：=]|是|為|is|are)\s*)${QUOTED_VALUE}`, "gi");
-/** 關鍵字後面不遠處接引號：引號裡的整串都遮掉（例如「密碼改成『a b c』」） */
-const SECRET_QUOTED = new RegExp(String.raw`(${SECRET_KEY})[^"'「『“\n]{0,24}?${QUOTED_VALUE}`, "gi");
-/**
- * 關鍵字後面到這一句結束（，。；！？換行，或後面接空白／結尾的句點）全部遮掉：
- * 「密碼是： xxx」「password is xxx」「API key = xxx」不用猜哪一段才是值，寧可多遮
- */
-const SECRET_CLAUSE = new RegExp(String.raw`(${SECRET_KEY})((?:[^,;，。；！？!?\n.]|\.(?!\s|$))*)`, "gi");
-/** 已經遮好的片段（只剩引號、冒號、括號與［已遮蔽］）：句子那一關不用再遮一次 */
-const ALREADY_MASKED = new RegExp(String.raw`^[\s"'“”「」『』:：=,{}\[\]]*${MASK}[\s"'“”「」『』:：=,{}\[\]]*$`);
+const SECRET_KEY = new RegExp(
+  String.raw`密碼|口令|密鑰|私鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|安全碼|\b[\w-]*?(?:password|passwd|passcode|passphrase|pwd|api[\s_-]?key|access[\s_-]?key|secret|token|credential|private[\s_-]?key|authorization|bearer|cookie|session[\s_-]?id)s?\b`,
+  "i",
+);
+/** 不靠關鍵字也認得出來、自己有邊界的祕密：JWT、常見金鑰前綴、PEM 區塊、32 字以上的不透明字串 */
 const SECRET_PATTERNS: [RegExp, string][] = [
+  [/-----BEGIN [A-Z ]+-----[\s\S]*?(?:-----END [A-Z ]+-----|$)/g, MASK],
   [/\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g, MASK],
   [/\b(?:sk|pk|rk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{8,}/g, MASK],
   [/\bAKIA[0-9A-Z]{16}\b/g, MASK],
   [/[A-Za-z0-9_\-+/=]{32,}/g, MASK],
 ];
 
+/** 文字裡有沒有帳密類關鍵字（不管後面的值是單行、多行、引號、陣列、YAML 區塊） */
+export const mentionsSecret = (s: string) => SECRET_KEY.test(s);
+
 /**
- * 帳密、金鑰、憑證型式的字串：後端的 mask_pii 只遮電話、Email、身分證，存進瀏覽器前再遮一次（保守：寧可多遮）。
- * 關鍵字在句尾（後面沒有內容）時不動；「忘記密碼怎麼辦」這類一般問句也會被遮成「忘記密碼［已遮蔽］」，只影響存檔文字。
+ * 存進瀏覽器前的帳密處理（後端的 mask_pii 只遮電話、Email、身分證）：
+ * - 提到帳密類關鍵字的整段文字一律不保存，只存佔位文字——值的邊界（多行、YAML 區塊、JSON 陣列、跳脫引號…）
+ *   不可能逐一解析完整，寧可整段不存，也不留下半個密碼
+ * - 沒有關鍵字的文字，再把 JWT、金鑰前綴、PEM、長不透明字串遮掉
+ * placeholder 是整段不存時用的佔位文字（問句或回答各自的說法）
  */
-export function scrubSecrets(s: string) {
-  const pairs = s.replace(SECRET_PAIR, (_m, q1: string, key: string, q2: string, sep: string) => `${q1}${key}${q2}${sep}${MASK}`);
-  const quoted = pairs.replace(SECRET_QUOTED, (m, key: string) => (ALREADY_MASKED.test(m.slice(key.length)) ? m : `${key}${MASK}`));
-  const clause = quoted.replace(SECRET_CLAUSE, (m, key: string, rest: string) => (rest.trim() && !ALREADY_MASKED.test(rest) ? `${key}${MASK}` : m));
-  return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), clause);
+export function sanitizeForStorage(s: string, placeholder: string) {
+  if (mentionsSecret(s)) return placeholder;
+  return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), s);
 }
+
+export const SECRET_QUESTION = "（提到帳密、金鑰的提問，內容沒有保存）";
+export const SECRET_ANSWER = "（回答提到帳密、金鑰，內容沒有保存）";
 
 /** 被關卡拒絕的一輪：問句本身可能就是敏感內容（注入、套取帳密、看不到的文件），不存原文 */
 export const REJECTED: Record<string, string> = {
@@ -192,7 +187,7 @@ function savedText(t: Turn, a: ArchivedTurn) {
   if (!t.archived && !t.route) return "（沒有送達伺服器的提問）";
   // 有 route 才存（後端遮蔽個資後的問句）；從紀錄還原的那一輪 text 就是當時存的問句
   const q = t.archived ? t.text : t.route!.question;
-  return q ? scrubSecrets(q) : "（只有照片）";
+  return q ? sanitizeForStorage(q, SECRET_QUESTION) : "（只有照片）";
 }
 
 function saveTurn(t: Turn): SavedTurn | null {
@@ -280,7 +275,15 @@ export function load(): { convs: Conv[]; prefs: Omit<Saved, "v" | "convs"> } {
 /** 切換身分後：其他身分問到的非公開內容從畫面上收起來（只留問句與流程摘要），要看就以目前身分重新查詢 */
 export function redactForeign(t: Turn, accountId: string): Turn {
   if (t.archived || !t.account || t.account.id === accountId) return t;
-  if (isPublicTurn(t)) return t;
+  return redactPrivate(t);
+}
+
+/**
+ * 不管是哪個身分問的：非公開內容（工廠資料、內部段落、SQL 結果、3D、排程、試算）一律收起成流程摘要與編號。
+ * 憑證更新、身分還沒重新確認時用：這段期間誰都不能看舊身分已經拿到的內容，已完成、已停止、出錯的也一樣
+ */
+export function redactPrivate(t: Turn): Turn {
+  if (t.archived || isPublicTurn(t)) return t;
   return { ...t, text: t.route?.question || t.text, route: null, part: null, failure: null, archived: archive(t) };
 }
 

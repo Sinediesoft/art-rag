@@ -54,8 +54,9 @@ export default function App() {
   const { data: accounts } = useAccounts();
   useEffect(() => {
     const me = accounts?.current;
-    // 切換途中回來的身分查詢可能是舊的：切換結果由切換事件交給 store，這裡等切換完成再對
-    if (me && !shell.switching) shell.setAccount(me.id, me.label);
+    // 切換途中回來的身分查詢可能是舊的：切換結果由切換事件交給 store，這裡等切換完成再對。
+    // 帶上回應物件本身：憑證更新後、畫面還拿著更新前的舊結果時，store 不會拿它來重新確認身分
+    if (accounts && me && !shell.switching) shell.setAccount(me.id, me.label, accounts);
   }, [accounts, shell]);
 
   const conv = shell.convs.find((c) => c.id === m?.[2]) ?? null;

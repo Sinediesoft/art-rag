@@ -6,7 +6,7 @@ import { ACCOUNT_EVENTS, identityBound } from "../api/hooks";
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
-import { canRerun, interruptForAccount, load, redactForeign, save, serialize } from "./persist";
+import { canRerun, interruptForAccount, load, redactForeign, redactPrivate, save, serialize } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -52,7 +52,11 @@ export interface Shell {
    * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
    * 收起其他身分的非公開內容
    */
-  setAccount: (accountId: string, label: string) => void;
+  /**
+   * source：這份身分資料本身（/auth/accounts 的回應物件）。憑證更新時記下當時快取裡的那一份，
+   * 之後畫面還拿著它（React Query 還沒通知到）時不能拿來重新確認身分；重設後重抓的一定是新物件
+   */
+  setAccount: (accountId: string, label: string, source?: object) => void;
   /** 目前正在看的對話（切換身分的提示只留在這一段） */
   setCurrentConv: (convId: string | null) => void;
   startReconstruct: (convId: string, turnId: string) => void;
@@ -99,7 +103,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
    * 身分世代：開始切換身分、身分改變（含憑證過期改發訪客）時加一。
    * 每次執行記下開始時的世代，世代變了就不再寫回；/agent/route 回來的帳號和目前身分不同也不寫回
    */
-  const identity = useRef<{ accountId: string | null; label: string | null; epoch: number }>({ accountId: null, label: null, epoch: 0 });
+  const identity = useRef<{ accountId: string | null; label: string | null; epoch: number; stale: unknown }>({ accountId: null, label: null, epoch: 0, stale: undefined });
   const [switching, setSwitching] = useState(false);
   const switchingRef = useRef(false);
   /** 身分確認了沒有（剛打開頁面、憑證更新之後都要等 /auth/accounts 回來）：確認前不接受提問與任務 */
@@ -297,7 +301,9 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAccount = useCallback(
-    (accountId: string, label: string) => {
+    (accountId: string, label: string, source?: object) => {
+      // 憑證更新之前取得的身分資料（React Query 還沒通知到畫面的舊結果）不能拿來重新確認身分
+      if (source !== undefined && source === identity.current.stale) return;
       // 切換中的鎖只由切換事件解除（switched／failed）：/auth/accounts 定期重抓回來的還是舊身分時不能提早解鎖
       const prev = identity.current.accountId;
       if (prev === accountId) return;
@@ -334,10 +340,20 @@ export function ShellProvider({ children }: { children: ReactNode }) {
    * 在 /auth/accounts 重新確認之前視為「身分未確認」：中止在飛的請求、清掉快取、鎖住提問；確認後由 setAccount 解鎖
    */
   const identityLost = useCallback(() => {
+    identity.current.stale = qc.getQueryData(["accounts"]);
     identity.current.accountId = null;
     identity.current.label = null;
     identity.current.epoch++;
     interruptAll();
+    // 已經完成（或停止、出錯）的非公開成果也立刻收起：不等 /auth/accounts 重新確認（它可能一直失敗）
+    setConvs((cs) => {
+      const next = cs.map((c) => {
+        const turns = c.turns.map(redactPrivate);
+        return turns.some((t, i) => t !== c.turns[i]) ? { ...c, turns } : c;
+      });
+      convsRef.current = next;
+      return next;
+    });
     setIdentityReady(false);
     void qc.resetQueries({ predicate: identityBound });
   }, [qc]);

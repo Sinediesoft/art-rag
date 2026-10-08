@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { factoryRoute, route, sources, done } from "../test/transport";
 import { deriveOutputs } from "./outputs";
-import { archive, canRerun, interruptForAccount, load, redactForeign, save, scrubSecrets, serialize, STORAGE_KEY } from "./persist";
+import {
+  archive,
+  canRerun,
+  interruptForAccount,
+  load,
+  mentionsSecret,
+  redactForeign,
+  redactPrivate,
+  sanitizeForStorage,
+  save,
+  SECRET_ANSWER,
+  SECRET_QUESTION,
+  serialize,
+  STORAGE_KEY,
+} from "./persist";
 import { overlayPipeline, buildStages, progressOf } from "./stages";
 import type { Conv, Turn } from "./types";
 
@@ -136,15 +150,20 @@ describe("瀏覽器儲存：只存公開資料，不存憑證與內部資料", (
     expect(s.convs[0].turns.map((t) => t.archived.outcome)).toEqual(["blocked_auth", "degraded", "degraded", "rejected", "gateway_denied"]);
   });
 
-  it("放行的問句與回答存檔前再遮一次帳密、金鑰、JWT 型式的字串（全部是合成值）", () => {
-    expect(scrubSecrets("我的密碼是 hunter2-SYNTH，api key: sk-SYNTHETIC0000KEY")).toBe("我的密碼［已遮蔽］，api key［已遮蔽］");
-    expect(scrubSecrets("token=abc.def.ghi 與 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig")).not.toMatch(/abc\.def|eyJ/);
-    expect(scrubSecrets("AKIAABCDEFGHIJKLMNOP 跟 0123456789abcdef0123456789abcdef0123")).toBe("［已遮蔽］ 跟 ［已遮蔽］");
-    expect(scrubSecrets("梵谷畫這幅畫的時候在哪裡？")).toBe("梵谷畫這幅畫的時候在哪裡？");
+  it("放行的問句與回答：提到帳密就整段不存；沒有關鍵字的 JWT、金鑰前綴、長字串照樣遮掉（全部是合成值）", () => {
+    expect(sanitizeForStorage("我的密碼是 hunter2-SYNTH，api key: sk-SYNTHETIC0000KEY", SECRET_QUESTION)).toBe(SECRET_QUESTION);
+    expect(sanitizeForStorage("看這串 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig", SECRET_QUESTION)).toBe("看這串 ［已遮蔽］");
+    expect(sanitizeForStorage("AKIAABCDEFGHIJKLMNOP 跟 0123456789abcdef0123456789abcdef0123", SECRET_QUESTION)).toBe("［已遮蔽］ 跟 ［已遮蔽］");
+    expect(sanitizeForStorage("-----BEGIN RSA PRIVATE KEY-----\nSYNTH\n-----END RSA PRIVATE KEY-----", SECRET_QUESTION)).toBe(SECRET_QUESTION);
+    expect(sanitizeForStorage("-----BEGIN OPENSSH KEY-----\nSYNTH_PEM\n-----END OPENSSH KEY-----", SECRET_QUESTION)).not.toMatch(/SYNTH/);
+    expect(sanitizeForStorage("梵谷畫這幅畫的時候在哪裡？", SECRET_QUESTION)).toBe("梵谷畫這幅畫的時候在哪裡？");
     const t = base({ route: route({ question: "密碼是 SYNTH_PW_0001，梵谷在哪裡畫的？" }), part: artTurn().part });
-    const saved = JSON.stringify(serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" }));
-    expect(saved).not.toContain("SYNTH_PW_0001");
-    expect(saved).toContain("梵谷在哪裡畫的");
+    const saved = serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" });
+    expect(JSON.stringify(saved)).not.toContain("SYNTH_PW_0001");
+    expect(saved.convs[0].turns[0].text).toBe(SECRET_QUESTION);
+    // 佔位文字不能當成問句重送
+    save(saved);
+    expect(canRerun(load().convs[0].turns[0])).toBe(false);
   });
 
   it("存檔與讀回：紀錄、模組、正在看的成果、側欄收合、分隔線、主題", () => {
@@ -175,10 +194,23 @@ describe("瀏覽器儲存：只存公開資料，不存憑證與內部資料", (
     expect(redactForeign(artTurn(), "guest").part).not.toBeNull();
     expect(redactForeign(factoryTurn(), "planner").part).not.toBeNull();
   });
+
+  it("憑證更新、身分未確認：不管哪個身分，非公開內容都收起（已完成、已停止、出錯的也一樣），公開內容留著", () => {
+    for (const phase of ["done", "stopped", "error"] as const) {
+      const t = redactPrivate({ ...sqlTurn(), phase });
+      expect(t.part).toBeNull();
+      expect(t.route).toBeNull();
+      expect(t.archived?.redacted).toBe(true);
+      expect(JSON.stringify(t)).not.toContain("12345");
+    }
+    expect(redactPrivate(factoryTurn()).part).toBeNull();
+    expect(redactPrivate(artTurn()).part).not.toBeNull();
+  });
 });
 
-describe("帳密遮蔽：審查報告的格式與其他常見寫法（全部是合成值）", () => {
+describe("帳密：提到就整段不存（審查報告的單行、JSON、多行、YAML 區塊、陣列，全部是合成值）", () => {
   const formats = [
+    // 單行（第 2、3 次審查）
     "密碼是： SYNTH_PW_0001",
     "password is SYNTH_PW_0002",
     "API key is SYNTH_KEY_0003",
@@ -189,69 +221,57 @@ describe("帳密遮蔽：審查報告的格式與其他常見寫法（全部是�
     "帳密 admin / SYNTH_PW_0008",
     "the secret was SYNTH_PW_0009.",
     "請用驗證碼 SYNTH0010 登入",
+    // JSON／引號鍵名（第 3 次審查）
+    '{"password":"SYNTH_ALPHA,SYNTH_BETA"}',
+    '{"api_key":"SYNTH_KEY_ALPHA,SYNTH_KEY_BETA"}',
+    "{'token': 'SYNTH_T1, SYNTH_T2'}",
+    '{"password":"SYNTH_ESC\\"APED,SYNTH_TAIL"}',
+    '{"db_password": "SYNTH_DB,SYNTH_DB2", "user": "bob"}',
+    '{"access_token":"SYNTH_AT,SYNTH_AT2","refresh_token":"SYNTH_RT,SYNTH_RT2"}',
+    // 多行、YAML 區塊、陣列（第 4 次審查）
+    'password: "SYNTH_ALPHA\nSYNTH_BETA"',
+    "password: |\n  SYNTH_BLOCK_SECRET",
+    "password: >-\n  SYNTH_FOLDED_1\n  SYNTH_FOLDED_2",
+    '{"passwords":["SYNTH_A","SYNTH_B"]}',
+    '{\n  "credentials": [\n    "SYNTH_C1",\n    "SYNTH_C2"\n  ]\n}',
+    "credentials:\n  - SYNTH_LIST_1\n  - SYNTH_LIST_2",
+    'private_key: "第一行 SYNTH_PK1\n第二行 SYNTH_PK2\n第三行 SYNTH_PK3"',
+    "密碼：「第一行 SYNTH_ZH1\n第二行 SYNTH_ZH2」",
+    "Authorization: Bearer SYNTH_BEARER_TOKEN_VALUE",
+    "cookie: session=SYNTH_COOKIE",
   ];
 
-  it.each(formats)("「%s」的值不會留下", (s) => {
-    expect(scrubSecrets(s)).not.toMatch(/SYNTH/);
+  it.each(formats)("「%s」：整段不存，任何片段都不留下", (s) => {
+    expect(sanitizeForStorage(s, SECRET_QUESTION)).toBe(SECRET_QUESTION);
+    expect(sanitizeForStorage(`前面的說明\n${s}\n後面的說明`, SECRET_ANSWER)).toBe(SECRET_ANSWER);
   });
 
-  it("問句（含閒聊短路）與公開回答存檔、讀回後都沒有帳密", () => {
-    const turns = formats.map((f, i) =>
-      i % 2
-        ? base({ id: `q${i}`, route: route({ question: `${f}，梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } })
-        : base({
-            id: `a${i}`,
-            route: route({ question: "梵谷在哪裡畫的？" }),
-            part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `回答裡出現 ${f}。1889 年在聖雷米 [1]。`, done: done() as never, error: null },
-          }),
-    );
+  it("放在問句（含閒聊短路）與公開回答：serialize → save → load 後沒有任何片段", () => {
+    const turns = formats.flatMap((f, i) => [
+      base({ id: `q${i}`, route: route({ question: `幫我看這段 ${f} 梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } }),
+      base({
+        id: `a${i}`,
+        route: route({ question: "梵谷在哪裡畫的？" }),
+        part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `範例：${f}\n\n1889 年在聖雷米 [1]。`, done: done() as never, error: null },
+      }),
+    ]);
     const s = serialize([conv(turns)], { collapsed: false, split: 50, theme: "dark" });
     expect(JSON.stringify(s)).not.toMatch(/SYNTH/);
     save(s);
     expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH/);
     const back = load().convs[0].turns;
     expect(JSON.stringify(back)).not.toMatch(/SYNTH/);
-    expect(back.find((t) => t.id === "a0")?.archived?.answer).toContain("1889 年在聖雷米");
-    expect(back.find((t) => t.id === "q1")?.text).toContain("梵谷在哪裡畫的");
+    expect(back.filter((t) => t.id.startsWith("q")).every((t) => t.text === SECRET_QUESTION && !canRerun(t))).toBe(true);
+    expect(back.filter((t) => t.id.startsWith("a")).every((t) => t.archived?.answer === SECRET_ANSWER)).toBe(true);
+    // 公開段落（知識庫原文）照樣保存
+    expect(back.find((t) => t.id === "a0")?.archived?.sources?.[0].text).toBe("1889 年在聖雷米。");
   });
 
-  const jsonFormats = [
-    '{"password":"SYNTH_ALPHA,SYNTH_BETA"}',
-    '{"api_key":"SYNTH_KEY_ALPHA,SYNTH_KEY_BETA"}',
-    "{'token': 'SYNTH_T1, SYNTH_T2'}",
-    '{"password":"SYNTH_ESC\\"APED,SYNTH_TAIL"}',
-    '{"password":"SYNTH_UNCLOSED,SYNTH_REST',
-    '{"db_password": "SYNTH_DB,SYNTH_DB2", "user": "bob"}',
-    '{"access_token":"SYNTH_AT,SYNTH_AT2","refresh_token":"SYNTH_RT,SYNTH_RT2"}',
-    'config = {"client_secret": "SYNTH CS, SYNTH CS2"}; 其他說明',
-    "password='SYNTH_SQ,SYNTH_SQ2'",
-    "密碼：「SYNTH 全形, SYNTH 全形2」",
-  ];
-
-  it.each(jsonFormats)("JSON／引號鍵名「%s」整串值都不留下", (s) => {
-    const out = scrubSecrets(s);
-    expect(out).not.toMatch(/SYNTH/);
-  });
-
-  it("JSON 帳密放在問句與公開回答：serialize → save → load 後沒有任何片段", () => {
-    const turns = jsonFormats.flatMap((f, i) => [
-      base({ id: `jq${i}`, route: route({ question: `幫我看這段設定 ${f} 梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } }),
-      base({
-        id: `ja${i}`,
-        route: route({ question: "梵谷在哪裡畫的？" }),
-        part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `範例：${f}\n\n1889 年在聖雷米 [1]。`, done: done() as never, error: null },
-      }),
-    ]);
-    save(serialize([conv(turns)], { collapsed: false, split: 50, theme: "dark" }));
-    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH/);
-    const back = load().convs[0].turns;
-    expect(JSON.stringify(back)).not.toMatch(/SYNTH/);
-    expect(back.find((t) => t.id === "ja0")?.archived?.answer).toContain("1889 年在聖雷米");
-  });
-
-  it("一般文字不受影響；關鍵字在句尾不動", () => {
-    expect(scrubSecrets("梵谷畫這幅畫的時候在哪裡？")).toBe("梵谷畫這幅畫的時候在哪裡？");
-    expect(scrubSecrets("我忘記密碼。")).toBe("我忘記密碼。");
+  it("沒有帳密關鍵字的一般文字照存；只提到關鍵字也整段不存（寧可多遮，只影響存檔）", () => {
+    expect(sanitizeForStorage("梵谷畫這幅畫的時候在哪裡？", SECRET_QUESTION)).toBe("梵谷畫這幅畫的時候在哪裡？");
+    expect(sanitizeForStorage("谿山行旅圖用了什麼皴法？", SECRET_QUESTION)).toBe("谿山行旅圖用了什麼皴法？");
+    expect(sanitizeForStorage("我忘記密碼。", SECRET_QUESTION)).toBe(SECRET_QUESTION);
+    expect(mentionsSecret("secretary")).toBe(false);
   });
 });
 

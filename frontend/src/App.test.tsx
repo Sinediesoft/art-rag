@@ -343,6 +343,68 @@ describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未
   });
 });
 
+describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL／私有問答／3D → token-renewed → accounts 一直沒回來）", () => {
+  it("對話與展示區都立刻撤下舊身分的完成結果，不等身分重新確認", async () => {
+    const t = factoryBackend();
+    t.on("POST", "/agent/route", ({ body }) => {
+      const q = (body as { question: string }).question;
+      if (q.includes("幾件")) return json(route({ question: q, intent: "data_query", intent_label: "庫存・訂單・工單查詢", dispatch: { artwork_id: null, part_id: null, question: q } }));
+      if (q.includes("3D"))
+        return json(factoryRoute({ question: q, intent: "reconstruct", intent_label: "3D 重建", gate: "confirm", dispatch: { module: "reconstruct", part_id: "mfg-002", part_label: "連接法蘭", artwork_id: null, question: q } }));
+      return json(factoryRoute({ question: q }));
+    });
+    t.on("POST", "/cad/reconstruct", () =>
+      sse([
+        ["meta", { request_id: "r", job_id: "job-9", strategy: "ortho2cad", model: "mock", image_id: null, part: null, identified: null, layout: "kb", input_url: "", input_size: [1, 1], scale_to: null, scale_source: null }],
+        ["executing", {}],
+        ["result", { ok: true, error: null, code: "SYNTH_CAD_CODE", valid: true, repaired: false, raw_dims: null, dims: { width: 111, depth: 222, height: 33 }, scale: 1, volume: 1, faces: 12, iou: 0.99, iou_bbox: 0.99, files: { "model.stl": "/api/v1/cad/jobs/job-9/model.stl" } }],
+        ["done", { request_id: "r", job_id: "job-9", strategy: "ortho2cad", model: "mock", latency_ms: { first_token: 1, generation: 1, exec: 1, total: 2800 }, tokens: { input: 1, output: 1 }, egress: { images: 0, chunks: 0, bytes: 0 } }],
+      ]),
+    );
+    renderApp();
+    await ask("連接法蘭有哪些公差要求？");
+    await idle();
+    fireEvent.click(document.querySelector(".jump--factory")!);
+    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await ask("法蘭還剩幾件可以出貨？");
+    await idle();
+    await ask("把連接法蘭轉成 3D");
+    await idle();
+    fireEvent.click(screen.getByText("開始轉換"));
+    await waitFor(() => expect([...document.querySelectorAll(".strip__item")].some((b) => b.textContent?.includes("3D"))).toBe(true));
+    const before = document.body.textContent ?? "";
+    expect(before).toContain("±0.02");
+    expect(before).toContain("111×222×33");
+    // 憑證過期：client.ts 已改拿訪客憑證；重新確認身分的 /auth/accounts 一直沒回來，後端對舊身分的資料改回 403
+    t.on("GET", "/auth/accounts", () => new Promise<Response>(() => undefined));
+    const denied = () => json({ error: { code: "DATA_SCOPE_DENIED", message: "看不到", request_id: "r" } }, 403);
+    t.on("GET", "/parts/mfg-002", denied);
+    t.on("GET", "/cad/jobs/job-9", denied);
+    act(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
+    });
+    await waitFor(() => expect(document.querySelector(".composer__lock")?.textContent).toContain("正在確認身分"));
+    // 左邊對話、右邊展示區、縮圖歷程都不能再有舊身分的結果
+    for (const kind of ["圖紙", "查詢", "庫存", "3D"]) {
+      const item = [...document.querySelectorAll(".strip__item")].find((b) => b.textContent?.includes(kind));
+      if (item) {
+        fireEvent.click(item);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      const text = document.body.textContent ?? "";
+      expect(text).not.toContain("±0.02");
+      expect(text).not.toContain("一廠成品倉");
+      expect(text).not.toContain("還有 15 件");
+      expect(text).not.toContain("111×222×33");
+      expect(text).not.toContain("SYNTH_CAD_CODE");
+      expect(text).not.toContain("FLG-2002");
+    }
+    expect(document.querySelector(".view--data table")).toBeNull();
+    expect(document.querySelector(".taskcard")).toBeNull();
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/±0\.02|一廠成品倉|還有 15 件|111/));
+  });
+});
+
 describe("入口：沒有模組可以跳轉時，功能頁的交接連結要在", () => {
   it("批次辨識：入口給「打開批次辨識」，點了到 /batch", async () => {
     const t = factoryBackend();
