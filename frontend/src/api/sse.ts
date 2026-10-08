@@ -55,7 +55,7 @@ export interface SourcesEvent {
   candidates?: number;
   /** 第 4～6 段：雙重驗證、評分重排、生成閘門（docs/adr/015）；關檢索或第 1、2 段就擋下時為 null */
   post_filter?: PostFilterInfo | null;
-  /** 可觀測軌跡：每一段執行了沒有、結果、由誰判斷（docs/adr/019）；sources 事件只到第 6 段 */
+  /** 可觀測軌跡：每一段執行了沒有、結果、由誰判斷（docs/adr/030）；sources 事件只到第 6 段 */
   pipeline?: PipelineStage[];
 }
 

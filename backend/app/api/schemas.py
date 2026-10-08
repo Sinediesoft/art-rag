@@ -280,7 +280,7 @@ class ChatRequest(BaseModel):
     use_retrieval: bool = Field(
         default=True,
         description="false＝關檢索對照組：只有評估模式的畫作問答會生成，"
-        "其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/019）",
+        "其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/030）",
     )
     allow_fallback: bool = True
     rearrange: bool | None = Field(
@@ -291,7 +291,7 @@ class ChatRequest(BaseModel):
     route_ticket: str | None = Field(
         default=None,
         max_length=64,
-        description="/agent/route 回的交接票（docs/adr/019）。有效才沿用第 2 段的判斷；"
+        description="/agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；"
         "沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。"
         "七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位",
     )
@@ -315,7 +315,7 @@ class StrategyStatus(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    """公開健康檢查（不用憑證，docs/adr/019）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
+    """公開健康檢查（不用憑證，docs/adr/030）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
     模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"""
 
     status: Literal["ok", "degraded"]
@@ -345,7 +345,7 @@ class System1Brief(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    """登入後畫面用的系統狀態（要有效 JWT，docs/adr/019）：服務能不能用、記憶體、展示模式。
+    """登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。
     不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"""
 
     status: Literal["ok", "degraded"]
@@ -359,7 +359,7 @@ class StatusResponse(BaseModel):
 
 
 class DiagnosticsResponse(BaseModel):
-    """管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/019）：
+    """管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/030）：
     原本放在公開健康檢查裡的完整內容。"""
 
     status: Literal["ok", "degraded"]
@@ -975,7 +975,7 @@ class Account(BaseModel):
     clearance: int = Field(description="機密等級：公開 0、內部 1、機密 2（寫進 JWT）")
     views: list[str] = Field(
         default=[],
-        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/019）",
+        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
     )
 
 
@@ -1031,7 +1031,7 @@ class RouteRequest(BaseModel):
         description="第 2、4～6 段由誰判斷：auto／jev＝用 Jev，"
         "叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；"
         "local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，"
-        "其他情況一律由伺服器決定（docs/adr/019）",
+        "其他情況一律由伺服器決定（docs/adr/030）",
     )
 
 
@@ -1202,7 +1202,7 @@ class RouteResponse(BaseModel):
     )
     route_ticket: str | None = Field(
         default=None,
-        description="交接票（docs/adr/019）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，"
+        description="交接票（docs/adr/030）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，"
         "伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效",
     )
     egress: RouteEgress

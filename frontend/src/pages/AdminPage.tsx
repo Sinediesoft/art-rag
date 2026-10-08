@@ -43,7 +43,7 @@ const pct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(0)}%` 
 export function AdminPage() {
   const canView = useCanView("diagnostics");
   const { data: h, isLoading } = useDiagnostics();
-  // 展示按鈕看 /status 的 demo_controls：展示模式開著、而且是本機來的請求才顯示（docs/adr/019）
+  // 展示按鈕看 /status 的 demo_controls：展示模式開著、而且是本機來的請求才顯示（docs/adr/030）
   const { data: st } = useStatus();
   const evals = useEvalRuns();
   const cadEvals = useCadEvalRuns();
@@ -55,7 +55,7 @@ export function AdminPage() {
     return (
       <div className="card p-6 text-sm text-ink-80">
         <h1 className="t-display mb-3">系統狀態與評估</h1>
-        系統診斷含最近的問句、回覆、SQL 與路由紀錄，只有主管看得到（docs/adr/019）。請在頁首切換身分。
+        系統診斷含最近的問句、回覆、SQL 與路由紀錄，只有主管看得到（docs/adr/030）。請在頁首切換身分。
         {st && <p className="mt-3">服務狀態：{st.status === "ok" ? "全部正常" : "部分異常"}</p>}
       </div>
     );

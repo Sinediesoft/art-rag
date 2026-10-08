@@ -12,7 +12,7 @@
    生成閘門與地端生成；/inventory/ask 唯讀 SQL…），那些 API 自己也驗 JWT 與資料範圍，
    所以前端分派錯了或直接打 API 也繞不過權限。
    畫作問答、圖紙問答放行時發一張交接票（agent/handoff.py）：/chat 憑票沿用第 2 段的判斷，
-   沒票或票不符就自己重跑第 2 段（docs/adr/019）。
+   沒票或票不符就自己重跑第 2 段（docs/adr/030）。
 最後通知記憶體管理預估要用的模型、寫路由紀錄（eval-route 也用同一個端點）。
 """
 
@@ -37,7 +37,7 @@ DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙
 def _identify_photo(image_id: str, account: Account) -> dict:
     """照片是畫作還是圖紙：和以圖搜圖、問答同一個領域路由（docs/adr/007），只跑該領域的辨識。
     路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。
-    圖紙只在目前身分看得到的圖紙裡辨識（docs/adr/019）：看不到的不讀、不回名稱。"""
+    圖紙只在目前身分看得到的圖紙裡辨識（docs/adr/030）：看不到的不讀、不回名稱。"""
     visible = visible_part_ids(account, get_store().parts)
     found = search_service.identify_any(image_id, part_ids=visible)
     if found["route"]["domain"] == "art":
@@ -149,7 +149,7 @@ async def route(
 ) -> dict:
     """auth：閘道驗證過的 JWT（帳號＋憑證內容）。engine：第 2、4～6 段由誰判斷。
     auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用）。
-    engine 由 API 層決定：只有評估模式（EVAL_CONTROLS＋本機）才會傳 local 進來（docs/adr/019）。
+    engine 由 API 層決定：只有評估模式（EVAL_CONTROLS＋本機）才會傳 local 進來（docs/adr/030）。
     forced_intent（澄清按鈕）只改變交給哪個模組，不降低任何關卡：第 2 段照「使用者點的意圖」與
     「本地分流原本判斷的意圖」裡比較危險的那個判斷冒充身分。"""
     t0 = time.perf_counter()
@@ -220,7 +220,7 @@ async def route(
         entities,
         domain=domain,
     )
-    # 拒絕並記錄不存問句原文與文件名稱，只存雜湊（docs/adr/019）
+    # 拒絕並記錄不存問句原文與文件名稱，只存雜湊（docs/adr/030）
     logged_text = (
         f"問句雜湊 {guard.fingerprint(question)}"
         if question or not photo

@@ -406,7 +406,7 @@ def test_commit_writes_kb_and_bumps_version(client, reads, kb):
 
 
 def test_duplicate_check_only_looks_at_drawings_the_requester_can_see(client, monkeypatch):
-    """查「知識庫是不是已經有」只在建檔人看得到的圖紙裡比（docs/adr/019）：
+    """查「知識庫是不是已經有」只在建檔人看得到的圖紙裡比（docs/adr/030）：
     業務看不到機密圖紙，辨識時不讀它們，也不會在「已收錄」訊息裡看到名稱。"""
     seen: list = []
 

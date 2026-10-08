@@ -20,7 +20,7 @@
 改在地端判斷（規則掃描＋本地 Qwen3-VL 挑選＋相似度與關鍵詞）。
 規則與 Jev 的題目都在 shared/agent.yaml 的 guard；資料範圍在 shared/access.yaml。
 
-2026-10-06 修補（docs/adr/019）：
+2026-10-06 修補（docs/adr/030）：
 - 地端規則比對前先正規化（NFKC、去零寬字元、小寫，另比一次去掉空白標點的版本）
 - 第 2 段的確定性 hard-block 永遠先跑，Jev 只能增加攔截，不能覆寫
 - Jev 回應缺欄、不是數字、NaN、無限大、超出範圍一律當「叫不到 Jev」，改用地端判斷（不會放行或 500）
@@ -158,7 +158,7 @@ def _find(rx: re.Pattern, text: str) -> re.Match | None:
 
 
 def fingerprint(text: str) -> str:
-    """不可逆的短雜湊：拒絕並記錄、稽核只存這個，不存原文（docs/adr/019）。"""
+    """不可逆的短雜湊：拒絕並記錄、稽核只存這個，不存原文（docs/adr/030）。"""
     return hashlib.sha256(normalize(text).encode("utf-8")).hexdigest()[:12]
 
 
@@ -228,7 +228,7 @@ class MetaFilter:
         return f
 
     def allows(self, level: str, dept: str) -> bool:
-        # 和 identity.can_view_part 同一條規則（docs/adr/019）
+        # 和 identity.can_view_part 同一條規則（docs/adr/030）
         return scope_allows(self.clearance, self.depts, level, dept)
 
     @property
@@ -539,7 +539,7 @@ async def guard_input(
     tag = None
     fallback = None
     reply = None
-    # 確定性的 hard-block 永遠先跑（docs/adr/019）：命中就擋，Jev 不能覆寫，也不必再送 Jev
+    # 確定性的 hard-block 永遠先跑（docs/adr/030）：命中就擋，Jev 不能覆寫，也不必再送 Jev
     direct, suspects = _local_hits(text)
     eff = risk or risk_hint or "read"
     said = "、".join(f"「{m}」" for _, m in suspects)
@@ -713,7 +713,7 @@ class GateInfo(StageInfo):
 
 @dataclass
 class PostResult:
-    mode: str  # jev／local：第 4～6 段由誰判斷（2026-10-06 起沒有只掃描的 scan，docs/adr/019）
+    mode: str  # jev／local：第 4～6 段由誰判斷（2026-10-06 起沒有只掃描的 scan，docs/adr/030）
     kept: list[dict]
     candidates: int
     verify: StageInfo
@@ -804,7 +804,7 @@ async def _ask(state: dict, questions: dict) -> tuple[jev.JevReply | None, str |
 
 def local_answerable(question: str, kept: list[dict], card: dict | None) -> tuple[bool, str]:
     """第 6 段地端的 answerable：問題的關鍵詞有沒有出現在留下的段落與作品資料裡。
-    不因為有文件卡、圖面或任一段高相似度就放行（docs/adr/019）。"""
+    不因為有文件卡、圖面或任一段高相似度就放行（docs/adr/030）。"""
     lg = _cfg()["local_gate"]
     q = terms(question)
     if not q:
@@ -1246,7 +1246,7 @@ def hidden_terms(account: Account | None, parts: list[dict]) -> set[str]:
 
 
 def check_output(answer: str, kept: list[dict], hidden: set[str], flagged: list[dict]) -> list[str]:
-    """第 7 段：回覆送給使用者之前的輸出合規與引用完整性檢查（docs/adr/019）。
+    """第 7 段：回覆送給使用者之前的輸出合規與引用完整性檢查（docs/adr/030）。
     回傳違規種類（空的＝通過）；只回種類，不帶原文。"""
     r = _rules()
     norm, flat = normalize(answer), compact(answer)
@@ -1276,7 +1276,7 @@ def log_block(
     stage: int, rule: str, account: Account | None, text: str, request_id: str, judge: str
 ) -> str:
     """擋下、剔除或改寫都記一筆。text 只放事件摘要（文件／段落 ID、問句雜湊），
-    寫入前再遮蔽個資與帳密；不存問句、段落或回覆原文（docs/adr/019）。回傳紀錄編號（SEC-0001）。"""
+    寫入前再遮蔽個資與帳密；不存問句、段落或回覆原文（docs/adr/030）。回傳紀錄編號（SEC-0001）。"""
     safe = _rules()["credential"].sub("[帳密已遮蔽]", mask_pii(text)[0])
     repo = get_logs_repo()
     return repo.add_security_log(

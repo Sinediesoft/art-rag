@@ -150,7 +150,7 @@ class PgCollection(Collection):
         self._chunk_by_id = {c["chunk_id"]: c for c in self.chunks}
 
     def search_images(self, query: np.ndarray, k: int, owners: set | None = None) -> list[Hit]:
-        """owners：只在這些項目裡找（資料庫查詢階段就過濾，docs/adr/019）；None＝不限。"""
+        """owners：只在這些項目裡找（資料庫查詢階段就過濾，docs/adr/030）；None＝不限。"""
         if not self.items or (owners is not None and not owners):
             return []
         with self.pool.connection() as conn:

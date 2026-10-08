@@ -152,7 +152,7 @@ async def _reconstruct_stream(
     if image_id:
         photo = load_image(load_upload(image_id))
         if not part:
-            # 只在看得到的圖紙裡辨識（docs/adr/019）：看不到的圖紙不讀，認不出就當未收錄的照片
+            # 只在看得到的圖紙裡辨識（docs/adr/030）：看不到的圖紙不讀，認不出就當未收錄的照片
             visible = visible_part_ids(account, store.parts) if account is not None else None
             identified = await asyncio.to_thread(
                 identify_drawing, image_id, None, photo, None, visible

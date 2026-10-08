@@ -71,7 +71,7 @@ export function IdentityBar() {
         {data.demo_controls && (
           <span
             className="rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold text-warning"
-            title="DEMO_CONTROLS=true：可以不用密碼切換任何身分（docs/adr/019）"
+            title="DEMO_CONTROLS=true：可以不用密碼切換任何身分（docs/adr/030）"
           >
             展示模式・不可用於正式環境
           </span>

@@ -99,7 +99,7 @@ def test_cloud_rejects_user_photos(real_llm, monkeypatch):
 
 def test_cloud_egress_is_recorded(real_llm, monkeypatch, all_chunks):
     """A2（api_kb）送出圖片與段落；A1（api_nokb）不帶任何檢索段落。
-    A1 是關檢索對照組：只有評估模式才生成，否則第 6 段直接降級（docs/adr/019）。"""
+    A1 是關檢索對照組：只有評估模式才生成，否則第 6 段直接降級（docs/adr/030）。"""
     monkeypatch.setattr(get_settings(), "allow_cloud", True)
     monkeypatch.setattr(get_settings(), "api_key", "test-key")
     kb = event(

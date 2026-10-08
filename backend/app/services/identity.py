@@ -6,10 +6,10 @@
   請求碰不到任何模型與資料
 - 帳號、角色、範圍都在 shared/access.yaml（種子檔，不用密碼）。切換身分只在展示模式開放：
   DEMO_CONTROLS=true（預設 false，人在本機 .env 明確開啟）＋請求來自 DEMO_TRUSTED_HOSTS
-  ＋已經有有效憑證；正式環境不能自己簽發任何帳號的 JWT（docs/adr/019）
+  ＋已經有有效憑證；正式環境不能自己簽發任何帳號的 JWT（docs/adr/030）
 - 任何模型（Jev、Qwen3-VL）都看不到、也決定不了身分：權限只由憑證裡的帳號與角色決定
 - 資料範圍：角色能讀哪些領域（畫作／工廠圖紙／工廠資料庫）、哪些機密等級與部門；
-  圖紙看不看得到只由 can_view_part() 決定（領域＋機密等級＋部門，docs/adr/019），
+  圖紙看不看得到只由 can_view_part() 決定（領域＋機密等級＋部門，docs/adr/030），
   單筆、清單、搜尋、比較、3D、問答與生成前置檢查都用它；
   檢索用同一條規則產生 Metadata Filter（第 3 段）
 - 管理與診斷畫面（診斷、拒絕並記錄、稽核）照 access.yaml 的 views 檢查角色（require_view）
@@ -32,7 +32,7 @@ COOKIE = "artrag_token"
 ISSUER = "art-rag"
 TW = timezone(timedelta(hours=8))
 # 不用憑證的端點：健康檢查（只回存活與就緒）、取得憑證（/auth/accounts 沒有有效憑證時發訪客憑證）。
-# 切換身分不在這裡：沒有憑證就在閘道 401（docs/adr/019）
+# 切換身分不在這裡：沒有憑證就在閘道 401（docs/adr/030）
 PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts"}
 
 
@@ -305,7 +305,7 @@ def demo_allowed(request: Request) -> bool:
 
 
 def require_demo(request: Request, what: str) -> None:
-    """展示用功能（切換身分、模擬斷線、展示還原、手動釋放模型）的共同檢查（docs/adr/019）。"""
+    """展示用功能（切換身分、模擬斷線、展示還原、手動釋放模型）的共同檢查（docs/adr/030）。"""
     s = get_settings()
     if not s.demo_controls:
         raise AppError("FORBIDDEN", f"展示模式已停用（DEMO_CONTROLS=false），不能{what}", 403)
@@ -367,7 +367,7 @@ def require_domain(account: Account, domain: str) -> None:
 
 
 def can_view_part(account: Account, part: dict) -> bool:
-    """單一圖紙可見性（docs/adr/019）：能讀 mfg 領域、看得到這個機密等級、部門在範圍內，三者都要。
+    """單一圖紙可見性（docs/adr/030）：能讀 mfg 領域、看得到這個機密等級、部門在範圍內，三者都要。
     單筆讀取、清單、以圖搜圖紙、文字搜圖紙、比較、3D、批次辨識、問答與生成前置檢查都用這一個函式。"""
     level = part.get("confidentiality", "機密")
     return (

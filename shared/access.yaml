@@ -46,7 +46,7 @@ domains:
   mfg: 工廠圖紙
   factory: 工廠資料庫
 
-# 管理與診斷畫面（docs/adr/019）：只有列出的角色看得到，其他身分（包含訪客）一律 403。
+# 管理與診斷畫面（docs/adr/030）：只有列出的角色看得到，其他身分（包含訪客）一律 403。
 # 這裡只管「看系統紀錄」，不影響上面各角色的業務操作（ops）、機密等級與部門。
 # diagnostics＝/admin/diagnostics（最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定）
 # security_logs＝/security/logs（拒絕並記錄）；audit＝/audit（稽核紀錄與異動單）

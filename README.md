@@ -232,7 +232,7 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 
 ### 智慧助理：七段權限控管＋權限與主管核准（約 5 分鐘）
 
-**先在 `.env` 設 `DEMO_CONTROLS=true`**（預設關閉，docs/adr/019）：切換身分不用密碼，所以只在展示模式、本機（`DEMO_TRUSTED_HOSTS`）、
+**先在 `.env` 設 `DEMO_CONTROLS=true`**（預設關閉，docs/adr/030）：切換身分不用密碼，所以只在展示模式、本機（`DEMO_TRUSTED_HOSTS`）、
 而且已經有憑證時開放，頁首會標「展示模式・不可用於正式環境」。從別台電腦（例如手機）展示時，把那台的位址加進 `DEMO_TRUSTED_HOSTS`。
 首頁（智慧助理）的「試試防護架構」與「展示腳本」按鈕會自動切換身分並送出（對話開始後從輸入框下方「示範句與展示腳本」叫出）；
 也可以在頁首的「目前身分」手動切換，對話裡會留一行「已切換身分為〈…〉」。

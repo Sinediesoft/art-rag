@@ -131,7 +131,7 @@ def main() -> int:
         print(f"連不上後端 {args.base}，請先執行 make demo")
         return 1
     # 切換身分要先有憑證、要展示模式；Jev 設定在管理診斷（主管）；
-    # engine=local 要評估模式（docs/adr/019）
+    # engine=local 要評估模式（docs/adr/030）
     client.get("/api/v1/auth/accounts").raise_for_status()
     client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
     health = client.get("/api/v1/admin/diagnostics").json()

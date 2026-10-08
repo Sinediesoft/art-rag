@@ -11,7 +11,7 @@ export type ImageAlignment = Schemas["ImageAlignment"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
 export type HealthResponse = Schemas["HealthResponse"];
-/** 登入後畫面用的系統狀態（docs/adr/019）：服務能不能用、記憶體、展示模式；不含模型端點與紀錄 */
+/** 登入後畫面用的系統狀態（docs/adr/030）：服務能不能用、記憶體、展示模式；不含模型端點與紀錄 */
 export type StatusResponse = Schemas["StatusResponse"];
 /** 管理診斷（只有 access.yaml 的 views.diagnostics 看得到，預設主管） */
 export type DiagnosticsResponse = Schemas["DiagnosticsResponse"];

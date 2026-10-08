@@ -1978,7 +1978,7 @@
           "production"
         ],
         "summary": "Reset Production",
-        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄\n與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/019）。",
+        "description": "展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄\n與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/030）。",
         "operationId": "reset_production_api_v1_admin_production_reset_post",
         "responses": {
           "200": {
@@ -2242,7 +2242,7 @@
           "system"
         ],
         "summary": "Health",
-        "description": "公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/019）。\n最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。",
+        "description": "公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/030）。\n最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -2274,7 +2274,7 @@
           "system"
         ],
         "summary": "System Status",
-        "description": "登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/019）。",
+        "description": "登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/030）。",
         "operationId": "system_status_api_v1_status_get",
         "responses": {
           "200": {
@@ -2306,7 +2306,7 @@
           "system"
         ],
         "summary": "Diagnostics",
-        "description": "管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。\n要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/019）。",
+        "description": "管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。\n要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/030）。",
         "operationId": "diagnostics_api_v1_admin_diagnostics_get",
         "responses": {
           "200": {
@@ -2338,7 +2338,7 @@
           "system"
         ],
         "summary": "Simulate Outage",
-        "description": "展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/019）。",
+        "description": "展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/030）。",
         "operationId": "simulate_outage_api_v1_admin_outage_post",
         "requestBody": {
           "content": {
@@ -2412,7 +2412,7 @@
           "agent"
         ],
         "summary": "Switch Account",
-        "description": "展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、\n本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/019）。",
+        "description": "展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、\n本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。",
         "operationId": "switch_account_api_v1_auth_switch_post",
         "requestBody": {
           "content": {
@@ -2772,7 +2772,7 @@
           "agent"
         ],
         "summary": "Security Logs",
-        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。\n只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/019）。",
+        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。\n只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。",
         "operationId": "security_logs_api_v1_security_logs_get",
         "parameters": [
           {
@@ -2818,7 +2818,7 @@
           "agent"
         ],
         "summary": "Audit Log",
-        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。\n要 access.yaml 的 views.audit（docs/adr/019）。",
+        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。\n要 access.yaml 的 views.audit（docs/adr/030）。",
         "operationId": "audit_log_api_v1_audit_get",
         "parameters": [
           {
@@ -2948,7 +2948,7 @@
             },
             "type": "array",
             "title": "Views",
-            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/019）",
+            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
             "default": []
           }
         },
@@ -4533,7 +4533,7 @@
           "use_retrieval": {
             "type": "boolean",
             "title": "Use Retrieval",
-            "description": "false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/019）",
+            "description": "false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/030）",
             "default": true
           },
           "allow_fallback": {
@@ -4564,7 +4564,7 @@
               }
             ],
             "title": "Route Ticket",
-            "description": "/agent/route 回的交接票（docs/adr/019）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位"
+            "description": "/agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位"
           }
         },
         "type": "object",
@@ -5054,7 +5054,7 @@
           "recent_chats"
         ],
         "title": "DiagnosticsResponse",
-        "description": "管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/019）：\n原本放在公開健康檢查裡的完整內容。"
+        "description": "管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/030）：\n原本放在公開健康檢查裡的完整內容。"
       },
       "DrawingSearchHit": {
         "properties": {
@@ -5571,7 +5571,7 @@
           "demo_warning"
         ],
         "title": "HealthResponse",
-        "description": "公開健康檢查（不用憑證，docs/adr/019）：只回存活與就緒。問句、回覆、SQL、路由紀錄、\n模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"
+        "description": "公開健康檢查（不用憑證，docs/adr/030）：只回存活與就緒。問句、回覆、SQL、路由紀錄、\n模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"
       },
       "ImageAlignment": {
         "properties": {
@@ -8758,7 +8758,7 @@
               "local"
             ],
             "title": "Engine",
-            "description": "第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/019）",
+            "description": "第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/030）",
             "default": "auto"
           }
         },
@@ -8967,7 +8967,7 @@
               }
             ],
             "title": "Route Ticket",
-            "description": "交接票（docs/adr/019）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效"
+            "description": "交接票（docs/adr/030）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效"
           },
           "egress": {
             "$ref": "#/components/schemas/RouteEgress"
@@ -10178,7 +10178,7 @@
           "system1"
         ],
         "title": "StatusResponse",
-        "description": "登入後畫面用的系統狀態（要有效 JWT，docs/adr/019）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"
+        "description": "登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"
       },
       "StockLocation": {
         "properties": {

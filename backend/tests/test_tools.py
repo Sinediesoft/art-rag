@@ -108,7 +108,7 @@ def test_batch_rows_blurry_matched_and_not_in_kb(client, monkeypatch):
 
 def test_batch_hides_drawings_outside_scope(client, monkeypatch):
     """業務看不到機密圖紙：那一列標「目前身分看不到」，不透露是哪一張；訪客不能用工廠圖紙。
-    辨識本身只在看得到的圖紙裡找（docs/adr/019）；
+    辨識本身只在看得到的圖紙裡找（docs/adr/030）；
     這裡的假辨識故意忽略 part_ids，測事後的第二道過濾。"""
     img = upload(client, DRAWINGS / "mfg-001__glare.jpg")
     monkeypatch.setattr(

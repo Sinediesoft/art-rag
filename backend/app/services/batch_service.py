@@ -134,7 +134,7 @@ def identify_one(image_id: str, index: int, domain: str | None, account: Account
             visible = visible_part_ids(account, get_store().parts)
             _row_from_drawing(row, identify_drawing(image_id, part_ids=visible), account)
         else:
-            # 判成圖紙時只在看得到的圖紙裡辨識（docs/adr/019；不能用工廠圖紙的身分是空集合）
+            # 判成圖紙時只在看得到的圖紙裡辨識（docs/adr/030；不能用工廠圖紙的身分是空集合）
             found = identify_any(image_id, part_ids=visible_part_ids(account, get_store().parts))
             row["route"] = found["route"]
             row["domain"] = found["route"]["domain"]

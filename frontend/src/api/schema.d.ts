@@ -881,7 +881,7 @@ export interface paths {
         /**
          * Reset Production
          * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
-         *     與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/019）。
+         *     與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/030）。
          */
         post: operations["reset_production_api_v1_admin_production_reset_post"];
         delete?: never;
@@ -1033,7 +1033,7 @@ export interface paths {
         };
         /**
          * Health
-         * @description 公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/019）。
+         * @description 公開健康檢查（不用憑證）：只回存活與就緒（docs/adr/030）。
          *     最近的問句、回覆、SQL、路由紀錄、模型端點與內部設定在 /admin/diagnostics（要管理權限）。
          */
         get: operations["health_api_v1_health_get"];
@@ -1055,7 +1055,7 @@ export interface paths {
         /**
          * System Status
          * @description 登入後畫面用的系統狀態（要有效 JWT）：服務能不能用、記憶體、展示模式。
-         *     不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/019）。
+         *     不含問句、回覆、SQL、路由紀錄、模型端點位址與內部設定（docs/adr/030）。
          */
         get: operations["system_status_api_v1_status_get"];
         put?: never;
@@ -1076,7 +1076,7 @@ export interface paths {
         /**
          * Diagnostics
          * @description 管理診斷：最近的問答、3D 重建、SQL、路由紀錄、模型端點、索引與內部設定。
-         *     要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/019）。
+         *     要 access.yaml 的 views.diagnostics（預設只有主管，docs/adr/030）。
          */
         get: operations["diagnostics_api_v1_admin_diagnostics_get"];
         put?: never;
@@ -1098,7 +1098,7 @@ export interface paths {
         put?: never;
         /**
          * Simulate Outage
-         * @description 展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/019）。
+         * @description 展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/030）。
          */
         post: operations["simulate_outage_api_v1_admin_outage_post"];
         delete?: never;
@@ -1140,7 +1140,7 @@ export interface paths {
         /**
          * Switch Account
          * @description 展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
-         *     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/019）。
+         *     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。
          */
         post: operations["switch_account_api_v1_auth_switch_post"];
         delete?: never;
@@ -1303,7 +1303,7 @@ export interface paths {
          * Security Logs
          * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
          *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
-         *     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/019）。
+         *     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。
          */
         get: operations["security_logs_api_v1_security_logs_get"];
         put?: never;
@@ -1324,7 +1324,7 @@ export interface paths {
         /**
          * Audit Log
          * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
-         *     要 access.yaml 的 views.audit（docs/adr/019）。
+         *     要 access.yaml 的 views.audit（docs/adr/030）。
          */
         get: operations["audit_log_api_v1_audit_get"];
         put?: never;
@@ -1386,7 +1386,7 @@ export interface components {
             clearance: number;
             /**
              * Views
-             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/019）
+             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）
              * @default []
              */
             views: string[];
@@ -1957,7 +1957,7 @@ export interface components {
             strategy: "hybrid" | "api_nokb" | "api_kb" | "lora" | "mock";
             /**
              * Use Retrieval
-             * @description false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/019）
+             * @description false＝關檢索對照組：只有評估模式的畫作問答會生成，其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/030）
              * @default true
              */
             use_retrieval: boolean;
@@ -1973,7 +1973,7 @@ export interface components {
             rearrange?: boolean | null;
             /**
              * Route Ticket
-             * @description /agent/route 回的交接票（docs/adr/019）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位
+             * @description /agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位
              */
             route_ticket?: string | null;
         };
@@ -2110,7 +2110,7 @@ export interface components {
         };
         /**
          * DiagnosticsResponse
-         * @description 管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/019）：
+         * @description 管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/030）：
          *     原本放在公開健康檢查裡的完整內容。
          */
         DiagnosticsResponse: {
@@ -2364,7 +2364,7 @@ export interface components {
         };
         /**
          * HealthResponse
-         * @description 公開健康檢查（不用憑證，docs/adr/019）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
+         * @description 公開健康檢查（不用憑證，docs/adr/030）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
          *     模型端點與內部設定都在需要管理權限的 /admin/diagnostics。
          */
         HealthResponse: {
@@ -3708,7 +3708,7 @@ export interface components {
             forced_intent?: string | null;
             /**
              * Engine
-             * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/019）
+             * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/030）
              * @default auto
              * @enum {string}
              */
@@ -3803,7 +3803,7 @@ export interface components {
             post_filter: "jev" | "local";
             /**
              * Route Ticket
-             * @description 交接票（docs/adr/019）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效
+             * @description 交接票（docs/adr/030）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效
              */
             route_ticket?: string | null;
             egress: components["schemas"]["RouteEgress"];
@@ -4191,7 +4191,7 @@ export interface components {
         };
         /**
          * StatusResponse
-         * @description 登入後畫面用的系統狀態（要有效 JWT，docs/adr/019）：服務能不能用、記憶體、展示模式。
+         * @description 登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。
          *     不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。
          */
         StatusResponse: {

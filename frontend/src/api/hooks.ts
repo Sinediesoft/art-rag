@@ -67,7 +67,7 @@ export const useTextSearch = (q: string | null) =>
     staleTime: 60_000,
   });
 
-/** 畫面用的系統狀態（要 JWT）：服務能不能用、記憶體、展示模式（docs/adr/019） */
+/** 畫面用的系統狀態（要 JWT）：服務能不能用、記憶體、展示模式（docs/adr/030） */
 export const useStatus = () =>
   useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 5000 });
 

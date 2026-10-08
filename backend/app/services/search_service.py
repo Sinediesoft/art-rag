@@ -167,7 +167,7 @@ def identify_drawing(
     """圖紙辨識三道關：Chinese-CLIP 粗篩 → ORB 幾何驗證（遮掉固定版面、排除退化 homography）
     → 拉正後比對線條重合度。三道都過才算辨識成功。
 
-    part_ids：目前身分看得到的圖紙（identity.visible_part_ids，docs/adr/019）。先做文件層授權：
+    part_ids：目前身分看得到的圖紙（identity.visible_part_ids，docs/adr/030）。先做文件層授權：
     候選只從這些圖紙裡找，看不到的圖紙不算相似度、不讀特徵與圖檔、也不會出現在結果；
     None＝不限（程式內部呼叫，例如照片建檔查重複由主管收錄時再確認）。"""
     cfg = get_models_config().drawing_retrieval
@@ -261,7 +261,7 @@ def search_parts_text(
 ) -> dict:
     """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數。
 
-    part_ids：目前身分看得到的圖紙（identity.visible_part_ids：領域＋機密等級＋部門，docs/adr/019），
+    part_ids：目前身分看得到的圖紙（identity.visible_part_ids：領域＋機密等級＋部門，docs/adr/030），
     看不到的圖紙在檢索時就濾掉；None＝不限。filter_text：回給畫面看的過濾條件。"""
     mfg = get_store().mfg
     k = top_k or int(get_models_config().drawing_retrieval["top_k_search"])

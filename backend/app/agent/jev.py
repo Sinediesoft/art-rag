@@ -48,7 +48,7 @@ class JevReply:
 
     def noul(self, name: str) -> float:
         """是非題：回答「是」的機率。缺欄、不是數字、NaN、無限大或不在 0～1 → JevUnavailable
-        （呼叫端改用地端判斷；不可以把缺欄當成 0 而放行，docs/adr/019）。"""
+        （呼叫端改用地端判斷；不可以把缺欄當成 0 而放行，docs/adr/030）。"""
         a = self._answer(name)
         if "noul" not in a:
             raise JevUnavailable(f"Jev 回應缺少 {name}.noul")

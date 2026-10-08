@@ -27,14 +27,14 @@
 - `candidates`：第 3 段檢索出的候選段落數（第 4 段驗證前）
 - `post_filter`：`{"mode", "engine", "candidates", "kept", "flagged", "dropped", "cloud", "local", "verify", "rerank", "gate",
   "rearrange", "egress_bytes", "ms"}`。`mode` 為 `jev`／`local`：第 4～6 段由誰判斷，**由伺服器決定**（交接票記的判斷者，
-  沒有交接票時是 `jev`，叫不到 Jev 就地端判斷）。2026-10-06 起（docs/adr/019）**每一次問答都完整跑第 4～6 段**，
+  沒有交接票時是 `jev`，叫不到 Jev 就地端判斷）。2026-10-06 起（docs/adr/030）**每一次問答都完整跑第 4～6 段**，
   沒有只掃描的 `scan` 模式，請求的 `post_filter` 欄位已移除（送了也會被忽略）。
   `flagged` 是第 4 段 security_leak_check 剔除的段落（`by`＝Jev／地端），`dropped` 是與提問無關、分數太低或超過 3 段的段落。
   `verify`（第 4 段 Jev Noul）、`rerank`（第 5 段 Jev Score）、`gate`（第 6 段生成閘門）都是
   `{"engine", "checks", "call", "fallback_reason", "ms"}`，`gate` 另有 `passed`、`message`；`call` 是那一次 Jev 請求的紀錄
   （送出的代號化內容、代號對照、回答、請求本文）。`cloud` 是送 Jev 的段落數（只有公開段落）。
   關檢索、或第 1、2 段就擋下時為 `null`。
-- `pipeline`（`sources` 與 `done` 都有，docs/adr/019）：可觀測軌跡 `[{"stage", "name", "status", "by", "detail"}]`，
+- `pipeline`（`sources` 與 `done` 都有，docs/adr/030）：可觀測軌跡 `[{"stage", "name", "status", "by", "detail"}]`，
   依序列出執行過的段落；`status` 為 `pass`／`block`／`skip`。`sources` 只到第 6 段，`done` 含第 7 段。
   某一段 `block` 之後的段落不會執行（不讀圖、不檢索、不組 prompt、不呼叫 Jev 或生成端），也不會出現在清單裡。
 每段多一個 `level`（畫作「公開」，圖紙「內部」或「機密」）。`done.egress` 多 `jev_bytes`（第 4～6 段送 Jev 的位元組合計），
@@ -145,7 +145,7 @@
 需後端 `ALLOW_CLOUD=true`，且不接受 `image_id`）、`mock`。備援只在本地之間：
 `hybrid` → `hybrid_fallback`，`lora` → `hybrid` → `hybrid_fallback`；雲端不在任何備援鏈上。
 
-評估用的對照組選項（docs/adr/019）只在後端 `EVAL_CONTROLS=true`、而且請求來自 `DEMO_TRUSTED_HOSTS` 時生效：
+評估用的對照組選項（docs/adr/030）只在後端 `EVAL_CONTROLS=true`、而且請求來自 `DEMO_TRUSTED_HOSTS` 時生效：
 `strategy=mock`（否則照 `hybrid`，`done.strategy_requested` 仍記 `mock`）、`use_retrieval=false`
 （否則第 6 段直接降級；工廠圖紙即使在評估模式也一律降級）、`/agent/route` 的 `engine=local`。
 `api_nokb`（A1）等於關檢索，一樣要評估模式。這些欄位都不能降低七段權限控管的任何一段。

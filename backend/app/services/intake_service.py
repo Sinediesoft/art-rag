@@ -499,7 +499,7 @@ async def intake_stream(
     """照片建檔用到 Chinese-CLIP（辨識）與 Qwen3-VL（讀圖紙標題欄）；記憶體吃緊時先釋放其他模型。
 
     domain＝從哪一邊的頁面進來（圖紙頁 mfg、尋畫 art）；沒給就交給領域路由判斷。
-    account：目前身分。查「知識庫是不是已經有這張圖紙」只在它看得到的圖紙裡比（docs/adr/019）：
+    account：目前身分。查「知識庫是不是已經有這張圖紙」只在它看得到的圖紙裡比（docs/adr/030）：
     看不到的圖紙不讀、也不會在「已收錄」訊息裡出現；主管收錄時再用主管的範圍查一次重複。
     None＝不限（程式內部呼叫）。
     """
@@ -902,7 +902,7 @@ def commit_draft(draft_id: str, account: Account, request_id: str) -> dict:
                 "INTAKE_INVALID", "還有欄位沒通過驗證：" + "、".join(view["blockers"]), 422
             )
         if domain == "mfg":
-            # 建草稿時只和建檔人看得到的圖紙比過（docs/adr/019）；收錄前用主管的範圍再查一次重複
+            # 建草稿時只和建檔人看得到的圖紙比過（docs/adr/030）；收錄前用主管的範圍再查一次重複
             photo = load_image(_dir(draft_id) / "photo.jpg")
             visible = visible_part_ids(account, get_store().parts)
             dup = identify_drawing(draft_id, None, photo, None, visible)
