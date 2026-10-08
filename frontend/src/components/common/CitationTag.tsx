@@ -31,7 +31,21 @@ export function CitationTag({
   );
 }
 
-/** 把回答中的 [1]、[1][3] 轉成可點的引用標籤 */
+/** 出處是「附上的畫作圖片」而不是知識庫段落（answer_v3 起，docs/adr/026）：不能點，沒有段落可看。
+ *  可以和段落編號並列，例如 [1][畫面]（東西是段落寫的、顏色或位置是看圖的，answer_v4） */
+export function ImageCitationTag() {
+  return (
+    <span
+      className="mx-0.5 inline-flex h-[18px] items-center rounded-full bg-parchment-deep px-1.5 align-[1px] text-[11px] font-semibold text-ink-80"
+      title="這句是模型看附上的畫作圖片得到的，知識庫段落裡沒有寫，請自己看圖確認"
+      aria-label="來源：畫面"
+    >
+      畫面
+    </span>
+  );
+}
+
+/** 把回答中的 [1]、[1][3] 轉成可點的引用標籤；[畫面] 轉成「畫面」標籤 */
 export function AnswerText({
   text,
   activeRef,
@@ -41,10 +55,11 @@ export function AnswerText({
   activeRef?: number | null;
   onCite?: (n: number) => void;
 }) {
-  const parts = text.split(/(\[\d+\])/g);
+  const parts = text.split(/(\[\d+\]|\[畫面\])/g);
   return (
     <>
       {parts.map((p, i) => {
+        if (p === "[畫面]") return <ImageCitationTag key={i} />;
         const m = p.match(/^\[(\d+)\]$/);
         return m ? (
           <CitationTag key={i} refNo={Number(m[1])} active={activeRef === Number(m[1])} onClick={onCite} />

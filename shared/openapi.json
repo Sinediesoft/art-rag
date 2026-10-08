@@ -612,7 +612,7 @@
           "chat"
         ],
         "summary": "Chat",
-        "description": "圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。\n角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」\n（兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。",
+        "description": "圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。\n角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」\n（兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。\ninject 只在受信任的評估模式開放；send_image 與 conflict_check 不會略過安全關卡。",
         "operationId": "chat_api_v1_chat_post",
         "requestBody": {
           "content": {
@@ -2634,7 +2634,7 @@
           "agent"
         ],
         "summary": "List Approvals",
-        "description": "待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。",
+        "description": "待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。\n主管看全部，其他人只看自己送出的申請。",
         "operationId": "list_approvals_api_v1_approvals_get",
         "responses": {
           "200": {
@@ -4553,6 +4553,18 @@
             "title": "Rearrange",
             "description": "地端段落是否由本地 Qwen3-VL 判斷相關性（MIRA 的 Rearrange）；null＝依伺服器設定。開或關都照樣執行第 4～6 段"
           },
+          "conflict_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conflict Check",
+            "description": "回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定"
+          },
           "route_ticket": {
             "anyOf": [
               {
@@ -4565,6 +4577,34 @@
             ],
             "title": "Route Ticket",
             "description": "/agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位"
+          },
+          "inject": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Distractor"
+                },
+                "type": "array",
+                "maxItems": 5
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inject",
+            "description": "評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403"
+          },
+          "send_image": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Image",
+            "description": "已辨識（或已指定）、檢索開著時要不要附圖給生成模型（docs/adr/024）；null＝依 .env 的 SEND_IMAGE／models.yaml 的 chat.send_image（預設送）。關檢索時一律送"
           }
         },
         "type": "object",
@@ -5055,6 +5095,62 @@
         ],
         "title": "DiagnosticsResponse",
         "description": "管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/030）：\n原本放在公開健康檢查裡的完整內容。"
+      },
+      "Distractor": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "counterfactual",
+              "compatible",
+              "other"
+            ],
+            "title": "Kind",
+            "description": "counterfactual＝呼叫端手寫、和正確答案衝突的段落；compatible＝呼叫端手寫、看起來相近但和正確答案可以同時成立的段落（量會不會誤報不一致）；other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "counterfactual、compatible 必填"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic",
+            "description": "counterfactual、compatible 的段落主題；留空＝「干擾段落」"
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "first",
+              "last"
+            ],
+            "title": "Position",
+            "description": "放在真正段落之前（較難）或之後",
+            "default": "first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "Distractor",
+        "description": "干擾段落（評估專用，docs/adr/019、028）。混進檢索結果後照常經過洩密掃描與段落篩選。"
       },
       "DrawingSearchHit": {
         "properties": {
@@ -6811,6 +6907,16 @@
             "type": "string",
             "title": "Flow Label"
           },
+          "pool": {
+            "type": "string",
+            "enum": [
+              "ram",
+              "gpu"
+            ],
+            "title": "Pool",
+            "description": "觸發的記憶體池；percent_*、threshold 是這個池的數字",
+            "default": "ram"
+          },
           "threshold": {
             "type": "number",
             "title": "Threshold"
@@ -6822,6 +6928,29 @@
           "percent_after": {
             "type": "number",
             "title": "Percent After"
+          },
+          "gpu_percent_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Percent Before",
+            "description": "有 NVIDIA 顯示卡時"
+          },
+          "gpu_percent_after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Percent After"
           },
           "released": {
             "items": {
@@ -6860,6 +6989,40 @@
           "kept"
         ],
         "title": "MemoryEvent"
+      },
+      "MemoryGpu": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent",
+            "description": "顯示記憶體使用率（%，整張卡、含其他程式）"
+          },
+          "threshold": {
+            "type": "number",
+            "title": "Threshold"
+          },
+          "used_mb": {
+            "type": "integer",
+            "title": "Used Mb"
+          },
+          "total_mb": {
+            "type": "integer",
+            "title": "Total Mb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "percent",
+          "threshold",
+          "used_mb",
+          "total_mb"
+        ],
+        "title": "MemoryGpu"
       },
       "MemoryModel": {
         "properties": {
@@ -6901,6 +7064,16 @@
           "needed_by_current_flow": {
             "type": "boolean",
             "title": "Needed By Current Flow"
+          },
+          "pool": {
+            "type": "string",
+            "enum": [
+              "ram",
+              "gpu"
+            ],
+            "title": "Pool",
+            "description": "ram＝系統記憶體；gpu＝顯示記憶體（有 NVIDIA 顯示卡時的 Ollama、llama-server，ADR 021）",
+            "default": "ram"
           }
         },
         "type": "object",
@@ -6994,6 +7167,17 @@
           "available_mb": {
             "type": "integer",
             "title": "Available Mb"
+          },
+          "gpu": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryGpu"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "NVIDIA 顯示卡的顯示記憶體；沒有時 null（只看系統記憶體）"
           },
           "current_flow": {
             "anyOf": [

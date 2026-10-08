@@ -1,0 +1,505 @@
+{
+ "run_id": "20261007T031008-bdc1",
+ "file": "qa_conflict.jsonl",
+ "split": "all",
+ "no_rearrange": true,
+ "conflict_check": "off",
+ "prompt_version": "answer_v4",
+ "summary": {
+  "exclusive/dev": {
+   "n": 6,
+   "flagged": 3,
+   "merged": 2,
+   "silent": 1,
+   "injected_kept": 6
+  },
+  "exclusive/holdout": {
+   "n": 6,
+   "flagged": 2,
+   "merged": 3,
+   "misled": 1,
+   "injected_kept": 6
+  },
+  "compatible/dev": {
+   "n": 5,
+   "ok": 5,
+   "injected_kept": 5
+  },
+  "compatible/holdout": {
+   "n": 4,
+   "ok": 3,
+   "false_alarm": 1,
+   "injected_kept": 4
+  },
+  "natural/dev": {
+   "n": 2,
+   "ok": 2,
+   "injected_kept": 0
+  },
+  "natural/holdout": {
+   "n": 2,
+   "ok": 2,
+   "injected_kept": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "q-conf-aic-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據參考資料，關於創作時間有兩種說法：  - [1] 說秀拉從構思到完成只用了大約三個月。 - [2] 說他花了大約兩年完成。  這兩段資料的說法不一致。",
+   "injected_kept": true,
+   "topics": [
+    "創作與展出",
+    "創作與展出",
+    "基本資料",
+    "外框與收藏",
+    "技法",
+    "色彩分析"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據參考資料，這幅畫在1920年代由芝加哥的帕瑪（Potter Palmer）家族購得並捐贈給芝加哥藝術博物館 [1]。  但另一段資料提到，1888至1889年秀拉加了外框後，1920年代由巴特雷（Frederic Clay Bartlett）購得並捐贈 [2]。  所以，參考資料的說法不一致：   - 一段說是帕瑪家族捐贈 [1]；   - 另一段說是巴特雷捐贈 [2]。  實際上，這幅畫在1920年代由巴特雷購得並捐贈給芝加哥藝術博物館 [2]，而帕瑪家族是在1920年代之前就已擁有這幅畫 [1]，但最終捐贈者是巴特雷 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "外框與收藏",
+    "創作與展出",
+    "基本資料",
+    "畫面"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據資料，芝加哥收藏家巴特雷是在 1920 年代購得這幅畫 [2]。  不過，資料 [1] 提到巴特雷「最早在 1912 年就向秀拉的家人買下這幅畫」，這與 [2] 的「1920 年代」說法不一致。  因此，目前資料中關於巴特雷買畫的時間有兩種說法：[1] 說是 1912 年，[2] 說是 1920 年代。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "外框與收藏",
+    "創作與展出",
+    "基本資料",
+    "畫面"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "畫裡的大碗島位於巴黎東南郊的馬恩河上 [1]，也是巴黎市民假日划船、野餐的熱門去處 [1]。   （補充：根據另一段資料，畫中描繪的是塞納河上的大碗島 [2]，但這與 [1] 的「馬恩河」有出入，因此我們不能單獨採信其中一段。）",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面",
+    "創作與展出",
+    "基本資料",
+    "色彩分析"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-05",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "這幅畫第一次公開展出，是在1886年的第八屆印象派畫展，也是最後一屆印象派畫展 [2]。   這幅畫後來也在1887年到布魯塞爾的「二十人展」展出 [1]，但首次公開亮相是印象派畫展。",
+   "injected_kept": true,
+   "topics": [
+    "創作與展出",
+    "創作與展出",
+    "外框與收藏",
+    "畫面",
+    "基本資料",
+    "技法"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "〈大碗島的星期天下午〉現在收藏在芝加哥藝術博物館 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "基本資料",
+    "畫面",
+    "創作與展出",
+    "色彩分析",
+    "外框與收藏"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-07",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "秀拉畫這幅畫用的是「點描法」，也就是把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [3]。這種技法也稱為「分色主義」，是新印象派的代表手法 [3]。",
+   "injected_kept": true,
+   "topics": [
+    "技法",
+    "創作與展出",
+    "技法",
+    "外框與收藏",
+    "基本資料",
+    "畫面"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-08",
+   "split": "dev",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "秀拉是在 1888 至 1889 年間，重新修改畫面時加上畫布四周的點描外框 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "外框與收藏",
+    "創作與展出",
+    "技法",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "梵谷是在法國南部聖雷米（Saint-Rémy-de-Provence）附近的聖保羅療養院周圍的田野畫這幅畫的 [3]。   不過，參考資料也提到他曾在亞爾（Arles）畫過類似作品 [1]，但這幅〈有絲柏的麥田〉是他在聖雷米療養院期間創作的 [3]。   所以，這幅畫的創作地點是聖雷米療養院附近的田野 [3]。",
+   "injected_kept": true,
+   "topics": [
+    "創作背景",
+    "基本資料",
+    "創作背景",
+    "技法與絲柏",
+    "其他版本",
+    "觀眾留言（未審核）"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "梵谷確實畫過一幅尺寸較小的〈有絲柏的麥田〉版本，這幅是送給療養院院長佩隆醫生（Dr. Peyron）的謝禮 [1]。  另外，同年 9 月他在療養院畫室裡還畫了一幅尺寸相近的版本，現藏倫敦國家美術館 [2]；而另一幅尺寸較小的版本則是畫給母親與妹妹的 [2]。  所以，您聽到的「尺寸比較小的版本」可能指不同幅數，其中一幅是畫給佩隆醫生的 [1]，另一幅是畫給母親與妹妹的 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "其他版本",
+    "其他版本",
+    "觀眾留言（未審核）",
+    "技法與絲柏",
+    "創作背景",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "大都會藝術博物館在 1993 年購得這幅畫的經費，全數來自洛克斐勒（Rockefeller）家族的捐款 [1]。   不過，另一段資料提到是安納伯格基金會（The Annenberg Foundation）的捐款 [2]。   兩段資料對捐款來源的說法不一致，請您確認哪一項是正確的。",
+   "injected_kept": true,
+   "topics": [
+    "收藏",
+    "收藏",
+    "其他版本",
+    "觀眾留言（未審核）",
+    "創作背景"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "畫面遠方那排藍紫色的山是聖維克多山 [1]，這座山也是塞尚常畫的題材 [1]。  （補充：根據另一段資料，中景的山丘被稱為阿爾皮耶山丘 [2]，但遠方那排藍紫色的山，資料明確指出是聖維克多山 [1]。）",
+   "injected_kept": true,
+   "topics": [
+    "畫面",
+    "畫面",
+    "觀眾留言（未審核）",
+    "創作背景",
+    "其他版本",
+    "色彩分析"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-05",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "false_alarm",
+   "answer": "根據參考資料，梵谷是在 1889 年 5 月自願住進聖雷米附近的聖保羅療養院 [2]。  不過，參考資料 [1] 提到他是在 1890 年 5 月離開療養院，這與 [2] 的時間點不一致。   [1] 說 1890 年 5 月離開，[2] 說 1889 年 5 月入院。",
+   "injected_kept": true,
+   "topics": [
+    "創作背景",
+    "創作背景",
+    "觀眾留言（未審核）",
+    "其他版本"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-06",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "大都會藝術博物館是在 1993 年購得這幅〈有絲柏的麥田〉的 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "收藏",
+    "收藏",
+    "其他版本",
+    "創作背景",
+    "觀眾留言（未審核）"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-07",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "梵谷在寫給弟弟西奧的信中，形容絲柏的線條與比例像埃及方尖碑一樣美 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "技法與絲柏",
+    "技法與絲柏",
+    "創作背景",
+    "其他版本",
+    "基本資料",
+    "觀眾留言（未審核）"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "根據資料，這幅畫是在 1889 年 7 月初完成的 [3]。",
+   "injected_kept": false,
+   "topics": [
+    "基本資料",
+    "收藏",
+    "創作背景",
+    "技法與絲柏",
+    "畫面"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-09",
+   "split": "dev",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "倫敦國家美術館收藏的那個版本，是梵谷在聖雷米療養院的畫室裡畫的 [1]。   這幅畫是他在療養院期間，以〈有絲柏的麥田〉為本所畫的版本之一 [1]。   （根據資料，這幅畫是他在戶外現場完成的 [4]，但這個版本是在療養院內的畫室完成的 [1]。）",
+   "injected_kept": false,
+   "topics": [
+    "其他版本",
+    "收藏",
+    "觀眾留言（未審核）",
+    "創作背景",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "范寬的簽名藏在畫面主峰右側瀑布下方的石縫中 [1]，或說是在右下方、騾隊後方的樹叢枝葉間 [2]。   （兩段資料位置描述略有不同，但都指向畫面右下方的山石或樹叢間。）",
+   "injected_kept": true,
+   "topics": [
+    "落款與發現",
+    "落款與發現",
+    "畫家",
+    "技法",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-02",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "misled",
+   "answer": "畫幅上方那行「北宋范中立谿山行旅圖」是清代乾隆皇帝親筆題的 [1]。   這行題字是乾隆皇帝在宮中賞畫時寫下的 [1]，與後來在畫面右下方發現的「范寬」款不同 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "落款與發現",
+    "落款與發現",
+    "基本資料",
+    "地位",
+    "畫家",
+    "技法"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "silent",
+   "answer": "〈谿山行旅圖〉是畫在絹本上的 [2]，畫面也確實呈現出絹本特有的質感 [畫面]。   這幅畫的材質是軸，絹本，水墨淺設色 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "技法",
+    "基本資料",
+    "地位",
+    "落款與發現",
+    "色彩分析",
+    "技法"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-04",
+   "split": "holdout",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "范寬是華原（今陝西耀州一帶）人 [2]。   不過，參考資料 [1] 也提到他與李成同為山東營丘人，但未說明這是否是他出生地或主要活動地。   因此，根據現有資料，最明確的記載是「華原（今陝西耀州一帶）」[2]。",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "落款與發現",
+    "技法",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-05",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "范寬早年學習李成與荊浩的畫法 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "技法",
+    "落款與發現",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-06",
+   "split": "holdout",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "這幅畫是在 1958 年確認作者是范寬的 [2]。當時故宮研究人員李霖燦在畫面右下方發現了「范寬」二字款 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "地位",
+    "落款與發現",
+    "畫家",
+    "技法",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-07",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "「范寬」是他的字，不是本名。他的本名是「中正」，字「中立」 [2]。   （補充：當時人稱他「范寬」，是因為他性格溫厚、度量寬大 [1]。）",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "落款與發現",
+    "技法",
+    "基本資料"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-08",
+   "split": "holdout",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "范寬與李成、關仝並稱為北宋初期山水畫三大家 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "畫家",
+    "基本資料",
+    "技法",
+    "落款與發現",
+    "地位"
+   ],
+   "conflict_check": null,
+   "prompt_version": "answer_v4",
+   "error": null
+  }
+ ]
+}

@@ -1,0 +1,253 @@
+{
+ "run_id": "20261007T015703-6fb6",
+ "file": "qa_conflict.jsonl",
+ "split": "dev",
+ "no_rearrange": true,
+ "prompt_version": "answer_v5c",
+ "summary": {
+  "exclusive/dev": {
+   "n": 6,
+   "flagged": 4,
+   "merged": 2,
+   "injected_kept": 6
+  },
+  "compatible/dev": {
+   "n": 5,
+   "false_alarm": 1,
+   "ok": 4,
+   "injected_kept": 5
+  },
+  "natural/dev": {
+   "n": 2,
+   "ok": 2,
+   "injected_kept": 0
+  }
+ },
+ "rows": [
+  {
+   "id": "q-conf-aic-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據參考資料，關於秀拉創作這幅畫所花的時間有兩種說法：  - 一段說是「大約三個月」[1]。 - 另一段則說是「大約兩年」[2]。  這兩段資料的說法不一致。",
+   "injected_kept": true,
+   "topics": [
+    "創作與展出",
+    "創作與展出",
+    "基本資料",
+    "外框與收藏",
+    "技法",
+    "色彩分析"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "根據參考資料，芝加哥收藏家巴特雷是在 1920 年代購得這幅畫 [2]。  不過，另一段資料提到巴特雷「最早在 1912 年就向秀拉的家人買下這幅畫」 [1]。  這兩段資料的說法不一致：一段說是 1920 年代購得，另一段說是 1912 年買下。",
+   "injected_kept": true,
+   "topics": [
+    "外框與收藏",
+    "外框與收藏",
+    "創作與展出",
+    "基本資料",
+    "畫面"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-05",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "false_alarm",
+   "answer": "根據參考資料，這幅畫第一次公開展出是在「第八屆印象派畫展」，也就是「最後一屆印象派畫展」[2]。  不過，另一段資料提到它是在「1886 年 8 月」送到「巴黎的獨立藝術家沙龍」展出[1]，而「獨立藝術家沙龍」與「印象派畫展」是兩個不同的展覽。  因此，參考資料的說法不一致：一段說是「第八屆印象派畫展」[2]，另一段說是「獨立藝術家沙龍」[1]。",
+   "injected_kept": true,
+   "topics": [
+    "創作與展出",
+    "創作與展出",
+    "外框與收藏",
+    "畫面",
+    "基本資料",
+    "技法"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-07",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "秀拉畫這幅畫用的是「點描法」，也就是把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [3]。   這技法也稱為「分色主義」，是新印象派的代表手法 [3]。   畫作完成後，秀拉還在畫布四周加上了同樣以點描法畫成的彩色外框 [4]。",
+   "injected_kept": true,
+   "topics": [
+    "技法",
+    "創作與展出",
+    "技法",
+    "外框與收藏",
+    "基本資料",
+    "畫面"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-aic-08",
+   "split": "dev",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "秀拉是在 1888 至 1889 年間，重新修改畫面時加上畫布四周的點描外框 [1]。",
+   "injected_kept": false,
+   "topics": [
+    "外框與收藏",
+    "創作與展出",
+    "技法",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "梵谷是在法國南部聖雷米（Saint-Rémy-de-Provence）附近的聖保羅療養院周圍的田野畫這幅畫的 [3]。  不過，參考資料 [1] 提到這幅畫是他在 1888 年夏天住在亞爾（Arles）時畫的，與 [3] 的說法不一致。   [3] 也提到這幅畫是在 1889 年 7 月初於戶外現場完成的，而 [2] 則明確指出創作年代是 1889 年，且風格關鍵字包含「聖雷米時期」，這與 [3] 的創作地點相符。   因此，綜合來看，這幅畫的創作地點是聖雷米療養院周圍的田野，但創作時間與地點的說法在不同資料中有出入。",
+   "injected_kept": true,
+   "topics": [
+    "創作背景",
+    "基本資料",
+    "創作背景",
+    "技法與絲柏",
+    "其他版本",
+    "觀眾留言（未審核）"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "flagged",
+   "answer": "大都會藝術博物館在 1993 年購得這幅畫時，經費全數來自洛克斐勒（Rockefeller）家族的捐款 [1]。  另外一段資料提到是安納伯格基金會（The Annenberg Foundation）的捐款 [2]，但兩段資料的說法不一致：一段說是洛克斐勒家族捐款 [1]，另一段說是安納伯格基金會捐款 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "收藏",
+    "收藏",
+    "其他版本",
+    "觀眾留言（未審核）",
+    "創作背景"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-06",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "大都會藝術博物館是在 1993 年購得這幅畫的 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "收藏",
+    "收藏",
+    "其他版本",
+    "創作背景",
+    "觀眾留言（未審核）"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-met-09",
+   "split": "dev",
+   "conflict": "natural",
+   "outcome": "ok",
+   "answer": "根據參考資料，倫敦國家美術館收藏的那個版本，是梵谷在「療養院的畫室裡」畫的 [1]。  這與畫作本身是在戶外現場完成的 [4] 不同，說明那個版本是室內創作的。",
+   "injected_kept": false,
+   "topics": [
+    "其他版本",
+    "收藏",
+    "觀眾留言（未審核）",
+    "創作背景",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-01",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "范寬的簽名藏在畫面主峰右側的瀑布下方石縫中 [1]，或說是在畫面右下方、騾隊後方的樹叢枝葉間 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "落款與發現",
+    "落款與發現",
+    "畫家",
+    "技法",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-03",
+   "split": "dev",
+   "conflict": "exclusive",
+   "outcome": "merged",
+   "answer": "〈谿山行旅圖〉是畫在絹本上的 [2]，並且畫在名貴的澄心堂紙上 [1]。   （但參考資料 [1] 與 [2] 對「材質」的描述略有不同：[1] 說是「澄心堂紙」，[2] 說是「絹本」。）",
+   "injected_kept": true,
+   "topics": [
+    "技法",
+    "基本資料",
+    "地位",
+    "落款與發現",
+    "色彩分析",
+    "技法"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-05",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "范寬早年學習李成與荊浩的畫法 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "技法",
+    "落款與發現",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  },
+  {
+   "id": "q-conf-npm-07",
+   "split": "dev",
+   "conflict": "compatible",
+   "outcome": "ok",
+   "answer": "根據資料，「范寬」是他的字，不是本名。他的本名是「中正」，字「中立」 [2]。  不過，資料 [1] 提到當時人稱他為「范寬」，這顯示「范寬」是他的字，而「中正」是他的本名。因此，「范寬」不是本名，本名是「中正」 [2]。",
+   "injected_kept": true,
+   "topics": [
+    "畫家",
+    "畫家",
+    "落款與發現",
+    "技法",
+    "基本資料"
+   ],
+   "prompt_version": "answer_v5c",
+   "error": null
+  }
+ ]
+}

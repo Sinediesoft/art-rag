@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # api_nokb／api_kb 是雲端對照組（A1 無檢索、A2 有檢索），ALLOW_CLOUD=false 時停用
 Strategy = Literal["hybrid", "api_nokb", "api_kb", "lora", "mock"]
@@ -267,6 +267,36 @@ class ImageAlignment(BaseModel):
     latency_ms: int = Field(description="對位與比對的計算時間（不含讀檔）")
 
 
+WRITTEN_DISTRACTORS = {"counterfactual", "compatible"}  # 呼叫端手寫 text 的干擾段落
+
+
+class Distractor(BaseModel):
+    """干擾段落（評估專用，docs/adr/019、028）。混進檢索結果後照常經過洩密掃描與段落篩選。"""
+
+    kind: Literal["counterfactual", "compatible", "other"] = Field(
+        description="counterfactual＝呼叫端手寫、和正確答案衝突的段落；"
+        "compatible＝呼叫端手寫、看起來相近但和正確答案可以同時成立的段落（量會不會誤報不一致）；"
+        "other＝自動取同領域『其他畫作／圖紙』中和問題最相近的真實段落"
+    )
+    text: str | None = Field(
+        default=None, max_length=2000, description="counterfactual、compatible 必填"
+    )
+    topic: str | None = Field(
+        default=None,
+        max_length=50,
+        description="counterfactual、compatible 的段落主題；留空＝「干擾段落」",
+    )
+    position: Literal["first", "last"] = Field(
+        default="first", description="放在真正段落之前（較難）或之後"
+    )
+
+    @model_validator(mode="after")
+    def _text_for_counterfactual(self):
+        if self.kind in WRITTEN_DISTRACTORS and not (self.text or "").strip():
+            raise ValueError(f"{self.kind} 干擾段落要有 text")
+        return self
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     artwork_id: str | None = None
@@ -288,12 +318,27 @@ class ChatRequest(BaseModel):
         description="地端段落是否由本地 Qwen3-VL 判斷相關性（MIRA 的 Rearrange）；"
         "null＝依伺服器設定。開或關都照樣執行第 4～6 段",
     )
+    conflict_check: bool | None = Field(
+        default=None,
+        description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
+        "（docs/adr/028）；null＝依伺服器設定",
+    )
     route_ticket: str | None = Field(
         default=None,
         max_length=64,
         description="/agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；"
         "沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。"
         "七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位",
+    )
+    inject: list[Distractor] | None = Field(
+        default=None,
+        max_length=5,
+        description="評估專用：干擾段落注入（docs/adr/019）。後端 EVAL_INJECTION=false 時回 403",
+    )
+    send_image: bool | None = Field(
+        default=None,
+        description="已辨識（或已指定）、檢索開著時要不要附圖給生成模型（docs/adr/024）；"
+        "null＝依 .env 的 SEND_IMAGE／models.yaml 的 chat.send_image（預設送）。關檢索時一律送",
     )
 
 
@@ -690,6 +735,19 @@ class MemoryModel(BaseModel):
     loaded: bool | None = Field(description="是否載入中；null＝連不上或不在本機")
     in_use: bool = Field(description="有請求正在使用（不會被釋放）")
     needed_by_current_flow: bool
+    pool: Literal["ram", "gpu"] = Field(
+        default="ram",
+        description="ram＝系統記憶體；gpu＝顯示記憶體"
+        "（有 NVIDIA 顯示卡時的 Ollama、llama-server，ADR 021）",
+    )
+
+
+class MemoryGpu(BaseModel):
+    name: str
+    percent: float = Field(description="顯示記憶體使用率（%，整張卡、含其他程式）")
+    threshold: float
+    used_mb: int
+    total_mb: int
 
 
 class MemoryReleased(BaseModel):
@@ -704,9 +762,14 @@ class MemoryEvent(BaseModel):
     trigger: str = Field(description="進入「…」流程／背景監控／手動")
     flow: str | None
     flow_label: str
+    pool: Literal["ram", "gpu"] = Field(
+        default="ram", description="觸發的記憶體池；percent_*、threshold 是這個池的數字"
+    )
     threshold: float
     percent_before: float
     percent_after: float
+    gpu_percent_before: float | None = Field(default=None, description="有 NVIDIA 顯示卡時")
+    gpu_percent_after: float | None = None
     released: list[MemoryReleased]
     failed: list[MemoryReleased]
     kept: list[str] = Field(description="目前流程或其他請求正在用、所以保留的模型")
@@ -718,6 +781,9 @@ class MemoryStatus(BaseModel):
     threshold: float
     total_mb: int
     available_mb: int
+    gpu: MemoryGpu | None = Field(
+        default=None, description="NVIDIA 顯示卡的顯示記憶體；沒有時 null（只看系統記憶體）"
+    )
     current_flow: str | None
     current_flow_label: str | None
     flow_at: str | None

@@ -1,0 +1,316 @@
+[
+ {
+  "id": "q-conf-aic-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-aic-02",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-aic-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-aic-04",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-aic-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-aic-06",
+  "split": "holdout",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-aic-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-aic-08",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-met-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2,
+   3
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2, 3]}"
+ },
+ {
+  "id": "q-conf-met-02",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-met-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-met-04",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-met-05",
+  "split": "holdout",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-met-06",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-met-07",
+  "split": "holdout",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-met-08",
+  "split": "holdout",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-met-09",
+  "split": "dev",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-01",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-02",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-conf-npm-03",
+  "split": "dev",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   6
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 6]}"
+ },
+ {
+  "id": "q-conf-npm-04",
+  "split": "holdout",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-05",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-06",
+  "split": "holdout",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-07",
+  "split": "dev",
+  "conflict": "compatible",
+  "injected_kept": true,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-conf-npm-08",
+  "split": "holdout",
+  "conflict": "natural",
+  "injected_kept": false,
+  "expect": false,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ },
+ {
+  "id": "q-dist-npm1-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-dist-met-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": true,
+  "refs": [
+   1,
+   2
+  ],
+  "raw": "{\"conflict\": true, \"refs\": [1, 2]}"
+ },
+ {
+  "id": "q-dist-aic-01",
+  "split": "regular",
+  "conflict": "exclusive",
+  "injected_kept": true,
+  "expect": true,
+  "got": false,
+  "refs": [],
+  "raw": "{\"conflict\": false, \"refs\": []}"
+ }
+]

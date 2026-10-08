@@ -48,6 +48,9 @@ class Provider:
     # OpenAI 的 response_format（例如 {"type": "json_schema", ...}）：照片建檔用來限制輸出格式
     # （docs/adr/013）。伺服器不支援時會被忽略，呼叫端仍要自己解析、驗證
     response_format: dict | None = None
+    # Ollama 的 keep_alive（例如 "60m"）：模型閒置多久才卸載（docs/adr/025）。
+    # None＝不送，用 Ollama 預設 5 分鐘
+    keep_alive: str | None = None
 
     async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
         raise NotImplementedError
@@ -73,11 +76,8 @@ def is_local_url(url: str) -> bool:
 
 
 class OpenAICompatProvider(Provider):
-    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
-        s = get_settings()
+    def body(self, messages: list[dict]) -> dict:
         gen = get_models_config().generation
-        if self.strategy in ("hybrid", "lora") and OUTAGE["enabled"]:
-            raise ProviderUnavailable("主推論伺服器無回應（模擬斷線）")
         body = {
             "model": self.model,
             "messages": messages,
@@ -88,6 +88,15 @@ class OpenAICompatProvider(Provider):
         }
         if self.response_format:
             body["response_format"] = self.response_format
+        if self.keep_alive:
+            body["keep_alive"] = self.keep_alive
+        return body
+
+    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+        s = get_settings()
+        if self.strategy in ("hybrid", "lora") and OUTAGE["enabled"]:
+            raise ProviderUnavailable("主推論伺服器無回應（模擬斷線）")
+        body = self.body(messages)
         timeout = httpx.Timeout(s.generate_timeout_s, connect=s.connect_timeout_s)
         headers = {"Authorization": f"Bearer {self.api_key}"}
         url = self.base_url.rstrip("/") + "/chat/completions"
@@ -153,10 +162,22 @@ def cloud_status() -> tuple[bool, str]:
     return True, "對照組已開啟，只供評估腳本與策略比較頁使用"
 
 
+# Ollama 提供的本地策略：送 keep_alive（docs/adr/025）。
+# ortho2cad 是 llama-server（router 模式自己管載入）
+OLLAMA_STRATEGIES = {"hybrid", "hybrid_fallback", "lora"}
+
+
 def _local(strategy: str, base_url: str, model: str, api_key: str) -> Provider:
     if not is_local_url(base_url):
         raise ProviderUnavailable(f"{base_url} 不是本機或內網位址，拒絕連線（本地策略不外送資料）")
-    return OpenAICompatProvider(strategy=strategy, model=model, base_url=base_url, api_key=api_key)
+    keep = get_settings().model_keep_alive.strip()
+    return OpenAICompatProvider(
+        strategy=strategy,
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        keep_alive=keep if keep and strategy in OLLAMA_STRATEGIES else None,
+    )
 
 
 def get_provider(strategy: str) -> Provider:

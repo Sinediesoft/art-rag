@@ -6,6 +6,9 @@
   （兩者都是人工評分前的自動化代理指標，正式成績依企劃書由兩人獨立評分）
 - 每題有題目類型 type（common 常識／kb_only 知識庫獨有／no_answer 無答案／distractor 干擾，
   未標註記為 untyped），結果依類型分組；每筆也記錄送出本機的資料量（egress）
+- 干擾段落題（docs/adr/019）：題目的 distractors 會注入檢索結果（後端要 EVAL_INJECTION=true），
+  forbidden 是干擾段落裡的錯誤事實。另計三項：干擾段落有沒有通過篩選進 prompt（kept）、
+  回答有沒有引用它（cited）、回答有沒有出現錯誤事實（misled）；被帶偏或引用了就不算答對
 
 雲端對照組（api_nokb＝A1 無檢索、api_kb＝A2 有檢索）需要後端 ALLOW_CLOUD=true 與 API_KEY。
 關檢索對照組（hybrid_norag、api_nokb）與 mock 要後端 EVAL_CONTROLS=true（docs/adr/030），
@@ -39,6 +42,13 @@ STRATEGY_BODY = {
     # 檢索段落篩選（MIRA 的 Rearrange）開關對照：明確指定，不受伺服器預設影響（make eval-rearrange）
     "hybrid_plain": {"strategy": "hybrid", "rearrange": False},
     "hybrid_rearrange": {"strategy": "hybrid", "rearrange": True},
+    # 問答附圖／不附圖對照（Issue #2、docs/adr/024，make eval-send-image）：
+    # 明確指定，不受伺服器預設影響
+    "hybrid_img": {"strategy": "hybrid", "send_image": True},
+    "hybrid_noimg": {"strategy": "hybrid", "send_image": False},
+    # 參考資料矛盾檢查開／關對照（docs/adr/028）：明確指定，不受伺服器預設影響
+    "hybrid_cc": {"strategy": "hybrid", "conflict_check": True},
+    "hybrid_nocc": {"strategy": "hybrid", "conflict_check": False},
     "api_nokb": {"strategy": "api_nokb"},
     "api_kb": {"strategy": "api_kb"},
     "lora": {"strategy": "lora"},
@@ -90,8 +100,19 @@ def eval_images(client: httpx.Client, kb_ids: set[str]) -> dict:
 
 
 def run_chat(client: httpx.Client, body: dict) -> dict:
-    out = {"answer": "", "sources": [], "rearrange": None, "done": None, "error": None}
+    out = {
+        "answer": "",
+        "sources": [],
+        "rearrange": None,
+        "conflict_check": None,
+        "done": None,
+        "error": None,
+    }
     with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
+        if resp.status_code != 200:
+            resp.read()
+            out["error"] = resp.json().get("error") or {"code": f"HTTP {resp.status_code}"}
+            return out
         event = None
         for line in resp.iter_lines():
             if line.startswith("event:"):
@@ -101,6 +122,7 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
                 if event == "sources":
                     out["sources"] = data["sources"]
                     out["rearrange"] = data.get("rearrange")
+                    out["conflict_check"] = data.get("conflict_check")
                 elif event == "token":
                     out["answer"] += data["text"]
                 elif event == "done":
@@ -108,6 +130,41 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
                 elif event == "error":
                     out["error"] = data
     return out
+
+
+def owner_of(q: dict) -> str:
+    """題目問的是哪一幅畫或哪一張圖紙（圖紙題用 part_id）。"""
+    return q.get("part_id") or q["artwork_id"]
+
+
+# 回答明白指出參考資料互相矛盾（answer_v2 第 5 條，docs/adr/020）。
+# 只在回答同時寫出正確答案時才算數。「所述…不同」「不符」是 2026-10-05 看到圖紙題才補的
+# （「[1] 與 [2] 所述最終扭力不同」「與本圖紙資料不符」）；單獨的「不同」不算——
+# 「在不同時間由不同人發現」是把兩種說法湊在一起，不是指出矛盾。補完重算了當天的評估
+CONFLICT = re.compile(
+    r"不一致|互相矛盾|矛盾|有出入|說法不一|說法.{0,4}不同|(所述|記載|說法|資料).{0,6}(不同|不符)|不符"
+)
+
+
+def score_distractor(q: dict, res: dict) -> dict:
+    """干擾段落題（其他題目回空 dict）：kept＝通過篩選進了 prompt、cited＝回答引用了它、
+    flagged＝回答寫出正確答案、也明白指出參考資料說法不一致、
+    misled＝回答出現 forbidden 裡的錯誤事實，而且沒有 flagged。
+
+    系統沒辦法自己判斷兩段誰對，所以「答對並指出另一段說法不同」是要的行為，不算被帶偏。"""
+    if not q.get("distractors"):
+        return {}
+    ans = res["answer"]
+    injected = {s["ref"] for s in res["sources"] if s.get("injected")}
+    cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)}
+    correct = all(any(k in ans for k in group) for group in q["keywords"])
+    flagged = correct and bool(CONFLICT.search(ans))
+    return {
+        "distractor_kept": bool(injected),
+        "distractor_cited": bool(injected & cited),
+        "distractor_flagged": flagged,
+        "distractor_misled": not flagged and any(k in ans for k in q.get("forbidden", [])),
+    }
 
 
 def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
@@ -118,11 +175,20 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     answer_ok = all(any(k in ans for k in group) for group in q["keywords"])
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)} - {0}
     by_ref = {s["ref"]: s for s in res["sources"]}
+    d = score_distractor(q, res)
+    flagged = d.get("distractor_flagged", False)
     citation_ok = (
         bool(cited)
-        and all(n in by_ref and by_ref[n]["artwork_id"] == q["artwork_id"] for n in cited)
+        and all(
+            n in by_ref
+            and (by_ref[n].get("part_id") or by_ref[n].get("artwork_id")) == owner_of(q)
+            and (flagged or not by_ref[n].get("injected"))  # 指出矛盾時引用干擾段落是對的
+            for n in cited
+        )
         and any(by_ref[n]["topic"] in q["topics"] for n in cited if n in by_ref)
     )
+    if d.get("distractor_misled") or (d.get("distractor_cited") and not flagged):
+        answer_ok = False  # 被干擾段落帶偏就不算答對
     return answer_ok, citation_ok
 
 
@@ -150,13 +216,19 @@ def main() -> int:
     ):
         print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
+    # 工廠圖紙題（part_id，docs/adr/020）：圖紙多是機密，切成主管才看得到全部
+    all_questions = [json.loads(x) for x in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]
+    if any(q.get("part_id") for q in all_questions):
+        client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+        kb_ids |= {p["id"] for p in client.get("/api/v1/parts").json()["items"]}
     source_lang = {
         i: "+".join(
             sorted({d["lang"] for d in client.get(f"/api/v1/artworks/{i}").json()["descriptions"]})
         )
         for i in kb_ids
+        if not i.startswith("mfg-")
     }
-    prompt_version = "answer_v1"
+    prompt_version = ""
 
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     print(f"評估 {run_id}：kb_version={manifest['kb_version']}，{len(kb_ids)} 幅畫")
@@ -167,11 +239,10 @@ def main() -> int:
         f"未收錄拒答 {img['reject_rate']:.0%}（{img['n_unknown']} 張）"
     )
 
-    questions = [json.loads(line) for line in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]
     questions = [
         q
-        for q in questions
-        if q["artwork_id"] in kb_ids and (args.split == "all" or q["split"] == args.split)
+        for q in all_questions
+        if owner_of(q) in kb_ids and (args.split == "all" or q["split"] == args.split)
     ]
     rows, by_strategy = [], {}
     for strat in args.strategies.split(","):
@@ -180,14 +251,21 @@ def main() -> int:
             t0 = time.time()
             body = {
                 "question": q["question"],
-                "artwork_id": q["artwork_id"],
+                ("part_id" if q.get("part_id") else "artwork_id"): owner_of(q),
                 "allow_fallback": False,
                 **STRATEGY_BODY[strat],
             }
+            # 關檢索的策略不放段落進 prompt，注入沒有意義
+            if q.get("distractors") and body.get("use_retrieval", True):
+                body["inject"] = q["distractors"]
             res = run_chat(client, body)
+            if (res["error"] or {}).get("code") == "FORBIDDEN" and "inject" in body:
+                print(f"  {q['id']}：後端沒開 EVAL_INJECTION=true，干擾段落題無法注入")
             done = res["done"] or {}
             answer_ok, citation_ok = score_answer(q, res) if not res["error"] else (False, False)
-            if done.get("prompt_version"):
+            dist = score_distractor(q, res) if not res["error"] and "inject" in body else {}
+            # 整次評估記畫作的 prompt 版本；圖紙題回的是 drawing_vN，每列另外記
+            if done.get("prompt_version") and not q.get("part_id"):
                 prompt_version = done["prompt_version"]
             egress = done.get("egress") or {}
             ra = res["rearrange"] or {}
@@ -195,8 +273,8 @@ def main() -> int:
                 "question_id": q["id"],
                 "split": q["split"],
                 "type": q.get("type", "untyped"),
-                "artwork_id": q["artwork_id"],
-                "source_lang": source_lang.get(q["artwork_id"], ""),
+                "artwork_id": owner_of(q),
+                "source_lang": source_lang.get(owner_of(q), ""),
                 "strategy": strat,
                 "model": done.get("model", ""),
                 "kb_version": manifest["kb_version"],
@@ -206,6 +284,14 @@ def main() -> int:
                 "n_sources": len(res["sources"]),
                 "rearrange_ms": ra.get("ms"),
                 "rearrange_fallback": ra.get("fallback") or "",
+                # 矛盾檢查（docs/adr/028）：conflict＝判為有矛盾、加了提醒；none＝沒有；空白＝沒檢查
+                "conflict_check": ""
+                if not res["conflict_check"]
+                else "fallback"
+                if res["conflict_check"]["fallback"]
+                else "conflict"
+                if res["conflict_check"]["conflict"]
+                else "none",
                 "first_token_ms": (done.get("latency_ms") or {}).get("first_token"),
                 "total_ms": (done.get("latency_ms") or {}).get("total")
                 or round((time.time() - t0) * 1000),
@@ -214,6 +300,10 @@ def main() -> int:
                 "egress_chunks": egress.get("chunks", 0),
                 "egress_bytes": egress.get("bytes", 0),
                 "error": (res["error"] or {}).get("code", ""),
+                "distractor_kept": dist.get("distractor_kept", ""),
+                "distractor_cited": dist.get("distractor_cited", ""),
+                "distractor_flagged": dist.get("distractor_flagged", ""),
+                "distractor_misled": dist.get("distractor_misled", ""),
                 "answer": res["answer"].replace("\n", " "),
             }
             rows.append(row)
@@ -221,6 +311,7 @@ def main() -> int:
             mark = "✓" if answer_ok else "✗"
             print(f"  [{strat}] {mark} {q['id']} {row['answer'][:60]}")
         ok = [r for r in results if not r["error"]]
+        injected = [r for r in ok if r["distractor_kept"] != ""]
         by_strategy[strat] = {
             "n": len(results),
             "errors": len(results) - len(ok),
@@ -240,6 +331,16 @@ def main() -> int:
                 / sum(1 for r in results if r["type"] == t)
                 for t in sorted({r["type"] for r in results})
             },
+            # 干擾段落題：篩選擋下率（越高越好）、引用率與被帶偏率（越低越好）
+            "distractor": {
+                "n": len(injected),
+                "filtered_out": sum(not r["distractor_kept"] for r in injected) / len(injected),
+                "cited": sum(r["distractor_cited"] for r in injected) / len(injected),
+                "flagged": sum(r["distractor_flagged"] for r in injected) / len(injected),
+                "misled": sum(r["distractor_misled"] for r in injected) / len(injected),
+            }
+            if injected
+            else None,
         }
 
     runs = EVAL / "runs"

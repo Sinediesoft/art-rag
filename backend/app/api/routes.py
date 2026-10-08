@@ -191,8 +191,16 @@ def get_artwork_colormap(artwork_id: str):
 async def chat(body: S.ChatRequest, request: Request):
     """圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。
     角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
-    （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。"""
+    （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。
+    inject 只在受信任的評估模式開放；send_image 與 conflict_check 不會略過安全關卡。"""
     account = identity.current(request)
+    eval_mode = identity.eval_allowed(request)
+    if body.inject and (not get_settings().eval_injection or not eval_mode):
+        raise AppError(
+            "FORBIDDEN",
+            "干擾段落注入只在受信任的評估模式開放（EVAL_INJECTION=true、EVAL_CONTROLS=true）",
+            403,
+        )
     if body.part_id:
         identity.require_domain(account, "mfg")
     stream = chat_service.chat_stream(
@@ -207,7 +215,10 @@ async def chat(body: S.ChatRequest, request: Request):
         rearrange=body.rearrange,
         account=account,
         route_ticket=body.route_ticket,
-        eval_mode=identity.eval_allowed(request),
+        eval_mode=eval_mode,
+        inject=[d.model_dump() for d in body.inject] if body.inject else None,
+        send_image=body.send_image,
+        conflict_check=body.conflict_check,
     )
     return StreamingResponse(
         stream,
@@ -1092,8 +1103,9 @@ def change_request_approval(pending_id: str, body: S.ApprovalRequest, request: R
 
 @router.get("/approvals", response_model=S.ApprovalsResponse, tags=["agent"])
 def list_approvals(request: Request):
-    """待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。"""
-    return change_service.list_approvals(identity.current(request))
+    """待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。
+    主管看全部，其他人只看自己送出的申請。"""
+    return change_service.list_approvals_for(identity.current(request))
 
 
 @router.post("/approvals/{ap_no}/approve", response_model=S.ApprovalDecision, tags=["agent"])
@@ -1117,7 +1129,8 @@ def security_logs(request: Request, limit: int = Query(default=20, ge=1, le=200)
     """七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。"""
-    identity.require_view(identity.current(request), "security_logs", "拒絕並記錄")
+    account = identity.current(request)
+    identity.require_view(account, "security_logs", "拒絕並記錄")
     repo = get_logs_repo()
     tz = timezone(timedelta(hours=8))
     midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1137,6 +1150,7 @@ def security_logs(request: Request, limit: int = Query(default=20, ge=1, le=200)
 def audit_log(request: Request, limit: int = Query(default=30, ge=1, le=200)):
     """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
     要 access.yaml 的 views.audit（docs/adr/030）。"""
-    identity.require_view(identity.current(request), "audit", "稽核紀錄")
+    account = identity.current(request)
+    identity.require_view(account, "audit", "稽核紀錄")
     prod = get_production_repo()
     return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}

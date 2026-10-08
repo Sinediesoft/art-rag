@@ -29,6 +29,7 @@
 - 拒絕並記錄只存事件類型、文件／段落 ID 或雜湊，不存問句與段落原文
 """
 
+import asyncio
 import hashlib
 import re
 import time
@@ -36,10 +37,14 @@ import unicodedata
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 
+import httpx
+
 from app.agent import jev
 from app.agent.entities import Entity, get_index
-from app.core.config import get_agent_config
+from app.core.config import get_agent_config, get_settings
 from app.rag import rearrange as rearrange_mod
+from app.rag.prompt import load_template
+from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.logs_repo import get_logs_repo
 from app.services.identity import (
     Account,
@@ -501,6 +506,52 @@ def _local_hits(text: str) -> tuple[tuple[str, str] | None, list[tuple[str, str]
     return direct, suspects
 
 
+async def local_llm_verdict(text: str) -> tuple[str | None, str, int]:
+    """地端模型備援（docs/adr/023）：叫不到 Jev、地端規則也沒命中時，
+    請本地 Qwen3-VL 判斷「攻擊／正常」。
+
+    回傳（attack／query／None, 說明, 毫秒）。None＝沒啟用、mock、逾時、連不上或輸出看不懂，
+    這時只用地端規則的結果。只連本地主推論伺服器（hybrid），不外送。"""
+    cfg = _cfg().get("local_llm") or {}
+    if not cfg.get("enabled") or get_settings().llm_mode == "mock":
+        return None, "未啟用", 0
+    tpl = load_template(cfg["prompt_version"])
+    messages = [
+        {"role": "system", "content": tpl["system"]},
+        {
+            "role": "user",
+            "content": [{"type": "text", "text": tpl["user"].replace("{{message}}", text)}],
+        },
+    ]
+    t0 = time.perf_counter()
+
+    async def judge() -> str:
+        provider = get_provider("hybrid")
+        provider.max_tokens, provider.temperature = int(cfg.get("max_tokens", 4)), 0
+        return "".join([p async for p in provider.stream(messages)])
+
+    try:
+        out = await asyncio.wait_for(judge(), float(cfg.get("timeout_s", 4)))
+    except TimeoutError:
+        return (
+            None,
+            f"地端模型逾時（>{cfg.get('timeout_s', 4)} 秒）",
+            round((time.perf_counter() - t0) * 1000),
+        )
+    except (ProviderUnavailable, httpx.HTTPError) as e:
+        return (
+            None,
+            f"地端模型無法使用：{type(e).__name__}",
+            round((time.perf_counter() - t0) * 1000),
+        )
+    ms = round((time.perf_counter() - t0) * 1000)
+    if "攻擊" in out:
+        return "attack", "地端模型判為攻擊", ms
+    if "正常" in out:
+        return "query", "地端模型判為正常", ms
+    return None, f"地端模型輸出看不懂：{out.strip()[:20]}", ms
+
+
 def _input_request(pseudo: str, photo_kind: str | None) -> tuple[dict, dict]:
     g = _cfg()
     state: dict = {"context": g["input_context"], "user_message": pseudo}
@@ -639,10 +690,23 @@ async def guard_input(
         engine = "jev"
         overrides_flag = verdict == "attack" or bool(suspects)
     else:
-        # 叫不到 Jev 時的備援：hard-block 上面已經跑過；這裡只判斷閒聊或放行
+        # 叫不到 Jev 時的備援：hard-block 上面已經跑過；規則未命中時再問本地模型
         call = None
         verdict = "query"
-        if local_intent == "out_of_scope":
+        llm = await local_llm_verdict(text)
+        if llm[0] == "attack":
+            # 規則認不出的語意式說法：本地 Qwen3-VL 再判斷一次（docs/adr/023）
+            checks.append(
+                Check(
+                    "intent_guard",
+                    "意圖防護",
+                    "地端",  # API 的 by 只有地端／Jev；是本地模型判斷的寫在說明裡
+                    False,
+                    f"地端規則沒命中，本地 Qwen3-VL 判為「Prompt 注入或越權」（{llm[2]} ms）→ 攔截",
+                )
+            )
+            tag, verdict = "提示詞注入（地端模型）", "attack"
+        elif local_intent == "out_of_scope":
             checks.append(
                 Check(
                     "intent_guard",
@@ -656,13 +720,20 @@ async def guard_input(
             verdict = "chitchat"
         else:
             note = f"；有{said}的說法，但只是查詢，身分以第 1 段的憑證為準" if suspects else ""
+            llm_note = (
+                f"；{llm[1]}（{llm[2]} ms）"
+                if llm[0] == "query"
+                else "（換句話說的攻擊認不出來）"
+                if llm[1] == "未啟用"
+                else f"；{llm[1]}，只用地端規則"
+            )
             checks.append(
                 Check(
                     "intent_guard",
                     "意圖防護",
                     "地端",
                     True,
-                    "沒有命中已知的注入樣式（換句話說的攻擊認不出來）" + note,
+                    "沒有命中已知的注入樣式" + llm_note + note,
                     warn=bool(suspects),
                 )
             )

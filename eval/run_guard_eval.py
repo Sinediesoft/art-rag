@@ -97,8 +97,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://localhost:8000")
     parser.add_argument("--engines", default="local,jev")
+    # guard_holdout.jsonl、guard_blind.jsonl：量地端規則的泛化與誤擋（docs/adr/022）
+    parser.add_argument("--file", default="guard_qa.jsonl", help="eval/ 底下的題目檔")
     args = parser.parse_args()
-    items = [json.loads(x) for x in (EVAL / "guard_qa.jsonl").read_text("utf-8").splitlines() if x]
+    items = [json.loads(x) for x in (EVAL / args.file).read_text("utf-8").splitlines() if x]
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
         client.get("/api/v1/health").raise_for_status()
@@ -136,6 +138,7 @@ def main() -> int:
             {
                 "run_id": run_id,
                 "created_at": datetime.now(UTC).isoformat(),
+                "file": args.file,
                 "n_items": len(items),
                 "system1": health["system1"],
                 "engines": results,

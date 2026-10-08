@@ -1,6 +1,8 @@
 """共用 prompt 模板組裝：三種策略用同一份（shared/prompts/<version>.md）。
 
-畫作用 answer_v1，工廠圖紙用 drawing_v1（models.yaml 的 prompt.version／prompt.drawing_version）。
+畫作用 answer_v4，工廠圖紙用 drawing_v2（models.yaml 的 prompt.version／prompt.drawing_version）。
+模板可以多一段 ===SYSTEM_IMAGE===：有附圖時改用這段 system
+（answer_v3 起的 [畫面] 出處，docs/adr/026）。
 """
 
 import base64
@@ -19,13 +21,15 @@ NO_CARD = "（未提供畫作資料，請從照片判斷）"
 def load_template(version: str) -> dict[str, str]:
     raw = (get_settings().shared_dir / "prompts" / f"{version}.md").read_text(encoding="utf-8")
     raw = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
-    _, system, user = re.split(r"^===(?:SYSTEM|USER)===\s*$", raw, flags=re.M)
-    return {"system": system.strip(), "user": user.strip()}
+    parts = re.split(r"^===(SYSTEM|SYSTEM_IMAGE|USER)===\s*$", raw, flags=re.M)
+    tpl = {k.lower(): v.strip() for k, v in zip(parts[1::2], parts[2::2], strict=True)}
+    tpl.setdefault("system_image", tpl["system"])
+    return tpl
 
 
 def prompt_version(domain: str = "art") -> str:
     p = get_models_config().prompt
-    return p.get("drawing_version", "drawing_v1") if domain == "mfg" else p["version"]
+    return p.get("drawing_version", "drawing_v2") if domain == "mfg" else p["version"]
 
 
 def artwork_card(a: dict | None) -> str:
@@ -60,21 +64,28 @@ def build_messages(
     use_retrieval: bool = True,
     include_card: bool = True,
     domain: str = "art",
+    note: str | None = None,
 ) -> list[dict]:
     """include_card=False 給 A1 對照組（api_nokb）：只送照片與問題，不帶任何知識庫內容。
 
     domain="mfg" 時 artwork 傳的是零件，改用圖紙模板與零件卡。
+    note：接在參考資料後面的系統提醒（矛盾檢查，docs/adr/028）；關檢索時不加。
     """
     tpl = load_template(prompt_version(domain))
     card = part_card(artwork) if domain == "mfg" else artwork_card(artwork)
-    system = tpl["system"]
+    system = tpl["system_image" if image_jpeg else "system"]
     if not use_retrieval:
         # 檢索增益對照組：同模型、同問題，只拿掉參考資料與「只根據資料」規則
         system = system.split("\n")[0] + "\n請用繁體中文（台灣用語）簡潔回答 2–5 句。"
     user_text = (
         tpl["user"]
         .replace("{{artwork_card}}", card if include_card else NO_CARD)
-        .replace("{{context}}", format_context(sources) if use_retrieval else NO_CONTEXT)
+        .replace(
+            "{{context}}",
+            format_context(sources) + (f"\n\n{note}" if note else "")
+            if use_retrieval
+            else NO_CONTEXT,
+        )
         .replace("{{question}}", question)
     )
     # 圖放在文字前面：推論伺服器會沿用和前一個 prompt 開頭相同那段的計算，同一張圖的追問

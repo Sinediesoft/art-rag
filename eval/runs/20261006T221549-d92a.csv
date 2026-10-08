@@ -1,0 +1,32 @@
+question_id,split,type,artwork_id,source_lang,strategy,model,kb_version,prompt_version,answer_ok,citation_ok,n_sources,rearrange_ms,rearrange_fallback,first_token_ms,total_ms,cost_twd,egress_images,egress_chunks,egress_bytes,error,distractor_kept,distractor_cited,distractor_flagged,distractor_misled,answer
+q-npm1-01,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,622,,4395,4701,0.0,0,0,0,,,,,,畫家的簽名藏在畫面右下方、騾隊後方的樹叢枝葉間 [1]。
+q-npm1-02,dev,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,547,,1209,1690,0.0,0,0,0,,,,,,1958 年，故宮研究人員李霖燦在畫面右下方、騾隊後方的樹叢枝葉間發現了「范寬」二字款 [1]。
+q-npm1-03,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,626,,1344,1994,0.0,0,0,0,,,,,,畫中山石使用了「雨點皴」，這是范寬擅長的筆法，用密集短促的筆觸表現岩石堅硬的質感 [1]。這也是他畫作中常見的技法，屬於巨碑式構圖的特色之一 [2]。
+q-npm1-04,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,572,,1229,1534,0.0,0,0,0,,,,,,畫面近景右下方的山路上，有一支馱著貨物的騾隊正在趕路 [1]。
+q-npm1-05,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,583,,1232,1643,0.0,0,0,0,,,,,,〈谿山行旅圖〉常與郭熙〈早春圖〉、李唐〈萬壑松風圖〉並稱為北宋山水畫三巨碑 [1]。
+q-met-01,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,559,,1226,1520,0.0,0,0,0,,,,,,這幅畫是在法國南部聖雷米附近的聖保羅療養院周圍的田野畫的 [1]。
+q-met-02,dev,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,560,,1228,1486,0.0,0,0,0,,,,,,梵谷在信中形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-met-03,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,3,608,,1329,2476,0.0,0,0,0,,,,,,是的，這幅畫有其他版本。同年 9 月，梵谷在療養院的畫室裡以這幅畫為本，又畫了一幅尺寸相近的版本，現藏倫敦國家美術館；另外還有一幅尺寸較小的版本，是畫給母親與妹妹的 [1]。  這幅畫目前收藏在大都會藝術博物館（The Met），於 1993 年以安納伯格基金會的捐款購得 [2]。
+q-met-04,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,574,,1219,1465,0.0,0,0,0,,,,,,大都會藝術博物館是在 1993 年取得這幅畫的 [1]。
+q-met-05,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,556,,1229,1451,0.0,0,0,0,,,,,,遠方的山是阿爾皮耶山丘（Alpilles）[1]。
+q-aic-01,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,577,,1250,1864,0.0,0,0,0,,,,,,秀拉用的是「點描法」，也就是把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1]。
+q-aic-02,dev,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,564,,1224,1366,0.0,0,0,0,,,,,,右邊的女子牽著一隻猴子 [1]。
+q-aic-03,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,554,,1196,1516,0.0,0,0,0,,,,,,這幅畫第一次在第八屆印象派畫展展出，也就是1886年的最後一屆印象派畫展 [1]。
+q-aic-04,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,582,,1284,1970,0.0,0,0,0,,,,,,畫布四周的邊框是在 1888 至 1889 年間由秀拉加上去的 [1]。   這部分是畫作的後期修改，與主畫面創作時間（1884–1886 年）不同 [2]。
+q-aic-05,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,580,,1253,1387,0.0,0,0,0,,,,,,畫的是塞納河上的大碗島 [1]。
+q-refuse-01,test,no_answer,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,561,,1230,1325,0.0,0,0,0,,,,,,知識庫中沒有這方面的資料。
+q-npm1-06,test,untyped,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,583,,1270,2067,0.0,0,0,0,,,,,,這幅畫主要使用了深褐與褐等中性色，整體偏暗調且彩度低 [1]。   畫面以水墨為主，呈現出沉穩的大地色系 [2]。   [畫面] 看起來是深色的山岩與樹木，背景是較淺的土黃色調。
+q-aic-06,test,untyped,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,568,,1249,1891,0.0,0,0,0,,,,,,這幅畫整體偏中性色，暖色佔比約 24%，冷色約 19%，但中性色（接近黑白灰）高達 56%，所以整體視覺上較偏向中性而非明顯的暖或冷 [1]。
+q-met-06,test,untyped,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,600,,1310,1946,0.0,0,0,0,,,,,,這幅畫的彩度中位數是 13，屬於中等彩度，不算特別鮮豔 [1]。   整體色彩冷暖並陳，以中間調為主，呈現出一種飽滿但不刺眼的視覺感受 [1]。
+q-dist-npm1-01,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,587,,1433,2774,0.0,0,0,0,,True,True,True,False,根據參考資料，這幅畫的作者簽名是在 1958 年由故宮研究人員李霖燦在畫面右下方發現的 [2]。  不過，另一段資料提到，是 1962 年張大千在畫面左上角發現了「范寬」款 [1]。  因此，參考資料的說法不一致：   - 1958 年，李霖燦在右下方發現款識 [2]。   - 1962 年，張大千在左上角發現款識 [1]。
+q-dist-met-01,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,625,,1446,2122,0.0,0,0,0,,True,True,True,False,根據資料，大都會藝術博物館是在 1979 年購得此畫 [1]，但也有資料指出是在 1993 年以捐款購得 [2]。   兩段資料的說法不一致，請確認您要的是哪一筆交易的年份。
+q-dist-aic-01,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,False,False,2,550,,1396,1956,0.0,0,0,0,,True,True,False,True,這幅畫第一次在第八屆印象派畫展展出，也就是1886年的最後一屆印象派畫展 [2]。   不過，它也在同年獲得巴黎沙龍的金獎 [1]，兩者是不同展覽。
+q-dist-npm1-02,test,distractor,npm-000001,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,584,,1312,1954,0.0,0,0,0,,False,False,False,False,畫中山石使用了「雨點皴」，這是范寬擅長的筆法，用密集短促的筆觸表現岩石堅硬的質感 [1]。這也是他畫作中常見的技法，屬於巨碑式構圖的特色之一 [2]。
+q-dist-met-02,test,distractor,met-436535,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,1,577,,1330,1590,0.0,0,0,0,,False,False,False,False,梵谷在信中形容絲柏的線條與比例像埃及方尖碑一樣美 [1]。
+q-dist-aic-02,test,distractor,aic-27992,zh,hybrid,qwen3-vl:8b-instruct,2026.10.1,answer_v3,True,True,2,571,,1298,1908,0.0,0,0,0,,False,False,False,False,秀拉用的是「點描法」，也就是把純色的小點並排畫在畫布上，讓顏色在觀者眼中自然混合 [1]。這種技法也稱為「分色主義」，是新印象派的代表風格 [1]。
+q-dist-mfg2-01,test,distractor,mfg-002,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,2,579,,1413,2251,0.0,0,0,0,,True,True,True,False,根據參考資料，M8 螺栓最終扭力有兩種說法：  - 來源 [1] 說明最終扭力為 40 N·m。 - 來源 [2] 說明最終扭力為 25 N·m。  參考資料的說法不一致，現場應以正式圖紙與規範為準。
+q-dist-mfg6-01,test,distractor,mfg-006,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,6,644,"模型輸出看不懂：[1], [2], [4]",1587,2574,0.0,0,0,0,,True,True,True,False,立式軸承座的材料為 FC250 灰口鑄鐵 [2]。   此材料亦於其他資料中明確記載為 FC250 灰口鑄鐵 [4]。   （註：參考資料 [1] 記載材料為 SS400 鋼板，與本圖紙資料不符，現場應以正式圖紙與規範為準。）
+q-dist-mfg1-01,test,distractor,mfg-001,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,2,585,,1377,2206,0.0,0,0,0,,True,True,True,False,根據參考資料，孔位公差有兩種說法：  - 一段資料指出孔位公差為 ±0.3 mm [1]。 - 另一段資料則規定孔位公差為 ±0.1 mm [2]。  兩段資料對孔位公差的數值不一致，現場應以正式圖紙與檢驗規範為準。
+q-dist-mfg2-02,test,distractor,mfg-002,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,1,596,,1361,1674,0.0,0,0,0,,False,False,False,False,連接法蘭的中心孔公差為 Ø30H7（+0.021/0） [1]。
+q-dist-mfg6-02,test,distractor,mfg-006,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,2,580,,1366,1864,0.0,0,0,0,,False,False,False,False,軸承孔公差為 Ø35H7（+0.025/0） [1]。   （註：此為參考資料中唯一明確記載的軸承孔公差資訊。）
+q-dist-mfg1-02,test,distractor,mfg-001,,hybrid,qwen3-vl:8b-instruct,2026.10.1,drawing_v2,True,True,1,567,,1305,1573,0.0,0,0,0,,False,False,False,False,L 型固定支架的底板使用 M6×16 內六角螺栓固定 [1]。

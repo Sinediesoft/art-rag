@@ -6,7 +6,7 @@
 |---|---|---|
 | `sources` | `{"request_id", "artwork_id", "strategy", "sources": [{"ref", "chunk_id", "artwork_id", "artwork_title", "text", "source_url", "license", "score"}]}` | 檢索到的來源，`ref` 即回答中的 [編號] |
 | `token` | `{"text"}` | 文字片段（已經過 OpenCC s2twp 轉換） |
-| `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "use_retrieval", "latency_ms": {"retrieval", "first_token", "generation", "total"}, "tokens": {"input", "output"}, "cost_twd", "egress": {"images", "chunks", "bytes"}}` | 完成；`fallback` 為 true 時前端顯示「本地備援模型」（`strategy_used` 為 `hybrid_fallback`）；`egress` 是送出本機的資料量，本地策略恆為 0，前端顯示「資料外送」標示 |
+| `done` | `{"request_id", "strategy_requested", "strategy_used", "model", "fallback", "fallback_reason", "prompt_version", "use_retrieval", "image_sent", "latency_ms": {"retrieval", "first_token", "generation", "total"}, "tokens": {"input", "output"}, "cost_twd", "egress": {"images", "chunks", "bytes"}}` | 完成；`image_sent`＝這題有沒有附圖給生成模型（docs/adr/024：已辨識、檢索開著時可設定不送）；`fallback` 為 true 時前端顯示「本地備援模型」（`strategy_used` 為 `hybrid_fallback`）；`egress` 是送出本機的資料量，本地策略恆為 0，前端顯示「資料外送」標示 |
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 
 `sources` 另帶 `part_id`、`identified`（有做以圖辨識時的辨識結果）與 `route`：只帶 `image_id`、
@@ -19,6 +19,13 @@
 失敗時 `sources` 是原本的全部段落）；沒開篩選（或關檢索）時為 `null`。候選只有 0～1 段時不呼叫模型，
 `candidates` ≤ 1、`ms` 為 0，不算篩選過。篩選只問本地模型；問答策略是 `mock` 時篩選也用 mock。
 `sources` 永遠只列真正放進 prompt 的段落，`ref` 從 1 重新編號。`done.latency_ms.retrieval` 包含篩選時間。
+
+`sources` 另帶 `conflict_check`（docs/adr/028）：開啟參考資料矛盾檢查（請求的 `conflict_check`、`.env` 的
+`CONFLICT_CHECK` 或 `models.yaml` 的 `conflict_check.enabled`）而且要放進 prompt 的段落有 2 段以上時為
+`{"conflict", "refs", "ms", "fallback"}`——有沒有矛盾、互相矛盾的段落 `ref`、檢查花幾毫秒、失敗原因
+（成功為 `null`；失敗時當成沒檢查）；沒開、不到 2 段、策略是 `mock` 時為 `null`。`conflict` 為 `true` 時，
+送給模型的參考資料後面多一句「系統比對：參考資料 [1]、[2] 對這個問題的說法不一致…」，回答會明白指出說法不一致。
+檢查只問本地模型、只送文字；時間也算在 `done.latency_ms.retrieval` 裡。
 
 `sources` 另帶七段權限控管（docs/adr/015）的第 3～6 段：
 - `filter`：Metadata Filter `{"domain", "domain_label", "clearance", "depts", "levels", "doc_id", "doc_label", "doc_level", "text"}`，
@@ -54,6 +61,10 @@
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
 雲端策略一律回 `error`（`CLOUD_CONFIDENTIAL_FORBIDDEN`）。
+
+**干擾段落注入**（評估專用，請求帶 `inject`、後端 `EVAL_INJECTION=true`，docs/adr/019）：被注入、而且通過洩密掃描與
+段落篩選留下來的段落，在 `sources` 裡多帶 `injected: true`、`injected_kind`（`counterfactual`／`other`），
+`chunk_id` 以 `inject:` 開頭，`source_label` 為「評估注入（干擾段落）」。前端不會送 `inject`，正常問答不會出現這些欄位。
 
 畫作的「色彩分析」段落（`chunk_id` 為 `<id>#color`，建索引時由系統計算，見 `docs/adr/010`）同樣 `source_url` 為 `null`，
 改帶 `source_label`（「系統計算：色彩分析（數位圖檔）」）；其他畫作段落不帶 `source_label`。

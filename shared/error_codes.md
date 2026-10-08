@@ -51,7 +51,7 @@
 | `CHANGE_NOT_FOUND` | 404 | 確認卡已過期（15 分鐘）或已使用，請重新輸入 |
 | `CHANGE_STALE` | 409 | 從試算到按確認之間，受影響的資料已被修改（指紋不同），沒有寫入 |
 | `ACCOUNT_NOT_FOUND` | 404 | 切換身分時沒有這個展示帳號 |
-| `FORBIDDEN` | 403 | 展示模式沒開或不是本機的請求（`DEMO_CONTROLS=false`（預設），或請求不是來自 `DEMO_TRUSTED_HOSTS` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`；ADR 030） |
+| `FORBIDDEN` | 403 | 展示模式沒開或不是受信任來源的請求（`DEMO_CONTROLS=false`（預設），或請求不是來自 `DEMO_TRUSTED_HOSTS` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`；ADR 030）；或 `/chat` 帶 `inject` 但未同時開啟 `EVAL_INJECTION=true`、`EVAL_CONTROLS=true` 且來自受信任來源（干擾段落注入只給評估用，ADR 019） |
 | `COMPARE_KIND_MISMATCH` | 422 | 兩件並排比較（`/compare/items`、`/compare/summary`）的兩件不同類：一幅畫和一張圖紙（docs/adr/017） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
 | `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |

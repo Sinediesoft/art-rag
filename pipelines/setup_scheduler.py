@@ -34,6 +34,10 @@ MAVEN_URL = (
     f"{MAVEN_VERSION}/apache-maven-{MAVEN_VERSION}-bin.tar.gz"
 )
 MIN_JAVA = 21
+# Windows 的執行檔是 java.exe、mvn.cmd（bin/mvn 是 sh 腳本）
+WINDOWS = os.name == "nt"
+JAVA_EXE = "java.exe" if WINDOWS else "java"
+MVN_EXE = "mvn.cmd" if WINDOWS else "mvn"
 
 
 def java_version(java: Path) -> int:
@@ -63,7 +67,7 @@ def find_java_home() -> Path | None:
     if which := shutil.which("java"):
         candidates.append(Path(which).resolve().parents[1])
     for home in candidates:
-        java = home / "bin" / "java"
+        java = home / "bin" / JAVA_EXE
         if java.is_file() and java_version(java) >= MIN_JAVA:
             return home
     return None
@@ -99,7 +103,7 @@ def find_maven() -> Path:
     if which := shutil.which("mvn"):
         return Path(which)
     home = SCHED / ".maven" / f"apache-maven-{MAVEN_VERSION}"
-    mvn = home / "bin" / "mvn"
+    mvn = home / "bin" / MVN_EXE
     if mvn.is_file():
         return mvn
     home.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +137,7 @@ def main() -> int:
         print("  Ubuntu／WSL2：sudo apt install openjdk-21-jdk-headless")
         print("沒有 Java 時排程頁會自動改用簡易排程（交期優先派工，不做最佳化）。")
         return 1
-    print(f"✓ Java {java_version(java_home / 'bin' / 'java')}：{java_home}")
+    print(f"✓ Java {java_version(java_home / 'bin' / JAVA_EXE)}：{java_home}")
     mvn = find_maven()
     print(f"✓ Maven：{mvn}")
 

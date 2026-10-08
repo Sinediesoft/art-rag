@@ -57,7 +57,8 @@ export function MemoryNotice({ event }: { event: MemoryEvent | null | undefined 
   if (!event || (!event.released.length && !event.failed.length)) return null;
   return (
     <div className="rounded-xl border border-success/30 bg-success-soft/60 p-3 text-sm text-success">
-      <b>記憶體管理</b>：{event.trigger}時記憶體 {event.percent_before}%（門檻 {event.threshold}%），已釋放{" "}
+      <b>記憶體管理</b>：{event.trigger}時{event.pool === "gpu" ? "顯示記憶體" : "記憶體"} {event.percent_before}%（門檻{" "}
+      {event.threshold}%），已釋放{" "}
       {event.released.map((r) => r.label).join("、") || "—"}，降到 {event.percent_after}%。
       {event.kept.length > 0 && <span className="text-ink-80">　保留：{event.kept.join("、")}</span>}
       {event.failed.length > 0 && (

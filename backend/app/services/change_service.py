@@ -422,6 +422,14 @@ async def preview(
         out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
         return out
 
+    # 角色本來就不能做這個操作：不回傳任何從資料庫推出來的內容
+    # （「改成 120」算出的「+102 件」會透露目前庫存是 18 件）
+    if x.op != "other" and not account.can(x.op):
+        out["checks"] = checks = authorize(account, x.op, x.params)
+        out["params"], out["param_labels"], out["sources"] = {}, {}, {}
+        out["summary"] = op_label(x.op)
+        denied = [c["detail"] for c in checks if c["ok"] is False]
+        return reject(denied[0] if denied else f"「{account.label}」不能{op_label(x.op)}")
     if x.op == "other":
         out["checks"] = authorize(account, "other", x.params)
         return reject("零件主檔與機台資料不開放用對話修改，請走 ERP 的正式流程")
@@ -767,6 +775,16 @@ def list_approvals(account: Account) -> dict:
         "mine": [_approval_view(a) for a in prod.approvals(requester_id=account.id, limit=20)],
         "recent": [_approval_view(a) for a in prod.approvals(limit=30)],
     }
+
+
+def list_approvals_for(account: Account) -> dict:
+    """主管看全部；其他人只看自己送出的申請（別人的申請會透露零件、數量與交期）。"""
+    out = list_approvals(account)
+    if not account.can("approve"):
+        own = account.id
+        out["pending"] = [a for a in out["pending"] if a.get("requester_id") == own]
+        out["recent"] = [a for a in out["recent"] if a.get("requester_id") == own]
+    return out
 
 
 def _open_approval(ap_no: str, account: Account, action: str, request_id: str) -> dict:

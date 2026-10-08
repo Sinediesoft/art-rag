@@ -32,6 +32,7 @@ from app.agent import guard, handoff
 from app.agent.entities import get_index
 from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
 from app.core.logging import log
+from app.rag import conflict_check as conflict_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import artwork_card, build_messages, part_card, prompt_version
@@ -128,6 +129,98 @@ def retrieve(
     return [_source(i, h, store) for i, h in enumerate(hits)]
 
 
+def send_image_enabled(requested: bool | None = None) -> bool:
+    """問答要不要附圖（docs/adr/024）。
+
+    優先順序：請求的 send_image ＞ .env 的 SEND_IMAGE ＞ models.yaml 的 chat.send_image。"""
+    if requested is not None:
+        return requested
+    env = get_settings().send_image.strip().lower()
+    if env in ("true", "1", "on"):
+        return True
+    if env in ("false", "0", "off"):
+        return False
+    return get_models_config().chat.send_image
+
+
+INJECTED_LABEL = "評估注入（干擾段落）"
+
+
+def inject_distractors(
+    question: str,
+    sources: list[dict],
+    specs: list[dict],
+    artwork_id: str | None,
+    part_id: str | None,
+    scope: guard.MetaFilter | None = None,
+) -> list[dict]:
+    """干擾段落注入（評估專用，docs/adr/019）：混進檢索結果，之後照常經過洩密掃描與段落篩選，
+    量「篩選擋不擋得掉」與「模型會不會被帶偏」。
+
+    counterfactual：呼叫端手寫的段落，掛在同一幅畫／同一張圖紙底下（看起來像真的）；
+    score 用它和問題的 bge-m3 相似度，和真正段落同一把尺。
+    compatible：同樣是手寫段落，但和正確答案可以同時成立（量模型會不會誤報不一致，docs/adr/028）。
+    other：同領域其他畫作／圖紙中和問題最相近的真實段落；工廠圖紙只從看得到的圖紙取。
+    每段標 injected，chunk_id 以 inject: 開頭，評估腳本靠它判斷有沒有引用到。"""
+    store = get_store()
+    domain_part = bool(part_id)
+    coll, owner = (store.mfg, part_id) if domain_part else (store.art, artwork_id)
+    counter = [s for s in specs if s["kind"] != "other"]  # 手寫段落：counterfactual、compatible
+    n_other = sum(1 for s in specs if s["kind"] == "other")
+    vecs = embed_text([question] + [s["text"] for s in counter])
+    qvec, cvecs = vecs[0], vecs[1:]
+
+    others = []
+    if n_other:
+        owners = visible_parts(scope) if domain_part else None
+        seen = {s["chunk_id"] for s in sources}
+        for h in coll.search_chunks(qvec, len(seen) + 20, exclude=seen, owners=owners):
+            if h.item[coll.owner_key] != owner:
+                others.append(h)
+            if len(others) >= n_other:
+                break
+
+    first, last = [], []
+    ci = oi = 0
+    for i, spec in enumerate(specs):
+        if spec["kind"] != "other":
+            s = {
+                "chunk_id": f"inject:{i}",
+                "topic": spec.get("topic") or "干擾段落",
+                "text": spec["text"],
+                "source_url": "",
+                "license": "",
+                "score": round(float(cvecs[ci] @ qvec), 4),
+                "source_label": INJECTED_LABEL,
+            }
+            ci += 1
+            if domain_part:
+                part = store.mfg.by_id[part_id]
+                s |= {
+                    "part_id": part_id,
+                    "title": part["name"]["zh"],
+                    "level": part["confidentiality"],
+                }
+            else:
+                title = store.by_id[artwork_id]["title"]["zh"] if artwork_id else ""
+                s |= {
+                    "artwork_id": artwork_id,
+                    "artwork_title": title,
+                    "title": title,
+                    "level": "公開",
+                }
+        else:
+            if oi >= len(others):
+                continue  # 同領域沒有別的段落可取（知識庫只有一筆）
+            real_id = others[oi].item["chunk_id"]
+            s = _source(0, others[oi], store) | {"chunk_id": f"inject:{i}:{real_id}"}
+            oi += 1
+        s |= {"injected": True, "injected_kind": spec["kind"]}
+        (first if spec.get("position", "first") == "first" else last).append(s)
+    merged = first + sources + last
+    return [{**s, "ref": i + 1} for i, s in enumerate(merged)]
+
+
 async def chat_stream(
     question: str,
     request_id: str,
@@ -141,6 +234,9 @@ async def chat_stream(
     account: Account | None = None,
     route_ticket: str | None = None,
     eval_mode: bool = False,
+    inject: list[dict] | None = None,
+    send_image: bool | None = None,
+    conflict_check: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -150,6 +246,9 @@ async def chat_stream(
     route_ticket：/agent/route 發的交接票（有效才沿用第 2 段的判斷）。
     eval_mode：評估模式（EVAL_CONTROLS＋本機，由 API 層判斷）。只有開啟時 strategy=mock 才生效、
     畫作的關檢索對照組才會生成；關閉時這些選項不會降低任何關卡。
+    inject：評估用的干擾段落（docs/adr/019），API 層只在受信任的評估模式傳入。
+    send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
+    conflict_check：回答前先檢查參考資料有沒有互相矛盾（docs/adr/028）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -165,6 +264,9 @@ async def chat_stream(
         account,
         route_ticket,
         eval_mode,
+        inject,
+        send_image,
+        conflict_check,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -190,6 +292,9 @@ async def _chat_stream(
     account: Account | None = None,
     route_ticket: str | None = None,
     eval_mode: bool = False,
+    inject: list[dict] | None = None,
+    send_image: bool | None = None,
+    conflict_check: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -220,6 +325,7 @@ async def _chat_stream(
                 "identified": None,
                 "route": None,
                 "rearrange": None,
+                "conflict_check": None,
                 "use_retrieval": use_retrieval,
                 "sources": [],
                 "filter": None,
@@ -420,6 +526,8 @@ async def _chat_stream(
     # 評估模式的畫作關檢索對照組仍檢索一次（供前端比較），但段落不放進 prompt
     if use_retrieval or (eval_mode and domain == "art"):
         sources = retrieve(asked, artwork_id, part_id, meta)
+        if inject:
+            sources = inject_distractors(asked, sources, inject, artwork_id, part_id, meta)
         _stage(
             trace,
             3,
@@ -433,6 +541,8 @@ async def _chat_stream(
     candidates = len(sources)
 
     # ------------------------------------------------------------ 第 4～6 段
+    conflict_info = None
+    context_note = None
     card = None
     if artwork:
         card = {
@@ -490,6 +600,12 @@ async def _chat_stream(
             post.gate.engine,
             "；".join(c.detail for c in post.gate.checks),
         )
+        # 矛盾檢查（docs/adr/028）：安全篩選後仍有至少兩段時才問本地模型；
+        # 有矛盾就在參考資料後面加提醒。這個開關不影響第 1～7 段安全關卡。
+        if not post.degraded and conflict_mod.enabled(conflict_check):
+            conflict_info = await conflict_mod.check(asked, sources, strategy)
+            if conflict_info and conflict_info["conflict"]:
+                context_note = conflict_mod.note(conflict_info["refs"])
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     sources_event = {
         "request_id": request_id,
@@ -499,6 +615,7 @@ async def _chat_stream(
         "identified": identified,
         "route": route_info,
         "rearrange": rearrange_info,
+        "conflict_check": conflict_info,
         "use_retrieval": use_retrieval,
         "sources": sources if use_retrieval else [],
         "filter": meta.public() if meta else None,
@@ -523,8 +640,12 @@ async def _chat_stream(
     # ------------------------------------------------------------ 第 7 段：本地 LLM 生成
     # 組 prompt（照片優先，否則用知識庫圖檔，一律長邊 1024 px）。畫作不用網頁卡片的 480 px 縮圖：
     # Ollama 會把圖換算成差不多的 token 數（縮圖約 1,060、原圖約 1,065），
-    # 縮圖省不到時間，模型反而看得比較模糊
-    if image_id:
+    # 縮圖省不到時間，模型反而看得比較模糊。已辨識或指定且檢索開著時可設定不送圖；
+    # 關檢索的評估對照組照樣送圖，才能量檢索增益（docs/adr/024）。
+    attach_image = not (artwork and use_retrieval) or send_image_enabled(send_image)
+    if not attach_image:
+        image_jpeg = None
+    elif image_id:
         image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
@@ -542,6 +663,7 @@ async def _chat_stream(
         use_retrieval,
         include_card=strategy != "api_nokb",
         domain=domain,
+        note=context_note,
     )
 
     # 依 strategy 生成；失敗依本地備援鏈改走下一個。
@@ -637,6 +759,7 @@ async def _chat_stream(
         "fallback_reason": "；".join(reasons) or None,
         "prompt_version": prompt_version(domain),
         "use_retrieval": use_retrieval,
+        "image_sent": image_jpeg is not None,  # docs/adr/024
         "latency_ms": {
             "retrieval": retrieval_ms,
             "first_token": first_token_ms,
