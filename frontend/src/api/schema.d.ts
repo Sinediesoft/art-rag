@@ -1195,6 +1195,7 @@ export interface paths {
         /**
          * List Approvals
          * @description 待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。
+         *     主管看全部，其他人只看自己送出的申請。
          */
         get: operations["list_approvals_api_v1_approvals_get"];
         put?: never;
@@ -1256,6 +1257,7 @@ export interface paths {
          * Security Logs
          * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
          *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。
+         *     主管看全部；其他人只看自己被擋下的紀錄（別人輸入的原文不公開），今天的筆數照常是全部。
          */
         get: operations["security_logs_api_v1_security_logs_get"];
         put?: never;
@@ -1276,6 +1278,7 @@ export interface paths {
         /**
          * Audit Log
          * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+         *     主管看全部；其他人只看自己的操作。
          */
         get: operations["audit_log_api_v1_audit_get"];
         put?: never;
