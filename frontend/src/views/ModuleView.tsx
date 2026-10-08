@@ -223,7 +223,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
                   <Icon name="arrowDown" strokeWidth={2} />
                 </button>
               )}
-              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus />
+              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus locked={shell.switching ? "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）" : undefined} />
               <p className="dock__status">LOCAL INFERENCE · EGRESS {egress ? `${(egress / 1024).toFixed(1)} KB → JEV` : "0 B"}</p>
             </div>
           </div>

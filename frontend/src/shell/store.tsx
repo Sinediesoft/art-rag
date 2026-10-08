@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { accountSwitch } from "../api/hooks";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { RouteResponse } from "../api/client";
+import { ACCOUNT_EVENTS, identityBound } from "../api/hooks";
 import type { Domain, View } from "./design";
 import { canRerun, interruptForAccount, load, redactForeign, save, serialize } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
@@ -40,8 +41,15 @@ export interface Shell {
   setActive: (convId: string, domain: Domain, key: string) => void;
   enterModule: (convId: string, domain: Domain, key?: string) => void;
   notice: (convId: string, text: string) => void;
-  /** 身分換了：其他身分的非公開內容收起來 */
-  onAccountChanged: (accountId: string, label: string, currentConvId: string | null) => void;
+  /** 正在切換身分：切換完成前不接受新提問 */
+  switching: boolean;
+  /**
+   * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
+   * 收起其他身分的非公開內容
+   */
+  setAccount: (accountId: string, label: string) => void;
+  /** 目前正在看的對話（切換身分的提示只留在這一段） */
+  setCurrentConv: (convId: string | null) => void;
   startReconstruct: (convId: string, turnId: string) => void;
   startSchedule: (convId: string, turnId: string) => void;
   cancelTask: (convId: string, turnId: string) => void;
@@ -82,6 +90,16 @@ export function ShellProvider({ children }: { children: ReactNode }) {
    */
   const runs = useRef(new Map<string, number>());
   const generation = useRef(0);
+  /**
+   * 身分世代：開始切換身分、身分改變（含憑證過期改發訪客）時加一。
+   * 每次執行記下開始時的世代，世代變了就不再寫回；/agent/route 回來的帳號和目前身分不同也不寫回
+   */
+  const identity = useRef<{ accountId: string | null; label: string | null; epoch: number }>({ accountId: null, label: null, epoch: 0 });
+  const [switching, setSwitching] = useState(false);
+  const switchingRef = useRef(false);
+  /** 這次切換開始時中止了請求（提示裡要說） */
+  const stoppedBySwitch = useRef(false);
+  const currentConv = useRef<string | null>(null);
 
   // 存檔：串流中每個字都會更新狀態，等 400 ms 沒有變化再寫
   useEffect(() => {
@@ -103,18 +121,22 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     return ctrl;
   };
 
-  /** 這一次執行專用的 update：世代失效後的呼叫一律丟掉 */
+  /** 這一次執行專用的 update：執行世代失效、或身分世代變了（切換身分）之後的呼叫一律丟掉 */
   const guarded = useCallback(
     (convId: string, turnId: string, key: string) => {
       const g = ++generation.current;
+      const epoch = identity.current.epoch;
       runs.current.set(key, g);
       const update = updateTurn(convId, turnId);
       return (f: (t: Turn) => Turn) => {
-        if (runs.current.get(key) === g) update(f);
+        if (runs.current.get(key) === g && identity.current.epoch === epoch) update(f);
       };
     },
     [updateTurn],
   );
+
+  /** /agent/route 回來的帳號必須是目前的身分（還不知道目前身分時，例如剛打開頁面，不擋） */
+  const acceptAccount = (accountId: string) => !identity.current.accountId || identity.current.accountId === accountId;
 
   /** 中止並讓這一輪（與它的任務）的 callback 失效 */
   const invalidate = (turnId: string) => {
@@ -128,7 +150,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const start = useCallback(
     (convId: string, turn: Turn, token?: string) => {
       const ctrl = control(turn.id);
-      void runTurn(turn, guarded(convId, turn.id, turn.id), { signal: ctrl.signal, token }).finally(() => {
+      const update = guarded(convId, turn.id, turn.id);
+      const onForeign = (route: RouteResponse) => {
+        // 回應屬於另一個身分（請求送出時的 JWT 已經不是目前的身分）：不寫回內容，只留問句與「已中止」
+        invalidate(turn.id);
+        updateTurn(convId, turn.id)((t) => interruptForAccount({ ...t, route }));
+      };
+      void runTurn(turn, update, { signal: ctrl.signal, token, accept: acceptAccount, onForeign }).finally(() => {
         if (controllers.current.get(turn.id) === ctrl) controllers.current.delete(turn.id);
         updateConv(convId, (c) => ({ ...c, updatedAt: Date.now() }));
       });
@@ -146,7 +174,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const text = input.text.trim();
       const id = convId && convsRef.current.some((c) => c.id === convId) ? convId : uid();
       if (!text && !input.imageId) return id;
-      if (busyOf(id)) return id;
+      // 切換身分途中不送：這時候帶的是哪一張 JWT 不確定
+      if (busyOf(id) || switchingRef.current) return id;
       const turn: Turn = {
         id: uid(),
         text,
@@ -185,7 +214,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const rerun = useCallback(
     (convId: string, turnId: string) => {
-      if (busyOf(convId)) return;
+      if (busyOf(convId) || switchingRef.current) return;
       const c = convsRef.current.find((x) => x.id === convId);
       const t = c?.turns.find((x) => x.id === turnId);
       if (!t || !canRerun(t)) return;
@@ -224,31 +253,95 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     [updateConv],
   );
 
-  const onAccountChanged = useCallback((accountId: string, label: string, currentConvId: string | null) => {
-    // 還在跑的一輪與任務用的是舊身分的 JWT：先中止並讓 callback 失效（之後再有事件也不會回填），再收起已經收到的內容
+  /** 所有還在跑的一輪與任務：中止、讓 callback 失效，已經收到的內容收起來。回傳有沒有中止任何東西 */
+  const interruptAll = () => {
     const live = new Set<string>();
-    const oldJwt = (t: Turn) =>
-      t.route ? t.route.account.id !== accountId : !accountSwitch.startedAt || t.ts <= accountSwitch.startedAt;
     for (const c of convsRef.current)
       for (const t of c.turns)
-        if ((RUNNING.has(t.phase) || taskRunning(t)) && oldJwt(t)) {
+        if (RUNNING.has(t.phase) || taskRunning(t)) {
           invalidate(t.id);
           live.add(t.id);
         }
+    if (!live.size) return false;
     setConvs((cs) => {
-      const next = cs.map((c) => {
-        // 每一段對話裡其他身分查到的非公開內容都收起來；提示只留在正在看的那一段
-        const turns = c.turns.map((t) => (live.has(t.id) ? interruptForAccount(t) : redactForeign(t, accountId)));
-        const stopped = c.turns.some((t) => live.has(t.id));
-        const changed = turns.some((t, i) => t !== c.turns[i]);
-        const text = `已切換身分為〈${label}〉：之後每一句都改用這張 JWT 判斷權限${stopped ? "；進行中的請求已中止" : ""}${changed ? "；其他身分查到的內部資料已收起" : ""}`;
-        const notices = c.id === currentConvId && c.turns.length ? [...c.notices, { id: uid(), ts: Date.now(), text }] : c.notices;
-        return { ...c, turns, notices };
-      });
+      const next = cs.map((c) => (c.turns.some((t) => live.has(t.id)) ? { ...c, turns: c.turns.map((t) => (live.has(t.id) ? interruptForAccount(t) : t)) } : c));
       convsRef.current = next;
       return next;
     });
+    return true;
+  };
+
+  /**
+   * 開始切換身分：這一刻起在飛的請求可能帶舊 JWT、也可能帶新 JWT，一律不採信——全部中止並收起，
+   * 身分世代加一（之後舊的 callback 都不會寫回），切換完成前不接受新提問。
+   */
+  const beginSwitch = useCallback(() => {
+    identity.current.epoch++;
+    switchingRef.current = true;
+    setSwitching(true);
+    if (interruptAll()) stoppedBySwitch.current = true;
   }, []);
+
+  const endSwitch = useCallback(() => {
+    switchingRef.current = false;
+    setSwitching(false);
+  }, []);
+
+  const setAccount = useCallback(
+    (accountId: string, label: string) => {
+      // 切換中的鎖只由切換事件解除（switched／failed）：/auth/accounts 定期重抓回來的還是舊身分時不能提早解鎖
+      const prev = identity.current.accountId;
+      if (prev === accountId) return;
+      identity.current.accountId = accountId;
+      identity.current.label = label;
+      if (prev === null) return; // 剛打開頁面，第一次知道身分
+      // 身分換了（主動切換，或憑證過期改發訪客）：舊身分還在跑的一律中止、舊身分快取的資料清掉（展示區重新讀取，
+      // 看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起
+      identity.current.epoch++;
+      const stopped = interruptAll() || stoppedBySwitch.current;
+      stoppedBySwitch.current = false;
+      void qc.resetQueries({ predicate: (q) => identityBound(q) && q.queryKey[0] !== "accounts" });
+      const currentConvId = currentConv.current;
+      setConvs((cs) => {
+        const next = cs.map((c) => {
+          // 提示只留在正在看的那一段
+          const turns = c.turns.map((t) => redactForeign(t, accountId));
+          const changed = turns.some((t, i) => t !== c.turns[i]);
+          const text = `已切換身分為〈${label}〉：之後每一句都改用這張 JWT 判斷權限${stopped ? "；進行中的請求已中止" : ""}${changed ? "；其他身分查到的內部資料已收起" : ""}`;
+          const notices = c.id === currentConvId && c.turns.length ? [...c.notices, { id: uid(), ts: Date.now(), text }] : c.notices;
+          return { ...c, turns, notices };
+        });
+        convsRef.current = next;
+        return next;
+      });
+    },
+    [qc],
+  );
+
+  // 切換身分的過程（api/hooks.ts 的 useSwitchAccount 發出）：切換回應一到就同步更新身分，
+  // 「切換成〇〇再試一次」緊接著送出的提問才會用新身分、不被擋
+  useEffect(() => {
+    const onSwitching = () => beginSwitch();
+    const onSwitched = (e: Event) => {
+      const d = (e as CustomEvent<{ id: string; label: string }>).detail;
+      setAccount(d.id, d.label);
+      // 切到同一個身分也要解鎖；開始切換時中止的請求在提示裡說明
+      if (stoppedBySwitch.current && identity.current.accountId === d.id) stoppedBySwitch.current = false;
+      endSwitch();
+    };
+    const onFailed = () => endSwitch();
+    window.addEventListener(ACCOUNT_EVENTS.switching, onSwitching);
+    window.addEventListener(ACCOUNT_EVENTS.switched, onSwitched);
+    window.addEventListener(ACCOUNT_EVENTS.failed, onFailed);
+    return () => {
+      window.removeEventListener(ACCOUNT_EVENTS.switching, onSwitching);
+      window.removeEventListener(ACCOUNT_EVENTS.switched, onSwitched);
+      window.removeEventListener(ACCOUNT_EVENTS.failed, onFailed);
+    };
+  }, [beginSwitch, endSwitch, setAccount]);
+
+  /** 使用者按了才開始的任務：切換身分途中、或這一輪是另一個身分問的，都不執行 */
+  const mayAct = (t: Turn) => !switchingRef.current && !(t.account && identity.current.accountId && t.account.id !== identity.current.accountId);
 
   const task = (convId: string, turnId: string) => {
     const c = convsRef.current.find((x) => x.id === convId);
@@ -258,7 +351,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const startReconstruct = useCallback(
     (convId: string, turnId: string) => {
       const t = task(convId, turnId);
-      if (t?.part?.kind !== "reconstruct") return;
+      if (t?.part?.kind !== "reconstruct" || !mayAct(t)) return;
       const ctrl = control(`${turnId}:task`);
       const update = guarded(convId, turnId, `${turnId}:task`);
       void runReconstruct(t.part as ReconstructPart, update, ctrl.signal).finally(() => {
@@ -272,7 +365,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const startSchedule = useCallback(
     (convId: string, turnId: string) => {
       const t = task(convId, turnId);
-      if (t?.part?.kind !== "schedule") return;
+      if (t?.part?.kind !== "schedule" || !mayAct(t)) return;
       const ctrl = control(`${turnId}:task`);
       void runSchedule(guarded(convId, turnId, `${turnId}:task`), ctrl.signal).finally(() => {
         void qc.invalidateQueries({ queryKey: ["production-overview"] });
@@ -293,7 +386,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const commitChange = useCallback(
     (convId: string, turnId: string, note: string | null) => {
       const t = task(convId, turnId);
-      if (t?.part?.kind !== "change") return;
+      if (t?.part?.kind !== "change" || !mayAct(t)) return;
       void runCommit(t.part as ChangePart, guarded(convId, turnId, `${turnId}:task`), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
     },
     [guarded, qc],
@@ -316,7 +409,9 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     setActive,
     enterModule,
     notice,
-    onAccountChanged,
+    switching,
+    setAccount,
+    setCurrentConv: (id) => void (currentConv.current = id),
     startReconstruct,
     startSchedule,
     cancelTask,

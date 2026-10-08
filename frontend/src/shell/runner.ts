@@ -34,9 +34,12 @@ export interface RunOptions {
   signal: AbortSignal;
   /** 示範第 1 段：竄改過的 JWT（只在送出這一次用，不保存） */
   token?: string;
+  /** /agent/route 回來的帳號是不是目前的身分；不是就不寫回任何內容，交給 onForeign 收起 */
+  accept?: (accountId: string) => boolean;
+  onForeign?: (route: RouteResponse) => void;
 }
 
-export async function runTurn(turn: Turn, update: Update, { signal, token }: RunOptions) {
+export async function runTurn(turn: Turn, update: Update, { signal, token, accept, onForeign }: RunOptions) {
   update((t) => ({ ...t, phase: "routing", route: null, failure: null, part: null, archived: undefined }));
   let route: RouteResponse;
   try {
@@ -45,6 +48,8 @@ export async function runTurn(turn: Turn, update: Update, { signal, token }: Run
     if (signal.aborted) return update((t) => ({ ...t, phase: "stopped" }));
     return update((t) => ({ ...t, phase: "error", failure: failureOf(e) }));
   }
+  // 請求送出後身分換了（切換、憑證過期改發訪客）：這是另一個身分的授權結果，不顯示、不分派
+  if (accept && !accept(route.account.id)) return onForeign?.(route);
   if (signal.aborted) return update((t) => ({ ...t, phase: "stopped", route }));
   const part = initialPart(route, turn.imageId);
   update((t) => ({ ...t, route, account: { id: route.account.id, label: route.account.label }, part, phase: part.kind === "route" ? "done" : "running" }));

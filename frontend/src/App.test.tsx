@@ -6,7 +6,7 @@ import App from "./App";
 import { STORAGE_KEY } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
-import { accounts, baseHandlers, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
+import { account, accounts, baseHandlers, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
 
 // 照片前處理用 canvas，jsdom 沒有：直接把檔案交給上傳
 vi.mock("./lib/image", () => ({ preprocessImage: async (f: File) => f }));
@@ -181,11 +181,95 @@ describe("切換身分時還在跑的請求（舊 JWT）", () => {
     expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped");
     await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("切換身分，已中止這一輪"));
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain("99999");
-    // 切換之後才送出的提問用的是新身分的 JWT，不會被中止
+    // 切換之後才送出的提問用的是新身分的 JWT（後端回的帳號是訪客），不會被中止
+    t.on("POST", "/agent/route", ({ body }) => json(route({ question: (body as { question: string }).question, account: account(current) })));
     await ask("梵谷畫這幅畫的時候在哪裡？");
     await idle();
     expect([...document.querySelectorAll(".msg--ai")].at(-1)?.getAttribute("data-phase")).toBe("done");
     expect(document.querySelector(".thread")?.textContent).toContain("1889 年在聖雷米");
+  });
+});
+
+describe("切換身分時路由還沒回來的請求（審查報告的延遲 switch＋延遲 route）", () => {
+  it("切換開始就中止在飛的請求；切換中不接受新提問；舊身分的路由晚到也不寫回", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    let releaseSwitch!: () => void;
+    t.on("POST", "/auth/switch", ({ body }) =>
+      new Promise<Response>((ok) => {
+        releaseSwitch = () => {
+          current = (body as { account_id: string }).account_id;
+          ok(json(accounts(current)));
+        };
+      }),
+    );
+    let releaseRoute!: () => void;
+    t.on("POST", "/agent/route", () =>
+      new Promise<Response>((ok) => {
+        // 生管的 JWT 授權過的結果：確認卡上會有圖紙名稱與機密等級（合成值）
+        releaseRoute = () =>
+          ok(
+            json(
+              factoryRoute({
+                question: "把附圖轉成 3D",
+                intent: "reconstruct",
+                gate: "confirm",
+                dispatch: { module: "reconstruct", part_id: "mfg-002", part_label: "SYNTH_PRIVATE_PART", artwork_id: null, question: "把附圖轉成 3D" },
+              }),
+            ),
+          );
+      }),
+    );
+    renderApp();
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await ask("把附圖轉成 3D");
+    await waitFor(() => expect(t.calls.filter((c) => c.path === "/agent/route")).toHaveLength(1));
+    // 開始切成訪客（切換回應還沒回來）
+    fireEvent.click(document.querySelector(".topbar__account")!);
+    act(() => {
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+    });
+    await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
+    // 切換中：輸入框鎖住，送不出去
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("切換身分中"));
+    await ask("再問一句");
+    expect(t.calls.filter((c) => c.path === "/agent/route")).toHaveLength(1);
+    // 切換完成，接著舊身分的路由才回來
+    await act(async () => {
+      releaseSwitch();
+    });
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("訪客"));
+    await act(async () => {
+      releaseRoute();
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(document.body.textContent).not.toContain("SYNTH_PRIVATE_PART");
+    expect(document.querySelector(".taskcard")).toBeNull();
+    expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped");
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("切換身分，已中止這一輪"));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain("SYNTH_PRIVATE_PART");
+  });
+
+  it("憑證過期改發訪客：路由回來的帳號不是目前的身分，就不顯示、不分派", async () => {
+    const t = factoryBackend();
+    t.on("POST", "/agent/route", () =>
+      json(
+        factoryRoute({
+          account: account("guest"),
+          question: "把附圖轉成 3D",
+          intent: "reconstruct",
+          gate: "confirm",
+          dispatch: { module: "reconstruct", part_id: "mfg-002", part_label: "SYNTH_OTHER_IDENTITY", artwork_id: null, question: "把附圖轉成 3D" },
+        }),
+      ),
+    );
+    renderApp();
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await ask("把附圖轉成 3D");
+    await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
+    expect(document.body.textContent).not.toContain("SYNTH_OTHER_IDENTITY");
+    expect(document.querySelector(".taskcard")).toBeNull();
   });
 });
 

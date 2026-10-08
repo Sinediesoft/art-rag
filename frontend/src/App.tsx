@@ -44,18 +44,18 @@ export default function App() {
   const lastConv = useRef<string | null>(null);
   const m = pathname.match(/^\/(c|factory|art)\/([\w-]+)/);
   if (m) lastConv.current = m[2];
+  shell.setCurrentConv(m?.[2] ?? null);
 
   // 入口用 01 Quiet、模組用 10 Night、藝術模組再疊暖色：畫面一換就只掛該用的樣式
   useLayoutEffect(() => applyStyles(view, shell.theme), [view, shell.theme]);
 
-  // 身分換了：在對話裡留一行提示，並把其他身分查到的非公開內容收起來
+  // 目前的身分交給 store：和之前不同（主動切換在 store 裡已經處理；這裡多了憑證過期改發訪客、別的分頁切換）時，
+  // 中止舊身分的請求、清掉舊身分的快取、收起其他身分的非公開內容
   const { data: accounts } = useAccounts();
-  const lastAccount = useRef<string | null>(null);
   useEffect(() => {
     const me = accounts?.current;
-    if (!me) return;
-    if (lastAccount.current && lastAccount.current !== me.id) shell.onAccountChanged(me.id, me.label, lastConv.current);
-    lastAccount.current = me.id;
+    // 切換途中回來的身分查詢可能是舊的：切換結果由切換事件交給 store，這裡等切換完成再對
+    if (me && !shell.switching) shell.setAccount(me.id, me.label);
   }, [accounts, shell]);
 
   const conv = shell.convs.find((c) => c.id === m?.[2]) ?? null;

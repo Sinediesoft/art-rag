@@ -231,9 +231,11 @@ export function ModelView({ o }: { o: Output }) {
   const [ref, size] = useSize<HTMLDivElement>();
   // 從紀錄還原：以工作編號重新讀取（後端依目前的 JWT 檢查看不看得到那張圖紙）
   const saved = useQuery({ queryKey: ["cad-job", o.cadJobId], queryFn: () => api.cadJob(o.cadJobId!), enabled: !o.job && !!o.cadJobId, retry: false });
+  // 重抓被拒絕（例如切換身分後 403）時，React Query 仍留著上一次成功的資料：拒絕優先，不再顯示舊模型
+  if (!o.job && saved.error) return <Failed error={saved.error} />;
   const res = (o.job?.result ?? (saved.data?.result as unknown as CadResultEvent | undefined)) || null;
   const done = o.job?.done ?? (saved.data?.done as unknown as CadDoneEvent | undefined) ?? null;
-  if (!res) return saved.error ? <Failed error={saved.error} /> : <Loading label="讀取 3D 模型…" />;
+  if (!res) return <Loading label="讀取 3D 模型…" />;
   return (
     <div className="view view--model">
       <div ref={ref} className="view__canvas view__canvas--model">
@@ -668,7 +670,7 @@ export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => voi
             </div>
             {compare.isLoading && <p className="pending"><Spinner />讀取兩件的資料…</p>}
             {compare.error && <p className="view__error">{(compare.error as Error).message}</p>}
-            {compare.data && (
+            {compare.data && !compare.error && (
               <>
                 <p className="view__label">
                   {compare.data.differences} 個欄位不同・直接讀知識庫，不經生成

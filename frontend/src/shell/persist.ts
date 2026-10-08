@@ -133,15 +133,32 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
  * 帳密、金鑰、憑證型式的字串：後端的 mask_pii 只遮電話、Email、身分證，存進瀏覽器前再遮一次。
  * 「密碼是 xxx」「api key: xxx」的值、JWT、常見金鑰前綴、32 字以上的不透明字串都換成［已遮蔽］。
  */
+const MASK = "［已遮蔽］";
+/** 帳密類關鍵字：中文直接比對，英文要整個字（tokens、passwords 這類複數也算） */
+const SECRET_KEY =
+  "(?:密碼|口令|密鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|\\b(?:password|passwd|passcode|pwd|api[\\s_-]?key|access[\\s_-]?key|secret[\\s_-]?key|client[\\s_-]?secret|private[\\s_-]?key|secret|token|credentials?)s?\\b)";
+/** 關鍵字後面接引號：引號裡的整串（可以有空白、逗號）都遮掉 */
+const SECRET_QUOTED = new RegExp(`(${SECRET_KEY})[^"'「『“\\n]{0,24}?["'「『“][^"'」』”\\n]*["'」』”]?`, "gi");
+/**
+ * 關鍵字後面到這一句結束（，。；！？換行，或後面接空白／結尾的句點）全部遮掉：
+ * 「密碼是： xxx」「password is xxx」「API key = xxx」不用猜哪一段才是值，寧可多遮
+ */
+const SECRET_CLAUSE = new RegExp(`(${SECRET_KEY})((?:[^,;，。；！？!?\\n.]|\\.(?!\\s|$))*)`, "gi");
 const SECRET_PATTERNS: [RegExp, string][] = [
-  [/(密碼|口令|密鑰|金鑰|帳密|憑證|權杖|password|passwd|pwd|api[\s_-]?key|access[\s_-]?key|secret|token)(\s*(?:是|為|:|：|=)?\s*)[^\s，。、,;；」）)]+/gi, "$1$2［已遮蔽］"],
-  [/\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g, "［已遮蔽］"],
-  [/\b(?:sk|pk|rk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{8,}/g, "［已遮蔽］"],
-  [/\bAKIA[0-9A-Z]{16}\b/g, "［已遮蔽］"],
-  [/[A-Za-z0-9_\-+/=]{32,}/g, "［已遮蔽］"],
+  [/\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g, MASK],
+  [/\b(?:sk|pk|rk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{8,}/g, MASK],
+  [/\bAKIA[0-9A-Z]{16}\b/g, MASK],
+  [/[A-Za-z0-9_\-+/=]{32,}/g, MASK],
 ];
+
+/**
+ * 帳密、金鑰、憑證型式的字串：後端的 mask_pii 只遮電話、Email、身分證，存進瀏覽器前再遮一次（保守：寧可多遮）。
+ * 關鍵字在句尾（後面沒有內容）時不動；「忘記密碼怎麼辦」這類一般問句也會被遮成「忘記密碼［已遮蔽］」，只影響存檔文字。
+ */
 export function scrubSecrets(s: string) {
-  return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), s);
+  const quoted = s.replace(SECRET_QUOTED, (_m, key: string) => `${key}${MASK}`);
+  const clause = quoted.replace(SECRET_CLAUSE, (m, key: string, rest: string) => (rest.trim() && rest.trim() !== MASK ? `${key}${MASK}` : m));
+  return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), clause);
 }
 
 /** 被關卡拒絕的一輪：問句本身可能就是敏感內容（注入、套取帳密、看不到的文件），不存原文 */

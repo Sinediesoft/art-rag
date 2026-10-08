@@ -60,7 +60,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
     if (c.id === conv?.id) navigate("/");
   };
 
-  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus key={heroComposer ? "hero" : "dock"} />;
+  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={shell.switching ? "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）" : undefined} key={heroComposer ? "hero" : "dock"} />;
   const sidebar = (variant: "rail" | "drawer") => (
     <Sidebar
       convs={shell.convs}

@@ -104,6 +104,11 @@
   font-size: 12.5px;
   color: var(--danger);
 }
+.composer__lock {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--warn);
+}
 .composer__attach:disabled {
   opacity: 0.6;
 }

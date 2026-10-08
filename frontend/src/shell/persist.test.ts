@@ -137,7 +137,7 @@ describe("瀏覽器儲存：只存公開資料，不存憑證與內部資料", (
   });
 
   it("放行的問句與回答存檔前再遮一次帳密、金鑰、JWT 型式的字串（全部是合成值）", () => {
-    expect(scrubSecrets("我的密碼是 hunter2-SYNTH，api key: sk-SYNTHETIC0000KEY")).toBe("我的密碼是 ［已遮蔽］，api key: ［已遮蔽］");
+    expect(scrubSecrets("我的密碼是 hunter2-SYNTH，api key: sk-SYNTHETIC0000KEY")).toBe("我的密碼［已遮蔽］，api key［已遮蔽］");
     expect(scrubSecrets("token=abc.def.ghi 與 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig")).not.toMatch(/abc\.def|eyJ/);
     expect(scrubSecrets("AKIAABCDEFGHIJKLMNOP 跟 0123456789abcdef0123456789abcdef0123")).toBe("［已遮蔽］ 跟 ［已遮蔽］");
     expect(scrubSecrets("梵谷畫這幅畫的時候在哪裡？")).toBe("梵谷畫這幅畫的時候在哪裡？");
@@ -174,6 +174,50 @@ describe("瀏覽器儲存：只存公開資料，不存憑證與內部資料", (
     expect(fac.archived?.redacted).toBe(true);
     expect(redactForeign(artTurn(), "guest").part).not.toBeNull();
     expect(redactForeign(factoryTurn(), "planner").part).not.toBeNull();
+  });
+});
+
+describe("帳密遮蔽：審查報告的格式與其他常見寫法（全部是合成值）", () => {
+  const formats = [
+    "密碼是： SYNTH_PW_0001",
+    "password is SYNTH_PW_0002",
+    "API key is SYNTH_KEY_0003",
+    "密碼為「SYNTH PW 0004」",
+    'password: "SYNTH PW,0005"',
+    "My Password = SYNTH_PW_0006 please",
+    "token：SYNTH.TOKEN.0007",
+    "帳密 admin / SYNTH_PW_0008",
+    "the secret was SYNTH_PW_0009.",
+    "請用驗證碼 SYNTH0010 登入",
+  ];
+
+  it.each(formats)("「%s」的值不會留下", (s) => {
+    expect(scrubSecrets(s)).not.toMatch(/SYNTH/);
+  });
+
+  it("問句（含閒聊短路）與公開回答存檔、讀回後都沒有帳密", () => {
+    const turns = formats.map((f, i) =>
+      i % 2
+        ? base({ id: `q${i}`, route: route({ question: `${f}，梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } })
+        : base({
+            id: `a${i}`,
+            route: route({ question: "梵谷在哪裡畫的？" }),
+            part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `回答裡出現 ${f}。1889 年在聖雷米 [1]。`, done: done() as never, error: null },
+          }),
+    );
+    const s = serialize([conv(turns)], { collapsed: false, split: 50, theme: "dark" });
+    expect(JSON.stringify(s)).not.toMatch(/SYNTH/);
+    save(s);
+    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH/);
+    const back = load().convs[0].turns;
+    expect(JSON.stringify(back)).not.toMatch(/SYNTH/);
+    expect(back.find((t) => t.id === "a0")?.archived?.answer).toContain("1889 年在聖雷米");
+    expect(back.find((t) => t.id === "q1")?.text).toContain("梵谷在哪裡畫的");
+  });
+
+  it("一般文字不受影響；關鍵字在句尾不動", () => {
+    expect(scrubSecrets("梵谷畫這幅畫的時候在哪裡？")).toBe("梵谷畫這幅畫的時候在哪裡？");
+    expect(scrubSecrets("我忘記密碼。")).toBe("我忘記密碼。");
   });
 });
 

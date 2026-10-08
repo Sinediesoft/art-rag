@@ -15,12 +15,15 @@ export function Composer({
   onStop,
   copy,
   autoFocus,
+  locked,
 }: {
   busy: boolean;
   onSend: (text: string, imageId: string | null) => void;
   onStop: () => void;
   copy: Copy;
   autoFocus?: boolean;
+  /** 暫時不能送出的原因（例如切換身分中：這時候帶哪一張 JWT 不確定） */
+  locked?: string;
 }) {
   const [text, setText] = useState("");
   const [imageId, setImageId] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export function Composer({
     }
   };
 
-  const canSend = !busy && !uploading && (text.trim().length > 0 || !!imageId);
+  const canSend = !busy && !locked && !uploading && (text.trim().length > 0 || !!imageId);
   const send = () => {
     if (!canSend) return;
     onSend(text.trim(), imageId);
@@ -119,6 +122,11 @@ export function Composer({
           )}
         </div>
       </div>
+      {locked && (
+        <p className="composer__lock" role="status">
+          {locked}
+        </p>
+      )}
       {error && (
         <p className="composer__error" role="alert">
           {error}

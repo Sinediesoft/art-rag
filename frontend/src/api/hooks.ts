@@ -165,19 +165,39 @@ export const useAccounts = () =>
  * 圖紙的辨識結果會依資料範圍過濾（docs/adr/014），所以 search-any、search-drawing 要重抓 */
 const IDENTITY_FREE = new Set(["search-image", "photo-colors", "artwork-colors"]);
 
-/**
- * 最近一次開始切換身分的時間：對話裡在這之前送出、還在跑的請求用的是舊身分的 JWT，
- * 身分換掉時要中止並收起（frontend/src/shell/store.tsx 的 onAccountChanged）
- */
-export const accountSwitch = { startedAt: 0 };
+/** 和身分有關的查詢（圖紙、3D 工作、排程、庫存、核准…）：身分換掉時要清掉舊身分的資料 */
+export const identityBound = (q: { queryKey: readonly unknown[] }) => !IDENTITY_FREE.has(String(q.queryKey[0]));
 
-/** 切換展示身分，其他查詢（帳號、待核准、庫存、排程…）全部重抓 */
+/**
+ * 切換身分的過程（frontend/src/shell/store.tsx 接收）：
+ * switching＝開始切換（舊身分還在跑的請求一律中止、切換完成前不接受新提問）、
+ * switched＝後端已改發新身分的 JWT（detail 是新身分）、failed＝切換失敗（解除鎖定）
+ */
+export const ACCOUNT_EVENTS = {
+  switching: "artrag:account-switching",
+  switched: "artrag:account-switched",
+  failed: "artrag:account-switch-failed",
+} as const;
+
+/**
+ * 切換展示身分：舊身分快取的資料先清掉（resetQueries 會把 data 清空再重抓，看不到的就停在 403，
+ * 不會繼續顯示舊身分讀到的內容），其他查詢（帳號、待核准、庫存、排程…）全部重抓
+ */
 export function useSwitchAccount() {
   const qc = useQueryClient();
   return async (accountId: string) => {
-    accountSwitch.startedAt = Date.now();
-    await api.switchAccount(accountId);
-    await qc.invalidateQueries({ predicate: (q) => !IDENTITY_FREE.has(String(q.queryKey[0])) });
+    window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.switching));
+    // 切換前就在飛的身分查詢回來的是舊身分：不要讓它在切換後蓋掉新身分
+    await qc.cancelQueries({ queryKey: ["accounts"] });
+    let res;
+    try {
+      res = await api.switchAccount(accountId);
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.failed));
+      throw e;
+    }
+    window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.switched, { detail: { id: res.current.id, label: res.current.label } }));
+    await qc.resetQueries({ predicate: identityBound });
   };
 }
 
