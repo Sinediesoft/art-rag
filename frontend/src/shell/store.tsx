@@ -2,6 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RouteResponse } from "../api/client";
 import { ACCOUNT_EVENTS, identityBound } from "../api/hooks";
+
+/** client.ts 的 renewToken 重新取得憑證時發出 */
+const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
 import { canRerun, interruptForAccount, load, redactForeign, save, serialize } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
@@ -43,6 +46,8 @@ export interface Shell {
   notice: (convId: string, text: string) => void;
   /** 正在切換身分：切換完成前不接受新提問 */
   switching: boolean;
+  /** 身分確認了沒有（剛打開頁面、憑證更新後要等 /auth/accounts 回來）：確認前不接受提問與任務 */
+  identityReady: boolean;
   /**
    * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
    * 收起其他身分的非公開內容
@@ -97,6 +102,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const identity = useRef<{ accountId: string | null; label: string | null; epoch: number }>({ accountId: null, label: null, epoch: 0 });
   const [switching, setSwitching] = useState(false);
   const switchingRef = useRef(false);
+  /** 身分確認了沒有（剛打開頁面、憑證更新之後都要等 /auth/accounts 回來）：確認前不接受提問與任務 */
+  const [identityReady, setIdentityReady] = useState(false);
   /** 這次切換開始時中止了請求（提示裡要說） */
   const stoppedBySwitch = useRef(false);
   const currentConv = useRef<string | null>(null);
@@ -135,8 +142,10 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     [updateTurn],
   );
 
-  /** /agent/route 回來的帳號必須是目前的身分（還不知道目前身分時，例如剛打開頁面，不擋） */
-  const acceptAccount = (accountId: string) => !identity.current.accountId || identity.current.accountId === accountId;
+  /** /agent/route 回來的帳號必須是目前確認過的身分；身分還沒確認（剛打開頁面、憑證更新中）一律不採信 */
+  const acceptAccount = (accountId: string) => identity.current.accountId !== null && identity.current.accountId === accountId;
+  /** 現在能不能送出會用到 JWT 的提問與任務：身分確認了、也沒有在切換 */
+  const canSend = () => identity.current.accountId !== null && !switchingRef.current;
 
   /** 中止並讓這一輪（與它的任務）的 callback 失效 */
   const invalidate = (turnId: string) => {
@@ -175,7 +184,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const id = convId && convsRef.current.some((c) => c.id === convId) ? convId : uid();
       if (!text && !input.imageId) return id;
       // 切換身分途中不送：這時候帶的是哪一張 JWT 不確定
-      if (busyOf(id) || switchingRef.current) return id;
+      if (busyOf(id) || !canSend()) return id;
       const turn: Turn = {
         id: uid(),
         text,
@@ -214,7 +223,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const rerun = useCallback(
     (convId: string, turnId: string) => {
-      if (busyOf(convId) || switchingRef.current) return;
+      if (busyOf(convId) || !canSend()) return;
       const c = convsRef.current.find((x) => x.id === convId);
       const t = c?.turns.find((x) => x.id === turnId);
       if (!t || !canRerun(t)) return;
@@ -294,9 +303,9 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (prev === accountId) return;
       identity.current.accountId = accountId;
       identity.current.label = label;
-      if (prev === null) return; // 剛打開頁面，第一次知道身分
-      // 身分換了（主動切換，或憑證過期改發訪客）：舊身分還在跑的一律中止、舊身分快取的資料清掉（展示區重新讀取，
-      // 看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起
+      // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發訪客都一樣處理——
+      // 這之前就在跑的一律中止（世代加一，之後舊的 callback 都不寫回）、和身分有關的快取清掉重抓
+      // （看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起。不能假定確認前沒有任何請求
       identity.current.epoch++;
       const stopped = interruptAll() || stoppedBySwitch.current;
       stoppedBySwitch.current = false;
@@ -304,8 +313,9 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const currentConvId = currentConv.current;
       setConvs((cs) => {
         const next = cs.map((c) => {
-          // 提示只留在正在看的那一段
           const turns = c.turns.map((t) => redactForeign(t, accountId));
+          if (prev === null) return turns.some((t, i) => t !== c.turns[i]) ? { ...c, turns } : c;
+          // 換了身分才留提示，而且只留在正在看的那一段
           const changed = turns.some((t, i) => t !== c.turns[i]);
           const text = `已切換身分為〈${label}〉：之後每一句都改用這張 JWT 判斷權限${stopped ? "；進行中的請求已中止" : ""}${changed ? "；其他身分查到的內部資料已收起" : ""}`;
           const notices = c.id === currentConvId && c.turns.length ? [...c.notices, { id: uid(), ts: Date.now(), text }] : c.notices;
@@ -314,9 +324,23 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         convsRef.current = next;
         return next;
       });
+      setIdentityReady(true);
     },
     [qc],
   );
+
+  /**
+   * 憑證更新（client.ts 的 renewToken：沒有、過期、後端重啟）：這時候身分可能已經變了（例如過期改發訪客），
+   * 在 /auth/accounts 重新確認之前視為「身分未確認」：中止在飛的請求、清掉快取、鎖住提問；確認後由 setAccount 解鎖
+   */
+  const identityLost = useCallback(() => {
+    identity.current.accountId = null;
+    identity.current.label = null;
+    identity.current.epoch++;
+    interruptAll();
+    setIdentityReady(false);
+    void qc.resetQueries({ predicate: identityBound });
+  }, [qc]);
 
   // 切換身分的過程（api/hooks.ts 的 useSwitchAccount 發出）：切換回應一到就同步更新身分，
   // 「切換成〇〇再試一次」緊接著送出的提問才會用新身分、不被擋
@@ -330,18 +354,21 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       endSwitch();
     };
     const onFailed = () => endSwitch();
+    const onRenewed = () => identityLost();
     window.addEventListener(ACCOUNT_EVENTS.switching, onSwitching);
     window.addEventListener(ACCOUNT_EVENTS.switched, onSwitched);
     window.addEventListener(ACCOUNT_EVENTS.failed, onFailed);
+    window.addEventListener(TOKEN_RENEWED, onRenewed);
     return () => {
       window.removeEventListener(ACCOUNT_EVENTS.switching, onSwitching);
       window.removeEventListener(ACCOUNT_EVENTS.switched, onSwitched);
       window.removeEventListener(ACCOUNT_EVENTS.failed, onFailed);
+      window.removeEventListener(TOKEN_RENEWED, onRenewed);
     };
-  }, [beginSwitch, endSwitch, setAccount]);
+  }, [beginSwitch, endSwitch, identityLost, setAccount]);
 
-  /** 使用者按了才開始的任務：切換身分途中、或這一輪是另一個身分問的，都不執行 */
-  const mayAct = (t: Turn) => !switchingRef.current && !(t.account && identity.current.accountId && t.account.id !== identity.current.accountId);
+  /** 使用者按了才開始的任務：身分還沒確認、切換身分途中、或這一輪是另一個身分問的，都不執行 */
+  const mayAct = (t: Turn) => canSend() && (!t.account || t.account.id === identity.current.accountId);
 
   const task = (convId: string, turnId: string) => {
     const c = convsRef.current.find((x) => x.id === convId);
@@ -410,6 +437,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     enterModule,
     notice,
     switching,
+    identityReady,
     setAccount,
     setCurrentConv: (id) => void (currentConv.current = id),
     startReconstruct,

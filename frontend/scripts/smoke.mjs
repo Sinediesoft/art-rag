@@ -117,6 +117,8 @@ const lastAi = "[...document.querySelectorAll('.msg--ai')].at(-1)";
 const idle = `(() => { const m = ${lastAi}; return !!m && !['routing','running'].includes(m.dataset.phase); })()`;
 /** 在目前畫面的輸入框輸入並送出；送出後等這一輪結束，遇到「請你選」就點第一個符合的選項 */
 const ask = async (text, prefer = "") => {
+  // 和使用者一樣：身分確認、輸入框解鎖後才送
+  await waitFor("!document.querySelector('.composer__lock')", 15000);
   const before = await js("document.querySelectorAll('.msg--ai').length");
   await js(
     `(() => { const ta = [...document.querySelectorAll(".composer__input")].at(-1); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set; set.call(ta, ${JSON.stringify(text)}); ta.dispatchEvent(new Event("input", { bubbles: true })); return new Promise((ok) => setTimeout(() => { ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); ok(true); }, 80)); })()`,

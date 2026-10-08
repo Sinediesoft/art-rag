@@ -1,7 +1,7 @@
 import type { ThreadActions } from "../components/shell/Message";
 import type { Domain } from "../shell/design";
 import { deriveOutputs } from "../shell/outputs";
-import { useShell } from "../shell/store";
+import { useShell, type Shell } from "../shell/store";
 import type { Conv } from "../shell/types";
 
 /**
@@ -19,6 +19,13 @@ export function forgeToken(unsigned: string) {
       .replace(/=+$/, "");
   const claims = JSON.parse(fromB64(body));
   return `${head}.${toB64(JSON.stringify({ ...claims, roles: ["主管"], clearance: 2 }))}.forged-signature`;
+}
+
+/** 輸入框暫時不能送出的原因：身分還沒確認、或正在切換身分（這時候帶哪一張 JWT 不確定） */
+export function lockReason(shell: Pick<Shell, "identityReady" | "switching">) {
+  if (shell.switching) return "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）";
+  if (!shell.identityReady) return "正在確認身分，確認後才能送出";
+  return undefined;
 }
 
 /** 入口與模組共用的問答串動作 */

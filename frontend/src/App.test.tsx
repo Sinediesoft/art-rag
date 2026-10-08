@@ -81,7 +81,16 @@ function factoryBackend() {
   return t;
 }
 
+/** 和使用者一樣：等身分確認、輸入框解鎖再送出 */
+const ready = () => waitFor(() => expect(document.querySelector(".composer__lock")).toBeNull());
+
 const ask = async (text: string) => {
+  await ready();
+  await sendNow(text);
+};
+
+/** 不等解鎖直接按 Enter（測試「鎖住時送不出去」用） */
+const sendNow = async (text: string) => {
   const input = screen.getAllByLabelText("輸入問題").at(-1)!;
   fireEvent.change(input, { target: { value: text } });
   await act(async () => {
@@ -233,7 +242,7 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
     await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
     // 切換中：輸入框鎖住，送不出去
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("切換身分中"));
-    await ask("再問一句");
+    await sendNow("再問一句");
     expect(t.calls.filter((c) => c.path === "/agent/route")).toHaveLength(1);
     // 切換完成，接著舊身分的路由才回來
     await act(async () => {
@@ -270,6 +279,67 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
     await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
     expect(document.body.textContent).not.toContain("SYNTH_OTHER_IDENTITY");
     expect(document.querySelector(".taskcard")).toBeNull();
+  });
+});
+
+describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未成功 → 生管串流 → 首次 accounts 回訪客 → 舊事件晚到）", () => {
+  it("剛打開頁面、/auth/accounts 還沒回來：輸入框鎖住、送不出任何提問；確認後才解鎖", async () => {
+    const t = factoryBackend();
+    let releaseAccounts!: () => void;
+    t.on("GET", "/auth/accounts", () => new Promise<Response>((ok) => (releaseAccounts = () => ok(json(accounts("planner"))))));
+    renderApp();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("正在確認身分"));
+    await sendNow("法蘭還剩幾件可以出貨？");
+    expect(t.calls.some((c) => c.path === "/agent/route")).toBe(false);
+    await act(async () => {
+      releaseAccounts();
+    });
+    await ask("梵谷畫這幅畫的時候在哪裡？");
+    await idle();
+    expect(t.calls.filter((c) => c.path === "/agent/route")).toHaveLength(1);
+    expect(document.querySelector(".thread")?.textContent).toContain("1889 年在聖雷米");
+  });
+
+  it("串流中憑證更新、重新確認是訪客：舊身分的串流中止，晚到的事件不寫回畫面與存檔；確認前鎖住", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    let releaseAccounts: (() => void) | null = null;
+    t.on("GET", "/auth/accounts", () =>
+      releaseAccounts === null ? json(accounts(current)) : new Promise<Response>((ok) => (releaseAccounts = () => ok(json(accounts(current))))),
+    );
+    const live = liveSse();
+    t.on("POST", "/inventory/ask", ({ signal }) => live.respond(signal));
+    renderApp();
+    await ask("法蘭還剩幾件可以出貨？");
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
+    live.push("sql", { attempt: 1, sql: "SELECT 1", ok: true, error: null });
+    // 憑證過期：client.ts 重新取得憑證（後端改發訪客），重新確認身分的請求先扣住
+    current = "guest";
+    releaseAccounts = () => undefined;
+    act(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
+    });
+    await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
+    await waitFor(() => expect(document.querySelector(".composer__lock")?.textContent).toContain("正在確認身分"));
+    // 舊身分串流晚到的事件（合成值）
+    act(() => {
+      live.push("result", { columns: ["倉庫", "可用"], rows: [["SYNTH_PRIVATE_INVENTORY_ROWS", 77777]], row_count: 1, truncated: false, exec_ms: 2 });
+      live.push("token", { text: "SYNTH_PRIVATE_ANSWER" });
+      live.push("done", { request_id: "r" });
+      live.close();
+    });
+    await act(async () => {
+      releaseAccounts!();
+    });
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("訪客"));
+    await ready();
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("SYNTH_PRIVATE_INVENTORY_ROWS");
+    expect(text).not.toContain("SYNTH_PRIVATE_ANSWER");
+    expect(text).not.toContain("77777");
+    expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped");
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("切換身分，已中止這一輪"));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH_PRIVATE|77777/);
   });
 });
 

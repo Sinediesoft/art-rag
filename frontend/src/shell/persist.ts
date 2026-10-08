@@ -134,16 +134,24 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
  * 「密碼是 xxx」「api key: xxx」的值、JWT、常見金鑰前綴、32 字以上的不透明字串都換成［已遮蔽］。
  */
 const MASK = "［已遮蔽］";
-/** 帳密類關鍵字：中文直接比對，英文要整個字（tokens、passwords 這類複數也算） */
-const SECRET_KEY =
-  "(?:密碼|口令|密鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|\\b(?:password|passwd|passcode|pwd|api[\\s_-]?key|access[\\s_-]?key|secret[\\s_-]?key|client[\\s_-]?secret|private[\\s_-]?key|secret|token|credentials?)s?\\b)";
-/** 關鍵字後面接引號：引號裡的整串（可以有空白、逗號）都遮掉 */
-const SECRET_QUOTED = new RegExp(`(${SECRET_KEY})[^"'「『“\\n]{0,24}?["'「『“][^"'」』”\\n]*["'」』”]?`, "gi");
+/**
+ * 帳密類關鍵字：中文直接比對；英文要整個字，前面可以有前綴（db_password、access_token、client_secret），
+ * 後面可以是複數（tokens、passwords）
+ */
+const SECRET_KEY = String.raw`(?:密碼|口令|密鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|\b[\w-]*?(?:password|passwd|passcode|pwd|api[\s_-]?key|access[\s_-]?key|secret|token|credential|private[\s_-]?key)s?\b)`;
+/** 引號裡的值：可以有跳脫的引號（\"）、逗號、空白；少了結尾引號就一路到行尾 */
+const QUOTED_VALUE = String.raw`(?:"(?:\\.|[^"\\\n])*"?|'(?:\\.|[^'\\\n])*'?|「[^」\n]*」?|『[^』\n]*』?|“[^”\n]*”?)`;
+/** 鍵值對（JSON、設定檔、口語）：鍵名可以帶引號，值是引號字串時整串遮掉，例如 {"password":"a,b"}、password: 'x' */
+const SECRET_PAIR = new RegExp(String.raw`(["'“「『]?)(${SECRET_KEY})(["'”」』]?)(\s*(?:[:：=]|是|為|is|are)\s*)${QUOTED_VALUE}`, "gi");
+/** 關鍵字後面不遠處接引號：引號裡的整串都遮掉（例如「密碼改成『a b c』」） */
+const SECRET_QUOTED = new RegExp(String.raw`(${SECRET_KEY})[^"'「『“\n]{0,24}?${QUOTED_VALUE}`, "gi");
 /**
  * 關鍵字後面到這一句結束（，。；！？換行，或後面接空白／結尾的句點）全部遮掉：
  * 「密碼是： xxx」「password is xxx」「API key = xxx」不用猜哪一段才是值，寧可多遮
  */
-const SECRET_CLAUSE = new RegExp(`(${SECRET_KEY})((?:[^,;，。；！？!?\\n.]|\\.(?!\\s|$))*)`, "gi");
+const SECRET_CLAUSE = new RegExp(String.raw`(${SECRET_KEY})((?:[^,;，。；！？!?\n.]|\.(?!\s|$))*)`, "gi");
+/** 已經遮好的片段（只剩引號、冒號、括號與［已遮蔽］）：句子那一關不用再遮一次 */
+const ALREADY_MASKED = new RegExp(String.raw`^[\s"'“”「」『』:：=,{}\[\]]*${MASK}[\s"'“”「」『』:：=,{}\[\]]*$`);
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/\beyJ[\w-]+\.[\w-]+(?:\.[\w-]+)?/g, MASK],
   [/\b(?:sk|pk|rk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{8,}/g, MASK],
@@ -156,8 +164,9 @@ const SECRET_PATTERNS: [RegExp, string][] = [
  * 關鍵字在句尾（後面沒有內容）時不動；「忘記密碼怎麼辦」這類一般問句也會被遮成「忘記密碼［已遮蔽］」，只影響存檔文字。
  */
 export function scrubSecrets(s: string) {
-  const quoted = s.replace(SECRET_QUOTED, (_m, key: string) => `${key}${MASK}`);
-  const clause = quoted.replace(SECRET_CLAUSE, (m, key: string, rest: string) => (rest.trim() && rest.trim() !== MASK ? `${key}${MASK}` : m));
+  const pairs = s.replace(SECRET_PAIR, (_m, q1: string, key: string, q2: string, sep: string) => `${q1}${key}${q2}${sep}${MASK}`);
+  const quoted = pairs.replace(SECRET_QUOTED, (m, key: string) => (ALREADY_MASKED.test(m.slice(key.length)) ? m : `${key}${MASK}`));
+  const clause = quoted.replace(SECRET_CLAUSE, (m, key: string, rest: string) => (rest.trim() && !ALREADY_MASKED.test(rest) ? `${key}${MASK}` : m));
   return SECRET_PATTERNS.reduce((x, [re, to]) => x.replace(re, to), clause);
 }
 

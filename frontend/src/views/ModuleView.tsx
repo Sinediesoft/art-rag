@@ -15,7 +15,7 @@ import { titleOf } from "../shell/persist";
 import { egressOf, progressOf } from "../shell/stages";
 import { useShell } from "../shell/store";
 import type { Conv } from "../shell/types";
-import { useThreadActions } from "./shared";
+import { lockReason, useThreadActions } from "./shared";
 
 /** 模組裡的功能頁捷徑：不是功能選單，是原本「深入」能到的完整頁面（照片建檔、批次辨識、核准…都還在） */
 const TOOLS: Record<Domain, { label: string; to: string }[]> = {
@@ -223,7 +223,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
                   <Icon name="arrowDown" strokeWidth={2} />
                 </button>
               )}
-              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus locked={shell.switching ? "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）" : undefined} />
+              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus locked={lockReason(shell)} />
               <p className="dock__status">LOCAL INFERENCE · EGRESS {egress ? `${(egress / 1024).toFixed(1)} KB → JEV` : "0 B"}</p>
             </div>
           </div>

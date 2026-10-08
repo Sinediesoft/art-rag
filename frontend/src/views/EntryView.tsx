@@ -14,7 +14,7 @@ import { ctaOf, deriveOutputs } from "../shell/outputs";
 import { titleOf } from "../shell/persist";
 import { useShell } from "../shell/store";
 import type { Conv } from "../shell/types";
-import { forgeToken, useThreadActions } from "./shared";
+import { forgeToken, lockReason, useThreadActions } from "./shared";
 
 /**
  * 來源：ArtRAG-前端demo/source/src/views/EntryView.tsx。
@@ -60,7 +60,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
     if (c.id === conv?.id) navigate("/");
   };
 
-  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={shell.switching ? "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）" : undefined} key={heroComposer ? "hero" : "dock"} />;
+  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} key={heroComposer ? "hero" : "dock"} />;
   const sidebar = (variant: "rail" | "drawer") => (
     <Sidebar
       convs={shell.convs}

@@ -215,6 +215,40 @@ describe("帳密遮蔽：審查報告的格式與其他常見寫法（全部是�
     expect(back.find((t) => t.id === "q1")?.text).toContain("梵谷在哪裡畫的");
   });
 
+  const jsonFormats = [
+    '{"password":"SYNTH_ALPHA,SYNTH_BETA"}',
+    '{"api_key":"SYNTH_KEY_ALPHA,SYNTH_KEY_BETA"}',
+    "{'token': 'SYNTH_T1, SYNTH_T2'}",
+    '{"password":"SYNTH_ESC\\"APED,SYNTH_TAIL"}',
+    '{"password":"SYNTH_UNCLOSED,SYNTH_REST',
+    '{"db_password": "SYNTH_DB,SYNTH_DB2", "user": "bob"}',
+    '{"access_token":"SYNTH_AT,SYNTH_AT2","refresh_token":"SYNTH_RT,SYNTH_RT2"}',
+    'config = {"client_secret": "SYNTH CS, SYNTH CS2"}; 其他說明',
+    "password='SYNTH_SQ,SYNTH_SQ2'",
+    "密碼：「SYNTH 全形, SYNTH 全形2」",
+  ];
+
+  it.each(jsonFormats)("JSON／引號鍵名「%s」整串值都不留下", (s) => {
+    const out = scrubSecrets(s);
+    expect(out).not.toMatch(/SYNTH/);
+  });
+
+  it("JSON 帳密放在問句與公開回答：serialize → save → load 後沒有任何片段", () => {
+    const turns = jsonFormats.flatMap((f, i) => [
+      base({ id: `jq${i}`, route: route({ question: `幫我看這段設定 ${f} 梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } }),
+      base({
+        id: `ja${i}`,
+        route: route({ question: "梵谷在哪裡畫的？" }),
+        part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `範例：${f}\n\n1889 年在聖雷米 [1]。`, done: done() as never, error: null },
+      }),
+    ]);
+    save(serialize([conv(turns)], { collapsed: false, split: 50, theme: "dark" }));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH/);
+    const back = load().convs[0].turns;
+    expect(JSON.stringify(back)).not.toMatch(/SYNTH/);
+    expect(back.find((t) => t.id === "ja0")?.archived?.answer).toContain("1889 年在聖雷米");
+  });
+
   it("一般文字不受影響；關鍵字在句尾不動", () => {
     expect(scrubSecrets("梵谷畫這幅畫的時候在哪裡？")).toBe("梵谷畫這幅畫的時候在哪裡？");
     expect(scrubSecrets("我忘記密碼。")).toBe("我忘記密碼。");
