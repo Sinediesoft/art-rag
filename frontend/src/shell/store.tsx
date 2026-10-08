@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RouteResponse } from "../api/client";
 import { ACCOUNT_EVENTS, identityBound } from "../api/hooks";
+import { orphanWrites } from "../api/writes";
 
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
@@ -40,7 +41,8 @@ export interface Shell {
   regenerate: (convId: string) => void;
   /** 從紀錄還原、內容沒有保存的一輪：以目前身分重新查詢 */
   rerun: (convId: string, turnId: string) => void;
-  remove: (convId: string) => void;
+  /** 刪除對話；有寫入送出中（還沒收到結果）時不刪，回傳 false */
+  remove: (convId: string) => boolean;
   setActive: (convId: string, domain: Domain, key: string) => void;
   enterModule: (convId: string, domain: Domain, key?: string) => void;
   notice: (convId: string, text: string) => void;
@@ -48,6 +50,11 @@ export interface Shell {
   switching: boolean;
   /** 身分確認了沒有（剛打開頁面、憑證更新後要等 /auth/accounts 回來）：確認前不接受提問與任務 */
   identityReady: boolean;
+  /**
+   * 身分世代（開始切換、身分改變、憑證更新時加一）：功能頁外框以它當 key，世代一變整個功能頁卸載重建，
+   * 各頁自己的 state（SQL 結果、串流、表單）不會留到下一個身分
+   */
+  identityEpoch: number;
   /**
    * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
    * 收起其他身分的非公開內容
@@ -108,6 +115,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const switchingRef = useRef(false);
   /** 身分確認了沒有（剛打開頁面、憑證更新之後都要等 /auth/accounts 回來）：確認前不接受提問與任務 */
   const [identityReady, setIdentityReady] = useState(false);
+  const [identityEpoch, setIdentityEpoch] = useState(0);
+  /** 身分世代加一：舊的 callback 失效、功能頁重建、還沒收到結果的寫入改成「身分改變時送出中」 */
+  const bumpEpoch = () => {
+    identity.current.epoch++;
+    setIdentityEpoch(identity.current.epoch);
+    orphanWrites();
+  };
   /** 這次切換開始時中止了請求（提示裡要說） */
   const stoppedBySwitch = useRef(false);
   const currentConv = useRef<string | null>(null);
@@ -250,8 +264,11 @@ export function ShellProvider({ children }: { children: ReactNode }) {
 
   const remove = useCallback((convId: string) => {
     const c = convsRef.current.find((x) => x.id === convId);
+    // 寫入送出後還沒收到結果：刪掉對話就看不到結果了，等結果回來再刪
+    if (c?.turns.some((t) => t.part?.kind === "change" && t.part.status === "committing")) return false;
     for (const t of c?.turns ?? []) invalidate(t.id);
     setConvs((cs) => cs.filter((x) => x.id !== convId));
+    return true;
   }, []);
 
   const setActive = useCallback((convId: string, domain: Domain, key: string) => updateConv(convId, (c) => (c.active[domain] === key ? c : { ...c, active: { ...c.active, [domain]: key } })), [updateConv]);
@@ -289,7 +306,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
    * 身分世代加一（之後舊的 callback 都不會寫回），切換完成前不接受新提問。
    */
   const beginSwitch = useCallback(() => {
-    identity.current.epoch++;
+    bumpEpoch();
     switchingRef.current = true;
     setSwitching(true);
     if (interruptAll()) stoppedBySwitch.current = true;
@@ -312,7 +329,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發訪客都一樣處理——
       // 這之前就在跑的一律中止（世代加一，之後舊的 callback 都不寫回）、和身分有關的快取清掉重抓
       // （看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起。不能假定確認前沒有任何請求
-      identity.current.epoch++;
+      bumpEpoch();
       const stopped = interruptAll() || stoppedBySwitch.current;
       stoppedBySwitch.current = false;
       void qc.resetQueries({ predicate: (q) => identityBound(q) && q.queryKey[0] !== "accounts" });
@@ -343,7 +360,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     identity.current.stale = qc.getQueryData(["accounts"]);
     identity.current.accountId = null;
     identity.current.label = null;
-    identity.current.epoch++;
+    bumpEpoch();
     interruptAll();
     // 已經完成（或停止、出錯）的非公開成果也立刻收起：不等 /auth/accounts 重新確認（它可能一直失敗）
     setConvs((cs) => {
@@ -454,6 +471,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     notice,
     switching,
     identityReady,
+    identityEpoch,
     setAccount,
     setCurrentConv: (id) => void (currentConv.current = id),
     startReconstruct,

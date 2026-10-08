@@ -575,3 +575,266 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     expect(document.body.textContent).not.toContain("±0.02");
   });
 });
+
+/** 功能頁頁首、模組頁首的身分按鈕（顯示目前身分名稱的那一顆） */
+const accountButton = (label: string) => [...document.querySelectorAll<HTMLElement>(".mtop__btn")].find((b) => b.textContent?.includes(label))!;
+
+const sqlDone = {
+  request_id: "r",
+  strategy_requested: "hybrid",
+  strategy_used: "hybrid",
+  model: "mock",
+  fallback: false,
+  fallback_reason: null,
+  prompt_version: "v",
+  answer_prompt_version: "v",
+  attempts: 1,
+  latency_ms: { first_token: 1, sql: 1, exec: 1, answer: 1, total: 4 },
+  tokens: { input: 1, output: 1 },
+  egress: { images: 0, chunks: 0, bytes: 0 },
+};
+
+/** 合成的庫存結果（SYNTH 開頭，任何時候都不該留在畫面上） */
+const synthSql = (live: ReturnType<typeof liveSse>) => {
+  live.push("sql", { attempt: 1, sql: "SELECT SYNTH_SQL", ok: true, error: null });
+  live.push("result", { columns: ["倉庫", "可用"], rows: [["SYNTH_WAREHOUSE", 99999]], row_count: 1, truncated: false, exec_ms: 2 });
+};
+
+describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 不在 React Query 快取裡）", () => {
+  const inventoryAsk = async (q: string) => {
+    const input = await screen.findByPlaceholderText(/連接法蘭還有幾件可以出貨/);
+    fireEvent.change(input, { target: { value: q } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+    });
+  };
+
+  it("/inventory 已完成的 SQL：開始切成訪客的當下就撤下，切換完成後也不會回來", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    let releaseSwitch!: () => void;
+    t.on("POST", "/auth/switch", ({ body }) =>
+      new Promise<Response>((ok) => {
+        releaseSwitch = () => {
+          current = (body as { account_id: string }).account_id;
+          ok(json(accounts(current)));
+        };
+      }),
+    );
+    const live = liveSse();
+    t.on("POST", "/inventory/ask", ({ signal }) => live.respond(signal));
+    renderApp("/inventory");
+    await waitFor(() => expect(accountButton("生管")).toBeTruthy());
+    await inventoryAsk("法蘭還剩幾件可以出貨？");
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
+    synthSql(live);
+    act(() => {
+      live.push("token", { text: "SYNTH_ANSWER 還有 99999 件。" });
+      live.push("done", sqlDone);
+      live.close();
+    });
+    await waitFor(() => expect(document.body.textContent).toContain("SYNTH_ANSWER"));
+    expect(document.body.textContent).toContain("SYNTH_WAREHOUSE");
+    // 切成訪客：切換回應還沒回來
+    fireEvent.click(accountButton("生管"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+    });
+    await waitFor(() => expect(screen.getByText(/切換身分中/)).toBeTruthy());
+    for (const s of ["SYNTH_ANSWER", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
+    await act(async () => releaseSwitch());
+    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    // 功能頁以新身分重建：輸入框回來了，舊結果沒有
+    await screen.findByPlaceholderText(/連接法蘭還有幾件可以出貨/);
+    for (const s of ["SYNTH_ANSWER", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
+  });
+
+  it("/inventory 串流中憑證更新：當下撤下、請求中止；傳輸層不理會中止、舊事件晚到也不能讓內容回來", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    const live = liveSse();
+    let signal: AbortSignal | null | undefined;
+    // 不把 signal 交給串流：模擬「中止了，但資料還是送到了」
+    t.on("POST", "/inventory/ask", (req) => {
+      signal = req.signal;
+      return live.respond(null);
+    });
+    renderApp("/inventory");
+    await waitFor(() => expect(accountButton("生管")).toBeTruthy());
+    await inventoryAsk("法蘭還剩幾件可以出貨？");
+    await waitFor(() => expect(signal).toBeTruthy());
+    synthSql(live);
+    await waitFor(() => expect(document.body.textContent).toContain("SYNTH_WAREHOUSE"));
+    // 憑證過期：client.ts 改拿訪客憑證
+    current = "guest";
+    act(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
+    });
+    await waitFor(() => expect(document.body.textContent).not.toContain("SYNTH_WAREHOUSE"));
+    expect(signal!.aborted).toBe(true);
+    act(() => {
+      live.push("token", { text: "SYNTH_LATE 還有 99999 件。" });
+      live.push("done", { request_id: "r" });
+      live.close();
+    });
+    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await screen.findByPlaceholderText(/連接法蘭還有幾件可以出貨/);
+    await new Promise((r) => setTimeout(r, 50));
+    for (const s of ["SYNTH_LATE", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
+  });
+
+  it("其他功能頁一樣：圖紙問答串流中切換身分，串流中止、回答撤下", async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    t.on("POST", "/auth/switch", ({ body }) => {
+      current = (body as { account_id: string }).account_id;
+      return json(accounts(current));
+    });
+    const live = liveSse();
+    let signal: AbortSignal | null | undefined;
+    t.on("POST", "/chat", (req) => {
+      signal = req.signal;
+      return live.respond(null);
+    });
+    renderApp("/drawings/mfg-002/chat");
+    const input = await screen.findByPlaceholderText(/問這張圖紙的製程/);
+    fireEvent.change(input, { target: { value: "外徑公差多少？" } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+    });
+    await waitFor(() => expect(signal).toBeTruthy());
+    act(() => {
+      live.push("sources", sources("機密"));
+      live.push("token", { text: "SYNTH_TOLERANCE ±0.02 mm" });
+    });
+    await waitFor(() => expect(document.body.textContent).toContain("SYNTH_TOLERANCE"));
+    fireEvent.click(accountButton("生管"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+    });
+    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    expect(signal!.aborted).toBe(true);
+    act(() => {
+      live.push("token", { text: "SYNTH_LATE" });
+      live.close();
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(document.body.textContent).not.toContain("SYNTH_TOLERANCE");
+    expect(document.body.textContent).not.toContain("SYNTH_LATE");
+  });
+});
+
+describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交易）", () => {
+  const preview = {
+    request_id: "r",
+    op: "adjust_stock",
+    op_label: "庫存增減",
+    account: account(),
+    params: {},
+    param_labels: { 數量: 5 },
+    sources: {},
+    notes: [],
+    llm: {},
+    missing: [],
+    checks: [],
+    diff: [{ label: "連接法蘭", field: "可用", before: 10, after: 15 }],
+    reasons: [],
+    pending_id: "pend-1",
+    summary: "",
+    next: "confirm",
+    message: "檢查都通過",
+    latency_ms: 1,
+  };
+
+  /** 進工廠模組、試算一筆修改，停在「確認寫入」 */
+  const changeReady = async () => {
+    const t = factoryBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    t.on("POST", "/auth/switch", ({ body }) => {
+      current = (body as { account_id: string }).account_id;
+      return json(accounts(current));
+    });
+    t.on("POST", "/agent/route", ({ body }) => {
+      const q = (body as { question: string }).question;
+      if (q.includes("加 5"))
+        return json(factoryRoute({ question: q, intent: "modify", intent_label: "修改資料", gate: "modify", dispatch: { op: "adjust_stock", part_id: "mfg-002", part_label: "連接法蘭", artwork_id: null, question: q } }));
+      return json(factoryRoute({ question: q }));
+    });
+    t.on("POST", "/changes/preview", () => json(preview));
+    renderApp();
+    await ask("連接法蘭有哪些公差要求？");
+    await idle();
+    fireEvent.click(document.querySelector(".jump--factory")!);
+    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await ask("連接法蘭庫存加 5");
+    await idle();
+    await screen.findByRole("button", { name: "確認寫入" });
+    return { t, setCurrent: (id: string) => (current = id) };
+  };
+  const committed = { change_no: "CH-1", text: "SYNTH_COMMITTED", rows: [], moves: 1, op: "adjust_stock", summary: "", account: account() };
+  const commits = (t: ReturnType<typeof mockTransport>) => t.calls.filter((c) => c.path === "/changes/pend-1/commit").length;
+
+  it("送出中不能切換身分、不能刪對話；憑證更新 → 標成「結果未確認」不是「已中止」，回覆到了只說完成、不顯示內容，不自動重送", async () => {
+    const { t, setCurrent } = await changeReady();
+    let release!: () => void;
+    t.on("POST", "/changes/pend-1/commit", () => new Promise<Response>((ok) => (release = () => ok(json(committed)))));
+    fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
+    await screen.findByRole("button", { name: "寫入中…" });
+    // 身分選單：切換被擋下
+    fireEvent.click(accountButton("生管"));
+    expect(screen.getByText("有寫入還沒收到結果，等結果回來再切換身分")).toBeTruthy();
+    expect((screen.getByRole("menuitemradio", { name: /訪客/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(t.calls.some((c) => c.path === "/auth/switch")).toBe(false);
+    // 刪掉這段對話：不刪
+    fireEvent.click(screen.getByLabelText("對話紀錄"));
+    fireEvent.click(screen.getAllByLabelText(/^刪除「/)[0]);
+    expect(window.alert).toHaveBeenCalledWith("有寫入還沒收到結果，等結果回來再刪除這段對話。");
+    expect(where).toMatch(/^\/factory\//);
+    fireEvent.keyDown(document, { key: "Escape" });
+    // 憑證過期、重新確認是訪客：擋不住的身分改變
+    setCurrent("guest");
+    act(() => {
+      window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
+    });
+    await waitFor(() => expect(document.querySelector(".thread")?.textContent).toContain("確認寫入已經送出、沒有收到結果"));
+    expect(document.querySelector(".thread")?.textContent).not.toContain("切換身分，已中止這一輪");
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toContain("〈確認寫入〉還在等伺服器回覆"));
+    // 伺服器回覆了：提示只說完成，不把內容接回畫面
+    await act(async () => release());
+    await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toContain("〈確認寫入〉伺服器回覆已完成"));
+    expect(document.body.textContent).not.toContain("SYNTH_COMMITTED");
+    expect(commits(t)).toBe(1);
+    // 不能拿這一輪重新查詢（重新試算再按一次就是第二筆）
+    const last = [...document.querySelectorAll(".msg--ai")].at(-1) as HTMLElement;
+    expect(within(last).queryByText("以目前身分重新查詢")).toBeNull();
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("確認寫入已經送出、沒有收到結果"));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toContain("SYNTH_COMMITTED");
+    fireEvent.click(within(document.querySelector(".banner[role=alert]") as HTMLElement).getByText("知道了"));
+    expect(document.querySelector(".banner[role=alert]")).toBeNull();
+  });
+
+  it("連線中斷（沒有收到伺服器回覆）：標成結果未確認，不再給「確認寫入」，重新整理後也不能重跑", async () => {
+    const { t } = await changeReady();
+    t.on("POST", "/changes/pend-1/commit", () => Promise.reject(new TypeError("network down")));
+    fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
+    await waitFor(() => expect(document.body.textContent).toContain("結果未確認"));
+    expect(screen.queryByRole("button", { name: "確認寫入" })).toBeNull();
+    expect(commits(t)).toBe(1);
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("確認寫入已經送出、沒有收到結果"));
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!).convs[0].turns.at(-1);
+    expect(saved.archived.outcome).toBe("unconfirmed");
+  });
+
+  it("伺服器明確回覆失敗（4xx）：照常顯示錯誤，可以再按一次", async () => {
+    const { t } = await changeReady();
+    t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "PENDING_EXPIRED", message: "試算已過期", request_id: "r" } }, 409));
+    fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
+    await waitFor(() => expect(document.body.textContent).toContain("試算已過期（PENDING_EXPIRED）"));
+    expect(document.body.textContent).not.toContain("結果未確認");
+    expect(screen.getByRole("button", { name: "確認寫入" })).toBeTruthy();
+  });
+});

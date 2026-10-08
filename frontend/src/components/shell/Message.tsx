@@ -5,7 +5,7 @@ import { useStatus, useSwitchAccount } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
-import { canRerun, REJECTED } from "../../shell/persist";
+import { canRerun, REJECTED, writeUnconfirmed } from "../../shell/persist";
 import { ctaOf, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
 import { dispatchOf } from "../../shell/runner";
 import { buildStages, egressOf, gatewayStages, progressOf, summaryOf } from "../../shell/stages";
@@ -278,6 +278,7 @@ function Blocked({ turn }: { turn: Turn }) {
   const th = useThread();
   const switchAccount = useSwitchAccount();
   const [busy, setBusy] = useState(false);
+  const [switchErr, setSwitchErr] = useState<string | null>(null);
   const r = turn.route!;
   const b = r.blocked!;
   if (b.degraded)
@@ -319,6 +320,7 @@ function Blocked({ turn }: { turn: Turn }) {
       <div className="panel-card__foot">
         <span className="panel-card__meta">
           紀錄 <span className="mono">{b.log_no}</span>・判斷：{b.judge}
+          {switchErr && <span className="is-error">・{switchErr}</span>}
         </span>
         {retry && (
           <button
@@ -327,9 +329,13 @@ function Blocked({ turn }: { turn: Turn }) {
             disabled={busy}
             onClick={async () => {
               setBusy(true);
+              setSwitchErr(null);
               try {
                 await switchAccount(retry.account_id);
                 th.ask(r.question, turn.forced, turn.imageId);
+              } catch (e) {
+                // 有寫入還沒收到結果時不能切換（見 api/writes.ts）
+                setSwitchErr((e as Error).message);
               } finally {
                 setBusy(false);
               }
@@ -354,7 +360,12 @@ function Archived({ turn }: { turn: Turn }) {
       {a.answer && <RichText text={a.answer} activeRef={cite} onCite={setCite} />}
       {a.sources && a.sources.length > 0 && <Sources sources={a.sources} active={cite} onActive={setCite} />}
       {a.artResults && th.mode === "brief" && <Works items={a.artResults.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
-      {a.outcome && REJECTED[a.outcome] ? (
+      {a.outcome === "unconfirmed" ? (
+        <p className="hint">
+          <Icon name="info" />
+          {a.summary}（<Link to="/approvals">核准紀錄</Link>）
+        </p>
+      ) : a.outcome && REJECTED[a.outcome] ? (
         <p className="hint">
           <Icon name="lock" />
           {a.summary}・被關卡拒絕的提問不保存內容
@@ -369,7 +380,7 @@ function Archived({ turn }: { turn: Turn }) {
           </button>
         </div>
       )}
-      {!(a.outcome && REJECTED[a.outcome]) && (!a.redacted || !canRerun(turn)) && !a.answer && !a.artResults && a.outcome !== "pass" && <p className="hint">{a.summary}</p>}
+      {a.outcome !== "unconfirmed" && !(a.outcome && REJECTED[a.outcome]) && (!a.redacted || !canRerun(turn)) && !a.answer && !a.artResults && a.outcome !== "pass" && <p className="hint">{a.summary}</p>}
     </div>
   );
 }
@@ -831,7 +842,8 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
         />
       </div>
     );
-  const finished = p.committed || p.approval;
+  // 結果未確認的寫入也不再給按鈕：伺服器可能已經完成，再按一次可能變成第二筆
+  const finished = p.committed || p.approval || p.status === "unconfirmed";
   return (
     <div className="panel-card changecard">
       <div className="panel-card__head">
@@ -923,7 +935,13 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
             已建立待核准單 <span className="mono">{p.approval.ap_no}</span>，等主管核准。切換成「主管」到 <Link to="/approvals">待核准清單</Link> 處理；核准時會重新試算。
           </p>
         )}
-        {p.error && <p className="outcome is-block">{p.error}</p>}
+        {p.status === "unconfirmed" ? (
+          <p className="outcome is-warn">
+            <b>結果未確認</b>：{p.error}。{writeUnconfirmed(p.action)}（<Link to="/approvals">核准紀錄</Link>、<Link to="/inventory">庫存・工單</Link>）。
+          </p>
+        ) : (
+          p.error && <p className="outcome is-block">{p.error}</p>
+        )}
       </div>
     </div>
   );

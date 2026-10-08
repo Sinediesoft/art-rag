@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type DrawingSearchResponse, type ImageSearchResponse } from "./client";
+import { api, ApiError, type DrawingSearchResponse, type ImageSearchResponse } from "./client";
+import { writesInFlight } from "./writes";
 
 export const useArtworks = () => useQuery({ queryKey: ["artworks"], queryFn: api.listArtworks });
 
@@ -186,6 +187,8 @@ export const ACCOUNT_EVENTS = {
 export function useSwitchAccount() {
   const qc = useQueryClient();
   return async (accountId: string) => {
+    // 寫入送出後還沒收到結果：伺服器可能已經寫好了，這時候換身分會讓結果接不回原畫面——等結果回來再切換
+    if (writesInFlight()) throw new ApiError("WRITE_IN_FLIGHT", "有寫入還沒收到結果，等結果回來再切換身分", "", 0);
     window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.switching));
     // 切換前就在飛的身分查詢回來的是舊身分：不要讓它在切換後蓋掉新身分
     await qc.cancelQueries({ queryKey: ["accounts"] });

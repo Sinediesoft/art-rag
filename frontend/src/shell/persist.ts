@@ -86,9 +86,12 @@ export function archive(t: Turn): ArchivedTurn {
   }
   const mod = progressOf(t.part, t.phase);
   const p0 = t.part;
+  // 寫入已經送出、沒有收到結果（送出中重新整理、連線中斷、身分改變）：伺服器可能已經寫好，記成「結果未確認」、不能重送
+  const unconfirmed = r.outcome === "pass" && p0?.kind === "change" && (p0.status === "committing" || p0.status === "unconfirmed");
   // 第 6 段生成閘門降級、試算被拒絕：/agent/route 放行了，但這一輪一樣是「被關卡拒絕」
-  const outcome =
-    r.outcome === "pass" && p0?.kind === "chat" && (p0.done?.degraded || p0.sources?.post_filter?.gate?.passed === false)
+  const outcome = unconfirmed
+    ? "unconfirmed"
+    : r.outcome === "pass" && p0?.kind === "chat" && (p0.done?.degraded || p0.sources?.post_filter?.gate?.passed === false)
       ? "degraded"
       : r.outcome === "pass" && p0?.kind === "change" && p0.preview?.next === "rejected"
         ? "rejected"
@@ -98,7 +101,7 @@ export function archive(t: Turn): ArchivedTurn {
     domain: domainOf(t),
     outcome,
     stages: buildStages(r, mod).map(({ key, short, state }) => ({ key, short, state })),
-    summary: summaryOf(r, mod),
+    summary: unconfirmed ? writeUnconfirmed(p0?.kind === "change" ? p0.action : undefined) : summaryOf(r, mod),
     redacted: false,
   };
   if (outcome !== "pass") return { ...base, redacted: outcome !== "short_circuit" };
@@ -114,6 +117,9 @@ export function archive(t: Turn): ArchivedTurn {
   if (p?.kind === "artSearch" && p.status === "done") base.artResults = p.items.slice(0, 12);
   return base;
 }
+
+export const writeUnconfirmed = (action?: "commit" | "approval") =>
+  `${action === "approval" ? "送主管核准" : "確認寫入"}已經送出、沒有收到結果：伺服器可能已經完成，請以目前身分到核准紀錄或庫存核對，不要直接重送`;
 
 /** 工廠成果只留編號：圖紙 id（第 1 段確認看得到的，或圖紙查找第 1 名）、3D 工作編號、排程結果編號 */
 function factoryRefs(t: Turn): ArchivedTurn["refs"] {
@@ -193,6 +199,8 @@ export const REJECTED: Record<string, string> = {
 export function canRerun(t: Turn) {
   if (!t.archived) return true;
   if (t.archived.outcome && REJECTED[t.archived.outcome]) return false;
+  // 結果未確認的寫入：重跑會重新試算、再按一次就可能變成第二筆
+  if (t.archived.outcome === "unconfirmed") return false;
   return !!t.text && !/^（.*）$/.test(t.text);
 }
 
@@ -317,7 +325,16 @@ export function interruptForAccount(t: Turn): Turn {
     route: null,
     part: null,
     failure: null,
-    archived: { ...a, outcome: a.outcome === "pass" ? "interrupted" : a.outcome, summary: "切換身分，已中止這一輪", redacted: hide || a.redacted, answer: undefined, sources: undefined, artResults: undefined },
+    archived: {
+      ...a,
+      outcome: a.outcome === "pass" ? "interrupted" : a.outcome,
+      // 已經送出的寫入不是「中止」：伺服器可能已經完成（見 archive 的 unconfirmed）
+      summary: a.outcome === "unconfirmed" ? a.summary : "切換身分，已中止這一輪",
+      redacted: hide || a.redacted,
+      answer: undefined,
+      sources: undefined,
+      artResults: undefined,
+    },
   };
 }
 

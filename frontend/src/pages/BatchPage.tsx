@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { useAccounts } from "../api/hooks";
@@ -48,6 +48,8 @@ export function BatchPage() {
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
+  // 卸載（離開頁面、切換身分時功能頁重建）就中止：舊身分的結果不再接收
+  useEffect(() => () => abort.current?.abort(), []);
 
   const start = async (files: File[]) => {
     const images = files.filter((f) => f.type.startsWith("image/"));

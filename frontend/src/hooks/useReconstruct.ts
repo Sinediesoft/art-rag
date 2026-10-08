@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ReconstructRequest } from "../api/client";
 import {
   streamReconstruct,
@@ -82,5 +82,7 @@ export function useReconstruct() {
   }, []);
 
   const abort = useCallback(() => abortRef.current?.abort(), []);
+  // 元件卸載（離開頁面、切換身分時功能頁重建）就中止串流：舊身分的結果不再接收
+  useEffect(() => () => abortRef.current?.abort(), []);
   return { state, start, load, abort };
 }

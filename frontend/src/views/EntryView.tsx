@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts, useSwitchAccount } from "../api/hooks";
-import { AccountMenu, Popover, SecurityPanel, StatusChip, useTokenRenewal, type Menu } from "../components/shell/Chrome";
+import { AccountMenu, Popover, SecurityPanel, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
@@ -50,13 +50,21 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
 
   const onGuard = (x: (typeof GUARD_EXAMPLES)[number]) => ask(x.q, null, null, x.tamper && accounts ? forgeToken(accounts.token.unsigned) : undefined);
   const onScript = async (s: (typeof SCRIPT)[number]) => {
-    if (accounts?.current.id !== s.account) await switchAccount(s.account);
+    if (accounts?.current.id !== s.account)
+      try {
+        await switchAccount(s.account);
+      } catch (e) {
+        // 有寫入還沒收到結果時不能切換（見 api/writes.ts）：留在原身分，不送這一句
+        if (conv) shell.notice(conv.id, (e as Error).message);
+        else window.alert((e as Error).message);
+        return;
+      }
     if (s.to) navigate(s.to);
     else ask(s.q);
   };
   const remove = (c: Conv) => {
     if (!window.confirm(`刪除這段對話紀錄？\n「${titleOf(c)}」\n\n只會刪掉這台電腦上的紀錄。`)) return;
-    shell.remove(c.id);
+    if (!shell.remove(c.id)) return window.alert("有寫入還沒收到結果，等結果回來再刪除這段對話。");
     if (c.id === conv?.id) navigate("/");
   };
 
@@ -146,6 +154,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
             )}
           </div>
         </header>
+        <WriteNotice />
         {renewal.renewed && (
           <p className="banner" role="status">
             {renewal.renewed}：閘道不再接受舊憑證，已重新取得〈{renewal.label}〉的憑證（要用其他身分請重新切換）。

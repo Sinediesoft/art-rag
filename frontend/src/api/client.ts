@@ -1,5 +1,6 @@
 // 所有 API 呼叫集中在這裡；元件不直接寫 fetch（共用層 §八）
 import type { components } from "./schema";
+import { trackWrite } from "./writes";
 
 export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
@@ -201,9 +202,9 @@ export const api = {
   // 生產排程（Timefold）
   productionOverview: () => request<ProductionOverview>("/production/overview"),
   partPlan: (id: string) => request<PartPlan>(`/production/parts/${encodeURIComponent(id)}`),
-  createWorkOrder: (body: WorkOrderCreate) => request<WorkOrderCreated>("/production/work-orders", json(body)),
+  createWorkOrder: (body: WorkOrderCreate) => trackWrite("開立工單", request<WorkOrderCreated>("/production/work-orders", json(body))),
   cancelWorkOrder: (woNo: string) =>
-    request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" }),
+    trackWrite("取消工單", request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" })),
   stopSchedule: () => request<Schemas["OkResponse"]>("/schedule/stop", { method: "POST" }),
   scheduleRun: (runId: string) => request<ScheduleRunDetail>(`/schedule/runs/${encodeURIComponent(runId)}`),
   resetProduction: () => request<Schemas["OkResponse"]>("/admin/production/reset", { method: "POST" }),
@@ -220,15 +221,16 @@ export const api = {
     return request<RouteResponse>("/agent/route", init, !!token);
   },
   changePreview: (body: ChangePreviewRequest) => request<ChangePreview>("/changes/preview", json(body)),
+  // 寫入一律經 trackWrite：送出後就算不再接收結果，伺服器也可能已經完成（見 writes.ts）
   changeCommit: (pendingId: string) =>
-    request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" }),
+    trackWrite("確認寫入", request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" })),
   requestApproval: (pendingId: string, note?: string) =>
-    request<Approval>(`/changes/${encodeURIComponent(pendingId)}/request-approval`, json({ note: note || null })),
+    trackWrite("送主管核准", request<Approval>(`/changes/${encodeURIComponent(pendingId)}/request-approval`, json({ note: note || null }))),
   approvals: () => request<ApprovalsResponse>("/approvals"),
   approve: (apNo: string, note?: string) =>
-    request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/approve`, json({ note: note || null })),
+    trackWrite("核准", request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/approve`, json({ note: note || null }))),
   returnApproval: (apNo: string, reason: string) =>
-    request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason })),
+    trackWrite("退回", request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason }))),
   audit: () => request<AuditResponse>("/audit"),
   securityLogs: (limit = 20) => request<SecurityLogsResponse>(`/security/logs?limit=${limit}`),
   routeEvalRuns: () => request<Schemas["RouteEvalRunsResponse"]>("/eval/route-runs"),
@@ -237,7 +239,7 @@ export const api = {
   updateIntake: (draftId: string, values: Record<string, string | number | null>) =>
     request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}`, { ...json({ values }), method: "PUT" }),
   commitIntake: (draftId: string) =>
-    request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" }),
+    trackWrite("照片建檔入庫", request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" })),
   discardIntake: (draftId: string) =>
     request<Schemas["OkResponse"]>(`/intake/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
   // 批次辨識走 SSE（sse.ts 的 streamBatch）；兩件並排比較：a、b 是 artwork:<id> 或 part:<id>

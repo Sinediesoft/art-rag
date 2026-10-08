@@ -83,7 +83,17 @@ export function IntakePage({ domain }: { domain: Domain }) {
   const [raw, setRaw] = useState("");
   const [failure, setFailure] = useState<IntakeErrorEvent | null>(null);
   const started = useRef<string | null>(null);
+  const ctrl = useRef<AbortController | null>(null);
   const qc = useQueryClient();
+  // 卸載（離開頁面、切換身分時功能頁重建）就中止：舊身分的草稿不再寫進快取、也不改網址。
+  // StrictMode 模擬卸載後會再跑一次 effect，所以順便清掉 started，讓它重新開始
+  useEffect(
+    () => () => {
+      ctrl.current?.abort();
+      started.current = null;
+    },
+    [],
+  );
 
   const start = (id: string) => {
     if (started.current === id) return; // StrictMode 會跑兩次 effect
@@ -92,6 +102,9 @@ export function IntakePage({ domain }: { domain: Domain }) {
     setStage("sharpness");
     setRaw("");
     setFailure(null);
+    ctrl.current?.abort();
+    const c = new AbortController();
+    ctrl.current = c;
     streamIntake(id, domain, {
       onStage: (e) => setStage(e.stage),
       onToken: (t) => setRaw((r) => r + t),
@@ -103,7 +116,7 @@ export function IntakePage({ domain }: { domain: Domain }) {
         setFailure(e);
         setStage(null);
       },
-    });
+    }, c.signal);
   };
 
   useEffect(() => {

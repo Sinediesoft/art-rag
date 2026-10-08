@@ -120,7 +120,10 @@ export type SchedulePart = {
 
 export type ChangePart = {
   kind: "change";
-  status: "previewing" | "ready" | "committing" | "error";
+  /** unconfirmed：寫入已經送出、沒有收到伺服器的回覆（連線中斷、閘道逾時）——可能已經寫好，不能當成失敗重送 */
+  status: "previewing" | "ready" | "committing" | "unconfirmed" | "error";
+  /** 送出的是確認寫入還是送主管核准 */
+  action?: "commit" | "approval";
   preview: ChangePreview | null;
   committed: ChangeCommitted | null;
   approval: Approval | null;

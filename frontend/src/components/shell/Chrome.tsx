@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Account, MemoryStatus } from "../../api/client";
 import { useAccounts, useCanView, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
+import { dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
 import { Icon } from "./Icons";
 
@@ -49,6 +50,7 @@ const hhmm = (iso: string) => iso.slice(11, 16);
 export function AccountMenu({ onClose }: { onClose: () => void }) {
   const { data } = useAccounts();
   const switchAccount = useSwitchAccount();
+  const writing = useWrites().some((w) => w.status === "pending");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (!data) return <p className="menu__label">讀取身分中…</p>;
@@ -79,11 +81,12 @@ export function AccountMenu({ onClose }: { onClose: () => void }) {
       {data.demo_controls ? (
         <>
           <p className="menu__label">切換展示身分・權限由伺服器依 JWT 判定</p>
+          {writing && <p className="menu__label is-error">有寫入還沒收到結果，等結果回來再切換身分</p>}
           {data.accounts.map((a) => (
             <button
               key={a.id}
               type="button"
-              disabled={busy}
+              disabled={busy || (writing && me.id !== a.id)}
               className={`menu__item${me.id === a.id ? " is-selected" : ""}`}
               onClick={() => void change(a.id)}
               role="menuitemradio"
@@ -212,6 +215,37 @@ export function useTokenRenewal() {
     void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "accounts" });
   }, [issuedDetail, qc]);
   return { renewed, label: data?.current.label, dismiss: () => setRenewed(null) };
+}
+
+const WRITE_STATUS = {
+  pending: "還在等伺服器回覆",
+  done: "伺服器回覆已完成",
+  failed: "伺服器回覆沒有完成",
+  unknown: "連線中斷，結果未確認",
+} as const;
+
+/**
+ * 身分改變時還沒收到結果的寫入（api/writes.ts）：伺服器可能已經寫好，結果不接回原畫面，
+ * 這裡只說「哪一種寫入、伺服器回覆了沒有」，不顯示內容；提醒到紀錄頁以目前身分核對、不要直接重送
+ */
+export function WriteNotice() {
+  const orphans = useWrites().filter((w) => w.orphaned);
+  if (!orphans.length) return null;
+  const waiting = orphans.some((w) => w.status === "pending");
+  return (
+    <div className="banner" role="alert">
+      <span>
+        身分改變時有 {orphans.length} 筆寫入已經送出：
+        {orphans.map((w) => `〈${w.label}〉${WRITE_STATUS[w.status]}`).join("；")}。結果不會接回原畫面，請以目前身分到
+        <Link to="/approvals">核准紀錄</Link>或<Link to="/inventory">庫存・工單</Link>核對，不要直接重送。
+      </span>
+      {!waiting && (
+        <button type="button" className="link-btn" onClick={dismissOrphans}>
+          知道了
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** 服務狀態與記憶體（GET /status，要 JWT）；剛釋放過模型就顯示釋放了幾個 */

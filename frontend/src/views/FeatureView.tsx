@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAccounts } from "../api/hooks";
-import { AccountMenu, Popover, StatusChip, useTokenRenewal, type Menu } from "../components/shell/Chrome";
+import { AccountMenu, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Icon } from "../components/shell/Icons";
 import { domainOfPath, MODULE } from "../shell/design";
+import { useShell } from "../shell/store";
 
 /** 功能頁的名稱（頁首用） */
 const PAGES: [RegExp, string][] = [
@@ -37,6 +38,7 @@ export function FeatureView({ backTo }: { backTo: string | null }) {
   const page = PAGES.find(([re]) => re.test(pathname))?.[1] ?? "功能頁";
   const [menu, setMenu] = useState<Menu>(null);
   const { data: accounts } = useAccounts();
+  const shell = useShell();
   const renewal = useTokenRenewal();
   const scroller = useRef<HTMLElement>(null);
   const close = () => setMenu(null);
@@ -84,6 +86,7 @@ export function FeatureView({ backTo }: { backTo: string | null }) {
           </div>
         </div>
       </header>
+      <WriteNotice />
       {renewal.renewed && (
         <p className="banner" role="status">
           {renewal.renewed}：已重新取得〈{renewal.label}〉的憑證。
@@ -94,7 +97,18 @@ export function FeatureView({ backTo }: { backTo: string | null }) {
       )}
       <main ref={scroller} className="feature">
         <div className="legacy feature__inner">
-          <Outlet />
+          {/*
+            身分邊界：各功能頁的結果（SQL、問答串流、批次、核准…）多半放在元件自己的 state，不在 React Query 快取裡。
+            身分未確認、切換中先整個卸載（串流由各 hook 卸載時中止，舊 callback 寫不回已卸載的元件）；
+            身分世代一變就以新的 key 重建，舊身分的內容不會留到下一個身分，要看就以目前身分重新操作
+          */}
+          {shell.identityReady && !shell.switching ? (
+            <Outlet key={shell.identityEpoch} />
+          ) : (
+            <p className="pending" role="status">
+              {shell.switching ? "切換身分中…" : "確認身分中…"}這一頁的內容先收起，確認身分後請重新操作。
+            </p>
+          )}
         </div>
       </main>
     </div>

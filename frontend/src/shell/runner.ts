@@ -1,5 +1,6 @@
 import { api, ApiError, type ChangePreviewRequest, type RouteResponse } from "../api/client";
 import { streamChat, streamInventoryAsk, streamReconstruct, streamScheduleSolve } from "../api/sse";
+import { resultUnknown } from "../api/writes";
 import type { ApiFailure, ChangePart, Part, ReconstructPart, SchedulePart, Turn } from "./types";
 
 /**
@@ -246,7 +247,8 @@ export async function startSchedule(update: Update, signal: AbortSignal) {
 export async function commitChange(part: ChangePart, update: Update, note: string | null) {
   if (!part.preview?.pending_id) return;
   const id = part.preview.pending_id;
-  setPart<ChangePart>(update, (p) => ({ ...p, status: "committing", error: null }));
+  const action = note === null ? "commit" : "approval";
+  setPart<ChangePart>(update, (p) => ({ ...p, status: "committing", action, error: null }));
   try {
     if (note === null) {
       const committed = await api.changeCommit(id);
@@ -257,6 +259,8 @@ export async function commitChange(part: ChangePart, update: Update, note: strin
     }
   } catch (e) {
     const f = failureOf(e);
-    setPart<ChangePart>(update, (p) => ({ ...p, status: "ready", error: `${f.message}（${f.code}）` }));
+    // 連不上、閘道逾時：請求可能已經到了伺服器，不能當成失敗讓人再按一次
+    if (resultUnknown(e)) setPart<ChangePart>(update, (p) => ({ ...p, status: "unconfirmed", error: `${f.message}（${f.code}）` }));
+    else setPart<ChangePart>(update, (p) => ({ ...p, status: "ready", error: `${f.message}（${f.code}）` }));
   }
 }

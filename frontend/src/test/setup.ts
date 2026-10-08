@@ -1,5 +1,6 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
+import { resetWrites } from "../api/writes";
 
 /** 測試裡的視窗寬度（useMedia 依它回答 min-width 查詢）；各測試可以改 */
 export const viewport = { width: 1440 };
@@ -44,10 +45,13 @@ beforeEach(() => {
   viewport.width = 1440;
   localStorage.clear();
   vi.spyOn(window, "confirm").mockReturnValue(true);
+  vi.spyOn(window, "alert").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   cleanup();
+  // 送出中的寫入是模組層級的狀態（api/writes.ts）：每個測試各自從空的開始
+  resetWrites();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

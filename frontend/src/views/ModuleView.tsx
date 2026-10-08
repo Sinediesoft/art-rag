@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts } from "../api/hooks";
-import { AccountMenu, Popover, StatusChip, useTokenRenewal, type Menu } from "../components/shell/Chrome";
+import { AccountMenu, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
@@ -158,6 +158,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
           </div>
         </div>
       </header>
+      <WriteNotice />
       {renewal.renewed && (
         <p className="banner" role="status">
           {renewal.renewed}：已重新取得〈{renewal.label}〉的憑證。
@@ -274,7 +275,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
             }}
             onDelete={(c) => {
               if (!window.confirm(`刪除這段對話紀錄？\n「${titleOf(c)}」\n\n只會刪掉這台電腦上的紀錄。`)) return;
-              shell.remove(c.id);
+              if (!shell.remove(c.id)) return window.alert("有寫入還沒收到結果，等結果回來再刪除這段對話。");
               if (c.id === conv.id) navigate("/");
             }}
             onClose={() => setDrawer(false)}
