@@ -267,6 +267,56 @@ describe("帳密：提到就整段不存（審查報告的單行、JSON、多行
     expect(back.find((t) => t.id === "a0")?.archived?.sources?.[0].text).toBe("1889 年在聖雷米。");
   });
 
+  // 第 5 次審查：程式識別字形式的欄位名（底線、全大寫、駝峰、連字號）
+  const identifiers = [
+    '{"secret_key":"SYNTH_SECRET_VALUE"}',
+    'SECRET_KEY = "SYNTH_DJANGO_VALUE"',
+    '{"secretKey":"SYNTH_JSON_VALUE"}',
+    'SECRET_KEY = "SYNTH_A!SYNTH_B@SYNTH_C#SYNTH_D$SYNTH_E%"',
+    "SECRETKEY=SYNTH_NOSEP",
+    '{"clientSecret":"SYNTH_CS"}',
+    "apiKey: SYNTH_API",
+    "APIKey: SYNTH_API2",
+    "APIKEY=SYNTH_API3",
+    "X-API-KEY: SYNTH_HEADER",
+    "DB_PASSWORD=SYNTH_ENV",
+    "myPassword: SYNTH_CAMEL",
+    "privateKey: SYNTH_PRIV",
+    "AWS_SECRET_ACCESS_KEY=SYNTH_AWS",
+    "refreshToken: SYNTH_RT",
+    "auth.token = SYNTH_DOTTED",
+  ];
+
+  it.each(identifiers)("欄位名「%s」：認得出是帳密，整段不存", (s) => {
+    expect(mentionsSecret(s)).toBe(true);
+    expect(sanitizeForStorage(s, SECRET_QUESTION)).toBe(SECRET_QUESTION);
+    expect(sanitizeForStorage(`設定檔：\n${s}\n其他說明`, SECRET_ANSWER)).toBe(SECRET_ANSWER);
+  });
+
+  it("欄位名形式放在問句與公開回答：serialize → save → load 後沒有任何片段，問句不能重送", () => {
+    const turns = identifiers.flatMap((f, i) => [
+      base({ id: `iq${i}`, route: route({ question: `幫我看 ${f}，梵谷在哪裡畫的？` }), part: artTurn().part }),
+      base({
+        id: `ia${i}`,
+        route: route({ question: "梵谷在哪裡畫的？" }),
+        part: { kind: "chat", target: { artwork_id: "met-436535" }, status: "done", sources: sources() as never, text: `例：${f}。1889 年在聖雷米 [1]。`, done: done() as never, error: null },
+      }),
+    ]);
+    save(serialize([conv(turns)], { collapsed: false, split: 50, theme: "dark" }));
+    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/SYNTH/);
+    const back = load().convs[0].turns;
+    expect(JSON.stringify(back)).not.toMatch(/SYNTH/);
+    expect(back.filter((t) => t.id.startsWith("iq")).every((t) => t.text === SECRET_QUESTION && !canRerun(t))).toBe(true);
+    expect(back.filter((t) => t.id.startsWith("ia")).every((t) => t.archived?.answer === SECRET_ANSWER)).toBe(true);
+  });
+
+  it("拆成單字後才比對：secretary、tokenizer、keynote 這類一般單字不算帳密", () => {
+    for (const s of ["The secretary of the museum", "a tokenizer for Chinese", "Keynote 簡報", "SecretaryGeneral", "tokenization", "梵谷畫這幅畫的時候在哪裡？"]) {
+      expect(mentionsSecret(s)).toBe(false);
+      expect(sanitizeForStorage(s, SECRET_QUESTION)).toBe(s);
+    }
+  });
+
   it("沒有帳密關鍵字的一般文字照存；只提到關鍵字也整段不存（寧可多遮，只影響存檔）", () => {
     expect(sanitizeForStorage("梵谷畫這幅畫的時候在哪裡？", SECRET_QUESTION)).toBe("梵谷畫這幅畫的時候在哪裡？");
     expect(sanitizeForStorage("谿山行旅圖用了什麼皴法？", SECRET_QUESTION)).toBe("谿山行旅圖用了什麼皴法？");

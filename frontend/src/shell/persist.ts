@@ -131,13 +131,24 @@ function factoryRefs(t: Turn): ArchivedTurn["refs"] {
 
 const MASK = "［已遮蔽］";
 /**
- * 帳密類關鍵字：中文直接比對；英文要整個字，前面可以有前綴（db_password、access_token、client_secret），
- * 後面可以是複數（tokens、passwords）
+ * 帳密類關鍵字：中文直接比對；英文比對前先把識別字拆成單字（見 splitIdentifiers），
+ * 所以 secret_key、SECRET_KEY、secretKey、clientSecret、db_password、x-api-key 都會變成獨立的單字，
+ * 再要求整個字比對（secretary、tokenizer 這類一般單字不算），後面可以是複數（tokens、passwords）
  */
 const SECRET_KEY = new RegExp(
-  String.raw`密碼|口令|密鑰|私鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|安全碼|\b[\w-]*?(?:password|passwd|passcode|passphrase|pwd|api[\s_-]?key|access[\s_-]?key|secret|token|credential|private[\s_-]?key|authorization|bearer|cookie|session[\s_-]?id)s?\b`,
+  String.raw`密碼|口令|密鑰|私鑰|金鑰|帳密|憑證|權杖|驗證碼|通行碼|安全碼|\b(?:password|passwd|passcode|passphrase|pwd|api\s?key|access\s?key|secret\s?key|secret|token|credential|private\s?key|authorization|bearer|cookie|session\s?id)s?\b`,
   "i",
 );
+
+/**
+ * 把程式識別字拆成單字：駝峰（secretKey → secret Key、APIKey → API Key）、底線、連字號、點都換成空白。
+ * 只用在「有沒有提到帳密」的判斷，不改動要保存的文字
+ */
+const splitIdentifiers = (s: string) =>
+  s
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ");
 /** 不靠關鍵字也認得出來、自己有邊界的祕密：JWT、常見金鑰前綴、PEM 區塊、32 字以上的不透明字串 */
 const SECRET_PATTERNS: [RegExp, string][] = [
   [/-----BEGIN [A-Z ]+-----[\s\S]*?(?:-----END [A-Z ]+-----|$)/g, MASK],
@@ -148,7 +159,7 @@ const SECRET_PATTERNS: [RegExp, string][] = [
 ];
 
 /** 文字裡有沒有帳密類關鍵字（不管後面的值是單行、多行、引號、陣列、YAML 區塊） */
-export const mentionsSecret = (s: string) => SECRET_KEY.test(s);
+export const mentionsSecret = (s: string) => SECRET_KEY.test(s) || SECRET_KEY.test(splitIdentifiers(s));
 
 /**
  * 存進瀏覽器前的帳密處理（後端的 mask_pii 只遮電話、Email、身分證）：
