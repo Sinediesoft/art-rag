@@ -1,4 +1,4 @@
-# ADR 029：段落篩選不把「色彩分析」當成某個東西的顏色（rearrange_v3）
+# ADR 030：段落篩選不把「色彩分析」當成某個東西的顏色（rearrange_v3）
 
 - 日期：2026-10-07
 - 狀態：採用（`models.yaml` 的 `rearrange.prompt_version` 改為 `rearrange_v3`）
