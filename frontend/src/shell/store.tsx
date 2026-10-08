@@ -127,10 +127,18 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const currentConv = useRef<string | null>(null);
 
   // 存檔：串流中每個字都會更新狀態，等 400 ms 沒有變化再寫
+  const prefsRef = useRef({ collapsed, split, theme });
+  prefsRef.current = { collapsed, split, theme };
   useEffect(() => {
     const t = window.setTimeout(() => save(serialize(convs, { collapsed, split, theme })), 400);
     return () => window.clearTimeout(t);
   }, [convs, collapsed, split, theme]);
+  // 離開頁面（重新整理、關分頁、切到背景）：還在等 400 ms 的那一次立刻寫
+  useEffect(() => {
+    const flush = () => void save(serialize(convsRef.current, prefsRef.current));
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
 
   const updateConv = useCallback((id: string, f: (c: Conv) => Conv) => setConvs((cs) => cs.map((c) => (c.id === id ? f(c) : c))), []);
   const updateTurn = useCallback(
@@ -447,9 +455,25 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     (convId: string, turnId: string, note: string | null) => {
       const t = task(convId, turnId);
       if (t?.part?.kind !== "change" || !mayAct(t)) return;
-      void runCommit(t.part as ChangePart, guarded(convId, turnId, `${turnId}:task`), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
+      const part = t.part as ChangePart;
+      if (part.status === "committing" || part.status === "unconfirmed" || !part.preview?.pending_id) return;
+      // 送出之前先同步寫進瀏覽器：這一輪標成送出中（存檔版是「結果未確認」、不能重跑）。
+      // 不等一般的 400 ms 延遲存檔——在那之前重新整理，會讀回試算完成、可以重跑的舊紀錄，再確認一次就是第二筆
+      const action = note === null ? "commit" : "approval";
+      const marked: Turn = { ...t, part: { ...part, status: "committing", action, error: null } };
+      const next = convsRef.current.map((c) => (c.id === convId ? { ...c, turns: c.turns.map((x) => (x.id === turnId ? marked : x)) } : c));
+      if (!save(serialize(next, prefsRef.current))) {
+        // 寫不進去就不送：重新整理後無法知道這筆已經送出過
+        updateTurn(convId, turnId)((x) =>
+          x.part?.kind === "change" ? { ...x, part: { ...x.part, error: "這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重新整理後重複寫入，這次沒有送出" } } : x,
+        );
+        return;
+      }
+      convsRef.current = next;
+      setConvs(next);
+      void runCommit(part, guarded(convId, turnId, `${turnId}:task`), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
     },
-    [guarded, qc],
+    [guarded, qc, updateTurn],
   );
 
   const value: Shell = {

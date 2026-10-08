@@ -248,11 +248,13 @@ export function serialize(convs: Conv[], prefs: Omit<Saved, "v" | "convs">): Sav
   };
 }
 
-export function save(s: Saved) {
+/** 寫進瀏覽器；寫不進去（無痕模式、空間不足）回傳 false，內容只留在記憶體 */
+export function save(s: Saved): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    return true;
   } catch {
-    /* 無痕模式或空間不足：只留在記憶體 */
+    return false;
   }
 }
 

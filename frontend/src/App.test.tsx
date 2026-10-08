@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -889,6 +889,77 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
     expect(t.calls.filter((c) => c.path === path)).toHaveLength(1);
     await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).convs[0].turns.at(-1).archived.outcome).toBe("unconfirmed"));
+  });
+
+  // 第 9 次 code review F1：送出之後、400 ms 延遲存檔之前就重新整理
+  const savedChange = () =>
+    (JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{"convs":[]}').convs as { turns: { archived: { intentLabel: string; outcome: string; summary: string } }[] }[])
+      .flatMap((c) => c.turns)
+      .find((x) => x.archived.intentLabel === "修改資料");
+  const reload = () => {
+    const at = where;
+    cleanup();
+    renderApp(at);
+  };
+
+  it.each([
+    ["確認寫入", {}, "/changes/pend-1/commit"],
+    ["送主管核准", { next: "approval", reasons: ["超過額度"] }, "/changes/pend-1/request-approval"],
+  ])("「%s」送出的當下就寫進瀏覽器（不等 400 ms）：立刻重新整理，還原的是結果未確認、不能重跑", async (label, over, path) => {
+    const { t } = await changeReady(over);
+    // 試算完成的那一版已經存過（outcome pass、可以重跑）
+    await waitFor(() => expect(savedChange()?.archived.outcome).toBe("pass"));
+    t.on("POST", path, () => new Promise<Response>(() => undefined));
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    // 同一個事件裡、計時器還沒跑：存檔已經是結果未確認
+    expect(savedChange()?.archived.outcome).toBe("unconfirmed");
+    expect(savedChange()?.archived.summary).toContain(`${label}已經送出、沒有收到結果`);
+    expect(localStorage.getItem(STORAGE_KEY)).not.toMatch(/pend-1|SYNTH/);
+    reload();
+    await waitFor(() => expect(lastAi()?.textContent).toContain(`${label}已經送出、沒有收到結果`));
+    expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
+    expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
+    expect(t.calls.filter((c) => c.path === path)).toHaveLength(1);
+  });
+
+  it("另一段對話的串流不停重設存檔計時器：送出的當下一樣先寫進瀏覽器", async () => {
+    const { t } = await changeReady();
+    await waitFor(() => expect(savedChange()?.archived.outcome).toBe("pass"));
+    // 另一段對話開始串流，之後每 50 ms 一個字（每次都重設 400 ms 的存檔計時器）
+    const live = liveSse();
+    t.on("POST", "/chat", () => live.respond(null));
+    fireEvent.click(screen.getByLabelText("新對話"));
+    await waitFor(() => expect(where).toBe("/"));
+    await ask("梵谷畫這幅畫的時候在哪裡？");
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/chat")).toBe(true));
+    act(() => void live.push("sources", sources("機密")));
+    const timer = window.setInterval(() => live.push("token", { text: "字" }), 50);
+    try {
+      // 回到修改資料那一段
+      const item = [...document.querySelectorAll<HTMLElement>(".side__open")].find((b) => b.textContent?.includes("連接法蘭有哪些公差要求"))!;
+      fireEvent.click(item);
+      const btn = await screen.findByRole("button", { name: "確認寫入" });
+      t.on("POST", "/changes/pend-1/commit", () => new Promise<Response>(() => undefined));
+      fireEvent.click(btn);
+      expect(savedChange()?.archived.outcome).toBe("unconfirmed");
+      reload();
+      await waitFor(() => expect(lastAi()?.textContent).toContain("確認寫入已經送出、沒有收到結果"));
+      expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
+    } finally {
+      window.clearInterval(timer);
+      live.close();
+    }
+  });
+
+  it("瀏覽器存不進去（空間不足）：不送出寫入，說明原因", async () => {
+    const { t } = await changeReady();
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
+    await waitFor(() => expect(lastAi().textContent).toContain("記不下「已送出」的狀態"));
+    expect(t.calls.some((c) => c.path === "/changes/pend-1/commit")).toBe(false);
+    expect(screen.getByRole("button", { name: "確認寫入" })).toBeTruthy();
   });
 });
 
