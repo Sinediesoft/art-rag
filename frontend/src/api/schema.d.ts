@@ -597,6 +597,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/artworks/{artwork_id}/region-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Region Draft
+         * @description 藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；
+         *     解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。
+         */
+        post: operations["create_region_draft_api_v1_artworks__artwork_id__region_drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Region Drafts
+         * @description 待收錄（能收錄的身分才看得到）與自己送出的草稿。
+         */
+        get: operations["list_region_drafts_api_v1_region_drafts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Region Draft
+         * @description 收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。
+         *
+         *     回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。
+         */
+        post: operations["commit_region_draft_api_v1_region_drafts__draft_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return Region Draft
+         * @description 主管退回（附原因），藝術家在自己的草稿清單看得到。
+         */
+        post: operations["return_region_draft_api_v1_region_drafts__draft_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw Region Draft
+         * @description 送出的人撤回還沒收錄的草稿。
+         */
+        delete: operations["withdraw_region_draft_api_v1_region_drafts__draft_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cad/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -1306,6 +1409,11 @@ export interface components {
             warehouses: string[];
             /** Customers */
             customers: string[];
+            /**
+             * Artworks
+             * @description 藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的
+             */
+            artworks: string[];
             /** Note */
             note: string;
             /**
@@ -1348,6 +1456,11 @@ export interface components {
              * @description 待核准單數量（主管看得到要處理幾件）
              */
             pending_approvals: number;
+            /**
+             * Pending Region Drafts
+             * @description 待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）
+             */
+            pending_region_drafts: number;
             token: components["schemas"]["TokenInfo"];
         };
         /** AlignDiff */
@@ -2096,6 +2209,11 @@ export interface components {
              * @description 這段講的是畫面上哪一塊（regions.items 的 id）
              */
             region?: string | null;
+            /**
+             * Speaker
+             * @description 第一人稱的解說是誰說的（藝術家的區域解說，docs/adr/029）
+             */
+            speaker?: string | null;
         };
         /**
          * Distractor
@@ -3618,6 +3736,129 @@ export interface components {
              * @enum {string}
              */
             strategy: "ortho2cad" | "hybrid";
+        };
+        /** RegionDraft */
+        RegionDraft: {
+            /** Draft Id */
+            draft_id: string;
+            /** Artwork Id */
+            artwork_id: string;
+            /** Artwork Title */
+            artwork_title: string;
+            /**
+             * Status
+             * @description pending 待收錄／indexing 收錄中（重建索引）／done 已收錄／failed 收錄失敗（已還原，可以再收錄）／returned 主管退回
+             * @enum {string}
+             */
+            status: "pending" | "indexing" | "done" | "failed" | "returned";
+            /** Label */
+            label: string;
+            /** Points */
+            points: number[][];
+            /** Text */
+            text: string;
+            /** License */
+            license: string;
+            /** Attribution */
+            attribution?: string | null;
+            /**
+             * Image Size
+             * @description 圈區域時畫作原圖的寬、高（像素）
+             */
+            image_size: number[];
+            /** By */
+            by: string;
+            /** By Label */
+            by_label: string;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            review?: components["schemas"]["RegionDraftReview"] | null;
+            commit?: components["schemas"]["RegionDraftCommit"] | null;
+        };
+        /** RegionDraftCommit */
+        RegionDraftCommit: {
+            /** By */
+            by: string;
+            /** By Label */
+            by_label: string;
+            /** At */
+            at: string;
+            /** Region Id */
+            region_id: string;
+            /** Kb Version */
+            kb_version: string;
+            /** Index Ms */
+            index_ms?: number | null;
+            /** Error */
+            error?: string | null;
+        };
+        /**
+         * RegionDraftRequest
+         * @description 藝術家在畫上圈一塊、寫解說（docs/adr/029 第 2 步）；送出就是草稿，等主管收錄
+         */
+        RegionDraftRequest: {
+            /**
+             * Label
+             * @description 這一塊叫什麼
+             */
+            label: string;
+            /**
+             * Points
+             * @description 多邊形頂點，相對畫作原圖的 0–1
+             */
+            points: number[][];
+            /**
+             * Text
+             * @description 解說
+             */
+            text: string;
+            /**
+             * License
+             * @description 藝術家同意的授權
+             * @enum {string}
+             */
+            license: "CC BY 4.0" | "CC0";
+            /**
+             * Attribution
+             * @description CC BY 4.0 的標示文字（署名）
+             */
+            attribution?: string | null;
+        };
+        /** RegionDraftReturn */
+        RegionDraftReturn: {
+            /** Reason */
+            reason: string;
+        };
+        /** RegionDraftReview */
+        RegionDraftReview: {
+            /** By */
+            by: string;
+            /** By Label */
+            by_label: string;
+            /** At */
+            at: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** RegionDraftsResponse */
+        RegionDraftsResponse: {
+            /**
+             * Pending
+             * @description 待收錄（只有能收錄的身分看得到）
+             */
+            pending: components["schemas"]["RegionDraft"][];
+            /**
+             * Mine
+             * @description 自己送出的草稿（新的在前）
+             */
+            mine: components["schemas"]["RegionDraft"][];
+            /**
+             * Can Commit
+             * @description 目前身分能不能收錄、退回
+             */
+            can_commit: boolean;
         };
         /** RetryAccount */
         RetryAccount: {
@@ -5525,6 +5766,167 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_region_draft_api_v1_artworks__artwork_id__region_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artwork_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegionDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_region_drafts_api_v1_region_drafts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraftsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    commit_region_draft_api_v1_region_drafts__draft_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    return_region_draft_api_v1_region_drafts__draft_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegionDraftReturn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    withdraw_region_draft_api_v1_region_drafts__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
             };
             /** @description Client Error */
             "4XX": {

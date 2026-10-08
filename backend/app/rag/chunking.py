@@ -112,6 +112,9 @@ def build_chunks(a: dict) -> list[dict]:
     for i, d in enumerate(a["descriptions"]):
         region = _region_info(regions[d["region"]]) if d.get("region") else None
         for j, piece in enumerate(split_paragraph(d["text"])):
+            # 藝術家用第一人稱寫的解說：寫明是誰說的，模型才不會把「我」當成畫家
+            if d.get("speaker"):
+                piece = f"{d['speaker']}說：「{piece}」"
             chunk = {
                 "chunk_id": f"{a['id']}#{i:02d}-{j}",
                 "artwork_id": a["id"],

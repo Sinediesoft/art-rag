@@ -1,6 +1,6 @@
 """API 請求／回應模型：FastAPI 依此產生 shared/openapi.json，前端型別再由它自動產生。"""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -83,6 +83,9 @@ class Description(BaseModel):
     region: str | None = Field(
         default=None, description="這段講的是畫面上哪一塊（regions.items 的 id）"
     )
+    speaker: str | None = Field(
+        default=None, description="第一人稱的解說是誰說的（藝術家的區域解說，docs/adr/029）"
+    )
 
 
 class ArtworkRegion(BaseModel):
@@ -98,6 +101,72 @@ class ArtworkRegions(BaseModel):
 
     image_size: list[int] = Field(description="圈區域時那張圖的寬、高（像素）")
     items: list[ArtworkRegion]
+
+
+Unit = Annotated[float, Field(ge=0, le=1)]
+
+
+class RegionDraftRequest(BaseModel):
+    """藝術家在畫上圈一塊、寫解說（docs/adr/029 第 2 步）；送出就是草稿，等主管收錄"""
+
+    label: str = Field(min_length=1, max_length=30, description="這一塊叫什麼")
+    points: list[Annotated[list[Unit], Field(min_length=2, max_length=2)]] = Field(
+        min_length=3, max_length=64, description="多邊形頂點，相對畫作原圖的 0–1"
+    )
+    text: str = Field(min_length=20, max_length=1000, description="解說")
+    license: Literal["CC BY 4.0", "CC0"] = Field(description="藝術家同意的授權")
+    attribution: str | None = Field(
+        default=None, max_length=60, description="CC BY 4.0 的標示文字（署名）"
+    )
+
+
+class RegionDraftReturn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class RegionDraftReview(BaseModel):
+    by: str
+    by_label: str
+    at: str
+    reason: str | None = None
+
+
+class RegionDraftCommit(BaseModel):
+    by: str
+    by_label: str
+    at: str
+    region_id: str
+    kb_version: str
+    index_ms: int | None = None
+    error: str | None = None
+
+
+class RegionDraft(BaseModel):
+    draft_id: str
+    artwork_id: str
+    artwork_title: str
+    status: Literal["pending", "indexing", "done", "failed", "returned"] = Field(
+        description="pending 待收錄／indexing 收錄中（重建索引）／done 已收錄／"
+        "failed 收錄失敗（已還原，可以再收錄）／returned 主管退回"
+    )
+    label: str
+    points: list[list[float]]
+    text: str
+    license: str
+    attribution: str | None = None
+    image_size: list[int] = Field(description="圈區域時畫作原圖的寬、高（像素）")
+    by: str
+    by_label: str
+    created_at: str
+    updated_at: str
+    review: RegionDraftReview | None = None
+    commit: RegionDraftCommit | None = None
+
+
+class RegionDraftsResponse(BaseModel):
+    pending: list[RegionDraft] = Field(description="待收錄（只有能收錄的身分看得到）")
+    mine: list[RegionDraft] = Field(description="自己送出的草稿（新的在前）")
+    can_commit: bool = Field(description="目前身分能不能收錄、退回")
 
 
 class ArtworkImage(BaseModel):
@@ -993,6 +1062,9 @@ class Account(BaseModel):
     ops: list[str]
     warehouses: list[str]
     customers: list[str]
+    artworks: list[str] = Field(
+        description="藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的"
+    )
     note: str
     domains: list[str] = Field(description="能讀的資料領域：art／mfg／factory（docs/adr/014）")
     levels: list[str] = Field(description="看得到的機密等級")
@@ -1027,6 +1099,9 @@ class AccountsResponse(BaseModel):
     accounts: list[Account]
     demo_controls: bool
     pending_approvals: int = Field(description="待核准單數量（主管看得到要處理幾件）")
+    pending_region_drafts: int = Field(
+        description="待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）"
+    )
     token: TokenInfo
 
 

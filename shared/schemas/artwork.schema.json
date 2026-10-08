@@ -57,7 +57,8 @@
           "source": { "type": "string", "minLength": 1, "description": "沒有網址的出處（使用者投稿、外部上傳的文件）；與 source_url 至少填一個" },
           "license": { "$ref": "#/$defs/license" },
           "attribution": { "type": "string" },
-          "region": { "type": "string", "description": "這段講的是畫面上哪一塊（regions.items 的 id，docs/adr/029）" }
+          "region": { "type": "string", "description": "這段講的是畫面上哪一塊（regions.items 的 id，docs/adr/029）" },
+          "speaker": { "type": "string", "minLength": 1, "description": "第一人稱的解說是誰說的（藝術家的區域解說，docs/adr/029）；建索引時段落寫成「<speaker>說：「…」」，模型才不會把「我」當成畫家" }
         }
       }
     },

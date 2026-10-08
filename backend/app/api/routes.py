@@ -40,6 +40,7 @@ from app.services import (
     intake_service,
     item_compare_service,
     memory_guard,
+    region_service,
     schedule_service,
     search_service,
     sql_service,
@@ -520,6 +521,47 @@ def get_intake_file(draft_id: str, name: str):
     return FileResponse(intake_service.draft_file(draft_id, name))
 
 
+# -------------------------------------------------------- 畫面區域的草稿與收錄（docs/adr/029）
+@router.post("/artworks/{artwork_id}/region-drafts", response_model=S.RegionDraft, tags=["regions"])
+def create_region_draft(artwork_id: str, body: S.RegionDraftRequest, request: Request):
+    """藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；
+    解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。"""
+    return region_service.create_draft(
+        artwork_id, body.model_dump(), identity.current(request), request.state.request_id
+    )
+
+
+@router.get("/region-drafts", response_model=S.RegionDraftsResponse, tags=["regions"])
+def list_region_drafts(request: Request):
+    """待收錄（能收錄的身分才看得到）與自己送出的草稿。"""
+    return region_service.list_drafts(identity.current(request))
+
+
+@router.post("/region-drafts/{draft_id}/commit", response_model=S.RegionDraft, tags=["regions"])
+def commit_region_draft(draft_id: str, request: Request):
+    """收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。
+
+    回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。"""
+    return region_service.commit_draft(
+        draft_id, identity.current(request), request.state.request_id
+    )
+
+
+@router.post("/region-drafts/{draft_id}/return", response_model=S.RegionDraft, tags=["regions"])
+def return_region_draft(draft_id: str, body: S.RegionDraftReturn, request: Request):
+    """主管退回（附原因），藝術家在自己的草稿清單看得到。"""
+    return region_service.return_draft(
+        draft_id, body.reason, identity.current(request), request.state.request_id
+    )
+
+
+@router.delete("/region-drafts/{draft_id}", response_model=S.OkResponse, tags=["regions"])
+def withdraw_region_draft(draft_id: str, request: Request):
+    """送出的人撤回還沒收錄的草稿。"""
+    region_service.withdraw_draft(draft_id, identity.current(request))
+    return S.OkResponse()
+
+
 def _cad_job(job_id: str, request: Request) -> dict:
     """3D 重建結果的摘要；是知識庫圖紙的重建時，也要看得到那張圖紙（資料範圍）。"""
     path = get_settings().cad_jobs_dir / job_id / "summary.json"
@@ -945,6 +987,7 @@ def _accounts(auth: identity.Auth) -> dict:
         "accounts": [a.public() for a in identity.accounts().values()],
         "demo_controls": get_settings().demo_controls,
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
+        "pending_region_drafts": region_service.pending_count(),
         "token": auth.public(),
     }
 

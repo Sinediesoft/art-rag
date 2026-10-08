@@ -60,6 +60,9 @@ export type ApprovalDecision = Schemas["ApprovalDecision"];
 export type AuditResponse = Schemas["AuditResponse"];
 // 照片建檔（docs/adr/013）
 export type IntakeDraft = Schemas["IntakeDraft"];
+export type RegionDraft = Schemas["RegionDraft"];
+export type RegionDraftsResponse = Schemas["RegionDraftsResponse"];
+export type RegionDraftRequest = Schemas["RegionDraftRequest"];
 export type IntakeField = Schemas["IntakeField"];
 export type IntakeCheck = Schemas["IntakeCheck"];
 // 批次辨識、兩件並排比較、匯出（docs/adr/017）
@@ -233,6 +236,16 @@ export const api = {
     request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" }),
   discardIntake: (draftId: string) =>
     request<Schemas["OkResponse"]>(`/intake/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
+  // 畫面區域（docs/adr/029）：藝術家在畫上圈一塊、寫解說送草稿，主管收錄或退回
+  regionDrafts: () => request<RegionDraftsResponse>("/region-drafts"),
+  createRegionDraft: (artworkId: string, body: RegionDraftRequest) =>
+    request<RegionDraft>(`/artworks/${encodeURIComponent(artworkId)}/region-drafts`, json(body)),
+  commitRegionDraft: (draftId: string) =>
+    request<RegionDraft>(`/region-drafts/${encodeURIComponent(draftId)}/commit`, { method: "POST" }),
+  returnRegionDraft: (draftId: string, reason: string) =>
+    request<RegionDraft>(`/region-drafts/${encodeURIComponent(draftId)}/return`, json({ reason })),
+  withdrawRegionDraft: (draftId: string) =>
+    request<Schemas["OkResponse"]>(`/region-drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
   // 批次辨識走 SSE（sse.ts 的 streamBatch）；兩件並排比較：a、b 是 artwork:<id> 或 part:<id>
   compareItems: (a: string, b: string) =>
     request<ItemComparison>(`/compare/items?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),

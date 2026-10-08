@@ -1427,6 +1427,230 @@
         }
       }
     },
+    "/api/v1/artworks/{artwork_id}/region-drafts": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Create Region Draft",
+        "description": "藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；\n解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。",
+        "operationId": "create_region_draft_api_v1_artworks__artwork_id__region_drafts_post",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts": {
+      "get": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "List Region Drafts",
+        "description": "待收錄（能收錄的身分才看得到）與自己送出的草稿。",
+        "operationId": "list_region_drafts_api_v1_region_drafts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraftsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}/commit": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Commit Region Draft",
+        "description": "收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。\n\n回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。",
+        "operationId": "commit_region_draft_api_v1_region_drafts__draft_id__commit_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}/return": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Return Region Draft",
+        "description": "主管退回（附原因），藝術家在自己的草稿清單看得到。",
+        "operationId": "return_region_draft_api_v1_region_drafts__draft_id__return_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionDraftReturn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}": {
+      "delete": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Withdraw Region Draft",
+        "description": "送出的人撤回還沒收錄的草稿。",
+        "operationId": "withdraw_region_draft_api_v1_region_drafts__draft_id__delete",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/cad/jobs/{job_id}": {
       "get": {
         "tags": [
@@ -2835,6 +3059,14 @@
             "type": "array",
             "title": "Customers"
           },
+          "artworks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Artworks",
+            "description": "藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的"
+          },
           "note": {
             "type": "string",
             "title": "Note"
@@ -2887,6 +3119,7 @@
           "ops",
           "warehouses",
           "customers",
+          "artworks",
           "note",
           "domains",
           "levels",
@@ -2918,6 +3151,11 @@
             "title": "Pending Approvals",
             "description": "待核准單數量（主管看得到要處理幾件）"
           },
+          "pending_region_drafts": {
+            "type": "integer",
+            "title": "Pending Region Drafts",
+            "description": "待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）"
+          },
           "token": {
             "$ref": "#/components/schemas/TokenInfo"
           }
@@ -2928,6 +3166,7 @@
           "accounts",
           "demo_controls",
           "pending_approvals",
+          "pending_region_drafts",
           "token"
         ],
         "title": "AccountsResponse"
@@ -4933,6 +5172,18 @@
             ],
             "title": "Region",
             "description": "這段講的是畫面上哪一塊（regions.items 的 id）"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker",
+            "description": "第一人稱的解說是誰說的（藝術家的區域解說，docs/adr/029）"
           }
         },
         "type": "object",
@@ -8647,6 +8898,330 @@
         },
         "type": "object",
         "title": "ReconstructRequest"
+      },
+      "RegionDraft": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "title": "Draft Id"
+          },
+          "artwork_id": {
+            "type": "string",
+            "title": "Artwork Id"
+          },
+          "artwork_title": {
+            "type": "string",
+            "title": "Artwork Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "indexing",
+              "done",
+              "failed",
+              "returned"
+            ],
+            "title": "Status",
+            "description": "pending 待收錄／indexing 收錄中（重建索引）／done 已收錄／failed 收錄失敗（已還原，可以再收錄）／returned 主管退回"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "license": {
+            "type": "string",
+            "title": "License"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution"
+          },
+          "image_size": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Image Size",
+            "description": "圈區域時畫作原圖的寬、高（像素）"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "by_label": {
+            "type": "string",
+            "title": "By Label"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionDraftReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegionDraftCommit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_id",
+          "artwork_id",
+          "artwork_title",
+          "status",
+          "label",
+          "points",
+          "text",
+          "license",
+          "image_size",
+          "by",
+          "by_label",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RegionDraft"
+      },
+      "RegionDraftCommit": {
+        "properties": {
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "by_label": {
+            "type": "string",
+            "title": "By Label"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "region_id": {
+            "type": "string",
+            "title": "Region Id"
+          },
+          "kb_version": {
+            "type": "string",
+            "title": "Kb Version"
+          },
+          "index_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by",
+          "by_label",
+          "at",
+          "region_id",
+          "kb_version"
+        ],
+        "title": "RegionDraftCommit"
+      },
+      "RegionDraftRequest": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Label",
+            "description": "這一塊叫什麼"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "maxItems": 64,
+            "minItems": 3,
+            "title": "Points",
+            "description": "多邊形頂點，相對畫作原圖的 0–1"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 20,
+            "title": "Text",
+            "description": "解說"
+          },
+          "license": {
+            "type": "string",
+            "enum": [
+              "CC BY 4.0",
+              "CC0"
+            ],
+            "title": "License",
+            "description": "藝術家同意的授權"
+          },
+          "attribution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribution",
+            "description": "CC BY 4.0 的標示文字（署名）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "points",
+          "text",
+          "license"
+        ],
+        "title": "RegionDraftRequest",
+        "description": "藝術家在畫上圈一塊、寫解說（docs/adr/029 第 2 步）；送出就是草稿，等主管收錄"
+      },
+      "RegionDraftReturn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "RegionDraftReturn"
+      },
+      "RegionDraftReview": {
+        "properties": {
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "by_label": {
+            "type": "string",
+            "title": "By Label"
+          },
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by",
+          "by_label",
+          "at"
+        ],
+        "title": "RegionDraftReview"
+      },
+      "RegionDraftsResponse": {
+        "properties": {
+          "pending": {
+            "items": {
+              "$ref": "#/components/schemas/RegionDraft"
+            },
+            "type": "array",
+            "title": "Pending",
+            "description": "待收錄（只有能收錄的身分看得到）"
+          },
+          "mine": {
+            "items": {
+              "$ref": "#/components/schemas/RegionDraft"
+            },
+            "type": "array",
+            "title": "Mine",
+            "description": "自己送出的草稿（新的在前）"
+          },
+          "can_commit": {
+            "type": "boolean",
+            "title": "Can Commit",
+            "description": "目前身分能不能收錄、退回"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending",
+          "mine",
+          "can_commit"
+        ],
+        "title": "RegionDraftsResponse"
       },
       "RetryAccount": {
         "properties": {

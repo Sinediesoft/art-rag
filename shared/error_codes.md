@@ -26,7 +26,10 @@
 | `INTAKE_DRAFT_NOT_FOUND` | 404 | 建檔草稿不存在或已過期（與上傳照片同為 7 天） |
 | `INTAKE_CLOSED` | 409 | 建檔草稿已經收錄或正在收錄，不能修改、捨棄或再收錄 |
 | `INTAKE_INVALID` | 422 | 收錄時還有欄位沒通過驗證，或組出來的零件 JSON 不符 `part.schema.json` |
-| `INTAKE_BUSY` | 409 | 另一張圖紙正在收錄、重建索引（一次只收錄一張） |
+| `INTAKE_BUSY` | 409 | 另一筆資料正在收錄、重建索引（照片建檔、區域解說一次只收錄一筆） |
+| `REGION_DRAFT_NOT_FOUND` | 404 | 區域解說草稿不存在，或已收錄／退回超過保存期限（docs/adr/029） |
+| `REGION_DRAFT_CLOSED` | 409 | 區域解說草稿已經收錄、退回或正在收錄，不能再收錄、退回或撤回 |
+| `REGION_REJECTED` | 422 | 區域解說沒有通過檢查：輸入防護的地端規則（像在對 AI 下指令、要內部資料）、合進畫作 JSON 後不符 schema 或區域規則、畫作的圖在送出後換過 |
 | `SQL_REJECTED` | 200（SSE `error`） | 庫存 Text-to-SQL：模型產生的 SQL 含寫入或管理指令（使用者要求修改資料），執行前攔下、不進修正迴圈；沒有任何資料被修改 |
 | `SQL_FAILED` | 200（SSE `error`） | 庫存 Text-to-SQL：修正 2 次後仍無法產生可執行的 SQL |
 | `INVENTORY_UNAVAILABLE` | 200（SSE `error`） | 庫存資料庫無法建立（`kb/inventory/` 資料有誤，細節見 `/health` 的 `inventory.problems`） |

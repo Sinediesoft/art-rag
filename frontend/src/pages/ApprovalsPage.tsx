@@ -5,6 +5,7 @@ import { api, ApiError, type Approval, type ApprovalDecision } from "../api/clie
 import { useAccounts, useApprovals, useAudit } from "../api/hooks";
 import { DiffTable } from "../components/agent/ChangeCard";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
+import { RegionDraftsSection } from "../components/regions/RegionDrafts";
 
 const STATUS_STYLE: Record<string, string> = {
   待核准: "bg-warning-soft text-warning",
@@ -50,6 +51,8 @@ export function ApprovalsPage() {
           <ApprovalCard key={a.ap_no} ap={a} canApprove={data.can_approve} myId={me?.id} />
         ))}
       </section>
+
+      <RegionDraftsSection />
 
       {data.mine.length > 0 && (
         <section className="flex flex-col gap-2">

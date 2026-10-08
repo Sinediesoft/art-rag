@@ -747,6 +747,15 @@ def local_leak(text: str) -> str | None:
     return None
 
 
+def passage_risk(text: str) -> str | None:
+    """要寫進知識庫的文字（藝術家的區域解說，docs/adr/029）：之後會原文進 prompt，
+    收錄前先用地端規則擋直接注入（第 2 段）、夾帶指令與要內部資料（第 4 段）。沒問題回 None。"""
+    direct, _ = _local_hits(text)
+    if direct:
+        return f"像是在對 AI 下指令（{direct[1]}）"
+    return local_leak(text)
+
+
 async def _ask(state: dict, questions: dict) -> tuple[jev.JevReply | None, str | None]:
     try:
         return await jev.ask(state, questions, timeout_s=POST_TIMEOUT_S), None

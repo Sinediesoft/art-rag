@@ -10,7 +10,8 @@ export function scopeText(a: Account) {
   if (a.role === "warehouse") return `盤點、調撥、報廢、庫存狀態 · ${a.warehouses.join("、")}`;
   if (a.role === "sales") return `訂單交期、數量 · ${a.customers.join("、")}`;
   if (a.role === "planner") return "開立工單、改交期、取消自己開的工單、執行排程 · 全廠";
-  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙";
+  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙與藝術家的區域解說";
+  if (a.role === "artist") return `在畫上圈區域、寫解說（送主管收錄） · ${a.artworks.join("、")}`;
   return a.note;
 }
 
@@ -52,6 +53,8 @@ export function IdentityBar() {
   if (!data) return null;
   const me = data.current;
   const token = data.token;
+  // 待核准＝超額申請＋待收錄的區域解說（docs/adr/029），都在 /approvals 處理
+  const pending = data.pending_approvals + data.pending_region_drafts;
 
   const change = async (id: string) => {
     setBusy(true);
@@ -99,14 +102,14 @@ export function IdentityBar() {
         <Link
           to="/approvals"
           className={`ml-auto shrink-0 ${
-            data.pending_approvals > 0 && me.role === "manager"
+            pending > 0 && me.role === "manager"
               ? "btn-primary px-3.5 py-1 text-[13px]"
-              : data.pending_approvals > 0
+              : pending > 0
                 ? "font-semibold text-warning"
                 : "link"
           }`}
         >
-          {data.pending_approvals > 0 ? `待核准 ${data.pending_approvals} 件` : "核准紀錄"} ›
+          {pending > 0 ? `待核准 ${pending} 件` : "核准紀錄"} ›
         </Link>
         {renewed && (
           <p className="w-full text-[12px] text-warning">

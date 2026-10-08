@@ -170,6 +170,17 @@ export function useSwitchAccount() {
 export const useApprovals = () =>
   useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });
 
+/** 區域解說草稿（docs/adr/029）：收錄中要等背景重建索引，短間隔重抓 */
+export const useRegionDrafts = () =>
+  useQuery({
+    queryKey: ["region-drafts"],
+    queryFn: api.regionDrafts,
+    refetchInterval: (q) =>
+      [...(q.state.data?.pending ?? []), ...(q.state.data?.mine ?? [])].some((d) => d.status === "indexing")
+        ? 1500
+        : 10_000,
+  });
+
 export const useAudit = () => useQuery({ queryKey: ["audit"], queryFn: api.audit });
 
 /** 七段權限控管的拒絕並記錄（認證與授權、Jev Choice 擋下的請求，Jev Noul 剔除的洩密段落） */

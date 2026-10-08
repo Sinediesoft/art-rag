@@ -130,6 +130,15 @@ def test_region_passage_carries_region_and_position():
     assert plain["text"] == ART["descriptions"][1]["text"]
 
 
+def test_first_person_story_names_the_speaker():
+    """藝術家寫「我第一次看到時…」：段落寫成「藝術家・甲說：「…」」，模型才不會把「我」當成畫家。"""
+    a = art()
+    a["descriptions"][0]["speaker"] = "藝術家・甲"
+    assert artwork_problems(a) == []
+    c = next(c for c in build_chunks(a) if "region" in c)
+    assert c["text"] == "〔畫面右下・簽名〕藝術家・甲說：「" + ART["descriptions"][0]["text"] + "」"
+
+
 def test_kb_artwork_detail_returns_regions(client):
     a = client.get("/api/v1/artworks/npm-000001").json()
     ids = {r["id"] for r in a["regions"]["items"]}
