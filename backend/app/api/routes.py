@@ -1008,8 +1008,9 @@ def change_request_approval(pending_id: str, body: S.ApprovalRequest, request: R
 
 @router.get("/approvals", response_model=S.ApprovalsResponse, tags=["agent"])
 def list_approvals(request: Request):
-    """待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。"""
-    return change_service.list_approvals(identity.current(request))
+    """待核准清單（主管處理）、我的申請、最近的核准紀錄；超過 24 小時的自動失效。
+    主管看全部，其他人只看自己送出的申請。"""
+    return change_service.list_approvals_for(identity.current(request))
 
 
 @router.post("/approvals/{ap_no}/approve", response_model=S.ApprovalDecision, tags=["agent"])
@@ -1029,21 +1030,32 @@ def return_approval(ap_no: str, body: S.ReturnRequest, request: Request):
 
 
 @router.get("/security/logs", response_model=S.SecurityLogsResponse, tags=["agent"])
-def security_logs(limit: int = Query(default=20, ge=1, le=200)):
+def security_logs(request: Request, limit: int = Query(default=20, ge=1, le=200)):
     """七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
-    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。"""
+    第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落。只存遮蔽個資後的文字。
+    主管看全部；其他人只看自己被擋下的紀錄（別人輸入的原文不公開），今天的筆數照常是全部。"""
+    account = identity.current(request)
     repo = get_logs_repo()
     tz = timezone(timedelta(hours=8))
     midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
     counts = repo.count_security(midnight.astimezone(UTC).isoformat())
+    items = repo.recent_security(limit if account.can("approve") else 200)
+    if not account.can("approve"):
+        items = [i for i in items if i.get("account_id") == account.id][:limit]
     return {
-        "items": repo.recent_security(limit),
+        "items": items,
         "today": {"rbac": counts.get(1, 0), "guard": counts.get(2, 0), "post": counts.get(4, 0)},
     }
 
 
 @router.get("/audit", response_model=S.AuditResponse, tags=["agent"])
-def audit_log(limit: int = Query(default=30, ge=1, le=200)):
-    """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。"""
+def audit_log(request: Request, limit: int = Query(default=30, ge=1, le=200)):
+    """稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+    主管看全部；其他人只看自己的操作。"""
+    account = identity.current(request)
     prod = get_production_repo()
-    return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}
+    if account.can("approve"):
+        return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}
+    items = [i for i in prod.audit(200) if i.get("actor_id") == account.id][:limit]
+    changes = [c for c in prod.changes(limit=200) if c.get("actor_id") == account.id][:10]
+    return {"items": items, "changes": changes}
