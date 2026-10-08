@@ -7,6 +7,7 @@ import { AnswerText } from "./common/CitationTag";
 import { ErrorMessage, FeedbackButtons } from "./common/Feedback";
 import { QaExport } from "./common/QaExport";
 import { EgressBadge, FallbackBadge, NotInKbNotice } from "./common/StatusNotices";
+import { RegionThumb } from "./regions/RegionOverlay";
 
 /** 一次問答：開始串流、顯示引用、來源、延遲與成本。問答頁、策略比較頁、智慧助理共用。
  * onProgress：智慧助理用來畫七段權限控管的第 3～7 段（檢索、驗證、重排、閘門、生成）；
@@ -170,6 +171,9 @@ export function ChatAnswer({
                     <span className="text-ink-48">相似度 {s.score.toFixed(2)}</span>
                   </div>
                   <p className={`text-ink-80 ${compact ? "line-clamp-2" : ""}`}>{s.text}</p>
+                  {s.region && s.artwork_id && (
+                    <RegionThumb artworkId={s.artwork_id} region={s.region} compact={compact} />
+                  )}
                   {s.source_url ? (
                     <a
                       href={s.source_url}

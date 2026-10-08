@@ -7,6 +7,17 @@ export const seconds = (ms: number | null | undefined) =>
 
 export const twd = (v: number) => (v === 0 ? "NT$0" : `NT$${v < 0.01 ? v.toFixed(4) : v.toFixed(2)}`);
 
+/** 0–1 座標落在畫面九宮格的哪一格（照片拍到的範圍、圈出的區域）；後端 chunking.where_on_painting() 用同一套詞 */
+export function whereOnPainting([x, y]: number[]): string {
+  const col = x < 1 / 3 ? 0 : x > 2 / 3 ? 2 : 1;
+  const row = y < 1 / 3 ? 0 : y > 2 / 3 ? 2 : 1;
+  return [
+    ["左上", "上方", "右上"],
+    ["左側", "中央", "右側"],
+    ["左下", "下方", "右下"],
+  ][row][col];
+}
+
 export const STRATEGY_LABEL: Record<string, string> = {
   hybrid: "混合式",
   hybrid_norag: "混合式（關檢索）",

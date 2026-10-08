@@ -80,6 +80,24 @@ class Description(BaseModel):
     source: str | None = Field(default=None, description="沒有網址的出處（使用者投稿、外部文件）")
     license: str
     attribution: str | None = None
+    region: str | None = Field(
+        default=None, description="這段講的是畫面上哪一塊（regions.items 的 id）"
+    )
+
+
+class ArtworkRegion(BaseModel):
+    id: str
+    label: str
+    points: list[list[float]] = Field(
+        description="多邊形頂點，相對畫作原圖的 0–1（x 往右、y 往下）"
+    )
+
+
+class ArtworkRegions(BaseModel):
+    """畫面上圈出的區域（docs/adr/029）"""
+
+    image_size: list[int] = Field(description="圈區域時那張圖的寬、高（像素）")
+    items: list[ArtworkRegion]
 
 
 class ArtworkImage(BaseModel):
@@ -101,6 +119,7 @@ class ArtworkDetail(BaseModel):
     image: ArtworkImage
     source_url: str
     descriptions: list[Description]
+    regions: ArtworkRegions | None = None
     style_tags: list[str] = []
     image_url: str
     thumb_url: str

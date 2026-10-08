@@ -3436,6 +3436,16 @@
             "type": "array",
             "title": "Descriptions"
           },
+          "regions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtworkRegions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "style_tags": {
             "items": {
               "type": "string"
@@ -3528,6 +3538,62 @@
           "items"
         ],
         "title": "ArtworkListResponse"
+      },
+      "ArtworkRegion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Points",
+            "description": "多邊形頂點，相對畫作原圖的 0–1（x 往右、y 往下）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "points"
+        ],
+        "title": "ArtworkRegion"
+      },
+      "ArtworkRegions": {
+        "properties": {
+          "image_size": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Image Size",
+            "description": "圈區域時那張圖的寬、高（像素）"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArtworkRegion"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_size",
+          "items"
+        ],
+        "title": "ArtworkRegions",
+        "description": "畫面上圈出的區域（docs/adr/029）"
       },
       "ArtworkSummary": {
         "properties": {
@@ -4855,6 +4921,18 @@
               }
             ],
             "title": "Attribution"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region",
+            "description": "這段講的是畫面上哪一塊（regions.items 的 id）"
           }
         },
         "type": "object",

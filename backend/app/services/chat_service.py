@@ -77,6 +77,8 @@ def _source(i: int, h, store) -> dict:
     title = store.by_id[item["artwork_id"]]["title"]["zh"]
     # 系統計算的段落（色彩分析）沒有網址，跟工廠圖紙段落一樣帶 source_label
     label = {"source_label": item["source"]} if item.get("source") else {}
+    # 綁在畫面區域上的段落帶座標（docs/adr/029），前端在畫上標出那一塊
+    region = {"region": item["region"]} if item.get("region") else {}
     return {
         **base,
         "artwork_id": item["artwork_id"],
@@ -84,6 +86,7 @@ def _source(i: int, h, store) -> dict:
         "title": title,
         "level": "公開",
         **label,
+        **region,
     }
 
 

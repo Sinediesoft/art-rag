@@ -57,6 +57,10 @@
 畫作的「色彩分析」段落（`chunk_id` 為 `<id>#color`，建索引時由系統計算，見 `docs/adr/010`）同樣 `source_url` 為 `null`，
 改帶 `source_label`（「系統計算：色彩分析（數位圖檔）」）；其他畫作段落不帶 `source_label`。
 
+綁在畫面區域上的畫作段落（`kb/artworks/<id>.json` 的段落有 `region`，見 `docs/adr/029`）多帶
+`region`：`{"id", "label", "points", "bbox"}`，座標是相對畫作原圖的 0–1（x 往右、y 往下），`bbox` 是 `[x0, y0, x1, y1]`；
+這種段落的 `text` 前面有系統加的方位詞（`〔畫面右下・騾隊與後方樹叢〕`）。其他段落不帶 `region`。
+
 ## `POST /api/v1/cad/reconstruct`（工廠圖紙 → 3D）
 
 | event | data（JSON） | 說明 |

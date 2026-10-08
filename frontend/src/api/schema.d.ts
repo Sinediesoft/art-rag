@@ -1543,6 +1543,7 @@ export interface components {
             source_url: string;
             /** Descriptions */
             descriptions: components["schemas"]["Description"][];
+            regions?: components["schemas"]["ArtworkRegions"] | null;
             /**
              * Style Tags
              * @default []
@@ -1570,6 +1571,31 @@ export interface components {
             kb_version: string;
             /** Items */
             items: components["schemas"]["ArtworkSummary"][];
+        };
+        /** ArtworkRegion */
+        ArtworkRegion: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Points
+             * @description 多邊形頂點，相對畫作原圖的 0–1（x 往右、y 往下）
+             */
+            points: number[][];
+        };
+        /**
+         * ArtworkRegions
+         * @description 畫面上圈出的區域（docs/adr/029）
+         */
+        ArtworkRegions: {
+            /**
+             * Image Size
+             * @description 圈區域時那張圖的寬、高（像素）
+             */
+            image_size: number[];
+            /** Items */
+            items: components["schemas"]["ArtworkRegion"][];
         };
         /** ArtworkSummary */
         ArtworkSummary: {
@@ -2065,6 +2091,11 @@ export interface components {
             license: string;
             /** Attribution */
             attribution?: string | null;
+            /**
+             * Region
+             * @description 這段講的是畫面上哪一塊（regions.items 的 id）
+             */
+            region?: string | null;
         };
         /**
          * Distractor
