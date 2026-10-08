@@ -4,6 +4,7 @@ import type { DoneEvent, ErrorEvent, PostFilterInfo, SourcesEvent } from "../api
 import { useChatStream } from "../hooks/useChatStream";
 import { seconds, STRATEGY_LABEL, twd } from "../lib/format";
 import { AnswerText } from "./common/CitationTag";
+import { ConflictNote, conflictCheckedLabel } from "./common/ConflictNote";
 import { ErrorMessage, FeedbackButtons } from "./common/Feedback";
 import { QaExport } from "./common/QaExport";
 import { EgressBadge, FallbackBadge, NotInKbNotice } from "./common/StatusNotices";
@@ -81,6 +82,7 @@ export function ChatAnswer({
           <AnswerText text={text.trim()} activeRef={activeRef} onCite={cite} />
         </div>
       )}
+      {text && <ConflictNote check={sources?.conflict_check} onCite={cite} />}
       {error && (
         <ErrorMessage
           title={
@@ -147,6 +149,7 @@ export function ChatAnswer({
                   · 由模型從 {sources.rearrange.candidates} 段候選中篩選
                 </span>
               )}
+              <span className="font-normal text-ink-48">{conflictCheckedLabel(sources.conflict_check)}</span>
             </span>
             <span className="font-normal text-accent">{open ? "收合" : "展開"}</span>
           </button>
