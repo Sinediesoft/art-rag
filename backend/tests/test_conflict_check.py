@@ -69,7 +69,7 @@ def test_note_goes_after_context_only_with_retrieval():
     assert "系統比對" not in no_rag[-1]["content"][-1]["text"]
 
 
-def test_chat_adds_note_when_conflict_found(monkeypatch):
+def test_chat_adds_note_when_conflict_found(monkeypatch, all_chunks):
     """請求開 conflict_check：sources 事件帶檢查結果，送給模型的參考資料後面多一句提醒。"""
 
     async def judge(question, sources):
@@ -91,7 +91,7 @@ def test_chat_adds_note_when_conflict_found(monkeypatch):
         events = [
             e
             async for e in chat_service.chat_stream(
-                "是誰發現了作者的簽名？",
+                "1962 年是誰發現了作者的簽名？",
                 f"req_cc_{flag}",
                 artwork_id="npm-000001",
                 rearrange=False,

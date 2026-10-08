@@ -126,10 +126,17 @@ def main() -> int:
     items = [json.loads(x) for x in (EVAL / "route_qa.jsonl").read_text("utf-8").splitlines() if x]
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
-        health = client.get("/api/v1/health").json()
+        client.get("/api/v1/health").raise_for_status()
     except httpx.HTTPError:
         print(f"連不上後端 {args.base}，請先執行 make demo")
         return 1
+    # 切換身分要先有憑證、要展示模式；Jev 設定在管理診斷（主管）；
+    # engine=local 要評估模式（docs/adr/030）
+    client.get("/api/v1/auth/accounts").raise_for_status()
+    client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+    health = client.get("/api/v1/admin/diagnostics").json()
+    if "local" in args.engines and not client.get("/api/v1/status").json()["eval_controls"]:
+        print("提醒：後端沒開 EVAL_CONTROLS，engine=local 會被忽略（照樣用 Jev）")
     print(f"路由評估：{len(items)} 題 · Jev：{health['system1']['detail']}")
     results = []
     for engine in args.engines.split(","):

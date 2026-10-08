@@ -82,9 +82,11 @@ def main() -> int:
     repo.ensure_built()
     qa = [json.loads(line) for line in (EVAL / "sql_qa.jsonl").read_text().splitlines() if line]
     client = httpx.Client(base_url=args.base, timeout=300)
-    # 資料範圍（docs/adr/014）：訪客不能讀工廠圖紙與工廠資料庫，用看得到全部資料的主管身分評估
+    # 資料範圍（docs/adr/014）：訪客不能讀工廠圖紙與工廠資料庫，用看得到全部資料的主管身分評估。
+    # 切換身分要先有憑證、要展示模式；模型名稱在管理診斷（主管，docs/adr/030）
+    client.get("/api/v1/auth/accounts").raise_for_status()
     client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
-    health = client.get("/api/v1/health").json()
+    health = client.get("/api/v1/admin/diagnostics").json()
     rows = []
     for q in qa:
         gold = repo.run_readonly(q["gold_sql"], 1000, 5000).rows

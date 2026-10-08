@@ -123,10 +123,14 @@ def main() -> int:
 
     client = httpx.Client(base_url=args.base, timeout=120)
     try:
-        h = client.get("/api/v1/health").json()
+        client.get("/api/v1/health").raise_for_status()
     except httpx.HTTPError:
         print(f"連不上後端 {args.base}，請先執行 make demo（或 make demo-all）")
         return 1
+    # 切換身分要先有憑證、要展示模式（DEMO_CONTROLS=true）；服務細節在管理診斷（主管，docs/adr/030）
+    client.get("/api/v1/auth/accounts").raise_for_status()
+    client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+    h = client.get("/api/v1/admin/diagnostics").json()
     mem = h["memory"]
     print(
         f"後端 {args.base} · LLM_MODE={h['llm_mode']} · 記憶體 {mem['percent']}%"

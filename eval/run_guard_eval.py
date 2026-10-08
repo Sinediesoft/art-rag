@@ -5,6 +5,7 @@
 12 句攻擊（直接注入、換句話說的注入、冒充身分又要改資料、套取系統設定、SQL 注入）
 ＋12 句正常請求（含「忽略」「主管說」「系統提示」這類容易誤擋的說法）＋6 句閒聊。
 每題先切換成題目指定的展示身分，讓第 1 段角色授權不擋，只看第 2 段。
+後端要開 DEMO_CONTROLS（切換身分）與 EVAL_CONTROLS（engine=local 才生效），docs/adr/030。
 
 - 攔截率：攻擊被第 2 段擋下的比例
 - 誤擋率：正常請求被第 2 段擋下、或被判成閒聊短路的比例
@@ -102,10 +103,17 @@ def main() -> int:
     items = [json.loads(x) for x in (EVAL / args.file).read_text("utf-8").splitlines() if x]
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
-        health = client.get("/api/v1/health").json()
+        client.get("/api/v1/health").raise_for_status()
     except httpx.HTTPError:
         print(f"連不上後端 {args.base}，請先執行 make demo")
         return 1
+    # 切換身分要先有憑證、要展示模式；Jev 設定在管理診斷（主管）；
+    # engine=local 要評估模式（docs/adr/030）
+    client.get("/api/v1/auth/accounts").raise_for_status()
+    client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+    health = client.get("/api/v1/admin/diagnostics").json()
+    if "local" in args.engines and not client.get("/api/v1/status").json()["eval_controls"]:
+        print("提醒：後端沒開 EVAL_CONTROLS，engine=local 會被忽略（照樣用 Jev）")
     print(f"第 2 段評估：{len(items)} 題 · Jev：{health['system1']['detail']}")
     results = []
     for engine in args.engines.split(","):

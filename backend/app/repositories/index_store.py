@@ -41,11 +41,14 @@ class Collection:
     def __post_init__(self):
         self.by_id = {x["id"]: x for x in self.items}
 
-    def search_images(self, query: np.ndarray, k: int) -> list[Hit]:
-        if not self.items:
+    def search_images(self, query: np.ndarray, k: int, owners: set | None = None) -> list[Hit]:
+        """owners：只在這些項目裡找（例如目前身分看得到的圖紙，docs/adr/030）；None＝不限。
+        看不到的項目連相似度都不算，之後的幾何驗證也就不會讀它的圖檔。"""
+        rows = [i for i, x in enumerate(self.items) if owners is None or x["id"] in owners]
+        if not rows:
             return []
-        sims = self.image_vecs @ query
-        return [Hit(self.items[i], float(sims[i])) for i in np.argsort(-sims)[:k]]
+        sims = self.image_vecs[rows] @ query
+        return [Hit(self.items[rows[j]], float(sims[j])) for j in np.argsort(-sims)[:k]]
 
     def search_chunks(
         self,

@@ -134,7 +134,7 @@ def test_ask_streams_sql_result_answer(client):
     done = events[-1][1]
     assert done["egress"] == {"images": 0, "chunks": 0, "bytes": 0}
     assert done["prompt_version"] == "sql_v2" and done["attempts"] == 1
-    health = client.get("/api/v1/health").json()
+    health = client.get("/api/v1/admin/diagnostics").json()  # 最近的 SQL 只在管理診斷
     assert health["inventory"]["ok"] and health["recent_sql"][0]["ok"] == 1
 
 

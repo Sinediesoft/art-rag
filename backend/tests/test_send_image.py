@@ -39,31 +39,37 @@ def ask(client, **body) -> dict:
     return next(d for e, d in parse_sse(r.text) if e == "done")
 
 
-def test_default_sends_image_like_before(client, sent):
+def test_default_sends_image_like_before(client, sent, all_chunks):
     assert get_models_config().chat.send_image is True
     done = ask(client, artwork_id="npm-000001")
     assert isinstance(sent[-1], bytes) and done["image_sent"] is True
 
 
-def test_request_can_skip_image_when_identified_and_retrieval_on(client, sent):
+def test_request_can_skip_image_when_identified_and_retrieval_on(client, sent, all_chunks):
     done = ask(client, artwork_id="npm-000001", send_image=False)
     assert sent[-1] is None and done["image_sent"] is False
     assert done["egress"]["images"] == 0
 
 
-def test_retrieval_off_baseline_still_sends_image(client, sent):
+def test_retrieval_off_baseline_still_sends_image(client, sent, monkeypatch):
     """檢索增益的對照組靠圖回答，不能拿掉。"""
+    monkeypatch.setattr(get_settings(), "eval_controls", True)
     done = ask(client, artwork_id="npm-000001", send_image=False, use_retrieval=False)
     assert isinstance(sent[-1], bytes) and done["image_sent"] is True
 
 
-def test_drawing_question_can_skip_image(client, sent):
+def test_drawing_question_can_skip_image(client, sent, all_chunks):
     client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
-    done = ask(client, part_id="mfg-002", send_image=False)
+    done = ask(
+        client,
+        question="連接法蘭有哪些公差要求？",
+        part_id="mfg-002",
+        send_image=False,
+    )
     assert sent[-1] is None and done["image_sent"] is False
 
 
-def test_env_overrides_models_yaml_and_request_overrides_env(client, sent, monkeypatch):
+def test_env_overrides_models_yaml_and_request_overrides_env(client, sent, monkeypatch, all_chunks):
     monkeypatch.setattr(get_settings(), "send_image", "false")
     ask(client, artwork_id="npm-000001")
     assert sent[-1] is None  # .env 關掉

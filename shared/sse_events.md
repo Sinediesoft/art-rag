@@ -33,18 +33,30 @@
   看不到的文件 `doc_level` 為 `null`（不透露它的等級）
 - `candidates`：第 3 段檢索出的候選段落數（第 4 段驗證前）
 - `post_filter`：`{"mode", "engine", "candidates", "kept", "flagged", "dropped", "cloud", "local", "verify", "rerank", "gate",
-  "rearrange", "egress_bytes", "ms"}`。`mode` 為 `jev`／`local`（請求帶 `post_filter`，智慧助理用：第 4～6 段）或
-  `scan`（沒帶，其他頁面：只用地端規則剔除有洩密風險的段落，段落數照原本規則，`rerank`、`gate` 為 `null`）。
+  "rearrange", "egress_bytes", "ms"}`。`mode` 為 `jev`／`local`：第 4～6 段由誰判斷，**由伺服器決定**（交接票記的判斷者，
+  沒有交接票時是 `jev`，叫不到 Jev 就地端判斷）。2026-10-06 起（docs/adr/030）**每一次問答都完整跑第 4～6 段**，
+  沒有只掃描的 `scan` 模式，請求的 `post_filter` 欄位已移除（送了也會被忽略）。
   `flagged` 是第 4 段 security_leak_check 剔除的段落（`by`＝Jev／地端），`dropped` 是與提問無關、分數太低或超過 3 段的段落。
   `verify`（第 4 段 Jev Noul）、`rerank`（第 5 段 Jev Score）、`gate`（第 6 段生成閘門）都是
   `{"engine", "checks", "call", "fallback_reason", "ms"}`，`gate` 另有 `passed`、`message`；`call` 是那一次 Jev 請求的紀錄
-  （送出的代號化內容、代號對照、回答、請求本文）。`cloud` 是送 Jev 的段落數（只有公開段落）。關檢索、其他頁面又沒有段落時為 `null`。
+  （送出的代號化內容、代號對照、回答、請求本文）。`cloud` 是送 Jev 的段落數（只有公開段落）。
+  關檢索、或第 1、2 段就擋下時為 `null`。
+- `pipeline`（`sources` 與 `done` 都有，docs/adr/030）：可觀測軌跡 `[{"stage", "name", "status", "by", "detail"}]`，
+  依序列出執行過的段落；`status` 為 `pass`／`block`／`skip`。`sources` 只到第 6 段，`done` 含第 7 段。
+  某一段 `block` 之後的段落不會執行（不讀圖、不檢索、不組 prompt、不呼叫 Jev 或生成端），也不會出現在清單裡。
 每段多一個 `level`（畫作「公開」，圖紙「內部」或「機密」）。`done.egress` 多 `jev_bytes`（第 4～6 段送 Jev 的位元組合計），
 `bytes`／`chunks` 也算進去；本地策略只有這一項外送。
 
-**生成閘門沒過**（`post_filter.gate.passed=false`）：`sources.sources` 是空的，接著只送一個 `token`（降級訊息「查無資料：…」）
-和 `done`，`done.degraded=true`、`model` 為「生成閘門（未呼叫 LLM）」、`tokens` 為 0、`latency_ms.first_token` 為 `null`。
-其他情況 `done.degraded=false`。
+**降級回應**（`done.degraded=true`，只送 `sources`（空）→ 一個 `token` → `done`，`tokens` 為 0、`latency_ms.first_token` 為 `null`）：
+- 第 1 段：指定的圖紙看不到**或不存在**（兩者回應完全一樣，不透露有沒有這份文件），訊息「查無資料：…」，`model` 為「第 1 段（未呼叫 LLM）」
+- 第 2 段：沒有有效交接票時 `/chat` 自己跑的 Jev Choice／地端硬性規則擋下，訊息為 `agent.yaml` 的 `guard.blocked_message`
+- 第 6 段：生成閘門沒過（`post_filter.gate.passed=false`），或關閉檢索（評估模式的畫作對照組以外），`model` 為「生成閘門（未呼叫 LLM）」
+- 第 7 段：生成後的輸出檢查沒過（含帳密／金鑰、個資、看不到的文件名稱或編號、內部資料數字、被剔除段落的內容、引用沒提供的編號），
+  原輸出不送出，訊息為 `guard.output_blocked_message`，`model` 註明「第 7 段輸出檢查擋下」
+其他情況 `done.degraded=false`。生成的回覆先在伺服器收齊、通過輸出檢查才送出 `token`，所以第一個 `token` 會在生成完成後才到。
+
+請求另可帶 `route_ticket`（`/agent/route` 回的交接票）：有效（同帳號、同一句話、同一個對象、10 分鐘內）才沿用第 2 段的判斷；
+沒帶、過期或不符時 `/chat` 自己重跑第 2 段。角色不能用工廠圖紙（訪客帶 `part_id`）在串流開始前回 403 `DATA_SCOPE_DENIED`。
 
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
@@ -147,3 +159,8 @@
 `strategy` 可用值：`hybrid`（主架構）、`lora`（選做）、`api_nokb`／`api_kb`（雲端對照組 A1／A2，
 需後端 `ALLOW_CLOUD=true`，且不接受 `image_id`）、`mock`。備援只在本地之間：
 `hybrid` → `hybrid_fallback`，`lora` → `hybrid` → `hybrid_fallback`；雲端不在任何備援鏈上。
+
+評估用的對照組選項（docs/adr/030）只在後端 `EVAL_CONTROLS=true`、而且請求來自 `DEMO_TRUSTED_HOSTS` 時生效：
+`strategy=mock`（否則照 `hybrid`，`done.strategy_requested` 仍記 `mock`）、`use_retrieval=false`
+（否則第 6 段直接降級；工廠圖紙即使在評估模式也一律降級）、`/agent/route` 的 `engine=local`。
+`api_nokb`（A1）等於關檢索，一樣要評估模式。這些欄位都不能降低七段權限控管的任何一段。

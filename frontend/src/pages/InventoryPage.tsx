@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { InventoryOverviewRow } from "../api/client";
-import { useHealth, useInventoryOverview, useInventorySchema } from "../api/hooks";
+import { useInventoryOverview, useInventorySchema, useStatus } from "../api/hooks";
 import { ApiErrorMessage, Loading } from "../components/common/Feedback";
 import { SqlAnswer } from "../components/inventory/SqlAnswer";
 
@@ -34,7 +34,7 @@ export function InventoryPage() {
   const [params, setParams] = useSearchParams();
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
-  const { data: health } = useHealth();
+  const { data: health } = useStatus();
   const hybrid = health?.strategies.hybrid;
 
   const ask = (question: string) => {
@@ -105,7 +105,7 @@ export function InventoryPage() {
 
       {hybrid && !hybrid.available && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
-          本地推論伺服器目前無法使用（{hybrid.detail}），查詢會改走本地備援模型；都失敗時服務暫停，不改走雲端。
+          本地推論伺服器目前無法使用，查詢會改走本地備援模型；都失敗時服務暫停，不改走雲端。
         </div>
       )}
 

@@ -1,8 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api, type HealthResponse } from "../api/client";
-import { useCadEvalRuns, useEvalRuns, useHealth, useRouteEvalRuns, useSqlEvalRuns } from "../api/hooks";
+import { api, type DiagnosticsResponse } from "../api/client";
+import {
+  useCadEvalRuns,
+  useCanView,
+  useDiagnostics,
+  useEvalRuns,
+  useRouteEvalRuns,
+  useSqlEvalRuns,
+  useStatus,
+} from "../api/hooks";
 import { Loading } from "../components/common/Feedback";
 import { formatTaipei, seconds, STRATEGY_LABEL } from "../lib/format";
 import { SecurityLogPanel } from "../components/agent/BlockedCard";
@@ -33,20 +41,33 @@ const Dot = ({ ok }: { ok: boolean }) => (
 const pct = (v: unknown) => (typeof v === "number" ? `${(v * 100).toFixed(0)}%` : "—");
 
 export function AdminPage() {
-  const { data: h, isLoading } = useHealth();
+  const canView = useCanView("diagnostics");
+  const { data: h, isLoading } = useDiagnostics();
+  // 展示按鈕看 /status 的 demo_controls：展示模式開著、而且是本機來的請求才顯示（docs/adr/030）
+  const { data: st } = useStatus();
   const evals = useEvalRuns();
   const cadEvals = useCadEvalRuns();
   const sqlEvals = useSqlEvalRuns();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
 
+  if (!canView)
+    return (
+      <div className="card p-6 text-sm text-ink-80">
+        <h1 className="t-display mb-3">系統狀態與評估</h1>
+        系統診斷含最近的問句、回覆、SQL 與路由紀錄，只有主管看得到（docs/adr/030）。請在頁首切換身分。
+        {st && <p className="mt-3">服務狀態：{st.status === "ok" ? "全部正常" : "部分異常"}</p>}
+      </div>
+    );
   if (isLoading || !h) return <Loading />;
   const m = h.manifest as Record<string, any>;
+  const demo = !!st?.demo_controls;
 
   const toggleOutage = async () => {
     setBusy(true);
     await api.setOutage(!h.outage_simulated).finally(() => setBusy(false));
-    await qc.invalidateQueries({ queryKey: ["health"] });
+    await qc.invalidateQueries({ queryKey: ["diagnostics"] });
+    await qc.invalidateQueries({ queryKey: ["status"] });
   };
 
   return (
@@ -118,7 +139,7 @@ export function AdminPage() {
         </Card>
       </div>
 
-      {h.demo_controls && (
+      {demo && (
         <Card title="容錯展示" className={h.outage_simulated ? "border-warning/40 bg-warning-soft/40" : ""}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <p className="flex-1 text-sm text-ink-80">
@@ -143,9 +164,9 @@ export function AdminPage() {
 
       <System1Card h={h} />
 
-      <MemoryCard h={h} />
+      <MemoryCard h={h} demo={demo} />
 
-      <SchedulerCard h={h} />
+      <SchedulerCard h={h} demo={demo} />
 
       <Card title="評估結果">
         {evals.data?.runs.length ? (
@@ -464,7 +485,7 @@ function MemoryBar({ percent, threshold }: { percent: number; threshold: number 
   );
 }
 
-function MemoryCard({ h }: { h: HealthResponse }) {
+function MemoryCard({ h, demo }: { h: DiagnosticsResponse; demo: boolean }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const m = h.memory;
@@ -472,7 +493,7 @@ function MemoryCard({ h }: { h: HealthResponse }) {
   const release = async () => {
     setBusy(true);
     await api.releaseMemory().finally(() => setBusy(false));
-    await qc.invalidateQueries({ queryKey: ["health"] });
+    await qc.invalidateQueries({ queryKey: ["diagnostics"] });
   };
   const high = m.percent >= m.threshold;
   return (
@@ -575,7 +596,7 @@ function MemoryCard({ h }: { h: HealthResponse }) {
             </ul>
           </div>
         )}
-        {h.demo_controls && (
+        {demo && (
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -596,7 +617,7 @@ function MemoryCard({ h }: { h: HealthResponse }) {
   );
 }
 
-function SchedulerCard({ h }: { h: HealthResponse }) {
+function SchedulerCard({ h, demo }: { h: DiagnosticsResponse; demo: boolean }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const e = h.scheduler;
@@ -626,7 +647,7 @@ function SchedulerCard({ h }: { h: HealthResponse }) {
           <Link to="/schedule" className="link font-semibold">
             生產排程頁
           </Link>
-          {h.demo_controls && (
+          {demo && (
             <button
               type="button"
               disabled={busy}
@@ -644,7 +665,7 @@ function SchedulerCard({ h }: { h: HealthResponse }) {
 
 /** 智慧助理的七段權限控管（docs/adr/015）：Jev 是否設定（第 2、4～6 段）、信心門檻、最近的路由紀錄、
  * 路由評估（make eval-route）、拒絕並記錄 */
-function System1Card({ h }: { h: HealthResponse }) {
+function System1Card({ h }: { h: DiagnosticsResponse }) {
   const s1 = h.system1;
   const runs = useRouteEvalRuns();
   if (!s1) return null;

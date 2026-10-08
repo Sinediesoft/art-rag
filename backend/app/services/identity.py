@@ -4,11 +4,15 @@
   部門（dept／depts）、機密等級（clearance）與效期；瀏覽器把它存在 HttpOnly cookie（artrag_token），
   API 也接受 Authorization: Bearer。所有 /api/v1 請求先過 gateway()：沒帶、簽章不符、過期 → 401，
   請求碰不到任何模型與資料
-- 帳號、角色、範圍都在 shared/access.yaml（種子檔，不用密碼）；DEMO_CONTROLS=false 時不能切換
+- 帳號、角色、範圍都在 shared/access.yaml（種子檔，不用密碼）。切換身分只在展示模式開放：
+  DEMO_CONTROLS=true（預設 false，人在本機 .env 明確開啟）＋請求來自 DEMO_TRUSTED_HOSTS
+  ＋已經有有效憑證；正式環境不能自己簽發任何帳號的 JWT（docs/adr/030）
 - 任何模型（Jev、Qwen3-VL）都看不到、也決定不了身分：權限只由憑證裡的帳號與角色決定
 - 資料範圍：角色能讀哪些領域（畫作／工廠圖紙／工廠資料庫）、哪些機密等級與部門；
-  所有讀取 API 用 require_domain()／require_part() 檢查，檢索用 JWT 的 clearance 與 depts
-  產生 Metadata Filter（第 3 段）
+  圖紙看不看得到只由 can_view_part() 決定（領域＋機密等級＋部門，docs/adr/030），
+  單筆、清單、搜尋、比較、3D、問答與生成前置檢查都用它；
+  檢索用同一條規則產生 Metadata Filter（第 3 段）
+- 管理與診斷畫面（診斷、拒絕並記錄、稽核）照 access.yaml 的 views 檢查角色（require_view）
 """
 
 import json
@@ -27,8 +31,9 @@ from app.core.errors import AppError
 COOKIE = "artrag_token"
 ISSUER = "art-rag"
 TW = timezone(timedelta(hours=8))
-# 不用憑證的端點：健康檢查、取得憑證（/auth/accounts 沒有有效憑證時發訪客憑證）
-PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts", "/api/v1/auth/switch"}
+# 不用憑證的端點：健康檢查（只回存活與就緒）、取得憑證（/auth/accounts 沒有有效憑證時發訪客憑證）。
+# 切換身分不在這裡：沒有憑證就在閘道 401（docs/adr/030）
+PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts"}
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,8 @@ class Account:
     # 部門：自己的部門、讀得到哪些部門的文件（Metadata Filter 的 dept 條件）
     dept: str = ""
     depts: tuple[str, ...] = ()
+    # 看得到哪些管理與診斷畫面（access.yaml 的 views）
+    views: tuple[str, ...] = ()
 
     @property
     def clearance(self) -> int:
@@ -82,6 +89,7 @@ class Account:
             "dept": self.dept,
             "depts": list(self.depts),
             "clearance": self.clearance,
+            "views": list(self.views),
         }
 
 
@@ -92,6 +100,7 @@ def accounts() -> dict[str, Account]:
         role = cfg["roles"][a["role"]]
         # 沒列在 clearance 的角色只能讀公開畫作（預設不允許）
         cl = cfg.get("clearance", {}).get(a["role"], {})
+        views = tuple(v for v, roles in cfg.get("views", {}).items() if a["role"] in roles)
         out[aid] = Account(
             id=aid,
             label=a["label"],
@@ -107,6 +116,7 @@ def accounts() -> dict[str, Account]:
             scope_note=cl.get("note", "只查公開的畫作知識庫"),
             dept=cl.get("dept", ""),
             depts=tuple(cl.get("depts", [])),
+            views=views,
         )
     return out
 
@@ -115,6 +125,14 @@ def level_rank(level: str) -> int:
     """機密等級的順序：公開 0、內部 1、機密 2（shared/access.yaml 的 levels）。"""
     order = get_access_config().get("levels", ["公開", "內部", "機密"])
     return order.index(level) if level in order else len(order)
+
+
+def scope_allows(clearance: int, depts, level: str, dept: str) -> bool:
+    """機密等級與部門的共同規則：等級不高於 clearance，而且部門是「公開」或在 depts 裡。
+    第 3 段的 Metadata Filter（guard.MetaFilter）與 can_view_part() 都用這一條，
+    不會一處放行、一處擋。
+    沒有部門的文件（dept 空白）一律看不到（預設不允許）。"""
+    return level_rank(level) <= clearance and (dept == "公開" or (bool(dept) and dept in depts))
 
 
 def domain_label(domain: str) -> str:
@@ -280,9 +298,36 @@ def ensure(request: Request, response: Response) -> Auth:
     return a
 
 
+def client_host(request: Request) -> str:
+    return request.client.host if request.client else ""
+
+
+def demo_allowed(request: Request) -> bool:
+    """展示模式：人在 .env 開了 DEMO_CONTROLS，而且請求來自信任的主機（預設只有本機 loopback）。"""
+    s = get_settings()
+    return s.demo_controls and client_host(request) in s.demo_trusted_hosts
+
+
+def require_demo(request: Request, what: str) -> None:
+    """展示用功能（切換身分、模擬斷線、展示還原、手動釋放模型）的共同檢查（docs/adr/030）。"""
+    s = get_settings()
+    if not s.demo_controls:
+        raise AppError("FORBIDDEN", f"展示模式已停用（DEMO_CONTROLS=false），不能{what}", 403)
+    if client_host(request) not in s.demo_trusted_hosts:
+        raise AppError("FORBIDDEN", f"展示模式只接受本機的請求，不能從這台主機{what}", 403)
+
+
+def eval_allowed(request: Request) -> bool:
+    """評估模式（EVAL_CONTROLS）：engine=local、關檢索、strategy=mock 這類對照組選項才會生效。"""
+    s = get_settings()
+    return s.eval_controls and client_host(request) in s.demo_trusted_hosts
+
+
 def switch(request: Request, response: Response, account_id: str) -> Auth:
-    if not get_settings().demo_controls:
-        raise AppError("FORBIDDEN", "展示控制已停用，不能切換身分", 403)
+    """展示版切換身分：不用密碼簽發任何帳號的 JWT，所以只在展示模式、本機、
+    而且已經有有效憑證（閘道驗過）時開放；其他情況 401／403，不會簽發。"""
+    require_demo(request, "切換身分")
+    auth_of(request)  # 閘道已擋沒有憑證的請求；直接呼叫函式時也一樣要有
     acc = get_account(account_id)
     token = issue(acc)
     _set_cookie(response, token)
@@ -325,9 +370,39 @@ def require_domain(account: Account, domain: str) -> None:
         raise _scope_denied(account, f"不能使用「{domain_label(domain)}」", domain)
 
 
-def require_part(account: Account, part: dict) -> None:
-    """資料範圍：工廠圖紙要能讀 mfg 領域，而且看得到這張圖紙的機密等級。"""
-    require_domain(account, "mfg")
+def can_view_part(account: Account, part: dict) -> bool:
+    """單一圖紙可見性（docs/adr/030）：能讀 mfg 領域、看得到這個機密等級、部門在範圍內，三者都要。
+    單筆讀取、清單、以圖搜圖紙、文字搜圖紙、比較、3D、批次辨識、問答與生成前置檢查都用這一個函式。"""
     level = part.get("confidentiality", "機密")
-    if not account.can_see(level):
-        raise _scope_denied(account, f"看不到{level}圖紙〈{part['name']['zh']}〉", "mfg", level)
+    return (
+        account.can_read("mfg")
+        and account.can_see(level)
+        and scope_allows(account.clearance, account.depts, level, part.get("owner", ""))
+    )
+
+
+def visible_part_ids(account: Account, parts) -> set[str]:
+    return {p["id"] for p in parts if can_view_part(account, p)}
+
+
+def require_part(account: Account, part: dict) -> None:
+    """資料範圍：看不到的圖紙 → 403。訊息不寫圖紙名稱與等級（不透露是哪一份文件）。"""
+    require_domain(account, "mfg")
+    if not can_view_part(account, part):
+        raise AppError(
+            "DATA_SCOPE_DENIED",
+            f"目前身分「{account.label}」看不到這張圖紙（{account.scope_note}）。",
+            403,
+        )
+
+
+def require_view(account: Account, view: str, what: str) -> None:
+    """管理與診斷畫面（access.yaml 的 views）：沒列到的角色一律 403，只有 JWT 不夠。"""
+    if view in account.views:
+        return
+    cfg = get_access_config()
+    roles = cfg.get("views", {}).get(view, [])
+    labels = "、".join(cfg["roles"][r]["label"] for r in roles) or "沒有任何身分"
+    raise AppError(
+        "PERMISSION_DENIED", f"目前身分「{account.label}」不能查看{what}（只有{labels}可以）。", 403
+    )

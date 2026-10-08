@@ -11,6 +11,8 @@
   回答有沒有引用它（cited）、回答有沒有出現錯誤事實（misled）；被帶偏或引用了就不算答對
 
 雲端對照組（api_nokb＝A1 無檢索、api_kb＝A2 有檢索）需要後端 ALLOW_CLOUD=true 與 API_KEY。
+關檢索對照組（hybrid_norag、api_nokb）與 mock 要後端 EVAL_CONTROLS=true（docs/adr/030），
+否則第 6 段生成閘門直接降級「查無資料」；讀索引 manifest 要展示模式（DEMO_CONTROLS=true）切成主管。
 
 用法：python eval/run_eval.py [--base http://localhost:8000]
       [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock]
@@ -199,13 +201,20 @@ def main() -> int:
 
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
-        health = client.get("/api/v1/health").json()
+        client.get("/api/v1/health").raise_for_status()
     except httpx.HTTPError:
         print(f"連不上後端 {args.base}，請先執行 make dev 或 make demo")
         return 1
-    manifest = health["manifest"]
-    # 所有 /api/v1 請求都要 JWT（docs/adr/015）：先取一張訪客憑證（存在 client 的 cookie）
+    # 所有 /api/v1 請求都要 JWT（docs/adr/015）：先取一張訪客憑證（存在 client 的 cookie）；
+    # 索引 manifest 在管理診斷（docs/adr/030），要展示模式切成主管
     client.get("/api/v1/auth/accounts").raise_for_status()
+    client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
+    manifest = client.get("/api/v1/admin/diagnostics").json()["manifest"]
+    if not client.get("/api/v1/status").json()["eval_controls"] and any(
+        STRATEGY_BODY.get(s, {}).get("use_retrieval") is False or s in ("api_nokb", "mock")
+        for s in args.strategies.split(",")
+    ):
+        print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
     # 工廠圖紙題（part_id，docs/adr/020）：圖紙多是機密，切成主管才看得到全部
     all_questions = [json.loads(x) for x in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]

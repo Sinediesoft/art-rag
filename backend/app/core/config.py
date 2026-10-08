@@ -100,8 +100,16 @@ class Settings(BaseSettings):
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
 
-    # 展示用：在 /admin 模擬主推論伺服器斷線，正式上線請關閉
-    demo_controls: bool = True
+    # 展示模式（docs/adr/030）：頁首切換身分（/auth/switch 簽發任意帳號的 JWT）、
+    # 模擬斷線、展示還原。預設關閉，只能由人類在本機 .env 明確開啟；
+    # 開啟後也只接受 demo_trusted_hosts 來的請求（預設只有本機 loopback）。不可用於正式環境
+    demo_controls: bool = False
+    demo_trusted_hosts: list[str] = ["127.0.0.1", "::1"]
+
+    # 評估模式（docs/adr/030）：只有開啟時，請求才能指定 engine=local、use_retrieval=false、
+    # strategy=mock 這類「對照組」選項，而且一樣只接受 demo_trusted_hosts 來的請求。
+    # 關閉時這些欄位不會降低任何安全關卡（engine 一律由伺服器決定、關檢索會被生成閘門擋下）
+    eval_controls: bool = False
 
     # 評估用：/chat 接受 inject（干擾段落注入，docs/adr/019）。等於讓呼叫端把任意文字塞進 prompt，
     # 只在跑 make eval 的主機打開，正式服務一律 false
@@ -170,7 +178,7 @@ class RearrangeSpec(BaseModel):
     """檢索段落篩選（MIRA 的 Rearrange，見 docs/adr/008）"""
 
     enabled: bool = False
-    prompt_version: str = "rearrange_v2"
+    prompt_version: str = "rearrange_v3"
     max_candidates: int = 5
     timeout_s: float = 30
     max_tokens: int = 16

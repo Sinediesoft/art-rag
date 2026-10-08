@@ -222,12 +222,20 @@ guard:
     - {kind: Email, code: Email, pattern: '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+'}
     - {kind: 身分證字號, code: 身分證, pattern: '(?<![A-Za-z0-9])[A-Z][12]\d{8}(?!\d)'}
 
-  # 地端規則：叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）時的備援，Jev 有回答就不跑（0 ms、不外送）
+  # 地端規則（docs/adr/030）：比對前先正規化——NFKC（全形英數變半形）、去掉零寬字元、轉小寫，
+  # 另外再比一次「去掉空白與標點」的版本（擋拆字：「內 部-成·本」）。
+  # direct 與 suspect＋耗時／修改是確定性的 hard-block：永遠先跑，命中就擋，Jev 不能覆寫；
+  # Jev 只能在沒命中時再「增加」攔截。叫不到 Jev 時先靠這些規則，未命中再由本地模型備援
   local_rules:
     direct:            # 第 2 段 Prompt 注入：命中就擋
       - {rule: 提示詞注入, pattern: '(忽略|無視|忘掉|忘記|不要理會?)(你|妳)?(之前|以上|前面|先前|原本|所有|全部)?的?(指示|指令|提示詞?|設定|角色)'}
-      - {rule: 提示詞注入, pattern: 'ignore\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions|prompts?|rules)'}
+      - {rule: 提示詞注入, pattern: '(ignore|disregard|forget|override)\s+(all\s+)?(the\s+|your\s+)?(previous|prior|above|earlier|system)\s+(instructions|prompts?|rules|guidelines)'}
       - {rule: 套取系統設定, pattern: '(顯示|列出|印出|告訴我|洩漏|輸出|給我看).{0,6}(系統提示詞?|system\s*prompt|你的(提示詞|指令|設定))'}
+      - {rule: 越獄指令, pattern: 'jailbreak|dan\s*模式|開發者模式|developer\s+mode'}
+      # 要模型扮演不受限制的角色（換句話說的越權，例如「不受限制的管理員模式」）
+      - {rule: 越獄指令, pattern: '(不受限制|不受約束|無限制|沒有限制|毫無限制|無約束|無審查|unrestricted|unfiltered|uncensored)的?.{0,6}(模式|管理員|助理|身分|角色|權限|mode|admin)'}
+      - {rule: 越獄指令, pattern: '(進入|切換到?|啟用|開啟|扮演|假裝(你)?是|你現在是|從現在起你是|從現在開始你是).{0,6}(超級管理員|系統管理員|管理員模式|root|上帝模式|最高權限)'}
+      - {rule: 越獄指令, pattern: '(act|behave)\s+as\s+(an?\s+)?(unrestricted|admin|administrator|root|superuser)|you\s+are\s+now\s+(in\s+)?(dan|admin|unrestricted|developer)'}
       # 以下到「解除規則」是 2026-10-05 依攻擊類型補的（docs/adr/022）。改之前先跑
       # make eval-guard 與 python eval/run_guard_eval.py --engines local --file guard_holdout.jsonl，誤擋率要維持 0
       # 套取系統設定（換句話說）：要複述／貼出「系統訊息、一開始收到的指令」；前後順序都認。
@@ -241,6 +249,7 @@ guard:
       - {rule: 角色改寫, pattern: '(無限制|不受限制|沒有任何限制|解除限制|上帝|管理員|維護|除錯|god|admin|root)\s*模式'}
       - {rule: 角色改寫, pattern: '(你|妳)的新(身分|角色|設定)|(你|妳)(現在)?不(再)?是(AI|助理|機器人|導覽助理)|只聽我的(命令|指令|話)'}
       - {rule: 角色改寫, pattern: '(忘記|忘掉|拋開)(你|妳)(是|的).{0,10}(助理|角色|身分|設定|規則)'}
+      - {rule: 角色改寫, pattern: '(把)?(你|妳).{0,12}(人格|角色|身分|設定).{0,6}(丟掉|拋開|忘掉|換掉)'}
       # 角色扮演越獄：扮演／假裝成「不受限制」或有權限的人。只寫「扮演什麼角色」「假設下週停機」不算
       - {rule: 角色扮演越獄, pattern: '(假裝|扮演|演一個|演個|當作|想像)(你|妳)?(是|成|一個|個)?.{0,12}(不受限制|沒有(任何)?限制|無限制|什麼都能做|為所欲為|超級管理員|管理員|老闆|主管|廠長|root|admin)'}
       # 解除規則：直接說不用遵守規定
@@ -256,9 +265,18 @@ guard:
       - {rule: 要求略過管控, pattern: '(忽略|跳過|繞過|略過|不用|不必|不要管|無視|免)(經過|再|走)?.{0,6}(權限|規則|核准|檢查|限制|審核|確認|流程)|bypass'}
       - {rule: 要求不留紀錄, pattern: '(不要|不用|不必|別|免)(留|寫|記|進)?.{0,4}(紀錄|記錄|稽核|log|日誌)'}
     # 第 4 段 security_leak_check：文件段落裡明顯的夾帶指令（間接注入）
-    indirect: '(給\s*AI|AI\s*助理|系統提示|system\s*prompt).{0,8}[:：]|忽略.{0,8}(規則|指示|指令)|ignore\s+(all\s+)?previous'
+    indirect: '(給\s*ai|ai\s*助理|系統提示|system\s*prompt).{0,8}[:：]|忽略.{0,8}(規則|指示|指令)|(ignore|disregard)\s+(all\s+)?(previous|prior|above)'
     # 第 4 段 security_leak_check：段落要求附上內部資料，或本身含帳密、金鑰
     leak: '(附上|提供|列出|告訴).{0,10}(內部電話|分機|帳號密碼|密碼|金鑰|成本|報價|客戶聯絡)|(password|passwd|api[_-]?key|secret)\s*[:=]'
+    # 第 4 段（地端）間接注入：段落提到內部資料（sensitive），又要把東西寫進回覆（directive）→ 剔除。
+    # 「檢核／除錯需求」這類包裝（wrapper）配上內部資料也剔除。
+    # 內部、機密段落再嚴一點（無法安全判斷就不進上下文）：wrapper、或對 AI 下的 directive 單獨出現、
+    # 或含零寬等隱藏字元，也剔除
+    # 英文字用 (?<![a-z])…(?![a-z]) 當邊界：中文字也算 \w，「內部cost」用 \b 會比不到
+    sensitive: '內部(成本|電話|分機|資料|價格|報價|聯絡|單價|帳號)|成本|報價|底價|單價|毛利|進價|分機|帳號|密碼|金鑰|憑證|客戶(聯絡|名單|電話|資料)|(?<![a-z])(cost|price|pricing|margin|token|api[_ ]?key|password|passwd|secret|credential|extension)s?(?![a-z])'
+    directive: '(寫進|寫入|寫到|寫在|放進|放入|放到|放在|加進|加入|加到|附上|附在|附加|填入|帶入|帶進|納入|列入|列在|列出|提供|告訴|透露|揭露|公開|輸出|印出|顯示|貼上|複製|轉述|完整寫|一併|順便).{0,16}(答覆|回覆|回答|答案|回應|輸出|結果|使用者|讀者|對方|最終|最後|answer|reply|response|output|final)|(回答|回覆|答覆|答案|作答|answer|reply).{0,16}(順便|一併|都要|務必|記得|附上|加上|附帶|帶上|寫上|寫進|寫入|列出|列進|列入|放進|加進|納入|提供)|(?<![a-z])(include|insert|add|append|put|write|reveal|disclose|expose|print|output|leak|share|tell)(?![a-z]).{0,40}(?<![a-z])(answer|reply|response|output|user|final)(?![a-z])'
+    wrapper: '(檢核|稽核|除錯|偵錯|debug|測試|驗證|維運|(?<![a-z])qa(?![a-z])|audit).{0,8}(需求|用途|目的|模式|要求|流程|說明|purpose|mode).{0,30}(輸出|列出|附上|提供|完整|寫進|寫入|回覆|回答|answer|output|include|print)'
+    ai_target: '(?<![a-z])(ai|llm|assistant|chatbot)(?![a-z])|ai助理|語言模型|生成模型|助理|機器人|生成端'
 
   # 地端模型備援（docs/adr/023）：叫不到 Jev、地端規則也沒命中時，再請本地 Qwen3-VL 判斷「攻擊／正常」。
   # 不外送；逾時、連不上、輸出看不懂時只用地端規則的結果。LLM_MODE=mock 時不呼叫
@@ -301,6 +319,32 @@ guard:
     生成模型只能依這些內容回答。請判斷要不要讓它開始回答。
   gate_answerable: 只根據這些作品資料與參考段落，能不能回答使用者的問題？（answerable?）
   gate_compliant: 依這些內容回答是否合規：不會洩漏個資、帳密、內部電話或成本，也不是要系統做查詢以外的事？（compliant?）
+  # 第 6 段的地端閘門（docs/adr/030；機密段落不送 Jev、或叫不到 Jev 時）：不因為有文件卡、圖面或
+  # 任一段高相似度就放行，要實際檢查——
+  # answerable：問題的關鍵詞（中文兩字一組＋英數詞，去掉疑問詞與虛詞）出現在留下的段落與作品資料裡的比例
+  #   ≥ min_coverage；只有「介紹一下」這類概覽問題時，要已指定文件而且至少有 1 段通過第 4、5 段
+  # compliant：問題本身不是在要內部資料（local_rules.sensitive），留下的段落也沒有帳密、個資
+  # 第 4 段地端 is_relevant 也看關鍵詞：相似度 ≥ local_relevance_min，或這段的覆蓋率 ≥ passage_coverage
+  local_gate:
+    min_coverage: 0.3
+    passage_coverage: 0.5
+    stopwords: [請問, 請, 有哪些, 有沒有, 是不是, 能不能, 可不可以, 為什麼, 為何, 哪些, 哪個, 哪裡, 哪一, 什麼, 甚麼, 多少, 如何, 怎麼, 怎樣, 是否, 告訴我, 我想, 我要, 想知道, 一下, 這張, 這幅, 這個, 這件, 那張, 那幅, 它的, 嗎, 呢, 吧, 啊, 的, 了, 是, 在, 和, 與, 及, 或, 跟, 有, 誰, 幾, 要, 用, 會, 被, 把, 對, 從, 你, 我, 他, 她, 它]
+    overview: '介紹|重點|概要|摘要|概述|說明一下|是什麼東西|overview|summary'
+    # 作品資料的欄位名稱：卡片上有這些欄位，問「作者是誰」「材質是什麼」才算作品資料答得出來
+    card_labels:
+      art: [作者, 畫家, 創作者, 年代, 年份, 媒材, 材質, 館藏, 收藏, 名稱, 標題]
+      mfg: [料號, 圖號, 版次, 材質, 材料, 外形, 尺寸, 大小, 名稱]
+
+  # 第 7 段輸出檢查（docs/adr/030）：生成的回覆先在伺服器收齊、檢查完才送給使用者。
+  # 含帳密／金鑰、個資、看不到的文件名稱或編號、內部資料數字、被第 4 段剔除的段落原文、
+  # 或引用了沒提供的 [編號] → 原輸出不送出，改回 output_blocked_message 並記錄（不存原文）
+  output:
+    credential: '(?<![a-z])(password|passwd|pwd|api[_-]?key|secret|token)(?![a-z])\s*[:=：]\s*\S+|(密碼|金鑰|帳密)\s*[:=：是為]\s*\S+|(?<![a-z])sk-[a-z0-9]{16,}|-----begin [a-z ]*private key-----'
+    sensitive_number: '(內部)?(成本|報價|底價|單價|毛利|進價|分機|cost|price)\s*[:=：為是約]?\s*(nt\$|\$|新台幣|台幣|約)?\s*\d'
+    flagged_overlap: 12
+  output_blocked_message: 查無資料：在你目前可以查閱的資料中，找不到能安全回答這個問題的內容。
+  # /chat 自己跑第 2 段（沒有有效的交接票）時，被擋下的回覆（不說明是哪條規則）
+  blocked_message: 這個請求已被安全防護攔截並記錄，請換個方式描述你要查詢的內容。
   # 降級回應：不透露「有文件但你沒有權限」
   degrade_message: 查無資料：在你目前可以查閱的資料中，找不到能回答這個問題的內容。
   # 第 2 段判為閒聊時的快速短路回覆（不檢索、不生成）

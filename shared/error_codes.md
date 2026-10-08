@@ -19,7 +19,7 @@
 | `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在或已過期（與上傳照片同為 7 天） |
 | `PART_MODEL_NOT_FOUND` | 404 | 這張圖紙沒有標準 3D 模型（照片建檔的零件，`/parts/{id}/model.stl`、`model.step`；docs/adr/013） |
 | `INTAKE_TOO_BLURRY` | 200（SSE `error`） | 照片建檔：照片太模糊（模糊程度超過 `intake.max_blur`，圖紙與畫作共用），不送模型、不建檔——模型看不清楚時不會留空而是猜，糊的原圖之後也認不出來（docs/adr/013） |
-| `INTAKE_ALREADY_IN_KB` | 200（SSE `error`） | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔 |
+| `INTAKE_ALREADY_IN_KB` | 200（SSE `error`）／409 | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔。圖紙只和建檔人看得到的圖紙比（ADR 030），所以主管收錄（`POST /intake/{draft_id}/commit`）時會用主管的範圍再查一次，有重複回 409 |
 | `INTAKE_WRONG_DOMAIN` | 200（SSE `error`） | 照片建檔：從圖紙頁進來，領域路由卻很確定是畫作（或反過來）；`route` 附上路由結果，前端帶著同一張照片轉到另一邊 |
 | `INTAKE_DOMAIN_UNSUPPORTED` | 200（SSE `error`）／422 | 照片建檔：`shared/models.yaml` 沒有這個領域的 `intake` 設定 |
 | `INTAKE_PAGE_NOT_FOUND` | 200（SSE `error`） | 照片建檔：找不到整張圖紙的四個角或完整的標題欄外框（沒拍完整，或不是知識庫圖紙的版面） |
@@ -41,12 +41,12 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts`、`/auth/switch` 例外；前端會向 `/auth/accounts` 取得訪客憑證後重送 |
+| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得訪客憑證後重送 |
 | `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對或帳號不存在（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
 | `TOKEN_EXPIRED` | 401 | 憑證過期（預設 8 小時，`JWT_TTL_MIN`）；前端自動重新取得 |
 | `TOKEN_STALE` | 401 | 憑證是舊的簽章金鑰簽發的（`JWT_SECRET` 留空時後端每次啟動換金鑰）；前端自動重新取得、不記錄 |
-| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原、照片建檔收錄（只有主管，ADR 013）也會回這個（ADR 011） |
-| `DATA_SCOPE_DENIED` | 403／SSE `error` | 目前身分的資料範圍不含這份資料（ADR 014）：訪客不能使用工廠圖紙與工廠資料庫、業務看不到機密圖紙。所有讀取 API 都檢查（含影像比對 `/images/{image_id}/align`、`align.png` 指定 `part:` 時）；`/chat`、`/cad/reconstruct` 用照片辨識出看不到的圖紙時改在串流裡回 `error`。智慧助理（`/chat` 帶 `post_filter`）不回這個：不透露文件存在，改由第 6 段降級成「查無資料」（ADR 015） |
+| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原、照片建檔收錄（只有主管，ADR 013）也會回這個（ADR 011）；管理與診斷畫面（`/admin/diagnostics`、`/security/logs`、`/audit`）沒有 `access.yaml` 的 `views` 權限時也是這個（ADR 030） |
+| `DATA_SCOPE_DENIED` | 403／SSE `error` | 目前身分的資料範圍不含這份資料（ADR 014）：訪客不能使用工廠圖紙與工廠資料庫、業務看不到機密圖紙。所有讀取 API 都檢查（含影像比對 `/images/{image_id}/align`、`align.png` 指定 `part:` 時）；`/cad/reconstruct` 用照片辨識出看不到的圖紙時改在串流裡回 `error`。2026-10-06 起（ADR 030）看不看得到同時看機密等級與部門（`identity.can_view_part`），訊息不寫圖紙名稱；`/chat` 只有角色不能用工廠圖紙時回這個，指定了看不到或不存在的圖紙一律在串流裡降級「查無資料」（不透露文件存在） |
 | `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
 | `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
 | `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |
@@ -54,7 +54,7 @@
 | `CHANGE_NOT_FOUND` | 404 | 確認卡已過期（15 分鐘）或已使用，請重新輸入 |
 | `CHANGE_STALE` | 409 | 從試算到按確認之間，受影響的資料已被修改（指紋不同），沒有寫入 |
 | `ACCOUNT_NOT_FOUND` | 404 | 切換身分時沒有這個展示帳號 |
-| `FORBIDDEN` | 403 | 展示控制已停用（`DEMO_CONTROLS=false` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`）；或 `EVAL_INJECTION=false` 時 `/chat` 帶了 `inject`（干擾段落注入只給評估用，ADR 019） |
+| `FORBIDDEN` | 403 | 展示模式沒開或不是受信任來源的請求（`DEMO_CONTROLS=false`（預設），或請求不是來自 `DEMO_TRUSTED_HOSTS` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`；ADR 030）；或 `/chat` 帶 `inject` 但未同時開啟 `EVAL_INJECTION=true`、`EVAL_CONTROLS=true` 且來自受信任來源（干擾段落注入只給評估用，ADR 019） |
 | `COMPARE_KIND_MISMATCH` | 422 | 兩件並排比較（`/compare/items`、`/compare/summary`）的兩件不同類：一幅畫和一張圖紙（docs/adr/017） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
 | `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |

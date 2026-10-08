@@ -91,7 +91,7 @@ def test_batch_rows_blurry_matched_and_not_in_kb(client, monkeypatch):
     answers = {sharp: art_found("aic-27992"), other: art_found(None)}
     called = []
 
-    def fake(image_id, top_k=None):
+    def fake(image_id, top_k=None, part_ids=None):
         called.append(image_id)
         return answers[image_id]
 
@@ -107,10 +107,14 @@ def test_batch_rows_blurry_matched_and_not_in_kb(client, monkeypatch):
 
 
 def test_batch_hides_drawings_outside_scope(client, monkeypatch):
-    """業務看不到機密圖紙：那一列標「目前身分看不到」，不透露是哪一張；訪客不能用工廠圖紙。"""
+    """業務看不到機密圖紙：那一列標「目前身分看不到」，不透露是哪一張；訪客不能用工廠圖紙。
+    辨識本身只在看得到的圖紙裡找（docs/adr/030）；
+    這裡的假辨識故意忽略 part_ids，測事後的第二道過濾。"""
     img = upload(client, DRAWINGS / "mfg-001__glare.jpg")
     monkeypatch.setattr(
-        batch_service, "identify_any", lambda i, k=None: drawing_found("mfg-001", "機密")
+        batch_service,
+        "identify_any",
+        lambda i, k=None, part_ids=None: drawing_found("mfg-001", "機密"),
     )
     as_account(client, "sales_a")
     rows, _ = run_batch(client, [img])

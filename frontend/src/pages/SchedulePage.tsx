@@ -72,7 +72,7 @@ export function SchedulePage() {
   const qc = useQueryClient();
   const { data, isLoading, error } = useProductionOverview();
   const refresh = () => {
-    for (const key of ["production-overview", "part-plan", "inventory-overview", "part-inventory", "health"]) {
+    for (const key of ["production-overview", "part-plan", "inventory-overview", "part-inventory", "diagnostics"]) {
       void qc.invalidateQueries({ queryKey: [key] });
     }
   };

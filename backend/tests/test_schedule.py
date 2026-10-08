@@ -191,9 +191,14 @@ def test_work_order_validation(client):
     assert client.post("/api/v1/production/work-orders", json=too_many).status_code == 422
 
 
-def test_health_reports_scheduler_and_memory(client):
-    h = client.get("/api/v1/health").json()
+def test_diagnostics_report_scheduler_and_memory(client):
+    """排程服務與記憶體在管理診斷（主管才看得到）；畫面用的 /status 也有記憶體。"""
+    as_account(client, "planner")
+    assert client.get("/api/v1/admin/diagnostics").status_code == 403
+    as_account(client, "manager")
+    h = client.get("/api/v1/admin/diagnostics").json()
     assert h["scheduler"]["engine"] == "greedy"
+    assert 0 < client.get("/api/v1/status").json()["memory"]["percent"] <= 100
     assert 0 < h["memory"]["percent"] <= 100
     assert {m["key"] for m in h["memory"]["models"]} == {
         "clip",

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import type { MemoryStatus } from "./api/client";
-import { useHealth } from "./api/hooks";
+import { useStatus } from "./api/hooks";
 import { IdentityBar } from "./components/agent/IdentityBar";
 import { AssistantPage } from "./pages/AssistantPage";
 
@@ -26,7 +26,7 @@ const PAGES: [RegExp, string][] = [
 ];
 
 export function Layout() {
-  const { data: health } = useHealth();
+  const { data: health } = useStatus();
   const { pathname, hash } = useLocation();
   const home = pathname === "/";
   const degraded = health && health.status !== "ok";

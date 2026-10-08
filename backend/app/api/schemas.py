@@ -390,23 +390,33 @@ class ChatRequest(BaseModel):
     artwork_id: str | None = None
     part_id: str | None = Field(default=None, description="工廠圖紙問答；與 artwork_id 擇一")
     image_id: str | None = None
-    strategy: Strategy = "hybrid"
-    use_retrieval: bool = True
+    strategy: Strategy = Field(
+        default="hybrid",
+        description="生成端。mock 只在評估模式（EVAL_CONTROLS＋本機）生效，否則照 hybrid；"
+        "雲端對照組要伺服器 ALLOW_CLOUD=true，而且不收工廠圖紙與使用者照片",
+    )
+    use_retrieval: bool = Field(
+        default=True,
+        description="false＝關檢索對照組：只有評估模式的畫作問答會生成，"
+        "其他情況第 6 段生成閘門直接降級「查無資料」、不呼叫 LLM（docs/adr/030）",
+    )
     allow_fallback: bool = True
     rearrange: bool | None = Field(
         default=None,
-        description="檢索段落篩選（MIRA 的 Rearrange）；null＝依伺服器設定（預設關）",
+        description="地端段落是否由本地 Qwen3-VL 判斷相關性（MIRA 的 Rearrange）；"
+        "null＝依伺服器設定。開或關都照樣執行第 4～6 段",
     )
     conflict_check: bool | None = Field(
         default=None,
         description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
         "（docs/adr/028）；null＝依伺服器設定",
     )
-    post_filter: Literal["jev", "local"] | None = Field(
+    route_ticket: str | None = Field(
         default=None,
-        description="七段權限控管第 4～6 段（docs/adr/015）：jev＝公開段落送 Jev 做雙重驗證、"
-        "評分重排與生成閘門，local＝全在地端；兩者都最多留 3 段，閘門沒過就降級回「查無資料」。"
-        "null＝只用地端規則剔除有洩密風險的段落（其他頁面）",
+        max_length=64,
+        description="/agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；"
+        "沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。"
+        "七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位",
     )
     inject: list[Distractor] | None = Field(
         default=None,
@@ -438,6 +448,53 @@ class StrategyStatus(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """公開健康檢查（不用憑證，docs/adr/030）：只回存活與就緒。問句、回覆、SQL、路由紀錄、
+    模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"""
+
+    status: Literal["ok", "degraded"]
+    ready: bool = Field(description="資料庫可連線而且索引與知識庫一致")
+    db: bool
+    index_consistent: bool
+    kb_version: str
+    demo_controls: bool = Field(description="展示模式是否開啟（開啟時不可用於正式環境）")
+    demo_warning: str | None = Field(description="展示模式開啟時的警語")
+
+
+class StrategyBrief(BaseModel):
+    """畫面用的服務狀態：只有能不能用，不含模型端點位址。"""
+
+    label: str
+    model: str
+    available: bool
+    detail: str
+
+
+class System1Brief(BaseModel):
+    """畫面用的 Jev 狀態：只說有沒有設定，不含端點、門檻與逾時（那些在 /admin/diagnostics）。"""
+
+    jev_configured: bool
+    detail: str
+    model: str
+
+
+class StatusResponse(BaseModel):
+    """登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。
+    不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"""
+
+    status: Literal["ok", "degraded"]
+    outage_simulated: bool
+    demo_controls: bool
+    demo_warning: str | None
+    eval_controls: bool
+    strategies: dict[str, StrategyBrief]
+    memory: "MemoryStatus | None" = None
+    system1: System1Brief
+
+
+class DiagnosticsResponse(BaseModel):
+    """管理診斷（access.yaml 的 views.diagnostics，預設只有主管，docs/adr/030）：
+    原本放在公開健康檢查裡的完整內容。"""
+
     status: Literal["ok", "degraded"]
     db: bool
     index_consistent: bool
@@ -450,6 +507,7 @@ class HealthResponse(BaseModel):
     allow_cloud: bool
     outage_simulated: bool
     demo_controls: bool
+    eval_controls: bool
     recent_chats: list[dict]
     recent_cad: list[dict] = []
     inventory: dict = Field(default={}, description="庫存資料庫：資料日期、各表筆數、資料問題")
@@ -1072,6 +1130,10 @@ class Account(BaseModel):
     dept: str = Field(description="自己的部門（寫進 JWT）")
     depts: list[str] = Field(description="讀得到哪些部門的文件（Metadata Filter 的 dept 條件）")
     clearance: int = Field(description="機密等級：公開 0、內部 1、機密 2（寫進 JWT）")
+    views: list[str] = Field(
+        default=[],
+        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
+    )
 
 
 class TokenCheck(BaseModel):
@@ -1128,7 +1190,8 @@ class RouteRequest(BaseModel):
         default="auto",
         description="第 2、4～6 段由誰判斷：auto／jev＝用 Jev，"
         "叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；"
-        "local＝只用地端規則（前端不提供，給 make eval-guard 對照用）",
+        "local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，"
+        "其他情況一律由伺服器決定（docs/adr/030）",
     )
 
 
@@ -1294,7 +1357,14 @@ class RouteResponse(BaseModel):
     blocked: BlockedInfo | None
     short_circuit: ShortCircuitInfo | None
     dispatch: dict
-    post_filter: Literal["jev", "local"] = Field(description="分派到 /chat 時帶的第 4～6 段判斷者")
+    post_filter: Literal["jev", "local"] = Field(
+        description="第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）"
+    )
+    route_ticket: str | None = Field(
+        default=None,
+        description="交接票（docs/adr/030）：畫作問答、圖紙問答放行時才有；呼叫 /chat 時帶上，"
+        "伺服器確認帳號、問句、對象都相符才沿用第 2 段的判斷，10 分鐘內有效",
+    )
     egress: RouteEgress
     latency_ms: dict[str, int]
 
@@ -1303,20 +1373,22 @@ class SecurityLogRow(BaseModel):
     no: str
     created_at: str
     request_id: str | None
-    stage: Literal[1, 2, 4]
+    stage: Literal[1, 2, 4, 7]
     rule: str
     judge: str | None
     account_id: str | None
     account_label: str | None
-    text: str | None
+    text: str | None = Field(
+        description="事件摘要：文件／段落 ID、問句或回覆的雜湊（不存問句、段落與回覆原文）"
+    )
 
 
 class SecurityLogsResponse(BaseModel):
-    """七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求，
-    第 4 段剔除的洩密段落。"""
+    """七段權限控管的拒絕並記錄：第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下的請求、
+    第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。要 access.yaml 的 views.security_logs。"""
 
     items: list[SecurityLogRow]
-    today: dict[str, int] = Field(description="今天（UTC+8）各段筆數：rbac／guard／post")
+    today: dict[str, int] = Field(description="今天（UTC+8）各段筆數：rbac／guard／post／output")
 
 
 class ChangeCheck(BaseModel):
@@ -1526,6 +1598,8 @@ class IntakeUpdate(BaseModel):
 
 
 HealthResponse.model_rebuild()
+StatusResponse.model_rebuild()
+DiagnosticsResponse.model_rebuild()
 
 
 # ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）

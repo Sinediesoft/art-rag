@@ -5,6 +5,7 @@ import json
 import pytest
 
 from app.core.config import get_settings
+from app.services import chat_service
 from app.services.chat_service import INJECTED_LABEL
 
 FAKE = "這幅畫的作者簽名是在 1962 年由張大千在畫面左上角發現的。"
@@ -27,6 +28,7 @@ def sources_of(client, body: dict) -> list[dict]:
 @pytest.fixture
 def injection_on(monkeypatch):
     monkeypatch.setattr(get_settings(), "eval_injection", True)
+    monkeypatch.setattr(get_settings(), "eval_controls", True)
 
 
 def test_injection_forbidden_by_default(client, monkeypatch):
@@ -78,15 +80,16 @@ def test_position_last(client, injection_on):
 
 
 def test_other_takes_real_chunk_from_another_artwork(client, injection_on):
-    got = sources_of(
-        client,
-        {"question": "簽名藏在哪裡？", "artwork_id": "npm-000001", "inject": [{"kind": "other"}]},
+    # 完整七段管線可以把無關的 other 濾掉；這裡只驗證注入器確實從另一幅畫取真實段落。
+    real = chat_service.retrieve("簽名藏在哪裡？", "npm-000001")
+    got = chat_service.inject_distractors(
+        "簽名藏在哪裡？", real, [{"kind": "other"}], "npm-000001", None
     )
     other = got[0]
     assert other["injected"] is True and other["injected_kind"] == "other"
     assert other["artwork_id"] != "npm-000001"
     assert other["chunk_id"].startswith("inject:0:")
-    real_ids = {s["chunk_id"] for s in got[1:]}
+    real_ids = {s["chunk_id"] for s in real}
     assert other["chunk_id"].removeprefix("inject:0:") not in real_ids
 
 
@@ -104,13 +107,14 @@ def test_compatible_is_written_like_counterfactual(client, injection_on):
     注入方式和 counterfactual 相同，只是用途不同（量會不會誤報不一致）。
     """
     text = "1980 年代起，這幅畫多次隨故宮的北宋山水特展展出。"
-    got = sources_of(
-        client,
-        {
-            "question": "簽名藏在哪裡？",
-            "artwork_id": "npm-000001",
-            "inject": [{"kind": "compatible", "text": text, "topic": "展出"}],
-        },
+    # 這段與問題不相關時會被完整安全管線濾掉；先在注入器層驗證建構格式。
+    real = chat_service.retrieve("簽名藏在哪裡？", "npm-000001")
+    got = chat_service.inject_distractors(
+        "簽名藏在哪裡？",
+        real,
+        [{"kind": "compatible", "text": text, "topic": "展出"}],
+        "npm-000001",
+        None,
     )
     first = got[0]
     assert first["injected"] is True and first["injected_kind"] == "compatible"

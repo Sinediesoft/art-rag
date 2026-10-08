@@ -11,6 +11,10 @@ export type ImageAlignment = Schemas["ImageAlignment"];
 export type ImageSearchResponse = Schemas["ImageSearchResponse"];
 export type TextSearchResponse = Schemas["TextSearchResponse"];
 export type HealthResponse = Schemas["HealthResponse"];
+/** 登入後畫面用的系統狀態（docs/adr/030）：服務能不能用、記憶體、展示模式；不含模型端點與紀錄 */
+export type StatusResponse = Schemas["StatusResponse"];
+/** 管理診斷（只有 access.yaml 的 views.diagnostics 看得到，預設主管） */
+export type DiagnosticsResponse = Schemas["DiagnosticsResponse"];
 export type EvalRunsResponse = Schemas["EvalRunsResponse"];
 export type PartSummary = Schemas["PartSummary"];
 export type PartDetail = Schemas["PartDetail"];
@@ -177,6 +181,8 @@ export const api = {
       `/images/${encodeURIComponent(imageId)}/align?target=${encodeURIComponent(target)}`,
     ),
   health: () => request<HealthResponse>("/health"),
+  status: () => request<StatusResponse>("/status"),
+  diagnostics: () => request<DiagnosticsResponse>("/admin/diagnostics"),
   evalRuns: () => request<EvalRunsResponse>("/eval/runs"),
   feedback: (body: Schemas["FeedbackRequest"]) => request<Schemas["OkResponse"]>("/feedback", json(body)),
   setOutage: (enabled: boolean) => request<Schemas["OkResponse"]>("/admin/outage", json({ enabled })),

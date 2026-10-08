@@ -71,6 +71,14 @@ export function IdentityBar() {
     <div className="frosted border-b border-hairline">
       <div className="mx-auto flex min-h-11 max-w-5xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5 text-[13px]">
         <span className="text-ink-48">目前身分</span>
+        {data.demo_controls && (
+          <span
+            className="rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold text-warning"
+            title="DEMO_CONTROLS=true：可以不用密碼切換任何身分（docs/adr/030）"
+          >
+            展示模式・不可用於正式環境
+          </span>
+        )}
         {data.demo_controls ? (
           <select
             value={me.id}

@@ -4,6 +4,7 @@ import type { DoneEvent, ErrorEvent, PostFilterInfo, SourcesEvent } from "../api
 import { useChatStream } from "../hooks/useChatStream";
 import { seconds, STRATEGY_LABEL, twd } from "../lib/format";
 import { AnswerText } from "./common/CitationTag";
+import { ConflictNote, conflictCheckedLabel } from "./common/ConflictNote";
 import { ErrorMessage, FeedbackButtons } from "./common/Feedback";
 import { QaExport } from "./common/QaExport";
 import { EgressBadge, FallbackBadge, NotInKbNotice } from "./common/StatusNotices";
@@ -82,6 +83,7 @@ export function ChatAnswer({
           <AnswerText text={text.trim()} activeRef={activeRef} onCite={cite} />
         </div>
       )}
+      {text && <ConflictNote check={sources?.conflict_check} onCite={cite} />}
       {error && (
         <ErrorMessage
           title={
@@ -148,6 +150,7 @@ export function ChatAnswer({
                   · 由模型從 {sources.rearrange.candidates} 段候選中篩選
                 </span>
               )}
+              <span className="font-normal text-ink-48">{conflictCheckedLabel(sources.conflict_check)}</span>
             </span>
             <span className="font-normal text-accent">{open ? "收合" : "展開"}</span>
           </button>
@@ -201,13 +204,12 @@ export function ChatAnswer({
 /** 放在回答上方的小註記：上下文是怎麼來的、有沒有剔除洩密段落（七段權限控管第 4～6 段） */
 function ContextNote({ pf, drawing }: { pf: PostFilterInfo; drawing: boolean }) {
   if (pf.gate && !pf.gate.passed) return null; // 降級回應本身就是答案
-  const parts = [`上下文 ${pf.kept} 段`];
-  if (pf.mode !== "scan")
-    parts[0] += `（從 ${pf.candidates} 段候選經${pf.engine === "jev" ? " Jev Noul 驗證、Jev Score 重排" : "地端驗證、重排"}）`;
+  const parts = [
+    `上下文 ${pf.kept} 段（從 ${pf.candidates} 段候選經${pf.engine === "jev" ? " Jev Noul 驗證、Jev Score 重排" : "地端驗證、重排"}）`,
+  ];
   if (pf.flagged.length)
     parts.push(`已剔除 ${pf.flagged.length} 段有洩密風險的段落（${pf.flagged.map((x) => x.topic).join("、")}）`);
-  if (drawing && pf.mode !== "scan") parts.push("機密圖紙只用地端模型");
-  if (pf.mode === "scan" && !pf.flagged.length) return null;
+  if (drawing) parts.push("機密圖紙只用地端模型");
   return (
     <p
       className={`rounded-lg px-2.5 py-1.5 text-xs ${pf.flagged.length ? "bg-warning-soft text-warning" : "bg-parchment text-ink-48"}`}
