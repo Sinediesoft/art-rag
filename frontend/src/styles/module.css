@@ -1,0 +1,442 @@
+/* =====================================================================
+   模組・沿用 Design 10 Night Opening
+   左邊純黑的對話欄、右邊暗色展牆；所有文字都很小、很安靜，成果才是主角。
+   整合版改成左右各一半（中間可拖曳），右側只放對話產生的成果。
+   工廠模組用這一份；藝術模組再疊 art.css 換成暖色。
+   ===================================================================== */
+
+/* 1. Tokens ----------------------------------------------------------- */
+:root {
+  --bg: #000000;
+  --surface: #0c0c0c;
+  --surface-2: #161616;
+  --surface-3: #222222;
+  --text: #ededed;
+  --text-2: #a5a5a5;
+  --text-3: #6f6f6f;
+  --line: #2a2a2a;
+  --line-2: #1a1a1a;
+  --accent: #ededed;
+  --on-accent: #000000;
+  --accent-soft: #1d1d1d;
+  --ok: #9fd3a8;
+  --warn: #e0b46a;
+  --danger: #ff7a6e;
+  --code-bg: #111111;
+  --code-text: #cfcfcf;
+  --series-1: #ededed;
+  --series-2: #9a9a9a;
+  --series-3: #e0b46a;
+  --series-4: #8fb3e8;
+  --series-5: #5f5f5f;
+  --model: #8c8c8c;
+  --model-edge: #ededed;
+  --shadow-art: 0 30px 60px rgb(0 0 0 / 0.7);
+  --shadow-pop: 0 20px 50px rgb(0 0 0 / 0.8);
+  --show-bg: #121212;
+  --factory: #e5533d;
+  --art: #c9a45c;
+  --on-mod: #fff;
+  color-scheme: dark;
+
+  --font-ui: "Noto Sans TC", system-ui, sans-serif;
+  --font-display: "Noto Sans TC", system-ui, sans-serif;
+  --font-read: "Noto Sans TC", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --fs-ui: 13px;
+  --fs-read: 14.5px;
+  --lh-read: 2;
+  --radius-s: 2px;
+  --radius-m: 2px;
+  --radius-l: 2px;
+  --radius-btn: 999px;
+  --radius-composer: 0;
+  --topbar-h: 64px;
+  --gap-msg: 22px;
+  --measure: 760px;
+}
+
+/* 2. Layout ----------------------------------------------------------- */
+.mtop {
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-2);
+}
+.mchat {
+  background: var(--bg);
+}
+.mchat .thread {
+  padding: 18px 40px 24px;
+  margin: 0;
+}
+.mchat .dock {
+  padding: 8px 40px 26px;
+  border: 0;
+  background: var(--bg);
+}
+.mchat .dock__inner {
+  max-width: 760px;
+  margin: 0;
+}
+.dock__note {
+  display: none;
+}
+.dock__status {
+  display: block;
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.32em;
+  color: var(--text-3);
+}
+.mtabs {
+  background: var(--bg);
+}
+
+/* 3. Components ------------------------------------------------------- */
+.section-label {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.24em;
+  color: var(--text-3);
+}
+
+/* 問答 */
+.msg--user {
+  align-items: flex-start;
+  padding-top: 16px;
+  border-top: 1px solid var(--line-2);
+}
+.thread > .msg--user:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.msg__bubble {
+  max-width: none;
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.msg--ai {
+  margin-top: -8px;
+}
+.msg__body {
+  gap: 14px;
+}
+.prose {
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+.trace__stages {
+  display: none;
+}
+.trace__summary {
+  order: 1;
+  flex-basis: auto;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+.trace__toggle {
+  order: 2;
+  font-size: 10.5px;
+}
+.trace-inline {
+  background: var(--surface-2);
+}
+.cite {
+  min-width: 0;
+  height: auto;
+  margin: 0 1px;
+  padding: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 10px;
+  vertical-align: super;
+  line-height: 0;
+}
+.cite:hover,
+.cite.is-active {
+  background: none;
+  color: #fff;
+  text-decoration: underline;
+}
+.answer__note {
+  font-size: 11px;
+}
+.sources {
+  border: 0;
+}
+.sources__toggle {
+  padding: 0;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+.sources__label {
+  font-weight: 400;
+}
+.followups__label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  font-weight: 400;
+}
+.followup {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.followup:hover {
+  color: #fff;
+}
+.link-btn {
+  color: var(--text);
+}
+.msg__actions {
+  opacity: 0.6;
+}
+.notice::before,
+.notice::after {
+  background: var(--line-2);
+}
+
+/* 輸入：底線＋膠囊描邊按鈕 */
+.composer__box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 10px;
+  border: 0;
+  background: none;
+  box-shadow: none !important;
+}
+.composer__photo {
+  flex-basis: 100%;
+  padding: 0;
+}
+.composer__unphoto {
+  left: 42px;
+}
+.composer__input {
+  flex-basis: 100%;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid #3a3a3a;
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+}
+.composer__input:focus {
+  border-bottom-color: var(--mod);
+}
+.composer__bar {
+  display: contents;
+}
+.composer__tool,
+.composer__hint {
+  display: none;
+}
+.composer__send {
+  order: 1;
+  margin: 0;
+  height: 36px;
+  width: auto;
+  padding: 0 22px;
+  border: 1px solid var(--text);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+.composer__send:not(:disabled):hover {
+  background: var(--text);
+  color: #000;
+}
+.composer__send:disabled {
+  background: transparent;
+  color: var(--text);
+  opacity: 0.5;
+}
+.composer__send .icon {
+  display: none;
+}
+.composer__send.is-stop .icon {
+  display: block;
+}
+.composer__send-label {
+  display: inline;
+}
+.composer__attach {
+  order: 2;
+  width: auto;
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid #3a3a3a;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.composer__attach .icon {
+  display: none;
+}
+.composer__attach-label {
+  display: inline;
+}
+
+/* 卡片 */
+.panel-card {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.works {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: 46%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.specs {
+  grid-template-columns: repeat(4, 1fr);
+}
+.specs__value {
+  font-size: 22px;
+  font-weight: 300;
+}
+.btn--primary {
+  border: 1px solid var(--text);
+  background: transparent;
+  color: var(--text);
+}
+.btn--primary:hover {
+  background: var(--text);
+  color: #000;
+  filter: none;
+}
+.btn--ghost {
+  border: 1px solid var(--line);
+}
+.choice {
+  background: transparent;
+  font-size: 12.5px;
+}
+.plinth {
+  background: var(--surface-2);
+}
+.table th {
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+}
+.progress__fill {
+  background: var(--mod);
+}
+
+/* 跳轉（在模組裡問到另一個模組的事） */
+.jump {
+  background: var(--surface);
+  border-color: var(--line);
+  border-radius: 2px;
+  padding: 14px 16px;
+}
+.jump__title {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+.jump__line {
+  font-size: 12.5px;
+}
+.jump__go {
+  height: 32px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 展示區 */
+.showcase {
+  background: var(--show-bg);
+}
+.showcase__title {
+  font-weight: 300;
+  letter-spacing: 0.14em;
+}
+.view__canvas {
+  margin: 0 40px;
+}
+.view__scroll {
+  padding-left: 40px;
+  padding-right: 40px;
+}
+.showcase__head {
+  padding-left: 40px;
+  padding-right: 32px;
+}
+.strip {
+  padding-left: 40px;
+}
+.titleblock,
+.view__foot {
+  margin-left: 40px;
+  margin-right: 40px;
+  padding-left: 0;
+  padding-right: 0;
+}
+.view--detail .view__canvas {
+  margin-left: 40px;
+}
+.table td {
+  font-size: 13px;
+}
+
+/* 側欄（模組裡以抽屜打開） */
+.side {
+  --side-bg: #0a0a0a;
+  border-right: 1px solid var(--line);
+}
+.side .mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--text);
+  font-size: 13px;
+}
+.side .brand__name {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.side__search {
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.menu {
+  background: #111;
+  border-color: var(--line);
+}
+
+@media (max-width: 899px) {
+  .mchat .thread {
+    padding: 14px 16px 20px;
+  }
+  .mchat .dock {
+    padding: 8px 16px 14px;
+  }
+  .view__canvas,
+  .view--detail .view__canvas {
+    margin: 0 16px;
+  }
+  .titleblock,
+  .view__foot {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+  .view__scroll,
+  .showcase__head,
+  .strip {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

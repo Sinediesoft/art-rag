@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiError, type Approval, type ApprovalDecision } from "../api/client";
 import { useAccounts, useApprovals, useAudit } from "../api/hooks";
-import { DiffTable } from "../components/agent/ChangeCard";
+import { DiffTable } from "../components/agent/DiffTable";
 import { ErrorMessage, Loading } from "../components/common/Feedback";
 
 const STATUS_STYLE: Record<string, string> = {

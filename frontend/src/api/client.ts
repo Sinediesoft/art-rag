@@ -205,6 +205,7 @@ export const api = {
   cancelWorkOrder: (woNo: string) =>
     request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" }),
   stopSchedule: () => request<Schemas["OkResponse"]>("/schedule/stop", { method: "POST" }),
+  scheduleRun: (runId: string) => request<ScheduleRunDetail>(`/schedule/runs/${encodeURIComponent(runId)}`),
   resetProduction: () => request<Schemas["OkResponse"]>("/admin/production/reset", { method: "POST" }),
   // 記憶體管理
   memory: () => request<MemoryStatus>("/memory"),
@@ -213,8 +214,8 @@ export const api = {
   accounts: () => request<AccountsResponse>("/auth/accounts"),
   switchAccount: (accountId: string) => request<AccountsResponse>("/auth/switch", json({ account_id: accountId })),
   /** token：示範「竄改過的憑證」時才給（放在 Authorization 標頭，閘道優先看它） */
-  route: (body: RouteRequest, token?: string) => {
-    const init = json(body);
+  route: (body: RouteRequest, token?: string, signal?: AbortSignal) => {
+    const init: RequestInit = { ...json(body), signal };
     if (token) init.headers = { ...init.headers, Authorization: `Bearer ${token}` };
     return request<RouteResponse>("/agent/route", init, !!token);
   },

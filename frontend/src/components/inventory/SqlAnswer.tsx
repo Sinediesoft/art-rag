@@ -65,7 +65,7 @@ export function SqlAnswer({ question }: { question: string }) {
           </div>
           <pre
             ref={codeRef}
-            className={`max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-tile p-4 font-mono text-[12.5px] leading-relaxed text-white [--color-accent:var(--color-accent-on-dark)] ${
+            className={`max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-tile p-4 font-mono text-[12.5px] leading-relaxed text-[var(--code-text)] [--color-accent:var(--color-accent-on-dark)] ${
               generating ? "caret" : ""
             } ${rejected ? "line-through decoration-danger decoration-2 ring-2 ring-danger" : ""}`}
           >

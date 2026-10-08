@@ -1,0 +1,102 @@
+/* =====================================================================
+   藝術模組・疊在 module.css 上
+   版面與工廠模組完全一樣，只換顏色與字：
+   暖深褐黑的畫廊夜色、象牙白的展品標籤、金箔色的重點，標題改用明體。
+   ===================================================================== */
+
+:root {
+  --bg: #0f0c09;
+  --surface: #17130f;
+  --surface-2: #201b16;
+  --surface-3: #2c261f;
+  --text: #ede6d8;
+  --text-2: #b3a894;
+  --text-3: #8a7f6d;
+  --line: #342d25;
+  --line-2: #221d18;
+  --accent: #ede6d8;
+  --on-accent: #0f0c09;
+  --accent-soft: #241f19;
+  --code-bg: #17130f;
+  --code-text: #d9cfbd;
+  --show-bg: #1a1511;
+  --wall-light: rgb(255 226 170 / 0.07);
+  --shadow-art: 0 28px 60px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.4);
+  --mod: #c9a45c;
+  --on-mod: #17130f;
+  --font-display: "Noto Serif TC", "Noto Sans TC", serif;
+}
+
+.app--art {
+  --mod: #c9a45c;
+}
+
+/* 標題用明體：像展品標籤 */
+.mtop__name,
+.msubject__title,
+.showcase__title,
+.museum-label__title,
+.tl-head__span,
+.tl__title,
+.sim-base__title,
+.sim__title,
+.wall__title,
+.note__title,
+.showcase__empty-title,
+.jump__title {
+  font-family: var(--font-display);
+}
+.msubject__title {
+  font-weight: 400;
+}
+
+/* 輸入框焦點、按鈕：金色 */
+.composer__input {
+  border-bottom-color: #4a3f33;
+}
+.composer__attach {
+  border-color: #4a3f33;
+}
+.composer__send:not(:disabled):hover,
+.btn--primary:hover {
+  background: var(--mod);
+  border-color: var(--mod);
+  color: var(--on-mod);
+}
+.cite:hover,
+.cite.is-active,
+.followup:hover {
+  color: var(--mod);
+}
+
+/* 展品標籤：象牙白紙卡 */
+.museum-label {
+  background: #ede6d8;
+  color: #1b1712;
+  border-left-color: var(--mod);
+}
+.museum-label__en,
+.museum-label__fine {
+  color: #6b604f;
+}
+.museum-label__by {
+  color: #3a3228;
+}
+.museum-label__tags span {
+  border-color: #c9bda7;
+  color: #4a4034;
+}
+
+.side {
+  --side-bg: #0c0a07;
+}
+.side .mark {
+  border-color: var(--mod);
+  color: var(--mod);
+}
+.menu {
+  background: #17130f;
+}
+.zp__tools {
+  background: rgb(20 16 12 / 0.78);
+}

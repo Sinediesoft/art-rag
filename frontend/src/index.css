@@ -1,308 +1,229 @@
-@import "tailwindcss";
-
 /*
- * 設計 token（共用層 §八）：Apple 風格，規則見 frontend/DESIGN.md。
- * 白色卡片放在 Parchment 底上、近黑文字、唯一的互動色 Action Blue；
- * 卡片只用 1px 細線不加陰影，陰影只留給作品圖（product-shadow）。
- * 綠／橘／紅只用在狀態（通過、警示、擋下），不當裝飾。
+ * 樣式分層（規則見 frontend/DESIGN.md）：
+ * - styles/core.css、styles/app.css：整合版（ArtRAG-前端demo）的版面骨架與元件，放在 artrag 層
+ * - styles/entry.css、module.css、art.css：入口（01 Quiet）、模組（10 Night）、藝術模組暖色；
+ *   依畫面由 src/shell/theme.ts 只掛上該用的那幾份（同樣在 artrag 層，排在後面所以覆寫 core）
+ * - Tailwind：功能頁（/search、/inventory…）沿用的 utility；utilities 層排在 artrag 之後，所以
+ *   功能頁的 utility 不會被整合版的元素重設蓋掉。顏色 token 全部接到整合版的 --bg／--text／--accent…，
+ *   功能頁跟著入口或模組的主題變色，不另外維護一套色票。
  */
+@layer theme, base, artrag, components, utilities;
+
+@import "tailwindcss";
+@import "./styles/core.css" layer(artrag);
+@import "./styles/app.css" layer(artrag);
+@import "./styles/shell.css" layer(artrag);
+
 @theme {
-  --color-canvas: #ffffff;
-  --color-parchment: #f5f5f7;
-  --color-parchment-deep: #e8e8ed;
-  --color-pearl: #fafafc;
-  --color-card: #ffffff;
-  --color-ink: #1d1d1f;
-  --color-ink-80: #333333;
-  --color-ink-48: #7a7a7a;
-  --color-hairline: #e0e0e0;
-  --color-divider: #f0f0f0;
-  --color-accent: #0066cc;
-  --color-accent-focus: #0071e3;
-  --color-accent-soft: #e8f1fb;
-  --color-accent-on-dark: #2997ff;
-  /* 黑色導覽列上的狀態色（深色底要用亮一階的綠／橘） */
-  --color-success-on-dark: #30d158;
-  --color-warning-on-dark: #ff9f0a;
-  --color-nav: #000000;
-  --color-tile: #272729;
-  --color-success: #248a3d;
-  --color-success-soft: #e9f6ec;
-  --color-warning: #b64400;
-  --color-warning-soft: #fff1e5;
-  --color-danger: #d70015;
-  --color-danger-soft: #fdeced;
-  /* Mac／iPhone 直接用 SF Pro＋蘋方；其他平台用 Inter＋思源黑體（DESIGN.md 的替代字型） */
-  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
-  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
-  /*
-   * 圓角只有四種（DESIGN.md rounded）：5px 小標籤、8px 工具按鈕與內嵌圖、18px 卡片、藥丸。
-   * 直接改 Tailwind 的級距，既有的 rounded-* 就落在這四種上：
-   * rounded-sm＝5px（不帶級距的 rounded 是 Tailwind 固定的 4px，視同 5px），rounded-md／rounded-lg＝8px，rounded-xl／rounded-2xl＝18px，rounded-full＝藥丸。
-   */
-  --radius-xs: 5px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 18px;
-  --radius-2xl: 18px;
+  --color-canvas: var(--surface);
+  --color-parchment: var(--bg);
+  --color-parchment-deep: var(--surface-3);
+  --color-pearl: var(--surface-2);
+  --color-card: var(--surface);
+  --color-ink: var(--text);
+  --color-ink-80: var(--text-2);
+  --color-ink-48: var(--text-3);
+  --color-hairline: var(--line);
+  --color-divider: var(--line-2);
+  --color-accent: var(--accent);
+  --color-accent-focus: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-on-dark: var(--accent);
+  --color-success-on-dark: var(--ok);
+  --color-warning-on-dark: var(--warn);
+  --color-nav: var(--bg);
+  --color-tile: var(--code-bg);
+  --color-success: var(--ok);
+  --color-success-soft: color-mix(in srgb, var(--ok) 16%, transparent);
+  --color-warning: var(--warn);
+  --color-warning-soft: color-mix(in srgb, var(--warn) 16%, transparent);
+  --color-danger: var(--danger);
+  --color-danger-soft: color-mix(in srgb, var(--danger) 16%, transparent);
+  /* 功能頁的 text-white 都放在 accent／danger／success 色塊上：整合版的重點色是淺色，字要用 --on-accent */
+  --color-white: var(--on-accent);
+  /* --font-display、--font-mono 與整合版同名，由 artrag 層的主題決定（層級較高） */
+  --font-sans: var(--font-ui);
+  --radius-xs: var(--radius-s);
+  --radius-sm: var(--radius-s);
+  --radius-md: var(--radius-m);
+  --radius-lg: var(--radius-m);
+  --radius-xl: var(--radius-l);
+  --radius-2xl: var(--radius-l);
 }
 
-@layer base {
-  html {
-    background: var(--color-parchment);
-    color: var(--color-ink);
-    font-family: var(--font-sans);
-    letter-spacing: -0.01em;
-    -webkit-font-smoothing: antialiased;
-    -webkit-text-size-adjust: 100%;
-    -webkit-tap-highlight-color: transparent;
-  }
-  body {
-    min-height: 100dvh;
-    background: var(--color-parchment);
-  }
-  button {
-    cursor: pointer;
-  }
-  button:disabled {
-    cursor: not-allowed;
-  }
-  /* 全系統的按下回饋：縮到 0.95（DESIGN.md button-primary-active） */
-  button:not(:disabled):active,
-  a.btn-primary:active,
-  a.btn-ghost:active,
-  a.btn-dark:active {
-    transform: scale(0.95);
-  }
-  :focus-visible {
-    outline: 2px solid var(--color-accent-focus);
-    outline-offset: 2px;
-  }
-  h1,
-  h2,
-  h3 {
-    font-family: var(--font-display);
-  }
-}
-
-/* ---------- 字級（DESIGN.md typography） ---------- */
+/* ---------- 功能頁沿用的元件 utility（外觀跟著整合版 token） ---------- */
 @utility t-hero {
   font-family: var(--font-display);
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 1.1;
-  letter-spacing: -0.28px;
-  @media (width < 640px) {
-    font-size: 30px;
-    line-height: 1.15;
-  }
-}
-@utility t-display {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 600;
-  line-height: 1.14;
-  letter-spacing: -0.28px;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.15;
   @media (width < 640px) {
     font-size: 24px;
   }
 }
+@utility t-display {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.2;
+}
 @utility t-tagline {
   font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 600;
-  line-height: 1.19;
-  letter-spacing: 0.231px;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.25;
 }
 @utility t-lead {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 400;
-  line-height: 1.42;
-  letter-spacing: 0.012em;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-2);
 }
 @utility t-body {
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.47;
-  letter-spacing: -0.374px;
+  font-size: 15px;
+  line-height: 1.6;
 }
 @utility t-caption {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.43;
-  letter-spacing: -0.224px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 @utility t-caption-strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.29;
-  letter-spacing: -0.224px;
+  line-height: 1.35;
 }
 @utility t-fine {
   font-size: 12px;
-  font-weight: 400;
-  line-height: 1.33;
-  letter-spacing: -0.12px;
+  line-height: 1.35;
 }
-/* 頁面最上方的小標（原本的朱色字距加寬標題） */
 @utility t-eyebrow {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.29;
-  letter-spacing: -0.224px;
-  color: var(--color-ink-48);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
-
-/* ---------- 元件（DESIGN.md components） ---------- */
-/* button-primary：Action Blue 藥丸 */
 @utility btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 9999px;
-  background: var(--color-accent);
-  color: #fff;
-  padding: 10px 22px;
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.24;
-  letter-spacing: -0.374px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 8px 18px;
+  font-size: 14px;
   white-space: nowrap;
-  transition:
-    transform 0.12s,
-    opacity 0.15s;
+  transition: opacity 0.15s;
+  &:hover {
+    opacity: 0.88;
+  }
   &:disabled,
   &[aria-disabled="true"] {
     opacity: 0.4;
   }
 }
-/* button-secondary-pill：空心藍框藥丸 */
 @utility btn-ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 9999px;
-  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  border: 1px solid var(--line);
   background: transparent;
-  color: var(--color-accent);
-  padding: 9px 21px;
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.24;
-  letter-spacing: -0.374px;
+  color: var(--text);
+  padding: 7px 17px;
+  font-size: 14px;
   white-space: nowrap;
-  transition: transform 0.12s;
+  &:hover {
+    border-color: var(--text-2);
+  }
   &:disabled {
     opacity: 0.4;
   }
 }
-/* button-dark-utility：近黑小方鈕（8px） */
 @utility btn-dark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 8px;
-  background: var(--color-ink);
-  color: #fff;
-  padding: 8px 15px;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.29;
-  letter-spacing: -0.224px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text);
+  padding: 7px 15px;
+  font-size: 13px;
   white-space: nowrap;
-  transition:
-    transform 0.12s,
-    opacity 0.15s;
   &:disabled {
     opacity: 0.4;
   }
 }
-/* button-pearl-capsule：次要的淺色膠囊（11px） */
 @utility btn-pearl {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 11px;
-  border: 1px solid var(--color-hairline);
-  background: var(--color-pearl);
-  color: var(--color-ink-80);
-  padding: 7px 14px;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.43;
-  letter-spacing: -0.224px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
+  padding: 6px 14px;
+  font-size: 13px;
   white-space: nowrap;
-  transition: transform 0.12s;
   &:disabled {
     opacity: 0.4;
   }
 }
-/* text-link：藍字 */
 @utility link {
-  color: var(--color-accent);
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
   &:hover {
-    text-decoration: underline;
+    text-decoration-color: var(--text);
   }
 }
-/* store-utility-card：白底、1px 細線、18px 圓角、不加陰影 */
 @utility card {
-  background: var(--color-card);
-  border: 1px solid var(--color-hairline);
-  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
 }
-/* configurator-option-chip：白底細線藥丸，選中時 2px 藍框 */
 @utility chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 9999px;
-  border: 1px solid var(--color-hairline);
-  background: var(--color-card);
-  color: var(--color-ink);
-  padding: 6px 14px;
-  font-size: 14px;
-  line-height: 1.43;
-  letter-spacing: -0.224px;
-  transition: transform 0.12s;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  padding: 5px 13px;
+  font-size: 13px;
 }
 @utility chip-selected {
-  border-color: var(--color-accent-focus);
-  box-shadow: inset 0 0 0 1px var(--color-accent-focus);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
-/* search-input：白底、細線、藥丸 */
 @utility field {
-  border-radius: 9999px;
-  border: 1px solid rgb(0 0 0 / 0.08);
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  padding: 10px 20px;
-  font-size: 17px;
-  line-height: 1.47;
-  letter-spacing: -0.374px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 16px;
+  font-size: 14px;
   outline: none;
   &::placeholder {
-    color: var(--color-ink-48);
+    color: var(--text-3);
   }
   &:focus {
-    border-color: var(--color-accent-focus);
+    border-color: var(--accent);
   }
 }
-/* 系統唯一的陰影：放在檯面上的作品圖 */
 @utility product-shadow {
-  box-shadow: 3px 5px 30px 0 rgb(0 0 0 / 0.22);
+  box-shadow: var(--shadow-art);
 }
-/* sub-nav-frosted / floating-sticky-bar：Parchment 80% 毛玻璃 */
 @utility frosted {
-  background: color-mix(in srgb, var(--color-parchment) 80%, transparent);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
 }
 
 /* 串流中的游標 */
@@ -313,14 +234,8 @@
   height: 1.05em;
   margin-left: 2px;
   vertical-align: -0.15em;
-  background: var(--color-accent);
+  background: var(--accent);
   animation: blink 1s steps(2) infinite;
-}
-
-@keyframes blink {
-  to {
-    opacity: 0;
-  }
 }
 
 .pixelated {

@@ -130,6 +130,8 @@ export interface DoneEvent {
   egress: { images: number; chunks: number; bytes: number; jev_bytes?: number };
   /** 第 6 段生成閘門沒過：回的是「查無資料」，沒有呼叫 LLM */
   degraded?: boolean;
+  /** 可觀測軌跡（docs/adr/030）：done 事件列到第 7 段；擋下之後的段落不執行也不列 */
+  pipeline?: PipelineStage[];
 }
 
 export interface ErrorEvent {

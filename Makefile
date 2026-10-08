@@ -234,5 +234,6 @@ demo-test:
 	$(PY) eval/run_demo_test.py
 
 ci: check-kb lint test
+	cd frontend && npm test
 	cd backend && uv run python -m app.export_openapi --check
 	cd frontend && npm run gen:api && git diff --exit-code src/api/schema.d.ts

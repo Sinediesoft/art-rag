@@ -13,7 +13,7 @@ import {
 } from "../api/hooks";
 import { Loading } from "../components/common/Feedback";
 import { formatTaipei, seconds, STRATEGY_LABEL } from "../lib/format";
-import { SecurityLogPanel } from "../components/agent/BlockedCard";
+import { SecurityLogPanel } from "../components/agent/SecurityLog";
 
 function Card({
   title,

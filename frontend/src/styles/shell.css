@@ -1,0 +1,385 @@
+/* =====================================================================
+   正式版接上真實 API 後才需要的元件（整合版 demo 沒有的狀態）。
+   只用整合版的 token（--bg、--text、--accent、--mod…），跟著入口／工廠／藝術的主題變色。
+   ===================================================================== */
+
+/* 七段軌跡：交給地端模組（3D、排程、試算） */
+.trace__stage.is-handoff .trace__dot {
+  background: var(--mod, var(--accent));
+}
+.steps__item.is-handoff .steps__title {
+  color: var(--text);
+}
+.step-icon.is-handoff {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--mod, var(--accent));
+  color: var(--on-mod, var(--on-accent));
+}
+.step-icon.is-handoff .icon {
+  width: 10px;
+  height: 10px;
+}
+.steps__title small {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+/* 等待中 */
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* 回答 */
+.answer > * + * {
+  margin-top: 12px;
+}
+.answer__lead,
+.answer__meta {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.answer__note.is-warn {
+  color: var(--warn);
+}
+.clarify__q {
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.cite--image,
+.cite--none {
+  cursor: default;
+  padding: 0 5px;
+  width: auto;
+  font-size: 10.5px;
+}
+.cite--none {
+  color: var(--warn);
+}
+
+/* 回答下方的功能頁連結 */
+.deeplinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin-top: 14px;
+  font-size: 12.5px;
+}
+.deeplinks__label {
+  color: var(--text-3);
+}
+.deeplink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--line);
+}
+.deeplink.is-primary {
+  color: var(--text);
+}
+.deeplink:hover {
+  color: var(--text);
+  border-color: var(--text-2);
+}
+.deeplink .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* 輸入框：上傳失敗 */
+.composer__error {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+.composer__attach:disabled {
+  opacity: 0.6;
+}
+
+/* 修改資料 */
+.changecard__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+.changecard__params small {
+  color: var(--text-3);
+}
+.changecard__approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.changecard .taskcard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.changecard .mfield {
+  flex: 1;
+  min-width: 160px;
+  width: auto;
+}
+.outcome {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.outcome.is-ok {
+  color: var(--ok);
+}
+.outcome.is-warn {
+  color: var(--warn);
+}
+.outcome.is-block {
+  color: var(--danger);
+}
+.outcome a {
+  text-decoration: underline;
+}
+
+/* 頁首：服務狀態與記憶體 */
+.statuschip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.statuschip__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.statuschip.is-ok .statuschip__dot {
+  background: var(--ok);
+}
+.statuschip.is-warn {
+  color: var(--warn);
+}
+.statuschip.is-warn .statuschip__dot {
+  background: var(--warn);
+}
+@media (max-width: 1100px) {
+  .topbar__status,
+  .mtop__status {
+    display: none;
+  }
+}
+
+/* 憑證自動更新的提示 */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 28px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 12.5px;
+  color: var(--warn);
+}
+
+/* 身分選單 */
+.acct {
+  padding: 6px 12px 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.acct__name {
+  font-size: 14px;
+  color: var(--text);
+}
+.acct__scope {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.acct__jwt {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.acct__warn {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--warn);
+}
+.menu__label.is-error {
+  color: var(--danger);
+}
+.menu--right {
+  right: 0;
+  left: auto;
+}
+.security__note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.home__script-label {
+  margin-top: 28px;
+}
+
+/* 展示區：讀取中、讀不到、補充說明 */
+.view--empty {
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.view__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.view__error small {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.view__answer {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-2);
+}
+.view__answer + .view__answer {
+  margin-top: 10px;
+}
+.view__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.segmented--small button {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+.gantt-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+.zp__overlay {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgb(10 10 10 / 0.7);
+  color: #fff;
+  font-size: 12px;
+  backdrop-filter: blur(4px);
+}
+.zp__overlay .icon {
+  width: 14px;
+  height: 14px;
+}
+.note--palette {
+  opacity: 1;
+}
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 4px 0;
+}
+.palette__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.palette__chip span {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+}
+.note__text.is-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.compare__table tr.is-same td {
+  color: var(--text-3);
+}
+/* 並排比較：欄位內容可能很長，換行而不是撐開展示區 */
+.compare__table {
+  table-layout: fixed;
+  white-space: normal;
+}
+.compare__table th {
+  width: 22%;
+}
+.compare__table td {
+  overflow-wrap: anywhere;
+}
+
+/* 功能頁：原本的頁面放在模組外框裡捲動 */
+.app--feature {
+  height: 100dvh;
+}
+.feature {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.feature__inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 28px 72px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.legacy select,
+.legacy input,
+.legacy textarea {
+  color: var(--text);
+}
+.legacy select option {
+  background: var(--surface);
+}
+@media (max-width: 899px) {
+  .feature__inner {
+    padding: 16px 16px 56px;
+  }
+  .app--feature .mtop__brand .mtop__en,
+  .app--feature .mtop__conv {
+    display: none;
+  }
+}
