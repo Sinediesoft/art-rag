@@ -7,7 +7,7 @@ import { orphanWrites } from "../api/writes";
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
-import { canRerun, interruptForAccount, load, redactForeign, redactPrivate, save, serialize } from "./persist";
+import { applyMarks, canRerun, clearUnconfirmed, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_KEY } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -138,6 +138,27 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     const flush = () => void save(serialize(convsRef.current, prefsRef.current));
     window.addEventListener("pagehide", flush);
     return () => window.removeEventListener("pagehide", flush);
+  }, []);
+  // 另一個分頁送出了寫入：這個分頁手上的同一輪（從紀錄還原的）立刻改成結果未確認，不再給「重新查詢」
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== UNCONFIRMED_KEY) return;
+      const marks = readMarks();
+      setConvs((cs) => {
+        let changed = false;
+        const next = cs.map((c) => {
+          const turns = c.turns.map((t) => applyMarks(t, marks));
+          if (turns.every((t, i) => t === c.turns[i])) return c;
+          changed = true;
+          return { ...c, turns };
+        });
+        if (!changed) return cs;
+        convsRef.current = next;
+        return next;
+      });
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const updateConv = useCallback((id: string, f: (c: Conv) => Conv) => setConvs((cs) => cs.map((c) => (c.id === id ? f(c) : c))), []);
@@ -462,8 +483,10 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const action = note === null ? "commit" : "approval";
       const marked: Turn = { ...t, part: { ...part, status: "committing", action, error: null } };
       const next = convsRef.current.map((c) => (c.id === convId ? { ...c, turns: c.turns.map((x) => (x.id === turnId ? marked : x)) } : c));
-      if (!save(serialize(next, prefsRef.current))) {
+      // 獨立的「已送出」標記（其他分頁的舊快照蓋不掉）＋對話快照，兩份都寫進去才送
+      if (!markUnconfirmed(turnId, convId, action) || !save(serialize(next, prefsRef.current))) {
         // 寫不進去就不送：重新整理後無法知道這筆已經送出過
+        clearUnconfirmed([turnId]);
         updateTurn(convId, turnId)((x) =>
           x.part?.kind === "change" ? { ...x, part: { ...x.part, error: "這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重新整理後重複寫入，這次沒有送出" } } : x,
         );
@@ -471,7 +494,15 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       }
       convsRef.current = next;
       setConvs(next);
-      void runCommit(part, guarded(convId, turnId, `${turnId}:task`), note).finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
+      const epoch = identity.current.epoch;
+      void runCommit(part, guarded(convId, turnId, `${turnId}:task`), note)
+        .then((result) => {
+          // 結果確實回到這一輪（同一個身分、對話還在）：完成或伺服器明確拒絕，才解除「已送出」標記；
+          // 結果不能確定、或回來時已經換了身分（結果沒有接回畫面），標記留著
+          const alive = identity.current.epoch === epoch && convsRef.current.some((c) => c.id === convId);
+          if (alive && (result === "done" || result === "failed")) clearUnconfirmed([turnId]);
+        })
+        .finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
     },
     [guarded, qc, updateTurn],
   );

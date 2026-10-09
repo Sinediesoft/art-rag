@@ -9,12 +9,16 @@ import {
   mentionsSecret,
   redactForeign,
   redactPrivate,
+  clearUnconfirmed,
+  markUnconfirmed,
+  readMarks,
   sanitizeForStorage,
   save,
   SECRET_ANSWER,
   SECRET_QUESTION,
   serialize,
   STORAGE_KEY,
+  UNCONFIRMED_KEY,
 } from "./persist";
 import { overlayPipeline, buildStages, progressOf } from "./stages";
 import type { Conv, Turn } from "./types";
@@ -409,5 +413,31 @@ describe("七段軌跡：以後端 pipeline 為準", () => {
       true,
     );
     expect(over.map((s) => s.state)).toEqual(["ok", "ok", "ok", "block", "skip", "skip", "skip"]);
+  });
+});
+
+describe("「已送出」標記：獨立於對話快照，其他分頁的舊快照蓋不掉", () => {
+  it("快照是試算完成（pass）的舊版本，只要有標記，讀回來就是結果未確認、不能重跑；標記不含 pending_id 與試算內容", () => {
+    const t = base({ id: "chg", route: factoryRoute({ question: "連接法蘭庫存加 5" }), part: { kind: "route" } });
+    save(serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" }));
+    expect(canRerun(load().convs[0].turns[0])).toBe(true);
+    expect(markUnconfirmed("chg", "c1", "approval")).toBe(true);
+    const back = load().convs[0].turns[0];
+    expect(back.archived?.outcome).toBe("unconfirmed");
+    expect(back.archived?.summary).toContain("送主管核准已經送出、沒有收到結果");
+    expect(canRerun(back)).toBe(false);
+    // 還在畫面上、還沒重新整理的那一份（舊的 pass）也不能重跑：canRerun 每次都看標記
+    expect(canRerun({ ...back, archived: { ...back.archived!, outcome: "pass" } })).toBe(false);
+    expect(localStorage.getItem(UNCONFIRMED_KEY)).not.toMatch(/pend|0912|連接法蘭/);
+    clearUnconfirmed(["chg"]);
+    expect(readMarks()).toEqual({});
+    expect(localStorage.getItem(UNCONFIRMED_KEY)).toBeNull();
+  });
+
+  it("標記壞掉（不是物件）：當作沒有，不影響讀取", () => {
+    localStorage.setItem(UNCONFIRMED_KEY, "[1,2]");
+    expect(readMarks()).toEqual({});
+    localStorage.setItem(UNCONFIRMED_KEY, "{bad");
+    expect(readMarks()).toEqual({});
   });
 });

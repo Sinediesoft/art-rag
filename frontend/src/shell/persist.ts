@@ -199,6 +199,8 @@ export const REJECTED: Record<string, string> = {
 export function canRerun(t: Turn) {
   // 寫入送出中或結果未確認（還在畫面上、沒有重新整理）：重跑會清掉這一輪、重新試算，再按一次就可能是第二筆
   if (t.part?.kind === "change" && (t.part.status === "committing" || t.part.status === "unconfirmed")) return false;
+  // 任何分頁送出過、還沒確認結果的寫入（獨立的標記，不會被其他分頁的舊快照蓋掉）
+  if (readMarks()[t.id]) return false;
   if (!t.archived) return true;
   if (t.archived.outcome && REJECTED[t.archived.outcome]) return false;
   // 結果未確認的寫入：重跑會重新試算、再按一次就可能變成第二筆
@@ -248,6 +250,60 @@ export function serialize(convs: Conv[], prefs: Omit<Saved, "v" | "convs">): Sav
   };
 }
 
+/**
+ * 送出過、還沒確認結果的寫入：獨立的 key，一般的對話快照存檔（400 ms 延遲、pagehide）不會碰它。
+ * 對話快照是整份覆寫的，另一個分頁手上的舊快照（試算完成、可以重跑）存檔時會把「已送出」蓋掉；
+ * 這份標記只有送出的那個分頁、在同一個身分下確實收到結果（完成，或伺服器明確拒絕）才清掉。
+ * 刪除對話也不清：其他分頁手上的舊快照可能把那段對話存回來。
+ * 只存輪次、對話與動作，不存 pending_id、試算內容、JWT 或交接票。
+ */
+export const UNCONFIRMED_KEY = "artrag-shell-unconfirmed-v1";
+export type Marks = Record<string, { conv: string; action: "commit" | "approval"; ts: number }>;
+
+export function readMarks(): Marks {
+  try {
+    const m = JSON.parse(localStorage.getItem(UNCONFIRMED_KEY) ?? "{}");
+    return m && typeof m === "object" && !Array.isArray(m) ? (m as Marks) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMarks(m: Marks): boolean {
+  try {
+    if (Object.keys(m).length) localStorage.setItem(UNCONFIRMED_KEY, JSON.stringify(m));
+    else localStorage.removeItem(UNCONFIRMED_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 送出寫入之前呼叫；寫不進去回傳 false（呼叫端就不送） */
+export function markUnconfirmed(turnId: string, convId: string, action: "commit" | "approval"): boolean {
+  const m = readMarks();
+  m[turnId] = { conv: convId, action, ts: Date.now() };
+  return writeMarks(m);
+}
+
+export function clearUnconfirmed(ids: string[]) {
+  const m = readMarks();
+  const hit = ids.filter((id) => id in m);
+  if (!hit.length) return;
+  for (const id of hit) delete m[id];
+  writeMarks(m);
+}
+
+/** 有標記的那一輪（從紀錄還原、或其他分頁送出的）一律當成結果未確認：不能重跑，摘要說明已送出 */
+export function applyMarks(t: Turn, marks: Marks = readMarks()): Turn {
+  const mk = marks[t.id];
+  if (!mk || !t.archived || t.archived.outcome === "unconfirmed") return t;
+  return {
+    ...t,
+    archived: { ...t.archived, outcome: "unconfirmed", summary: writeUnconfirmed(mk.action), redacted: true, answer: undefined, sources: undefined, artResults: undefined, refs: undefined },
+  };
+}
+
 /** 寫進瀏覽器；寫不進去（無痕模式、空間不足）回傳 false，內容只留在記憶體 */
 export function save(s: Saved): boolean {
   try {
@@ -262,6 +318,7 @@ export function load(): { convs: Conv[]; prefs: Omit<Saved, "v" | "convs"> } {
   try {
     const s = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as Partial<Saved> | null;
     if (s?.v === 1 && Array.isArray(s.convs)) {
+      const marks = readMarks();
       const convs: Conv[] = s.convs.map((c) => ({
         id: c.id,
         createdAt: c.createdAt,
@@ -269,20 +326,26 @@ export function load(): { convs: Conv[]; prefs: Omit<Saved, "v" | "convs"> } {
         module: c.module,
         active: c.active ?? {},
         notices: [],
-        turns: c.turns.map((t) => ({
-          id: t.id,
-          text: t.text,
-          imageId: t.imageId,
-          forced: t.forced,
-          at: t.at,
-          ts: t.ts,
-          account: t.accountLabel ? { id: "", label: t.accountLabel } : null,
-          phase: "done",
-          route: null,
-          failure: null,
-          part: null,
-          archived: t.archived,
-        })),
+        turns: c.turns.map((t) =>
+          // 快照可能被其他分頁的舊版本蓋過：以獨立的「已送出」標記為準
+          applyMarks(
+            {
+              id: t.id,
+              text: t.text,
+              imageId: t.imageId,
+              forced: t.forced,
+              at: t.at,
+              ts: t.ts,
+              account: t.accountLabel ? { id: "", label: t.accountLabel } : null,
+              phase: "done",
+              route: null,
+              failure: null,
+              part: null,
+              archived: t.archived,
+            },
+            marks,
+          ),
+        ),
       }));
       return {
         convs,

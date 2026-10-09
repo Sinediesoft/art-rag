@@ -244,8 +244,9 @@ export async function startSchedule(update: Update, signal: AbortSignal) {
 }
 
 /** 修改資料：確認寫入或送主管核准（後端再檢查一次權限與額度） */
-export async function commitChange(part: ChangePart, update: Update, note: string | null) {
-  if (!part.preview?.pending_id) return;
+/** 回傳伺服器的結果：done（完成）、failed（伺服器明確拒絕，確定沒寫）、unknown（結果不能確定） */
+export async function commitChange(part: ChangePart, update: Update, note: string | null): Promise<"done" | "failed" | "unknown" | null> {
+  if (!part.preview?.pending_id) return null;
   const id = part.preview.pending_id;
   const action = note === null ? "commit" : "approval";
   setPart<ChangePart>(update, (p) => ({ ...p, status: "committing", action, error: null }));
@@ -257,10 +258,15 @@ export async function commitChange(part: ChangePart, update: Update, note: strin
       const approval = await api.requestApproval(id, note.trim());
       setPart<ChangePart>(update, (p) => ({ ...p, status: "ready", approval }));
     }
+    return "done";
   } catch (e) {
     const f = failureOf(e);
-    // 連不上、閘道逾時：請求可能已經到了伺服器，不能當成失敗讓人再按一次
-    if (resultUnknown(e)) setPart<ChangePart>(update, (p) => ({ ...p, status: "unconfirmed", error: `${f.message}（${f.code}）` }));
-    else setPart<ChangePart>(update, (p) => ({ ...p, status: "ready", error: `${f.message}（${f.code}）` }));
+    // 連不上、閘道逾時、5xx：請求可能已經到了伺服器，不能當成失敗讓人再按一次
+    if (resultUnknown(e)) {
+      setPart<ChangePart>(update, (p) => ({ ...p, status: "unconfirmed", error: `${f.message}（${f.code}）` }));
+      return "unknown";
+    }
+    setPart<ChangePart>(update, (p) => ({ ...p, status: "ready", error: `${f.message}（${f.code}）` }));
+    return "failed";
   }
 }
