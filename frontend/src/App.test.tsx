@@ -1077,6 +1077,52 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(Object.keys(readMarks())).toHaveLength(1);
   });
 
+  // 第 13 次 code review F1：A、B 幾乎同時按下——兩邊都先讀到「沒有標記」，再各自寫入
+  it.each([
+    ["確認寫入", {}, "commit"],
+    ["送主管核准", { next: "approval", reasons: ["超過額度"] }, "request-approval"],
+  ])("「%s」兩個分頁交錯送出同一輪：只有一邊送出、它的標記留著；另一邊不送並說明，重新載入不能重跑", async (label, over, op) => {
+    const { t, b } = await sameTurnInB(over);
+    // B 的送出一直沒有結果；A 如果送出了會收到 409
+    t.on("POST", `/changes/pend-2/${op}`, () => new Promise<Response>(() => undefined));
+    t.on("POST", `/changes/pend-1/${op}`, () => json({ error: { code: "CHANGE_STALE", message: "試算已變動", request_id: "r" } }, 409));
+    // A 已經檢查過「沒有標記」，就在它寫入標記之前，B 按下送出（B 也讀到沒有標記）
+    const realSet = Storage.prototype.setItem;
+    let injected = false;
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, k: string, v: string) {
+      if (!injected && k.startsWith(UNCONFIRMED_PREFIX)) {
+        injected = true;
+        fireEvent.click(within(b.container).getByRole("button", { name: label }));
+      }
+      return realSet.call(this, k, v);
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+    spy.mockRestore();
+    expect(injected).toBe(true);
+    // 只有 B 送出；A 寫完標記後看到 B 的，撤回自己的、不送
+    expect(t.calls.filter((c) => c.path === `/changes/pend-2/${op}`)).toHaveLength(1);
+    expect(t.calls.filter((c) => c.path === `/changes/pend-1/${op}`)).toHaveLength(0);
+    expect(Object.keys(readMarks())).toHaveLength(1);
+    expect(Object.keys(localStorage).filter((k) => k.startsWith(UNCONFIRMED_PREFIX))).toHaveLength(1);
+    // A 的卡片：這一輪已經有 B 的標記，說明「另一個分頁已經送出」，不再給按鈕
+    const aCard = [...document.querySelectorAll(".changecard")].find((x) => !b.container.contains(x)) as HTMLElement;
+    await waitFor(() => expect(aCard.textContent).toContain("另一個分頁已經送出這一輪"));
+    expect(within(aCard).queryByRole("button", { name: label })).toBeNull();
+    // A 再按一次：這一輪已經有標記，收起成結果未確認，還是不送
+    const again = screen.queryAllByRole("button", { name: label }).find((x) => !b.container.contains(x));
+    if (again) fireEvent.click(again);
+    expect(t.calls.filter((c) => c.path === `/changes/pend-1/${op}`)).toHaveLength(0);
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    const at = where;
+    cleanup();
+    renderApp(at);
+    await waitFor(() => expect(lastAi()?.textContent).toContain(`${label}已經送出、沒有收到結果`));
+    expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
+    expect(Object.keys(readMarks())).toHaveLength(1);
+  });
+
   it("結果確實回到這一輪才解除標記：完成或伺服器明確拒絕（4xx）解除；連線中斷、5xx 留著", async () => {
     const { t } = await changeReady();
     t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "PENDING_EXPIRED", message: "試算已過期", request_id: "r" } }, 409));

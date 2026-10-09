@@ -257,17 +257,39 @@ export function serialize(convs: Conv[], prefs: Omit<Saved, "v" | "convs">): Sav
  * 刪除對話也不清：其他分頁手上的舊快照可能把那段對話存回來。
  * 只存輪次、對話與動作，不存 pending_id、試算內容、JWT 或交接票。
  *
- * 每一輪一個 key（`artrag-shell-unconfirmed-v1:<輪次>`）：新增只 setItem 自己那一輪、解除只 removeItem 自己那一輪，
- * 不做「讀出整份、改完再整份寫回」——兩個分頁在讀與寫之間交錯時，整份寫回會蓋掉或刪掉另一個分頁剛加的標記。
+ * 每一次送出一個 key（`artrag-shell-unconfirmed-v1:<輪次>:<送出代號>`）：新增只 setItem 自己這一次、解除只 removeItem
+ * 自己這一次，不做「讀出整份、改完再整份寫回」，也不和別的分頁共用同一個 key——
+ * 兩個分頁在讀與寫之間交錯時，共用的 key 會被後寫的一方覆寫，它解除時就把另一筆還沒確認的保護一起清掉。
+ * 同一輪只要還有任何一份標記，就不能重跑、不能再送（hasMark 看的是整個輪次）。
  */
 export const UNCONFIRMED_PREFIX = "artrag-shell-unconfirmed-v1:";
-export const markKey = (turnId: string) => UNCONFIRMED_PREFIX + turnId;
+const turnPrefix = (turnId: string) => `${UNCONFIRMED_PREFIX}${turnId}:`;
+/** 某一輪、某一次送出的 key；省略送出代號時是舊版（每輪一個 key）的格式，讀取時一樣算 */
+export const markKey = (turnId: string, submission?: string) => (submission ? turnPrefix(turnId) + submission : UNCONFIRMED_PREFIX + turnId);
 /** tab：送出的那個分頁（這個頁面載入時產生的隨機代號）；只有它能解除，其他分頁的提交清不掉 */
 type Mark = { conv: string; action: "commit" | "approval"; ts: number; tab: string };
 export type Marks = Record<string, Mark>;
 
 /** 這個分頁（這一次載入頁面）的代號 */
 export const TAB_ID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+let submissions = 0;
+
+/** 標記 key 是哪一輪的（key 的格式見上） */
+const turnOfKey = (k: string) => k.slice(UNCONFIRMED_PREFIX.length).split(":")[0];
+
+/** 列出某一輪（或全部）的標記 key */
+function markKeys(turnId?: string): string[] {
+  const out: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(UNCONFIRMED_PREFIX) && (turnId === undefined || turnOfKey(k) === turnId)) out.push(k);
+    }
+  } catch {
+    /* 讀不到瀏覽器儲存：這個分頁也寫不進標記，不會送出寫入 */
+  }
+  return out;
+}
 
 /** 標記的值壞掉也當成有標記（保守：不能重跑、誰都解除不了），動作不明就說「確認寫入」 */
 function parseMark(raw: string): Mark {
@@ -281,46 +303,45 @@ function parseMark(raw: string): Mark {
   return { conv: "", action: "commit", ts: 0, tab: "" };
 }
 
+/** 每一輪有沒有標記（同一輪有好幾份時取其中一份，只用來決定摘要的動作） */
 export function readMarks(): Marks {
   const out: Marks = {};
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k?.startsWith(UNCONFIRMED_PREFIX)) continue;
+  for (const k of markKeys())
+    try {
       const raw = localStorage.getItem(k);
-      if (raw !== null) out[k.slice(UNCONFIRMED_PREFIX.length)] = parseMark(raw);
+      if (raw !== null) out[turnOfKey(k)] ??= parseMark(raw);
+    } catch {
+      /* 讀不到就略過 */
     }
-  } catch {
-    /* 讀不到瀏覽器儲存：這個分頁也寫不進標記，不會送出寫入 */
-  }
   return out;
 }
 
-/** 這一輪有沒有標記（只讀自己那一個 key） */
-export function hasMark(turnId: string): boolean {
+/** 這一輪還有沒有任何一份標記（任何分頁、任何一次送出） */
+export const hasMark = (turnId: string) => markKeys(turnId).length > 0;
+
+/** 同一輪、自己這一次以外的標記 */
+export const otherMarks = (turnId: string, mine: string) => markKeys(turnId).filter((k) => k !== mine);
+
+/** 送出寫入之前呼叫：寫入自己這一次的標記，回傳它的 key；寫不進去回傳 null（呼叫端就不送） */
+export function markUnconfirmed(turnId: string, convId: string, action: "commit" | "approval"): string | null {
+  const key = markKey(turnId, `${TAB_ID}-${++submissions}`);
   try {
-    return localStorage.getItem(markKey(turnId)) !== null;
+    localStorage.setItem(key, JSON.stringify({ conv: convId, action, ts: Date.now(), tab: TAB_ID } satisfies Mark));
+    return key;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/** 送出寫入之前呼叫；寫不進去回傳 false（呼叫端就不送） */
-export function markUnconfirmed(turnId: string, convId: string, action: "commit" | "approval"): boolean {
-  try {
-    localStorage.setItem(markKey(turnId), JSON.stringify({ conv: convId, action, ts: Date.now(), tab: TAB_ID } satisfies Mark));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** 解除：只解除這個分頁自己送出的那一份（另一個分頁送出、還沒確認的標記不會被這裡清掉） */
-export function clearUnconfirmed(ids: string[]) {
-  for (const id of ids)
+/**
+ * 解除：只移除指定的那幾個 key，而且只限這個分頁自己寫的
+ * （另一個分頁送出、還沒確認的標記，以及壞掉、沒有分頁代號的，都不會被這裡清掉）
+ */
+export function clearUnconfirmed(keys: string[]) {
+  for (const k of keys)
     try {
-      const raw = localStorage.getItem(markKey(id));
-      if (raw !== null && parseMark(raw).tab === TAB_ID) localStorage.removeItem(markKey(id));
+      const raw = localStorage.getItem(k);
+      if (raw !== null && parseMark(raw).tab === TAB_ID) localStorage.removeItem(k);
     } catch {
       /* 移除失敗：標記留著，保守 */
     }

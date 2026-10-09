@@ -7,7 +7,7 @@ import { orphanWrites } from "../api/writes";
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
-import { applyMarks, canRerun, clearUnconfirmed, hasMark, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
+import { applyMarks, canRerun, clearUnconfirmed, hasMark, interruptForAccount, load, markUnconfirmed, otherMarks, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -490,14 +490,21 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       const action = note === null ? "commit" : "approval";
       const marked: Turn = { ...t, part: { ...part, status: "committing", action, error: null } };
       const next = convsRef.current.map((c) => (c.id === convId ? { ...c, turns: c.turns.map((x) => (x.id === turnId ? marked : x)) } : c));
-      // 獨立的「已送出」標記（其他分頁的舊快照蓋不掉）＋對話快照，兩份都寫進去才送
-      if (!markUnconfirmed(turnId, convId, action) || !save(serialize(next, prefsRef.current))) {
-        // 寫不進去就不送：重新整理後無法知道這筆已經送出過
-        clearUnconfirmed([turnId]);
-        updateTurn(convId, turnId)((x) =>
-          x.part?.kind === "change" ? { ...x, part: { ...x.part, error: "這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重新整理後重複寫入，這次沒有送出" } } : x,
-        );
-        return;
+      const failWith = (error: string) => updateTurn(convId, turnId)((x) => (x.part?.kind === "change" ? { ...x, part: { ...x.part, error } } : x));
+      // 獨立的「已送出」標記（其他分頁的舊快照蓋不掉；每一次送出一個 key，誰也蓋不到誰）
+      const mine = markUnconfirmed(turnId, convId, action);
+      if (!mine) return failWith("這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重新整理後重複寫入，這次沒有送出");
+      // 先寫、再看：寫完自己的標記後，同一輪如果還有別人的（另一個分頁和這裡幾乎同時按下、兩邊都先讀到沒有標記），
+      // 這次就不送，撤回自己的標記。兩邊都「寫完才看」，所以不會兩邊都送出——
+      // 最先寫入的那一邊若已經送出，後寫的一定看得到它；兩邊都看到對方就都不送，可以再按一次
+      if (otherMarks(turnId, mine).length) {
+        clearUnconfirmed([mine]);
+        return failWith("另一個分頁同時送出了這一輪，為避免重複寫入，這次沒有送出；請先到核准紀錄或庫存核對");
+      }
+      if (!save(serialize(next, prefsRef.current))) {
+        // 對話快照寫不進去也不送：重新整理後無法知道這筆已經送出過
+        clearUnconfirmed([mine]);
+        return failWith("這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重新整理後重複寫入，這次沒有送出");
       }
       convsRef.current = next;
       setConvs(next);
@@ -507,7 +514,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
           // 結果確實回到這一輪（同一個身分、對話還在）：完成或伺服器明確拒絕，才解除「已送出」標記；
           // 結果不能確定、或回來時已經換了身分（結果沒有接回畫面），標記留著
           const alive = identity.current.epoch === epoch && convsRef.current.some((c) => c.id === convId);
-          if (alive && (result === "done" || result === "failed")) clearUnconfirmed([turnId]);
+          // 只解除自己這一次的標記：同一輪別的分頁送出的標記不受影響
+          if (alive && (result === "done" || result === "failed")) clearUnconfirmed([mine]);
         })
         .finally(() => STALE_AFTER_WRITE.forEach((key) => void qc.invalidateQueries({ queryKey: [key] })));
     },

@@ -14,6 +14,7 @@ import {
   hasMark,
   markKey,
   markUnconfirmed,
+  otherMarks,
   readMarks,
   sanitizeForStorage,
   save,
@@ -424,17 +425,18 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
     const t = base({ id: "chg", route: factoryRoute({ question: "連接法蘭庫存加 5" }), part: { kind: "route" } });
     save(serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" }));
     expect(canRerun(load().convs[0].turns[0])).toBe(true);
-    expect(markUnconfirmed("chg", "c1", "approval")).toBe(true);
+    const k = markUnconfirmed("chg", "c1", "approval");
+    expect(k).toMatch(/^artrag-shell-unconfirmed-v1:chg:/);
     const back = load().convs[0].turns[0];
     expect(back.archived?.outcome).toBe("unconfirmed");
     expect(back.archived?.summary).toContain("送主管核准已經送出、沒有收到結果");
     expect(canRerun(back)).toBe(false);
     // 還在畫面上、還沒重新整理的那一份（舊的 pass）也不能重跑：canRerun 每次都看標記
     expect(canRerun({ ...back, archived: { ...back.archived!, outcome: "pass" } })).toBe(false);
-    expect(localStorage.getItem(markKey("chg"))).not.toMatch(/pend|0912|連接法蘭/);
-    clearUnconfirmed(["chg"]);
+    expect(localStorage.getItem(k!)).not.toMatch(/pend|0912|連接法蘭/);
+    clearUnconfirmed([k!]);
     expect(readMarks()).toEqual({});
-    expect(localStorage.getItem(markKey("chg"))).toBeNull();
+    expect(localStorage.getItem(k!)).toBeNull();
   });
 
   it("標記的值壞掉：一樣當成有標記（保守，不能重跑），動作不明就說確認寫入", () => {
@@ -470,7 +472,7 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
     const b = base({ id: "b-turn", route: factoryRoute({ question: "庫存加 5" }), part: { kind: "route" } });
     save(serialize([conv([b])], { collapsed: false, split: 50, theme: "dark" }));
     interleave(() => markUnconfirmed("b-turn", "c1", "approval"));
-    expect(markUnconfirmed("a-turn", "c2", "commit")).toBe(true);
+    expect(markUnconfirmed("a-turn", "c2", "commit")).toBeTruthy();
     vi.restoreAllMocks();
     expect(Object.keys(readMarks()).sort()).toEqual(["a-turn", "b-turn"]);
     const back = load().convs[0].turns[0];
@@ -480,15 +482,43 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
 
   // 第 12 次 code review F1：同一輪在另一個分頁送出、還沒確認——這個分頁的提交收到結果也不能把它清掉
   it("只能解除這個分頁自己送出的標記：另一個分頁的（或壞掉、沒有分頁代號的）留著", () => {
-    localStorage.setItem(markKey("same"), JSON.stringify({ conv: "c1", action: "approval", ts: 1, tab: "other-tab" }));
-    localStorage.setItem(markKey("bad"), "{bad");
-    clearUnconfirmed(["same", "bad"]);
+    localStorage.setItem(markKey("same", "other-tab-1"), JSON.stringify({ conv: "c1", action: "approval", ts: 1, tab: "other-tab" }));
+    localStorage.setItem(markKey("bad", "x"), "{bad");
+    clearUnconfirmed([markKey("same", "other-tab-1"), markKey("bad", "x")]);
     expect(hasMark("same")).toBe(true);
     expect(hasMark("bad")).toBe(true);
-    expect(markUnconfirmed("mine", "c1", "commit")).toBe(true);
-    expect(JSON.parse(localStorage.getItem(markKey("mine"))!).tab).toBe(TAB_ID);
-    clearUnconfirmed(["mine"]);
+    const mine = markUnconfirmed("mine", "c1", "commit")!;
+    expect(JSON.parse(localStorage.getItem(mine)!).tab).toBe(TAB_ID);
+    clearUnconfirmed([mine]);
     expect(hasMark("mine")).toBe(false);
+  });
+
+  // 第 13 次 code review F1：同一輪兩個分頁交錯送出。每一次送出一個 key，誰也蓋不到誰、清不到誰
+  it("同一輪兩份送出（不同分頁）：各自一個 key，後寫的不會覆寫先寫的；解除自己那一份，另一份還在、還是不能重跑", () => {
+    const t = base({ id: "same", route: factoryRoute({ question: "連接法蘭庫存加 5" }), part: { kind: "route" } });
+    save(serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" }));
+    // 分頁 B 先寫（它的送出還沒有結果）
+    const theirs = markKey("same", "tab-b-1");
+    localStorage.setItem(theirs, JSON.stringify({ conv: "c1", action: "approval", ts: 1, tab: "tab-b" }));
+    // 這個分頁也寫了自己的（兩邊都先讀到沒有標記）
+    const mine = markUnconfirmed("same", "c1", "commit")!;
+    expect(mine).not.toBe(theirs);
+    expect(otherMarks("same", mine)).toEqual([theirs]);
+    expect(localStorage.getItem(theirs)).toContain("tab-b");
+    // 這個分頁收到 409，解除自己那一份
+    clearUnconfirmed([mine]);
+    expect(localStorage.getItem(mine)).toBeNull();
+    expect(localStorage.getItem(theirs)).not.toBeNull();
+    expect(hasMark("same")).toBe(true);
+    const back = load().convs[0].turns[0];
+    expect(back.archived?.outcome).toBe("unconfirmed");
+    expect(canRerun(back)).toBe(false);
+  });
+
+  it("舊格式（每輪一個 key、沒有送出代號）也算有標記", () => {
+    localStorage.setItem(markKey("old"), JSON.stringify({ conv: "c1", action: "commit", ts: 1, tab: "x" }));
+    expect(hasMark("old")).toBe(true);
+    expect(Object.keys(readMarks())).toEqual(["old"]);
   });
 
   it("試算完成、還在畫面上的同一輪（另一個分頁送出了）：收起成結果未確認，不再有試算卡", () => {
@@ -497,7 +527,7 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
       route: factoryRoute({ question: "連接法蘭庫存加 5" }),
       part: { kind: "change", status: "ready", preview: { pending_id: "pend-2", next: "confirm" } as never, committed: null, approval: null, error: null },
     });
-    localStorage.setItem(markKey("same"), JSON.stringify({ conv: "c1", action: "commit", ts: 1, tab: "other-tab" }));
+    localStorage.setItem(markKey("same", "other-tab-1"), JSON.stringify({ conv: "c1", action: "commit", ts: 1, tab: "other-tab" }));
     const out = applyMarks(live);
     expect(out.part).toBeNull();
     expect(out.route).toBeNull();
@@ -512,9 +542,9 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
   });
 
   it("分頁 A 解除自己那一輪時，分頁 B 剛好新增：只移除 A，B 的標記留著", () => {
-    markUnconfirmed("a-turn", "c2", "commit");
+    const a = markUnconfirmed("a-turn", "c2", "commit")!;
     interleave(() => markUnconfirmed("b-turn", "c1", "approval"));
-    clearUnconfirmed(["a-turn"]);
+    clearUnconfirmed([a]);
     vi.restoreAllMocks();
     expect(Object.keys(readMarks())).toEqual(["b-turn"]);
     expect(hasMark("b-turn")).toBe(true);
