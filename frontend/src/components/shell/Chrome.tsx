@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { Account, MemoryStatus } from "../../api/client";
+import type { Account, AccountsResponse, MemoryStatus } from "../../api/client";
 import { useAccounts, useCanView, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
 import { acknowledgeWrite, dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
@@ -37,9 +37,13 @@ export function scopeText(a: Account) {
   if (a.role === "warehouse") return `盤點、調撥、報廢、庫存狀態・${a.warehouses.join("、")}`;
   if (a.role === "sales") return `訂單交期、數量・${a.customers.join("、")}`;
   if (a.role === "planner") return "開立工單、改交期、取消自己開的工單、執行排程・全廠";
-  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙";
+  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙與藝術家的區域解說";
+  if (a.role === "artist") return `在畫上圈區域、寫解說（送主管收錄）・${a.artworks.join("、")}`;
   return a.note;
 }
+
+export const pendingCount = (data?: AccountsResponse) =>
+  (data?.pending_approvals ?? 0) + (data?.pending_region_drafts ?? 0);
 
 const hhmm = (iso: string) => iso.slice(11, 16);
 
@@ -106,7 +110,7 @@ export function AccountMenu({ onClose }: { onClose: () => void }) {
       {err && <p className="menu__label is-error">{err}</p>}
       <Link to="/approvals" className="menu__item" onClick={onClose}>
         <span className="menu__text">
-          {data.pending_approvals > 0 ? `待核准 ${data.pending_approvals} 件` : "核准紀錄"}
+          {pendingCount(data) > 0 ? `待核准 ${pendingCount(data)} 件` : "核准紀錄"}
           <small>異動與主管核准</small>
         </span>
         <Icon name="chevronRight" strokeWidth={2} />

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts, useSwitchAccount } from "../api/hooks";
-import { AccountMenu, Popover, SecurityPanel, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
+import { AccountMenu, pendingCount, Popover, SecurityPanel, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
@@ -131,7 +131,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
               >
                 <span className="avatar">{(accounts?.current.label ?? "訪").slice(0, 1)}</span>
                 <span className="topbar__btn-label">{accounts?.current.label ?? "讀取中"}</span>
-                {!!accounts?.pending_approvals && <span className="count">{accounts.pending_approvals}</span>}
+                {pendingCount(accounts) > 0 && <span className="count">{pendingCount(accounts)}</span>}
                 <Icon name="chevronDown" strokeWidth={2} />
               </button>
               <Popover open={menu === "account"} onClose={close} className="menu--right">

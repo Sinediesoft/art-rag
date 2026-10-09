@@ -83,6 +83,7 @@ export const account = (id = "planner", over: Partial<Account> = {}): Account =>
   ops: [],
   warehouses: [],
   customers: [],
+  artworks: [],
   note: "",
   domains: id === "guest" ? ["art"] : ["art", "mfg", "factory"],
   levels: ["公開", "內部", "機密"],
@@ -99,6 +100,7 @@ export const accounts = (current = "planner", demo = true): AccountsResponse => 
   accounts: [account("guest"), account("planner"), account("manager")],
   demo_controls: demo,
   pending_approvals: 0,
+  pending_region_drafts: 0,
   token: {
     claims: { sub: current, roles: [current], clearance: 2 },
     expires_at: "2026-10-08T18:00:00+08:00",

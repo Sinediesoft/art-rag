@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAccounts } from "../api/hooks";
-import { AccountMenu, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
+import { AccountMenu, pendingCount, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
@@ -149,7 +149,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
           <div className="topbar__slot">
             <button type="button" className={`mtop__btn${menu === "account" ? " is-open" : ""}`} onClick={() => setMenu(menu === "account" ? null : "account")} aria-expanded={menu === "account"}>
               <span>{accounts?.current.label ?? "讀取中"}</span>
-              {!!accounts?.pending_approvals && <span className="count">{accounts.pending_approvals}</span>}
+              {pendingCount(accounts) > 0 && <span className="count">{pendingCount(accounts)}</span>}
               <Icon name="chevronDown" strokeWidth={1.8} />
             </button>
             <Popover open={menu === "account"} onClose={close} className="menu--right">

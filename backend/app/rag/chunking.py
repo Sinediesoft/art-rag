@@ -62,7 +62,42 @@ def color_text(a: dict) -> str:
     )
 
 
+# ---------------------------------------------------------------- 區域標註（docs/adr/029）
+# 和前端 AlignmentCards.tsx 的 whereOnPainting() 同一套用詞
+_WHERE = (("左上", "上方", "右上"), ("左側", "中央", "右側"), ("左下", "下方", "右下"))
+
+
+def where_on_painting(center) -> str:
+    """0–1 座標落在畫面九宮格的哪一格。"""
+    x, y = center
+    col = 0 if x < 1 / 3 else 2 if x > 2 / 3 else 1
+    row = 0 if y < 1 / 3 else 2 if y > 2 / 3 else 1
+    return _WHERE[row][col]
+
+
+def region_bbox(points: list[list[float]]) -> list[float]:
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    return [round(v, 4) for v in (min(xs), min(ys), max(xs), max(ys))]
+
+
+def _region_info(r: dict) -> dict:
+    return {
+        "id": r["id"],
+        "label": r["label"],
+        "points": r["points"],
+        "bbox": region_bbox(r["points"]),
+    }
+
+
+def _region_prefix(info: dict) -> str:
+    """段落前面加「〔畫面右下・騾隊與後方樹叢〕」：段落本身不一定寫了位置，
+    加上之後純文字問「右下角」也搜得到，模型也知道這段講的是畫面哪裡。"""
+    x0, y0, x1, y1 = info["bbox"]
+    return f"〔畫面{where_on_painting(((x0 + x1) / 2, (y0 + y1) / 2))}・{info['label']}〕"
+
+
 def build_chunks(a: dict) -> list[dict]:
+    regions = {r["id"]: r for r in a.get("regions", {}).get("items", [])}
     chunks = [
         {
             "chunk_id": f"{a['id']}#meta",
@@ -75,18 +110,24 @@ def build_chunks(a: dict) -> list[dict]:
         }
     ]
     for i, d in enumerate(a["descriptions"]):
+        region = _region_info(regions[d["region"]]) if d.get("region") else None
         for j, piece in enumerate(split_paragraph(d["text"])):
+            # 藝術家用第一人稱寫的解說：寫明是誰說的，模型才不會把「我」當成畫家
+            if d.get("speaker"):
+                piece = f"{d['speaker']}說：「{piece}」"
             chunk = {
                 "chunk_id": f"{a['id']}#{i:02d}-{j}",
                 "artwork_id": a["id"],
                 "lang": d["lang"],
                 "topic": d.get("topic", ""),
-                "text": piece,
+                "text": _region_prefix(region) + piece if region else piece,
                 "source_url": d.get("source_url"),
                 "license": d["license"],
             }
             if d.get("source"):  # 沒有網址的出處（使用者投稿、外部上傳的文件）
                 chunk["source"] = d["source"]
+            if region:
+                chunk["region"] = region
             chunks.append(chunk)
     if a.get("colors"):
         # 系統計算的段落沒有網址出處：source_url 為 None，改用 source（同工廠圖紙段落）

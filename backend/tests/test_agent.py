@@ -269,5 +269,5 @@ def test_api_level_permissions(client):
     )
     assert r.status_code == 403 and "生管" in r.json()["error"]["message"]
     accounts = client.get("/api/v1/auth/accounts").json()
-    assert accounts["current"]["id"] == "guest" and len(accounts["accounts"]) == 7
+    assert accounts["current"]["id"] == "guest" and len(accounts["accounts"]) == 8
     assert client.post("/api/v1/auth/switch", json={"account_id": "nobody"}).status_code == 404

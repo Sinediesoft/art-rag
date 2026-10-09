@@ -73,7 +73,18 @@ def test_upload_rejects_wrong_type(client):
     assert r.json()["error"]["code"] == "IMAGE_TYPE_NOT_ALLOWED"
 
 
-def test_chat_streams_sources_tokens_done(client):
+def test_chat_streams_sources_tokens_done(client, monkeypatch):
+    from app.repositories.index_store import Hit
+    from app.services import chat_service
+
+    # mock 向量是雜湊亂數，排第一的段落和問題無關（知識庫段落一改字就換一段排第一）；
+    # 排到沒有「作者」的段落會被第 4 段地端驗證剔除、變成「查無資料」。固定給「基本資料」段落
+    def meta_only(question, artwork_id, part_id=None, scope=None):
+        store = chat_service.get_store()
+        meta = next(c for c in store.chunks if c["chunk_id"] == f"{artwork_id}#meta")
+        return [chat_service._source(0, Hit(meta, 0.9), store)]
+
+    monkeypatch.setattr(chat_service, "retrieve", meta_only)
     r = client.post(
         "/api/v1/chat",
         json={"question": "這幅畫的作者是誰？", "artwork_id": "npm-000001", "strategy": "hybrid"},

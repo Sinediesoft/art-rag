@@ -19,13 +19,16 @@ accounts:
   sales_b: {label: 業務・乙, role: sales, customers: [岳承精機, 沛宇機電]}
   planner: {label: 生管, role: planner}
   manager: {label: 主管, role: manager}
+  # 藝術家（docs/adr/029）：artworks＝可以在哪幾幅畫上圈區域、寫解說；沒列的畫不能標
+  artist:  {label: 藝術家・甲, role: artist, artworks: [npm-000001, met-436535]}
 
 roles:
   guest:     {label: 訪客, ops: [], note: 只能查詢}
   warehouse: {label: 倉管, ops: [stock_adjust, stock_transfer, stock_scrap, stock_status], note: 自己廠區的倉庫}
   sales:     {label: 業務, ops: [so_update], note: 自己負責的客戶}
   planner:   {label: 生管, ops: [wo_create, wo_update_due, wo_cancel, schedule_run, demo_reset], note: 全廠；只能取消自己開的工單}
-  manager:   {label: 主管, ops: [approve, demo_reset, kb_intake], note: 核准所有人的超額申請；不能核准自己的申請；照片建檔的草稿只有主管能收錄（docs/adr/013）}
+  manager:   {label: 主管, ops: [approve, demo_reset, kb_intake], note: 核准所有人的超額申請；不能核准自己的申請；照片建檔的草稿、藝術家的區域解說只有主管能收錄（docs/adr/013、030）}
+  artist:    {label: 藝術家, ops: [kb_annotate], note: 在分給自己的畫上圈區域、寫解說，送出後等主管收錄（docs/adr/029）}
 
 # 資料範圍：domains＝能讀的資料領域（art 畫作知識庫、mfg 工廠圖紙與製程文件、factory 工廠資料庫：庫存／訂單／工單／排程），
 # levels＝看得到的機密等級（畫作都是「公開」；圖紙是「內部」或「機密」，見 kb/parts/*.json 的 confidentiality）；

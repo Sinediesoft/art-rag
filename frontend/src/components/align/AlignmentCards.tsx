@@ -3,20 +3,10 @@
 import { useId } from "react";
 import { assetUrl, type ApiError, type ImageAlignment } from "../../api/client";
 import { useImageAlignment } from "../../api/hooks";
+import { whereOnPainting } from "../../lib/format";
 import { ErrorMessage, Loading } from "../common/Feedback";
 
 const pct = (x: number) => `${Math.max(1, Math.round(x * 100))}%`;
-
-/** 拍到的範圍中心落在原圖的哪一區（九宮格） */
-function whereOnPainting([x, y]: number[]): string {
-  const col = x < 1 / 3 ? 0 : x > 2 / 3 ? 2 : 1;
-  const row = y < 1 / 3 ? 0 : y > 2 / 3 ? 2 : 1;
-  return [
-    ["左上", "上方", "右上"],
-    ["左側", "中央", "右側"],
-    ["左下", "下方", "右下"],
-  ][row][col];
-}
 
 /** 對不上是確定的答案（不硬畫），只留一行小字；其他錯誤照一般錯誤顯示 */
 function AlignError({ error, what }: { error: unknown; what: string }) {

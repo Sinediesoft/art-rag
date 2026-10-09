@@ -28,7 +28,7 @@ from app.repositories import db
 from app.repositories.index_store import IndexMismatch, get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
-from app.services import identity, memory_guard
+from app.services import identity, memory_guard, region_service
 from app.services.cad_service import purge_jobs
 from app.services.intake_service import purge_drafts
 
@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
         (s.uploads_dir / path).unlink(missing_ok=True)
     purge_jobs(s.upload_ttl_days)
     purge_drafts(s.upload_ttl_days)
+    region_service.purge_drafts(s.upload_ttl_days)
     # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動
     try:
         get_inventory_repo().ensure_built()

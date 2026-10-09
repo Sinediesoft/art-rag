@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
+from PIL import Image
 
 from app.core.config import REPO_ROOT
 
@@ -35,6 +36,50 @@ def _load(path: Path, validator: Draft202012Validator) -> tuple[dict | None, lis
     return data, problems
 
 
+# 區域面積下限（相對整張圖）：低於這個大概是點在同一條線上，或手滑點了兩下
+_MIN_REGION_AREA = 1e-4
+
+
+def _polygon_area(points: list[list[float]]) -> float:
+    """鞋帶公式；點的順序順時針、逆時針都可以。"""
+    n = len(points)
+    s = sum(
+        points[i][0] * points[(i + 1) % n][1] - points[(i + 1) % n][0] * points[i][1]
+        for i in range(n)
+    )
+    return abs(s) / 2
+
+
+def region_problems(data: dict, image: Path | None = None) -> list[str]:
+    """區域標註（docs/adr/029）：段落指到的區域要存在、每塊區域至少有一段、多邊形不能退化。
+
+    image：要比對尺寸的圖檔。座標綁在圈區域時的那張圖上，換過圖（重裁、換高解析度）尺寸會不同，
+    區域就要重新圈；照片建檔收錄前圖還沒寫，傳 None 不比。
+    """
+    regions = data.get("regions", {})
+    items = regions.get("items", [])
+    ids = [r.get("id") for r in items]
+    problems = [f"區域 id 重複：{i}" for i in sorted({i for i in ids if ids.count(i) > 1})]
+    used = {d["region"] for d in data.get("descriptions", []) if d.get("region")}
+    problems += [f"段落指向區域 {i}，但 regions 裡沒有這一塊" for i in sorted(used - set(ids))]
+    problems += [f"區域 {i} 沒有任何段落講它" for i in ids if i not in used]
+    for r in items:
+        pts = r.get("points", [])
+        well_formed = len(pts) >= 3 and all(isinstance(p, list) and len(p) == 2 for p in pts)
+        if well_formed and _polygon_area(pts) < _MIN_REGION_AREA:  # 格式不對的交給 schema 報
+            problems.append(f"區域 {r.get('id')} 的面積太小（點幾乎在同一條線上）")
+    if regions and image is not None and image.is_file():
+        with Image.open(image) as im:
+            size = list(im.size)
+        if regions.get("image_size") != size:
+            drawn = "×".join(map(str, regions.get("image_size") or []))
+            problems.append(
+                f"圖檔現在是 {size[0]}×{size[1]}，圈區域時是 {drawn}：換過圖，區域要重新圈"
+                "（只是等比例縮放的話，確認後把 regions.image_size 改成新尺寸）"
+            )
+    return problems
+
+
 def validate_kb() -> tuple[list[dict], list[str]]:
     validator = _validator("artwork.schema.json")
     ok, errors = [], []
@@ -47,6 +92,7 @@ def validate_kb() -> tuple[list[dict], list[str]]:
             for item in [data.get("image", {}), *data.get("descriptions", [])]:
                 if item.get("license") == "CC BY 4.0" and not item.get("attribution"):
                     problems.append("CC BY 4.0 的項目必須填 attribution（標示文字）")
+            problems += region_problems(data, img)
         if problems:
             errors.extend(f"{path.name}: {p}" for p in problems)
         else:
@@ -100,7 +146,7 @@ def artwork_problems(data: dict) -> list[str]:
     for item in [data.get("image", {}), *data.get("descriptions", [])]:
         if item.get("license") == "CC BY 4.0" and not item.get("attribution"):
             problems.append("CC BY 4.0 的項目必須填 attribution（標示文字）")
-    return problems
+    return problems + region_problems(data)
 
 
 def validate_inventory(part_ids: set[str]) -> tuple[dict | None, list[dict], list[str]]:

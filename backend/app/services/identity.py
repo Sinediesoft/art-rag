@@ -45,6 +45,8 @@ class Account:
     ops: tuple[str, ...]
     warehouses: tuple[str, ...] = ()
     customers: tuple[str, ...] = ()
+    # 藝術家可以圈區域、寫解說的畫（docs/adr/029）
+    artworks: tuple[str, ...] = ()
     note: str = ""
     # 資料範圍：能讀的領域（art／mfg／factory）與看得到的機密等級
     domains: tuple[str, ...] = ("art",)
@@ -79,6 +81,7 @@ class Account:
             "ops": list(self.ops),
             "warehouses": list(self.warehouses),
             "customers": list(self.customers),
+            "artworks": list(self.artworks),
             "note": self.note,
             "domains": list(self.domains),
             "levels": list(self.levels),
@@ -106,6 +109,7 @@ def accounts() -> dict[str, Account]:
             ops=tuple(role.get("ops", [])),
             warehouses=tuple(a.get("warehouses", [])),
             customers=tuple(a.get("customers", [])),
+            artworks=tuple(a.get("artworks", [])),
             note=role.get("note", ""),
             domains=tuple(cl.get("domains", ["art"])),
             levels=tuple(cl.get("levels", ["公開"])),

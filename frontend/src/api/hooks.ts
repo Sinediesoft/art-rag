@@ -207,6 +207,17 @@ export function useSwitchAccount() {
 export const useApprovals = () =>
   useQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });
 
+/** 區域解說草稿（docs/adr/029）：收錄中要等背景重建索引，短間隔重抓 */
+export const useRegionDrafts = () =>
+  useQuery({
+    queryKey: ["region-drafts"],
+    queryFn: api.regionDrafts,
+    refetchInterval: (q) =>
+      [...(q.state.data?.pending ?? []), ...(q.state.data?.mine ?? [])].some((d) => d.status === "indexing")
+        ? 1500
+        : 10_000,
+  });
+
 /** 目前身分看不看得到某個管理與診斷畫面（access.yaml 的 views；後端一樣會擋，這裡只是不發會 403 的請求） */
 export function useCanView(view: "diagnostics" | "security_logs" | "audit") {
   const { data } = useAccounts();

@@ -38,6 +38,8 @@ export interface SourceItem {
   source_url: string | null;
   license: string;
   score: number;
+  /** 綁在畫面區域上的畫作段落才有（docs/adr/029）：座標是相對畫作原圖的 0–1 */
+  region?: { id: string; label: string; points: number[][]; bbox: number[] };
 }
 
 export interface SourcesEvent {
