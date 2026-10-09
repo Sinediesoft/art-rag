@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError } from "./client";
+import { json, mockTransport } from "../test/transport";
+import { api, ApiError, workOrderScope } from "./client";
 import { acknowledgeWrite, blockedBy, simulateReloadForTest, trackWrite } from "./writes";
 
 /** 架構審查 c7ca88c F1：結果不能確定的寫入由共用層負責到底，所有呼叫端同一套語意 */
@@ -44,6 +45,49 @@ describe("寫入追蹤：結果不能確定（5xx、斷線）的處理", () => {
     const send = vi.fn(() => Promise.resolve("ok"));
     await expect(trackWrite("開立工單", send, "work-order:create:mfg-002")).rejects.toMatchObject({ code: "WRITE_UNCONFIRMED" });
     expect(send).not.toHaveBeenCalled();
+  });
+
+  // 第 16 次 code review F1：另一個分頁剛存下紀錄、這個分頁還沒處理到 storage 通知就送出
+  const otherTabSaved = (status: "pending" | "unknown", scope = "work-order:create:mfg-002") =>
+    localStorage.setItem("artrag-writes-v1:other-1", JSON.stringify({ label: "開立工單", scope, status, ts: 1, tab: "other" }));
+
+  it.each(["pending", "unknown"] as const)("另一個分頁剛存下 %s、還沒收到 storage 通知：送出入口重讀瀏覽器，一樣擋下、不呼叫 API", async (status) => {
+    otherTabSaved(status);
+    const send = vi.fn(() => Promise.resolve("ok"));
+    await expect(trackWrite("開立工單", send, "work-order:create:mfg-002")).rejects.toMatchObject({ code: "WRITE_UNCONFIRMED", status: 409 });
+    expect(send).not.toHaveBeenCalled();
+    // 沒有留下自己的紀錄
+    expect(stored().map(([k]) => k)).toEqual(["artrag-writes-v1:other-1"]);
+  });
+
+  it("透過實際的 client：同一個零件開工單、送主管核准（新的 pending_id）都被擋下，API 0 次", async () => {
+    const t = mockTransport();
+    otherTabSaved("unknown");
+    await expect(api.createWorkOrder({ part_id: "mfg-002", qty: 1, due_on: "2026-10-20", priority: "一般", note: null })).rejects.toMatchObject({ code: "WRITE_UNCONFIRMED" });
+    await expect(api.requestApproval("pend-new", "", workOrderScope("mfg-002"))).rejects.toMatchObject({ code: "WRITE_UNCONFIRMED" });
+    expect(t.calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    // 別的零件不受影響
+    t.on("POST", "/production/work-orders", () => json({ wo_no: "WO-1", qty: 1, due_on: "2026-10-20" }));
+    await expect(api.createWorkOrder({ part_id: "mfg-003", qty: 1, due_on: "2026-10-20", priority: "一般", note: null })).resolves.toMatchObject({ wo_no: "WO-1" });
+  });
+
+  it("先寫再看：這裡記下「送出中」的同時，另一個分頁也記下同一件事 → 撤回自己的、不送", async () => {
+    const realSet = Storage.prototype.setItem;
+    let injected = false;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, k: string, v: string) {
+      realSet.call(this, k, v);
+      // 自己的「送出中」寫入之後、再看之前，另一個分頁也寫了
+      if (!injected && k.startsWith("artrag-writes-v1:") && !k.includes("other")) {
+        injected = true;
+        realSet.call(this, "artrag-writes-v1:other-1", JSON.stringify({ label: "開立工單", scope: "work-order:create:mfg-002", status: "pending", ts: 1, tab: "other" }));
+      }
+    });
+    const send = vi.fn(() => Promise.resolve("ok"));
+    await expect(trackWrite("開立工單", send, "work-order:create:mfg-002")).rejects.toMatchObject({ code: "WRITE_UNCONFIRMED" });
+    vi.restoreAllMocks();
+    expect(injected).toBe(true);
+    expect(send).not.toHaveBeenCalled();
+    expect(stored().map(([k]) => k)).toEqual(["artrag-writes-v1:other-1"]);
   });
 
   it("記不下「送出中」（儲存空間不足）：不送出，以 4xx 拒絕（確定沒寫）", async () => {

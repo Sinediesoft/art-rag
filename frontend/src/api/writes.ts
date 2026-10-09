@@ -120,22 +120,35 @@ export const blockedBy = (scope: string) => all.find((e) => e.scope === scope &&
  * 送出一筆寫入。send 是真正呼叫 API 的函式：被擋下（同一件事還沒確認）或記不下「送出中」時不會呼叫它，
  * 直接以 4xx 的 ApiError 拒絕（確定沒有送出）。
  */
+const unconfirmedError = (prior: WriteEntry) =>
+  new ApiError(
+    "WRITE_UNCONFIRMED",
+    `上一次〈${prior.label}〉${prior.status === "pending" ? "還在送出中" : "送出後結果未確認，可能已經完成"}；請先到核准紀錄或庫存・工單核對，核對後在頁首按「已核對」再送`,
+    "",
+    409,
+  );
+
 export function trackWrite<T>(label: string, send: () => Promise<T>, scope?: string): Promise<T> {
+  // 送出入口一律重讀瀏覽器裡其他分頁留下的紀錄，不靠 storage 事件：
+  // 另一個分頁剛存下「結果未確認」、這個分頁還沒處理到通知時送出，一樣要擋下
+  if (scope) refreshForeign();
   const prior = scope ? blockedBy(scope) : undefined;
-  if (prior)
-    return Promise.reject(
-      new ApiError(
-        "WRITE_UNCONFIRMED",
-        `上一次〈${prior.label}〉${prior.status === "pending" ? "還在送出中" : "送出後結果未確認，可能已經完成"}；請先到核准紀錄或庫存・工單核對，核對後在頁首按「已核對」再送`,
-        "",
-        409,
-      ),
-    );
+  if (prior) return Promise.reject(unconfirmedError(prior));
   const id = `${TAB}-${++seq}`;
   const ts = Date.now();
   // 先記下「送出中」再送：送出中頁面關掉，重新載入後一樣知道這筆可能已經寫了
   if (!persist(id, { label, scope, status: "pending", ts, tab: TAB }))
     return Promise.reject(new ApiError("WRITE_NOT_RECORDED", "這台瀏覽器記不下「已送出」的狀態（儲存空間不足或被停用），為避免重複寫入，這次沒有送出", "", 400));
+  // 先寫、再看：記下自己的之後再讀一次，同一件事如果有別人的（另一個分頁和這裡幾乎同時送出），撤回自己的、不送。
+  // 兩邊都是寫完才看，所以不會兩邊都送出（同 shell/persist.ts 的「已送出」標記）
+  if (scope) {
+    const other = readForeign().find((e) => e.scope === scope);
+    if (other) {
+      unpersist(id);
+      refreshForeign();
+      return Promise.reject(unconfirmedError(other));
+    }
+  }
   setOwn([...own, { id, label, scope, status: "pending", orphaned: false, foreign: false, ts }]);
   const settle = (status: WriteStatus) => {
     const e = own.find((x) => x.id === id);
