@@ -7,7 +7,7 @@ import { orphanWrites } from "../api/writes";
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
-import { applyMarks, canRerun, clearUnconfirmed, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
+import { applyMarks, canRerun, clearUnconfirmed, hasMark, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -479,6 +479,12 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (t?.part?.kind !== "change" || !mayAct(t)) return;
       const part = t.part as ChangePart;
       if (part.status === "committing" || part.status === "unconfirmed" || !part.preview?.pending_id) return;
+      // 這一輪已經有「已送出」標記（另一個分頁對同一輪重新試算後先送出了、結果還沒確認）：這份試算不能再送，
+      // 收起成結果未確認——再送就是第二筆，而且會讓第一筆的標記被覆寫或清掉
+      if (hasMark(turnId)) {
+        updateTurn(convId, turnId)((x) => applyMarks(x));
+        return;
+      }
       // 送出之前先同步寫進瀏覽器：這一輪標成送出中（存檔版是「結果未確認」、不能重跑）。
       // 不等一般的 400 ms 延遲存檔——在那之前重新整理，會讀回試算完成、可以重跑的舊紀錄，再確認一次就是第二筆
       const action = note === null ? "commit" : "approval";

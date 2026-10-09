@@ -5,7 +5,7 @@ import { useStatus, useSwitchAccount } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
-import { canRerun, REJECTED, writeUnconfirmed } from "../../shell/persist";
+import { canRerun, hasMark, REJECTED, writeUnconfirmed } from "../../shell/persist";
 import { ctaOf, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
 import { dispatchOf } from "../../shell/runner";
 import { buildStages, egressOf, gatewayStages, progressOf, summaryOf } from "../../shell/stages";
@@ -842,8 +842,10 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
         />
       </div>
     );
-  // 結果未確認的寫入也不再給按鈕：伺服器可能已經完成，再按一次可能變成第二筆
-  const finished = p.committed || p.approval || p.status === "unconfirmed";
+  // 結果未確認的寫入也不再給按鈕：伺服器可能已經完成，再按一次可能變成第二筆。
+  // 另一個分頁已經送出同一輪（有「已送出」標記）也一樣
+  const sentElsewhere = p.status !== "committing" && p.status !== "unconfirmed" && !p.committed && !p.approval && hasMark(turn.id);
+  const finished = p.committed || p.approval || p.status === "unconfirmed" || sentElsewhere;
   return (
     <div className="panel-card changecard">
       <div className="panel-card__head">
@@ -938,6 +940,10 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
         {p.status === "unconfirmed" ? (
           <p className="outcome is-warn">
             <b>結果未確認</b>：{p.error}。{writeUnconfirmed(p.action)}（<Link to="/approvals">核准紀錄</Link>、<Link to="/inventory">庫存・工單</Link>）。
+          </p>
+        ) : sentElsewhere ? (
+          <p className="outcome is-warn">
+            <b>另一個分頁已經送出這一輪</b>，結果還沒確認，這份試算不能再送（<Link to="/approvals">核准紀錄</Link>、<Link to="/inventory">庫存・工單</Link>）。
           </p>
         ) : (
           p.error && <p className="outcome is-block">{p.error}</p>

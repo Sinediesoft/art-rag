@@ -262,18 +262,23 @@ export function serialize(convs: Conv[], prefs: Omit<Saved, "v" | "convs">): Sav
  */
 export const UNCONFIRMED_PREFIX = "artrag-shell-unconfirmed-v1:";
 export const markKey = (turnId: string) => UNCONFIRMED_PREFIX + turnId;
-type Mark = { conv: string; action: "commit" | "approval"; ts: number };
+/** tab：送出的那個分頁（這個頁面載入時產生的隨機代號）；只有它能解除，其他分頁的提交清不掉 */
+type Mark = { conv: string; action: "commit" | "approval"; ts: number; tab: string };
 export type Marks = Record<string, Mark>;
 
-/** 標記的值壞掉也當成有標記（保守：不能重跑），動作不明就說「確認寫入」 */
+/** 這個分頁（這一次載入頁面）的代號 */
+export const TAB_ID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+/** 標記的值壞掉也當成有標記（保守：不能重跑、誰都解除不了），動作不明就說「確認寫入」 */
 function parseMark(raw: string): Mark {
   try {
     const m = JSON.parse(raw) as Partial<Mark> | null;
-    if (m && typeof m === "object") return { conv: String(m.conv ?? ""), action: m.action === "approval" ? "approval" : "commit", ts: Number(m.ts) || 0 };
+    if (m && typeof m === "object")
+      return { conv: String(m.conv ?? ""), action: m.action === "approval" ? "approval" : "commit", ts: Number(m.ts) || 0, tab: String(m.tab ?? "") };
   } catch {
     /* 壞掉的值 */
   }
-  return { conv: "", action: "commit", ts: 0 };
+  return { conv: "", action: "commit", ts: 0, tab: "" };
 }
 
 export function readMarks(): Marks {
@@ -303,30 +308,47 @@ export function hasMark(turnId: string): boolean {
 /** 送出寫入之前呼叫；寫不進去回傳 false（呼叫端就不送） */
 export function markUnconfirmed(turnId: string, convId: string, action: "commit" | "approval"): boolean {
   try {
-    localStorage.setItem(markKey(turnId), JSON.stringify({ conv: convId, action, ts: Date.now() } satisfies Mark));
+    localStorage.setItem(markKey(turnId), JSON.stringify({ conv: convId, action, ts: Date.now(), tab: TAB_ID } satisfies Mark));
     return true;
   } catch {
     return false;
   }
 }
 
+/** 解除：只解除這個分頁自己送出的那一份（另一個分頁送出、還沒確認的標記不會被這裡清掉） */
 export function clearUnconfirmed(ids: string[]) {
   for (const id of ids)
     try {
-      localStorage.removeItem(markKey(id));
+      const raw = localStorage.getItem(markKey(id));
+      if (raw !== null && parseMark(raw).tab === TAB_ID) localStorage.removeItem(markKey(id));
     } catch {
       /* 移除失敗：標記留著，保守 */
     }
 }
 
-/** 有標記的那一輪（從紀錄還原、或其他分頁送出的）一律當成結果未確認：不能重跑，摘要說明已送出 */
+/**
+ * 有標記的那一輪一律當成結果未確認：不能重跑，摘要說明已送出。
+ * - 從紀錄還原的（archived）：改 outcome 與摘要
+ * - 還在畫面上、試算完成的卡片（另一個分頁對同一輪重新查詢過、還沒送出）：整張收起成同樣的摘要，不再給確認按鈕
+ * - 這個分頁自己送出中／結果未確認、或已經有結果的卡片不動
+ */
 export function applyMarks(t: Turn, marks: Marks = readMarks()): Turn {
   const mk = marks[t.id];
-  if (!mk || !t.archived || t.archived.outcome === "unconfirmed") return t;
-  return {
-    ...t,
-    archived: { ...t.archived, outcome: "unconfirmed", summary: writeUnconfirmed(mk.action), redacted: true, answer: undefined, sources: undefined, artResults: undefined, refs: undefined },
-  };
+  if (!mk) return t;
+  const unconfirmed = (a: ArchivedTurn): ArchivedTurn => ({
+    ...a,
+    outcome: "unconfirmed",
+    summary: writeUnconfirmed(mk.action),
+    redacted: true,
+    answer: undefined,
+    sources: undefined,
+    artResults: undefined,
+    refs: undefined,
+  });
+  if (t.archived) return t.archived.outcome === "unconfirmed" ? t : { ...t, archived: unconfirmed(t.archived) };
+  const p = t.part;
+  if (p?.kind !== "change" || p.status === "committing" || p.status === "unconfirmed" || p.committed || p.approval) return t;
+  return { ...t, text: t.route?.question || t.text, phase: "done", route: null, part: null, failure: null, archived: unconfirmed(archive({ ...t, archived: undefined })) };
 }
 
 /** 寫進瀏覽器；寫不進去（無痕模式、空間不足）回傳 false，內容只留在記憶體 */

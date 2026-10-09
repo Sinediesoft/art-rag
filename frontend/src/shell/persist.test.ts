@@ -9,6 +9,7 @@ import {
   mentionsSecret,
   redactForeign,
   redactPrivate,
+  applyMarks,
   clearUnconfirmed,
   hasMark,
   markKey,
@@ -20,6 +21,7 @@ import {
   SECRET_QUESTION,
   serialize,
   STORAGE_KEY,
+  TAB_ID,
 } from "./persist";
 import { overlayPipeline, buildStages, progressOf } from "./stages";
 import type { Conv, Turn } from "./types";
@@ -474,6 +476,39 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
     const back = load().convs[0].turns[0];
     expect(back.archived?.outcome).toBe("unconfirmed");
     expect(canRerun(back)).toBe(false);
+  });
+
+  // 第 12 次 code review F1：同一輪在另一個分頁送出、還沒確認——這個分頁的提交收到結果也不能把它清掉
+  it("只能解除這個分頁自己送出的標記：另一個分頁的（或壞掉、沒有分頁代號的）留著", () => {
+    localStorage.setItem(markKey("same"), JSON.stringify({ conv: "c1", action: "approval", ts: 1, tab: "other-tab" }));
+    localStorage.setItem(markKey("bad"), "{bad");
+    clearUnconfirmed(["same", "bad"]);
+    expect(hasMark("same")).toBe(true);
+    expect(hasMark("bad")).toBe(true);
+    expect(markUnconfirmed("mine", "c1", "commit")).toBe(true);
+    expect(JSON.parse(localStorage.getItem(markKey("mine"))!).tab).toBe(TAB_ID);
+    clearUnconfirmed(["mine"]);
+    expect(hasMark("mine")).toBe(false);
+  });
+
+  it("試算完成、還在畫面上的同一輪（另一個分頁送出了）：收起成結果未確認，不再有試算卡", () => {
+    const live = base({
+      id: "same",
+      route: factoryRoute({ question: "連接法蘭庫存加 5" }),
+      part: { kind: "change", status: "ready", preview: { pending_id: "pend-2", next: "confirm" } as never, committed: null, approval: null, error: null },
+    });
+    localStorage.setItem(markKey("same"), JSON.stringify({ conv: "c1", action: "commit", ts: 1, tab: "other-tab" }));
+    const out = applyMarks(live);
+    expect(out.part).toBeNull();
+    expect(out.route).toBeNull();
+    expect(out.archived?.outcome).toBe("unconfirmed");
+    expect(out.archived?.summary).toContain("確認寫入已經送出、沒有收到結果");
+    expect(JSON.stringify(out)).not.toContain("pend-2");
+    // 這個分頁自己送出中、結果未確認、已經有結果的卡片不動
+    for (const status of ["committing", "unconfirmed"] as const) {
+      const own = { ...live, part: { ...(live.part as object), status } } as Turn;
+      expect(applyMarks(own)).toBe(own);
+    }
   });
 
   it("分頁 A 解除自己那一輪時，分頁 B 剛好新增：只移除 A，B 的標記留著", () => {

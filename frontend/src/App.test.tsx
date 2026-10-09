@@ -1017,6 +1017,66 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(t.calls.filter((c) => c.path === "/changes/pend-1/request-approval")).toHaveLength(1);
   });
 
+  // 第 12 次 code review F1：B 在 A 送出前就對同一輪「以目前身分重新查詢」，手上有一張試算完成的卡片（同一個輪次、不同 pending_id）
+  const sameTurnInB = async (over: Record<string, unknown>) => {
+    const { t } = await changeReady(over);
+    await waitFor(() => expect(savedChange()?.archived.outcome).toBe("pass"));
+    const b = renderApp("/");
+    // B 的重新試算拿到另一個 pending_id
+    t.on("POST", "/changes/preview", () => json({ ...preview, ...over, pending_id: "pend-2" }));
+    const open = [...b.container.querySelectorAll<HTMLElement>(".side__open")].find((x) => x.textContent?.includes("連接法蘭有哪些公差要求"))!;
+    fireEvent.click(open);
+    await waitFor(() => expect(within(b.container).getAllByText("以目前身分重新查詢").length).toBeGreaterThan(0));
+    // 和使用者一樣：等 B 的身分確認、輸入框解鎖
+    await waitFor(() => expect(b.container.querySelector(".composer__lock")).toBeNull());
+    fireEvent.click(within(b.container).getAllByText("以目前身分重新查詢").at(-1)!);
+    const label = over.next === "approval" ? "送主管核准" : "確認寫入";
+    await waitFor(() => expect(within(b.container).getByRole("button", { name: label })).toBeTruthy());
+    return { t, b, label };
+  };
+  const bLastAi = (b: { container: HTMLElement }) => [...b.container.querySelectorAll(".msg--ai")].at(-1) as HTMLElement;
+
+  it("「送主管核准」：A 送出後，B 手上同一輪的試算卡在送出入口就被擋下（還沒收到 storage 通知也一樣），第二筆不送、A 的標記留著", async () => {
+    const { t, b, label } = await sameTurnInB({ next: "approval", reasons: ["超過額度"] });
+    t.on("POST", "/changes/pend-1/request-approval", () => new Promise<Response>(() => undefined));
+    t.on("POST", "/changes/pend-2/request-approval", () => json({ ap_no: "AP-SYNTH-2" }));
+    // A 是先畫出來的那一份
+    fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+    expect(Object.keys(readMarks())).toHaveLength(1);
+    // B 沒收到 storage 事件就按：送出入口核對標記，不送
+    fireEvent.click(within(b.container).getByRole("button", { name: label }));
+    await waitFor(() => expect(bLastAi(b).textContent).toContain("送主管核准已經送出、沒有收到結果"));
+    expect(within(b.container).queryByRole("button", { name: label })).toBeNull();
+    expect(t.calls.some((c) => c.path === "/changes/pend-2/request-approval")).toBe(false);
+    expect(t.calls.filter((c) => c.path === "/changes/pend-1/request-approval")).toHaveLength(1);
+    expect(Object.keys(readMarks())).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("AP-SYNTH-2");
+  });
+
+  it("「確認寫入」：A 送出後 B 收到 storage 通知，手上同一輪的試算卡立刻收起成結果未確認、沒有按鈕；重新載入也不能重跑", async () => {
+    const { t, b, label } = await sameTurnInB({});
+    t.on("POST", "/changes/pend-1/commit", () => new Promise<Response>(() => undefined));
+    t.on("POST", "/changes/pend-2/commit", () => json({ change_no: "CH-SYNTH-2", text: "SYNTH_SECOND", rows: [], moves: 1, op: "adjust_stock", summary: "", account: account() }));
+    fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: Object.keys(localStorage).find((k) => k.startsWith(UNCONFIRMED_PREFIX)) }));
+    });
+    await waitFor(() => expect(bLastAi(b).textContent).toContain("確認寫入已經送出、沒有收到結果"));
+    expect(within(b.container).queryByRole("button", { name: label })).toBeNull();
+    expect(within(bLastAi(b)).queryByText("以目前身分重新查詢")).toBeNull();
+    expect(t.calls.some((c) => c.path === "/changes/pend-2/commit")).toBe(false);
+    // 兩個分頁都存檔、離開後重新載入
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    const at = where;
+    cleanup();
+    renderApp(at);
+    await waitFor(() => expect(lastAi()?.textContent).toContain("確認寫入已經送出、沒有收到結果"));
+    expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
+    expect(Object.keys(readMarks())).toHaveLength(1);
+  });
+
   it("結果確實回到這一輪才解除標記：完成或伺服器明確拒絕（4xx）解除；連線中斷、5xx 留著", async () => {
     const { t } = await changeReady();
     t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "PENDING_EXPIRED", message: "試算已過期", request_id: "r" } }, 409));
