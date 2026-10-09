@@ -279,16 +279,15 @@ const turnOfKey = (k: string) => k.slice(UNCONFIRMED_PREFIX.length).split(":")[0
 
 /** 列出某一輪（或全部）的標記 key */
 function markKeys(turnId?: string): string[] {
-  const out: string[] = [];
+  // 一次取得整份 key 清單再篩選，不用 length／key(i) 逐一讀：逐一讀的途中另一個分頁解除了前面的 key，
+  // 後面的 key 會往前移一格而被跳過——「同一輪沒有別人的標記」就會誤判，兩份提交都送出
+  let keys: string[];
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k?.startsWith(UNCONFIRMED_PREFIX) && (turnId === undefined || turnOfKey(k) === turnId)) out.push(k);
-    }
+    keys = Object.keys(localStorage);
   } catch {
-    /* 讀不到瀏覽器儲存：這個分頁也寫不進標記，不會送出寫入 */
+    return []; // 讀不到瀏覽器儲存：這個分頁也寫不進標記，不會送出寫入
   }
-  return out;
+  return keys.filter((k) => k.startsWith(UNCONFIRMED_PREFIX) && (turnId === undefined || turnOfKey(k) === turnId));
 }
 
 /** 標記的值壞掉也當成有標記（保守：不能重跑、誰都解除不了），動作不明就說「確認寫入」 */

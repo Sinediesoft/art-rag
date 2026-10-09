@@ -1123,6 +1123,70 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(Object.keys(readMarks())).toHaveLength(1);
   });
 
+  // 第 14 次 code review F1：A 寫完標記、檢查別人的標記時，分頁 C 剛好解除了排在前面的另一輪標記（key 往前移一格）
+  it.each([
+    ["確認寫入", {}, "commit"],
+    ["送主管核准", { next: "approval", reasons: ["超過額度"] }, "request-approval"],
+  ])("「%s」交錯送出，加上檢查途中另一輪的標記被解除：B 的標記一樣看得到，只有 B 送出", async (label, over, op) => {
+    const { t, b } = await sameTurnInB(over);
+    t.on("POST", `/changes/pend-2/${op}`, () => new Promise<Response>(() => undefined));
+    t.on("POST", `/changes/pend-1/${op}`, () => json({ ok: true }));
+    const u = `${UNCONFIRMED_PREFIX}other-turn:tab-c-1`;
+    const realSet = Storage.prototype.setItem;
+    const realKey = Storage.prototype.key;
+    const realGet = Storage.prototype.getItem;
+    const realRemove = Storage.prototype.removeItem;
+    let injected = false;
+    let armed = false;
+    let removed = false;
+    const removeU = (s: Storage, k: string | null) => {
+      // 只在 A 的檢查途中（B 已經送出之後）才移除
+      if (armed && !removed && k === u) {
+        removed = true;
+        realRemove.call(s, u);
+      }
+    };
+    const spies = [
+      // A 寫入自己的標記之前：分頁 C 另一輪的標記 U 排在前面，B 也按下送出（B 也讀到沒有標記）
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, k: string, v: string) {
+        if (!injected && k.startsWith(UNCONFIRMED_PREFIX)) {
+          injected = true;
+          realSet.call(this, u, JSON.stringify({ conv: "c9", action: "commit", ts: 1, tab: "tab-c" }));
+          fireEvent.click(within(b.container).getByRole("button", { name: label }));
+          armed = true;
+        }
+        return realSet.call(this, k, v);
+      }),
+      // A 檢查別人的標記、讀到 U 的那一刻，分頁 C 收到 U 的結果、把 U 移除
+      vi.spyOn(Storage.prototype, "key").mockImplementation(function (this: Storage, i: number) {
+        const k = realKey.call(this, i);
+        removeU(this, k);
+        return k;
+      }),
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, k: string) {
+        const v = realGet.call(this, k);
+        removeU(this, k);
+        return v;
+      }),
+    ];
+    fireEvent.click(screen.getAllByRole("button", { name: label })[0]);
+    spies.forEach((s) => s.mockRestore());
+    expect(injected).toBe(true);
+    expect(t.calls.filter((c) => c.path === `/changes/pend-2/${op}`)).toHaveLength(1);
+    expect(t.calls.filter((c) => c.path === `/changes/pend-1/${op}`)).toHaveLength(0);
+    // B 的標記還在，重新載入仍是結果未確認
+    const marks = Object.keys(localStorage).filter((k) => k.startsWith(UNCONFIRMED_PREFIX) && k !== u);
+    expect(marks).toHaveLength(1);
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    const at = where;
+    cleanup();
+    renderApp(at);
+    await waitFor(() => expect(lastAi()?.textContent).toContain(`${label}已經送出、沒有收到結果`));
+    expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
+  });
+
   it("結果確實回到這一輪才解除標記：完成或伺服器明確拒絕（4xx）解除；連線中斷、5xx 留著", async () => {
     const { t } = await changeReady();
     t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "PENDING_EXPIRED", message: "試算已過期", request_id: "r" } }, 409));

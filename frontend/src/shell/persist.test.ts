@@ -515,6 +515,55 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
     expect(canRerun(back)).toBe(false);
   });
 
+  // 第 14 次 code review F1：列舉標記的途中，另一個分頁解除了排在前面的另一輪標記，後面的 key 往前移一格
+  it("列舉途中另一個分頁解除了排在前面的另一輪標記：同一輪別人的標記一樣看得到（otherMarks、readMarks、load）", () => {
+    const t = base({ id: "same", route: factoryRoute({ question: "連接法蘭庫存加 5" }), part: { kind: "route" } });
+    save(serialize([conv([t])], { collapsed: false, split: 50, theme: "dark" }));
+    // key 的順序：[快照, U（分頁 C 另一輪）, B（同一輪、分頁 B）, A（同一輪、這個分頁）]
+    const u = markKey("other-turn", "tab-c-1");
+    const theirs = markKey("same", "tab-b-1");
+    localStorage.setItem(u, JSON.stringify({ conv: "c9", action: "commit", ts: 1, tab: "tab-c" }));
+    localStorage.setItem(theirs, JSON.stringify({ conv: "c1", action: "approval", ts: 2, tab: "tab-b" }));
+    const mine = markUnconfirmed("same", "c1", "commit")!;
+    /** 讀到 U 的那一刻，分頁 C 收到 U 的結果、把 U 移除（逐一用 key(i) 或 getItem 讀都會碰到這個時間點） */
+    const removeUWhenRead = () => {
+      const realKey = Storage.prototype.key;
+      const realGet = Storage.prototype.getItem;
+      const realRemove = Storage.prototype.removeItem;
+      let removed = false;
+      const hit = (s: Storage, k: string | null) => {
+        if (!removed && k === u) {
+          removed = true;
+          realRemove.call(s, u);
+        }
+      };
+      vi.spyOn(Storage.prototype, "key").mockImplementation(function (this: Storage, i: number) {
+        const k = realKey.call(this, i);
+        hit(this, k);
+        return k;
+      });
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(function (this: Storage, k: string) {
+        const v = realGet.call(this, k);
+        hit(this, k);
+        return v;
+      });
+    };
+    removeUWhenRead();
+    expect(otherMarks("same", mine)).toEqual([theirs]);
+    vi.restoreAllMocks();
+    localStorage.setItem(u, JSON.stringify({ conv: "c9", action: "commit", ts: 1, tab: "tab-c" }));
+    removeUWhenRead();
+    expect(readMarks().same?.action).toBeDefined();
+    vi.restoreAllMocks();
+    localStorage.setItem(u, JSON.stringify({ conv: "c9", action: "commit", ts: 1, tab: "tab-c" }));
+    clearUnconfirmed([mine]);
+    removeUWhenRead();
+    const back = load().convs[0].turns[0];
+    vi.restoreAllMocks();
+    expect(back.archived?.outcome).toBe("unconfirmed");
+    expect(canRerun(back)).toBe(false);
+  });
+
   it("舊格式（每輪一個 key、沒有送出代號）也算有標記", () => {
     localStorage.setItem(markKey("old"), JSON.stringify({ conv: "c1", action: "commit", ts: 1, tab: "x" }));
     expect(hasMark("old")).toBe(true);
