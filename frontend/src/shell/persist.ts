@@ -200,7 +200,7 @@ export function canRerun(t: Turn) {
   // 寫入送出中或結果未確認（還在畫面上、沒有重新整理）：重跑會清掉這一輪、重新試算，再按一次就可能是第二筆
   if (t.part?.kind === "change" && (t.part.status === "committing" || t.part.status === "unconfirmed")) return false;
   // 任何分頁送出過、還沒確認結果的寫入（獨立的標記，不會被其他分頁的舊快照蓋掉）
-  if (readMarks()[t.id]) return false;
+  if (hasMark(t.id)) return false;
   if (!t.archived) return true;
   if (t.archived.outcome && REJECTED[t.archived.outcome]) return false;
   // 結果未確認的寫入：重跑會重新試算、再按一次就可能變成第二筆
@@ -256,24 +256,45 @@ export function serialize(convs: Conv[], prefs: Omit<Saved, "v" | "convs">): Sav
  * 這份標記只有送出的那個分頁、在同一個身分下確實收到結果（完成，或伺服器明確拒絕）才清掉。
  * 刪除對話也不清：其他分頁手上的舊快照可能把那段對話存回來。
  * 只存輪次、對話與動作，不存 pending_id、試算內容、JWT 或交接票。
+ *
+ * 每一輪一個 key（`artrag-shell-unconfirmed-v1:<輪次>`）：新增只 setItem 自己那一輪、解除只 removeItem 自己那一輪，
+ * 不做「讀出整份、改完再整份寫回」——兩個分頁在讀與寫之間交錯時，整份寫回會蓋掉或刪掉另一個分頁剛加的標記。
  */
-export const UNCONFIRMED_KEY = "artrag-shell-unconfirmed-v1";
-export type Marks = Record<string, { conv: string; action: "commit" | "approval"; ts: number }>;
+export const UNCONFIRMED_PREFIX = "artrag-shell-unconfirmed-v1:";
+export const markKey = (turnId: string) => UNCONFIRMED_PREFIX + turnId;
+type Mark = { conv: string; action: "commit" | "approval"; ts: number };
+export type Marks = Record<string, Mark>;
 
-export function readMarks(): Marks {
+/** 標記的值壞掉也當成有標記（保守：不能重跑），動作不明就說「確認寫入」 */
+function parseMark(raw: string): Mark {
   try {
-    const m = JSON.parse(localStorage.getItem(UNCONFIRMED_KEY) ?? "{}");
-    return m && typeof m === "object" && !Array.isArray(m) ? (m as Marks) : {};
+    const m = JSON.parse(raw) as Partial<Mark> | null;
+    if (m && typeof m === "object") return { conv: String(m.conv ?? ""), action: m.action === "approval" ? "approval" : "commit", ts: Number(m.ts) || 0 };
   } catch {
-    return {};
+    /* 壞掉的值 */
   }
+  return { conv: "", action: "commit", ts: 0 };
 }
 
-function writeMarks(m: Marks): boolean {
+export function readMarks(): Marks {
+  const out: Marks = {};
   try {
-    if (Object.keys(m).length) localStorage.setItem(UNCONFIRMED_KEY, JSON.stringify(m));
-    else localStorage.removeItem(UNCONFIRMED_KEY);
-    return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(UNCONFIRMED_PREFIX)) continue;
+      const raw = localStorage.getItem(k);
+      if (raw !== null) out[k.slice(UNCONFIRMED_PREFIX.length)] = parseMark(raw);
+    }
+  } catch {
+    /* 讀不到瀏覽器儲存：這個分頁也寫不進標記，不會送出寫入 */
+  }
+  return out;
+}
+
+/** 這一輪有沒有標記（只讀自己那一個 key） */
+export function hasMark(turnId: string): boolean {
+  try {
+    return localStorage.getItem(markKey(turnId)) !== null;
   } catch {
     return false;
   }
@@ -281,17 +302,21 @@ function writeMarks(m: Marks): boolean {
 
 /** 送出寫入之前呼叫；寫不進去回傳 false（呼叫端就不送） */
 export function markUnconfirmed(turnId: string, convId: string, action: "commit" | "approval"): boolean {
-  const m = readMarks();
-  m[turnId] = { conv: convId, action, ts: Date.now() };
-  return writeMarks(m);
+  try {
+    localStorage.setItem(markKey(turnId), JSON.stringify({ conv: convId, action, ts: Date.now() } satisfies Mark));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function clearUnconfirmed(ids: string[]) {
-  const m = readMarks();
-  const hit = ids.filter((id) => id in m);
-  if (!hit.length) return;
-  for (const id of hit) delete m[id];
-  writeMarks(m);
+  for (const id of ids)
+    try {
+      localStorage.removeItem(markKey(id));
+    } catch {
+      /* 移除失敗：標記留著，保守 */
+    }
 }
 
 /** 有標記的那一輪（從紀錄還原、或其他分頁送出的）一律當成結果未確認：不能重跑，摘要說明已送出 */

@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { STORAGE_KEY, UNCONFIRMED_KEY } from "./shell/persist";
+import { readMarks, STORAGE_KEY, UNCONFIRMED_PREFIX } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
 import { account, accounts, baseHandlers, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
@@ -981,7 +981,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(savedChangeOutcome()).toBe("pass");
     // 另一個分頁的標記變更（瀏覽器對其他分頁發 storage 事件）：B 手上那一輪立刻不能重新查詢
     act(() => {
-      window.dispatchEvent(new StorageEvent("storage", { key: UNCONFIRMED_KEY }));
+      window.dispatchEvent(new StorageEvent("storage", { key: Object.keys(localStorage).find((k) => k.startsWith(UNCONFIRMED_PREFIX)) }));
     });
     const open = [...b.container.querySelectorAll<HTMLElement>(".side__open")].find((x) => x.textContent?.includes("連接法蘭有哪些公差要求"))!;
     fireEvent.click(open);
@@ -995,7 +995,8 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(within(lastAi()).queryByText("以目前身分重新查詢")).toBeNull();
     expect(within(lastAi()).queryByLabelText("重新產生")).toBeNull();
     expect(t.calls.filter((c) => c.path === "/changes/pend-1/commit")).toHaveLength(1);
-    expect(localStorage.getItem(UNCONFIRMED_KEY)).not.toMatch(/pend-1|SYNTH/);
+    expect(Object.keys(readMarks())).toHaveLength(1);
+    expect(JSON.stringify(Object.entries(localStorage).filter(([k]) => k.startsWith(UNCONFIRMED_PREFIX)))).not.toMatch(/pend-1|SYNTH/);
   });
 
   it("「送主管核准」：分頁 B 的 400 ms 存檔用舊快照蓋回 pass → 重新載入仍是結果未確認、不能重跑", async () => {
@@ -1021,12 +1022,12 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "PENDING_EXPIRED", message: "試算已過期", request_id: "r" } }, 409));
     fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
     await waitFor(() => expect(lastAi().textContent).toContain("試算已過期"));
-    await waitFor(() => expect(localStorage.getItem(UNCONFIRMED_KEY)).toBeNull());
+    await waitFor(() => expect(Object.keys(readMarks())).toHaveLength(0));
     t.on("POST", "/changes/pend-1/commit", () => json({ error: { code: "INTERNAL", message: "伺服器錯誤", request_id: "r" } }, 500));
     fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
     await waitFor(() => expect(lastAi().textContent).toContain("結果未確認"));
     await new Promise((r) => setTimeout(r, 30));
-    expect(Object.keys(JSON.parse(localStorage.getItem(UNCONFIRMED_KEY) ?? "{}"))).toHaveLength(1);
+    expect(Object.keys(readMarks())).toHaveLength(1);
   });
 });
 

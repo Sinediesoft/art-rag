@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { factoryRoute, route, sources, done } from "../test/transport";
 import { deriveOutputs } from "./outputs";
 import {
@@ -10,6 +10,8 @@ import {
   redactForeign,
   redactPrivate,
   clearUnconfirmed,
+  hasMark,
+  markKey,
   markUnconfirmed,
   readMarks,
   sanitizeForStorage,
@@ -18,7 +20,6 @@ import {
   SECRET_QUESTION,
   serialize,
   STORAGE_KEY,
-  UNCONFIRMED_KEY,
 } from "./persist";
 import { overlayPipeline, buildStages, progressOf } from "./stages";
 import type { Conv, Turn } from "./types";
@@ -428,16 +429,60 @@ describe("「已送出」標記：獨立於對話快照，其他分頁的舊快�
     expect(canRerun(back)).toBe(false);
     // 還在畫面上、還沒重新整理的那一份（舊的 pass）也不能重跑：canRerun 每次都看標記
     expect(canRerun({ ...back, archived: { ...back.archived!, outcome: "pass" } })).toBe(false);
-    expect(localStorage.getItem(UNCONFIRMED_KEY)).not.toMatch(/pend|0912|連接法蘭/);
+    expect(localStorage.getItem(markKey("chg"))).not.toMatch(/pend|0912|連接法蘭/);
     clearUnconfirmed(["chg"]);
     expect(readMarks()).toEqual({});
-    expect(localStorage.getItem(UNCONFIRMED_KEY)).toBeNull();
+    expect(localStorage.getItem(markKey("chg"))).toBeNull();
   });
 
-  it("標記壞掉（不是物件）：當作沒有，不影響讀取", () => {
-    localStorage.setItem(UNCONFIRMED_KEY, "[1,2]");
-    expect(readMarks()).toEqual({});
-    localStorage.setItem(UNCONFIRMED_KEY, "{bad");
-    expect(readMarks()).toEqual({});
+  it("標記的值壞掉：一樣當成有標記（保守，不能重跑），動作不明就說確認寫入", () => {
+    localStorage.setItem(markKey("x"), "{bad");
+    localStorage.setItem(markKey("y"), "[1,2]");
+    expect(readMarks().x.action).toBe("commit");
+    expect(Object.keys(readMarks()).sort()).toEqual(["x", "y"]);
+    expect(canRerun(base({ id: "x", archived: { intentLabel: null, domain: null, outcome: "pass", stages: [], summary: null, redacted: true } }))).toBe(false);
+  });
+
+  // 第 11 次 code review F1：兩個分頁在「讀出、寫回」之間交錯。每一輪一個 key，新增與解除都不讀改寫整份
+  /** 在 A 的第一次寫入動作（setItem／removeItem）真正執行之前，先讓分頁 B 完成它的操作 */
+  const interleave = (other: () => void) => {
+    const realSet = Storage.prototype.setItem;
+    const realRemove = Storage.prototype.removeItem;
+    let done = false;
+    const before = () => {
+      if (done) return;
+      done = true;
+      other();
+    };
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, k: string, v: string) {
+      before();
+      return realSet.call(this, k, v);
+    });
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(function (this: Storage, k: string) {
+      before();
+      return realRemove.call(this, k);
+    });
+  };
+
+  it("分頁 A、B 同時新增不同輪次的標記：兩筆都在，B 那一輪讀回仍是結果未確認", () => {
+    const b = base({ id: "b-turn", route: factoryRoute({ question: "庫存加 5" }), part: { kind: "route" } });
+    save(serialize([conv([b])], { collapsed: false, split: 50, theme: "dark" }));
+    interleave(() => markUnconfirmed("b-turn", "c1", "approval"));
+    expect(markUnconfirmed("a-turn", "c2", "commit")).toBe(true);
+    vi.restoreAllMocks();
+    expect(Object.keys(readMarks()).sort()).toEqual(["a-turn", "b-turn"]);
+    const back = load().convs[0].turns[0];
+    expect(back.archived?.outcome).toBe("unconfirmed");
+    expect(canRerun(back)).toBe(false);
+  });
+
+  it("分頁 A 解除自己那一輪時，分頁 B 剛好新增：只移除 A，B 的標記留著", () => {
+    markUnconfirmed("a-turn", "c2", "commit");
+    interleave(() => markUnconfirmed("b-turn", "c1", "approval"));
+    clearUnconfirmed(["a-turn"]);
+    vi.restoreAllMocks();
+    expect(Object.keys(readMarks())).toEqual(["b-turn"]);
+    expect(hasMark("b-turn")).toBe(true);
+    expect(hasMark("a-turn")).toBe(false);
   });
 });

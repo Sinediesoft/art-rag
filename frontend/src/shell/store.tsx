@@ -7,7 +7,7 @@ import { orphanWrites } from "../api/writes";
 /** client.ts 的 renewToken 重新取得憑證時發出 */
 const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
-import { applyMarks, canRerun, clearUnconfirmed, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_KEY } from "./persist";
+import { applyMarks, canRerun, clearUnconfirmed, interruptForAccount, load, markUnconfirmed, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
 import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
@@ -142,7 +142,8 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   // 另一個分頁送出了寫入：這個分頁手上的同一輪（從紀錄還原的）立刻改成結果未確認，不再給「重新查詢」
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== UNCONFIRMED_KEY) return;
+      // key 是 null：另一個分頁清空了整個 localStorage
+      if (e.key !== null && !e.key.startsWith(UNCONFIRMED_PREFIX)) return;
       const marks = readMarks();
       setConvs((cs) => {
         let changed = false;
