@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError, type WorkOrderCreated } from "../../api/client";
+import { api, ApiError, workOrderScope, type WorkOrderCreated } from "../../api/client";
+import { useWriteBlocked } from "../../api/writes";
 import { usePartPlan } from "../../api/hooks";
 
 const fmt = (s: string | null | undefined) => (s ? `${s.slice(5, 10).replace("-", "/")}${s.length > 10 ? ` ${s.slice(11)}` : ""}` : "—");
@@ -22,6 +23,9 @@ export function PartProductionCard({ partId }: { partId: string }) {
   const [failure, setFailure] = useState<ApiError | null>(null);
   const [approvalNo, setApprovalNo] = useState<string | null>(null);
   const [showRouting, setShowRouting] = useState(false);
+  // 這個零件上一次開工單（或送核准）送出後結果未確認：可能已經開好了，核對前不能再送（api/writes.ts）
+  const pendingWrite = useWriteBlocked(workOrderScope(partId));
+  const unconfirmed = pendingWrite?.status === "unknown" ? pendingWrite : undefined;
 
   // 建議值帶進表單（換圖紙時重新帶）
   useEffect(() => {
@@ -64,7 +68,7 @@ export function PartProductionCard({ partId }: { partId: string }) {
         params: { part_id: partId, qty, due_on: due, priority, note: note.trim() || null },
       });
       if (!preview.pending_id || preview.next !== "approval") throw new ApiError("REJECTED", preview.message, "", 0);
-      const ap = await api.requestApproval(preview.pending_id, note.trim());
+      const ap = await api.requestApproval(preview.pending_id, note.trim(), workOrderScope(partId));
       setApprovalNo(ap.ap_no);
       setFailure(null);
       void qc.invalidateQueries({ queryKey: ["accounts"] });
@@ -208,7 +212,7 @@ export function PartProductionCard({ partId }: { partId: string }) {
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
-              disabled={busy || !qty || !due}
+              disabled={busy || !qty || !due || !!unconfirmed}
               className="btn-primary"
             >
               {busy ? "開立中…" : "開立工單"}
@@ -221,8 +225,22 @@ export function PartProductionCard({ partId }: { partId: string }) {
                 </Link>
               </span>
             )}
-            {failure && <span className="text-danger">{failure.message}</span>}
-            {failure?.code === "APPROVAL_REQUIRED" && (
+            {unconfirmed ? (
+              <span className="text-warning">
+                上一次〈{unconfirmed.label}〉送出後結果未確認，可能已經開好了：請先到{" "}
+                <Link to="/schedule" className="link">
+                  生產排程
+                </Link>{" "}
+                或{" "}
+                <Link to="/approvals" className="link">
+                  核准紀錄
+                </Link>{" "}
+                核對，核對後在頁首按「已核對」才能再開。
+              </span>
+            ) : (
+              failure && <span className="text-danger">{failure.message}</span>
+            )}
+            {!unconfirmed && failure?.code === "APPROVAL_REQUIRED" && (
               <button
                 type="button"
                 onClick={() => void requestApproval()}

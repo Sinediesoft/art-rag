@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Account, MemoryStatus } from "../../api/client";
 import { useAccounts, useCanView, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
-import { dismissOrphans, useWrites } from "../../api/writes";
+import { acknowledgeWrite, dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
 import { Icon } from "./Icons";
 
@@ -229,22 +229,44 @@ const WRITE_STATUS = {
  * 這裡只說「哪一種寫入、伺服器回覆了沒有」，不顯示內容；提醒到紀錄頁以目前身分核對、不要直接重送
  */
 export function WriteNotice() {
-  const orphans = useWrites().filter((w) => w.orphaned);
-  if (!orphans.length) return null;
+  const writes = useWrites();
+  // 身分改變時送出、已經有確定結果（或還在等）的：說明伺服器回覆了沒有
+  const orphans = writes.filter((w) => w.orphaned && w.status !== "unknown");
+  // 結果未確認的（這個頁面、其他分頁、重新載入前送出的都算）：可能已經完成，核對後才能再送同一件事
+  const unknown = writes.filter((w) => w.status === "unknown");
+  if (!orphans.length && !unknown.length) return null;
   const waiting = orphans.some((w) => w.status === "pending");
   return (
-    <div className="banner" role="alert">
-      <span>
-        身分改變時有 {orphans.length} 筆寫入已經送出：
-        {orphans.map((w) => `〈${w.label}〉${WRITE_STATUS[w.status]}`).join("；")}。結果不會接回原畫面，請以目前身分到
-        <Link to="/approvals">核准紀錄</Link>或<Link to="/inventory">庫存・工單</Link>核對，不要直接重送。
-      </span>
-      {!waiting && (
-        <button type="button" className="link-btn" onClick={dismissOrphans}>
-          知道了
-        </button>
+    <>
+      {orphans.length > 0 && (
+        <div className="banner" role="alert">
+          <span>
+            身分改變時有 {orphans.length} 筆寫入已經送出：
+            {orphans.map((w) => `〈${w.label}〉${WRITE_STATUS[w.status]}`).join("；")}。結果不會接回原畫面，請以目前身分到
+            <Link to="/approvals">核准紀錄</Link>或<Link to="/inventory">庫存・工單</Link>核對，不要直接重送。
+          </span>
+          {!waiting && (
+            <button type="button" className="link-btn" onClick={dismissOrphans}>
+              知道了
+            </button>
+          )}
+        </div>
       )}
-    </div>
+      {unknown.length > 0 && (
+        <div className="banner banner--unconfirmed" role="alert">
+          <span>
+            有 {unknown.length} 筆寫入送出後結果未確認（連線中斷、伺服器錯誤，或送出中頁面就關掉了），可能已經完成：
+            請以目前身分到<Link to="/approvals">核准紀錄</Link>或<Link to="/schedule">生產排程</Link>、
+            <Link to="/inventory">庫存・工單</Link>核對。核對後按「已核對」，同一件事才能再送。
+          </span>
+          {unknown.map((w) => (
+            <button key={w.id} type="button" className="link-btn" onClick={() => acknowledgeWrite(w.id)} aria-label={`已核對〈${w.label}〉`}>
+              〈{w.label}〉已核對
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

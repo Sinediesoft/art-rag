@@ -2,6 +2,9 @@
 import type { components } from "./schema";
 import { trackWrite } from "./writes";
 
+/** 某個零件「開工單」這件事（直接開立或送主管核准）的寫入範圍 */
+export const workOrderScope = (partId: string) => `work-order:create:${partId}`;
+
 export type Schemas = components["schemas"];
 export type ArtworkSummary = Schemas["ArtworkSummary"];
 export type ArtworkDetail = Schemas["ArtworkDetail"];
@@ -202,9 +205,11 @@ export const api = {
   // 生產排程（Timefold）
   productionOverview: () => request<ProductionOverview>("/production/overview"),
   partPlan: (id: string) => request<PartPlan>(`/production/parts/${encodeURIComponent(id)}`),
-  createWorkOrder: (body: WorkOrderCreate) => trackWrite("開立工單", request<WorkOrderCreated>("/production/work-orders", json(body))),
+  // 同一個零件開工單（直接開，或超過額度送核准）是同一件事：上一筆結果未確認前不能再送（見 writes.ts）
+  createWorkOrder: (body: WorkOrderCreate) =>
+    trackWrite("開立工單", () => request<WorkOrderCreated>("/production/work-orders", json(body)), workOrderScope(body.part_id)),
   cancelWorkOrder: (woNo: string) =>
-    trackWrite("取消工單", request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" })),
+    trackWrite("取消工單", () => request<Schemas["OkResponse"]>(`/production/work-orders/${encodeURIComponent(woNo)}`, { method: "DELETE" }), `work-order:cancel:${woNo}`),
   stopSchedule: () => request<Schemas["OkResponse"]>("/schedule/stop", { method: "POST" }),
   scheduleRun: (runId: string) => request<ScheduleRunDetail>(`/schedule/runs/${encodeURIComponent(runId)}`),
   resetProduction: () => request<Schemas["OkResponse"]>("/admin/production/reset", { method: "POST" }),
@@ -221,16 +226,18 @@ export const api = {
     return request<RouteResponse>("/agent/route", init, !!token);
   },
   changePreview: (body: ChangePreviewRequest) => request<ChangePreview>("/changes/preview", json(body)),
-  // 寫入一律經 trackWrite：送出後就算不再接收結果，伺服器也可能已經完成（見 writes.ts）
-  changeCommit: (pendingId: string) =>
-    trackWrite("確認寫入", request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" })),
-  requestApproval: (pendingId: string, note?: string) =>
-    trackWrite("送主管核准", request<Approval>(`/changes/${encodeURIComponent(pendingId)}/request-approval`, json({ note: note || null }))),
+  // 寫入一律經 trackWrite：送出後就算不再接收結果，伺服器也可能已經完成（見 writes.ts）。
+  // 對話裡的確認寫入／送主管核准另有「已送出」標記（shell/persist.ts）；功能頁的送核准帶 scope（重新試算會拿到新的 pending_id，
+  // 所以 scope 用「這件事」而不是 pending_id）
+  changeCommit: (pendingId: string, scope?: string) =>
+    trackWrite("確認寫入", () => request<ChangeCommitted>(`/changes/${encodeURIComponent(pendingId)}/commit`, { method: "POST" }), scope),
+  requestApproval: (pendingId: string, note?: string, scope?: string) =>
+    trackWrite("送主管核准", () => request<Approval>(`/changes/${encodeURIComponent(pendingId)}/request-approval`, json({ note: note || null })), scope),
   approvals: () => request<ApprovalsResponse>("/approvals"),
   approve: (apNo: string, note?: string) =>
-    trackWrite("核准", request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/approve`, json({ note: note || null }))),
+    trackWrite("核准", () => request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/approve`, json({ note: note || null })), `approval:${apNo}`),
   returnApproval: (apNo: string, reason: string) =>
-    trackWrite("退回", request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason }))),
+    trackWrite("退回", () => request<ApprovalDecision>(`/approvals/${encodeURIComponent(apNo)}/return`, json({ reason })), `approval:${apNo}`),
   audit: () => request<AuditResponse>("/audit"),
   securityLogs: (limit = 20) => request<SecurityLogsResponse>(`/security/logs?limit=${limit}`),
   routeEvalRuns: () => request<Schemas["RouteEvalRunsResponse"]>("/eval/route-runs"),
@@ -239,7 +246,7 @@ export const api = {
   updateIntake: (draftId: string, values: Record<string, string | number | null>) =>
     request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}`, { ...json({ values }), method: "PUT" }),
   commitIntake: (draftId: string) =>
-    trackWrite("照片建檔入庫", request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" })),
+    trackWrite("照片建檔入庫", () => request<IntakeDraft>(`/intake/${encodeURIComponent(draftId)}/commit`, { method: "POST" }), `intake:${draftId}`),
   discardIntake: (draftId: string) =>
     request<Schemas["OkResponse"]>(`/intake/${encodeURIComponent(draftId)}`, { method: "DELETE" }),
   // 批次辨識走 SSE（sse.ts 的 streamBatch）；兩件並排比較：a、b 是 artwork:<id> 或 part:<id>
