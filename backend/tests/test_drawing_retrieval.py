@@ -25,8 +25,9 @@ from PIL import Image
 from app.agent import guard
 from app.core import config
 from app.main import app
-from app.rag import verify
+from app.rag import providers, verify
 from app.rag.prompt import artwork_card, part_card
+from app.rag.textproc import NO_DATA, drop_stray_no_data
 from app.repositories.index_store import get_store
 from app.services import chat_service, identity, search_service
 
@@ -206,6 +207,78 @@ def test_photo_with_the_same_name_goes_straight_to_the_drawing(client, drawing_p
         "/api/v1/agent/route", json={"question": "連接法蘭", "image_id": image_id}
     ).json()
     assert other["router"]["detail"].get("photo_named") is None
+
+
+# 真模型（Qwen3-VL 4B、生管、附回報截圖＋「立式軸承座」）的實際回答：三句都引用段落，最後補一句拒答
+REPORTED_ANSWER = (
+    "此圖紙為立式軸承座，料號 PBK-6006，圖號 D-24-0618，版次 D，材料為 FC250 灰口鑄鐵，"
+    "外形尺寸為 120 × 40 × 72 mm [1]。  \n"
+    "軸承孔為 Ø35H7，公差為 +0.025/0，表面粗糙度 Ra 1.6 [2]。  \n"
+    "中心高為 40±0.02 mm，底面平面度 0.03 mm [2]。  \n"
+    "知識庫中沒有這方面的資料。"
+)
+
+
+@pytest.mark.parametrize(
+    "answer, expected",
+    [
+        (REPORTED_ANSWER, REPORTED_ANSWER.rsplit("  \n", 1)[0]),
+        ("材料為 FC250 [1]。知識庫中沒有這方面的資料。", "材料為 FC250 [1]。"),
+        ("知識庫中沒有這方面的資料。材料為 FC250 [1]。", "材料為 FC250 [1]。"),
+        ("材料為 FC250 [1]。\n\n知識庫中沒有這方面的資料 [1]", "材料為 FC250 [1]。"),
+        ("瀑布是白色的 [畫面]。知識庫中沒有這方面的資料。", "瀑布是白色的 [畫面]。"),
+    ],
+)
+def test_stray_no_data_after_a_cited_answer_is_dropped(answer, expected):
+    assert drop_stray_no_data(answer) == expected
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        NO_DATA,
+        "知識庫中沒有這方面的資料",
+        "知識庫中沒有這方面的資料 [0]。",  # 關檢索的對照組：[0] 不算引用
+        "材料為 FC250 [1]。",
+        "材料為 FC250。知識庫中沒有這方面的資料。",  # 沒有引用：不知道前面是不是答案，原樣保留
+    ],
+)
+def test_real_no_data_answers_are_kept(answer):
+    assert drop_stray_no_data(answer) == answer
+
+
+class _Reply(providers.MockProvider):
+    def __init__(self, reply: str):
+        super().__init__(strategy="hybrid", model="fake-qwen")
+        self.reply = reply
+
+    async def stream(self, messages):
+        for piece in (self.reply[:20], self.reply[20:]):  # 分兩塊回，和真的串流一樣
+            yield piece
+
+
+@pytest.mark.parametrize("reply", [REPORTED_ANSWER, NO_DATA])
+def test_found_drawing_answer_does_not_end_with_no_data(
+    client, realistic_retrieval, monkeypatch, reply
+):
+    """修正前：照片＋「立式軸承座」找到 mfg-006、三句都引用段落，
+    最後一句卻是「知識庫中沒有這方面的資料。」。
+    答完才補的那句不送出、第 7 段註明拿掉了；整段都答不出來時照舊回拒答句。"""
+    monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
+    monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
+    c = client_as("planner")
+    res = c.post("/api/v1/chat", json={"question": "立式軸承座", "part_id": "mfg-006"})
+    events = parse_sse(res.text)
+    text = "".join(x["text"] for e, x in events if e == "token")
+    done = next(x for e, x in events if e == "done")
+    stage7 = next(s for s in done["pipeline"] if s["stage"] == 7)
+    assert done["degraded"] is False and stage7["status"] == "pass"
+    if reply == NO_DATA:
+        assert text == NO_DATA and "拿掉" not in stage7["detail"]
+    else:
+        assert "沒有這方面的資料" not in text
+        assert text.startswith("此圖紙為立式軸承座") and text.endswith("底面平面度 0.03 mm [2]。")
+        assert "拿掉" in stage7["detail"]
 
 
 def test_found_drawing_but_unanswerable_question_keeps_the_drawing(

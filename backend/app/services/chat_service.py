@@ -43,7 +43,7 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
-from app.rag.textproc import to_taiwan
+from app.rag.textproc import drop_stray_no_data, to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
@@ -731,7 +731,12 @@ async def _chat_stream(
         ):
             yield e
         return
-    _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過")
+    # 答完才補的拒答句不送出：前面已引用資料回答，「知識庫中沒有這方面的資料」只會讓人以為沒找到
+    cleaned = drop_stray_no_data(answer)
+    note = "；已拿掉答完才補的「知識庫中沒有這方面的資料」" if cleaned != answer else ""
+    if note:
+        answer, pieces = cleaned, [cleaned]
+    _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過{note}")
     for piece in pieces:
         yield sse("token", {"text": piece})
 
