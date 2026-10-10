@@ -1410,10 +1410,23 @@ describe("照片查工廠圖紙（TASK-20261010-001：上傳立式軸承座的�
     t.on("POST", "/chat", () => sse([["sources", src], ["token", { text: "查無資料：在你目前可以查閱的資料中，找不到能回答這個問題的內容。" }], ["done", done({ degraded: true, pipeline })]]));
     renderApp();
     await sendPhoto("這張圖紙的包裝方式？");
-    expect(lastAi().textContent).toContain("已找到圖紙〈立式軸承座〉");
+    expect(lastAi().textContent).toContain("已找到圖紙〈立式軸承座〉；第 6 段生成閘門");
     await waitFor(() => expect(lastAi().querySelector(".subject__meta")?.textContent).toContain("PBK-6006"));
     expect(lastAi().querySelector(".jump")).toBeNull();
     expect(lastAi().querySelector(".deeplinks")).toBeNull();
+  });
+
+  it("第 7 段輸出檢查擋下：說明照實際擋下的段落寫，不寫成第 6 段", async () => {
+    const t = backend();
+    const pipeline = [1, 2, 3, 4, 5, 6].map(pass).concat({ stage: 7, name: "本地 LLM", status: "block", by: "地端", detail: "" });
+    t.on("POST", "/chat", () =>
+      sse([["sources", sources("機密", { part_id: "mfg-006", artwork_id: null, pipeline })], ["token", { text: "查無資料：在你目前可以查閱的資料中，找不到能安全回答這個問題的內容。" }], ["done", done({ degraded: true, pipeline })]]),
+    );
+    renderApp();
+    await sendPhoto();
+    expect(lastAi().textContent).toContain("已找到圖紙〈立式軸承座〉；第 7 段輸出檢查沒過");
+    expect(lastAi().textContent).not.toContain("第 6 段生成閘門");
+    expect(lastAi().querySelector(".jump")).toBeNull();
   });
 
   it("沒有權限（照片辨識不到）：和知識庫沒有的圖紙一樣，不讀圖紙、不顯示任何圖紙資訊", async () => {

@@ -80,15 +80,17 @@ def _plausible(h: np.ndarray, pts: np.ndarray) -> bool:
     """排除退化的 homography：把點壓成一條線（det≈0）、放大上千倍、強烈透視，或對應點擠在一小塊。
 
     實測不同圖紙之間的假對應全是這幾種（det 0.00 或 1298），同一張圖紙的照片 det 約 0.3–3。
-    「擠在一小塊」看對應點在知識庫圖紙上的分布：長邊 ≥ 160 px、短邊 ≥ 20 px。
-    原本兩邊都要 ≥ 80 px，只截一個視圖時扁長的視圖（法蘭、軸、薄板的前視圖，短邊 23–59 px）
-    正確的對應也被擋掉（TASK-20261010-001，eval/drawing_retrieval）。
+    「擠在一小塊」看對應點在知識庫圖紙上的分布，兩種都算合理：
+    - 兩個方向都 ≥ 80 px（原本的條件；方形的局部照片約 90×90 px 也靠這條）
+    - 扁長：長邊 ≥ 160 px、短邊 ≥ 20 px。只截一個扁長的視圖（法蘭、軸、薄板的前視圖）時，
+      正確的對應短邊只有 23–59 px（TASK-20261010-001，eval/drawing_retrieval）
+    局部照片之後還要過較高的線條重合門檻（search_service 的 partial_min_overlap）。
     """
     det = float(np.linalg.det(h[:2, :2]))
     if not 0.15 <= det <= 6 or max(abs(h[2, 0]), abs(h[2, 1])) > 0.003:
         return False
     span = pts.max(axis=0) - pts.min(axis=0)
-    return bool(span.max() >= 160 and span.min() >= 20)
+    return bool(span.min() >= 80 or (span.max() >= 160 and span.min() >= 20))
 
 
 def _degenerate(h: np.ndarray, pts: np.ndarray, shape: tuple[int, int], g: dict) -> bool:
@@ -197,8 +199,8 @@ def ink_match(img: Image.Image, h: np.ndarray, ref_path: Path) -> tuple[float, f
 
     幾何驗證只看特徵點；不同圖紙偶爾會有幾十個點碰巧對上，但線條整體不會重合。
     實測同一張圖紙的照片 ≥ 0.60，不同圖紙 ≤ 0.54（且其中 inlier ≥ 25 者 ≤ 0.48）。
-    只拍到一部分（截一個視圖）時比對的範圍小、證據少：不同圖紙可以到 0.55，
-    同一張圖紙的局部則幾乎完全重合（≥ 0.98）——門檻依涵蓋比例分開設（search_service）。
+    只拍到一部分（截一個視圖、一小塊）時比對的範圍小、證據少：不同圖紙可以到 0.55，
+    同一張圖紙的局部實測 ≥ 0.82——門檻依涵蓋比例分開設（search_service、models.yaml 的 partial_*）。
     """
     ref_img = Image.open(ref_path)
     q_ink, r_ink, valid = ink_layers(img, h, ref_img)

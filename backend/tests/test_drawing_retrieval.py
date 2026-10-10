@@ -67,11 +67,11 @@ def upload(c: TestClient, path: Path | None = None, img: Image.Image | None = No
     return r.json()["image_id"]
 
 
-def view_crop(path: Path, box: tuple[int, int, int, int]) -> Image.Image:
+def view_crop(path: Path, box: tuple[int, int, int, int], factor: float = 1.3) -> Image.Image:
     img = Image.open(path).convert("RGB")
     s = img.width / 800
     crop = img.crop(tuple(round(v * s) for v in box))
-    return crop.resize((round(crop.width * 1.3), round(crop.height * 1.3)), Image.LANCZOS)
+    return crop.resize((round(crop.width * factor), round(crop.height * factor)), Image.LANCZOS)
 
 
 @pytest.fixture
@@ -291,10 +291,47 @@ def test_plausible_accepts_thin_spread_but_not_a_cluster():
 
     h = np.array(h, dtype=float)
     thin = np.array([[100, 300], [380, 300], [240, 330], [120, 350]], dtype=float)  # 280×50
+    square = np.array([[100, 300], [190, 300], [100, 391], [150, 340]], dtype=float)  # 90×91
     cluster = np.array([[100, 300], [150, 310], [130, 340]], dtype=float)  # 50×40
     line = np.array([[100, 300], [400, 302], [250, 301]], dtype=float)  # 300×2
-    assert verify._plausible(h, thin)
+    square_short = np.array([[100, 300], [250, 300], [100, 370]], dtype=float)  # 150×70
+    # 原本的雙向條件（兩邊 ≥ 80）照樣成立；扁長是另外加的一條路（codex-review 7601cda F1）
+    assert verify._plausible(h, square) and verify._plausible(h, thin)
     assert not verify._plausible(h, cluster) and not verify._plausible(h, line)
+    assert not verify._plausible(h, square_short)  # 短邊不到 80、長邊不到 160
+
+
+# codex-review 7601cda F1：方形小局部（對應點約 90×90 px），
+# base 908148c 可辨識，7601cda 的分布條件擋掉
+REVIEW_CROPS = [
+    ("mfg-006", (120, 200, 290, 370), 1.3),
+    ("mfg-005", (460, 140, 660, 340), 1.3),
+    ("mfg-002", (380, 400, 600, 620), 2.0),
+]
+
+
+@pytest.mark.parametrize(("pid", "box", "factor"), REVIEW_CROPS)
+def test_square_partial_crops_are_recognised(client, drawing_photo, pid, box, factor):
+    """經 /images（JPEG）上傳，整條 /search/drawing：
+    幾何驗證、局部照片門檻都要過，第一名是那張圖紙。"""
+    c = client_as("planner")
+    image_id = upload(c, img=view_crop(ROOT / f"kb/drawings/{pid}.png", box, factor))
+    r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
+    assert r["matched"] and r["best_part_id"] == pid, r["results"][:2]
+    top = r["results"][0]
+    assert top["coverage"] < r["partial_cover"] and top["overlap"] >= r["partial_min_overlap"]
+
+
+@pytest.mark.parametrize("box", [(80, 160, 260, 340), (460, 160, 640, 340), (460, 510, 640, 690)])
+@pytest.mark.parametrize("factor", [1.3, 2.0])
+def test_square_partial_crops_of_unknown_drawings_are_not_matched(
+    client, drawing_photo, box, factor
+):
+    """反例：未收錄零件（U 型槽鋼座）每個視圖中央的方形局部，不能被指成任何一張知識庫圖紙。"""
+    c = client_as("planner")
+    image_id = upload(c, img=view_crop(UNKNOWN, box, factor))
+    r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
+    assert r["matched"] is False and r["best_part_id"] is None, r["results"][:2]
 
 
 # ---------------------------------------------------------------- 第 6 段：概覽問題
@@ -382,3 +419,58 @@ def test_exact_parts_ignore_spacing_and_width():
     assert search_service.exact_parts("L型固定支架", parts) == {"mfg-001"}
     assert search_service.exact_parts("ｐｂｋ－６００６", parts) == {"mfg-006"}
     assert search_service.exact_parts("法蘭", parts) == set()  # 只寫一部分：交給語意檢索
+
+
+@pytest.mark.parametrize(
+    "q",
+    # codex-review 7601cda F2：較長、前後相接的不同編號不是完整命中
+    [
+        "BRK-10010",
+        "D-24-01170",
+        "D-24-0117-1",
+        "X-BRK-1001",
+        "BRK-1001A",
+        "9D-24-0117",
+        "BRK-1001_2",
+    ],
+)
+def test_exact_parts_need_the_whole_code(q):
+    assert search_service.exact_parts(q, get_store().parts) == set()
+
+
+@pytest.mark.parametrize(
+    ("q", "expect"),
+    [
+        ("BRK-1001", {"mfg-001"}),
+        ("D-24-0117。", {"mfg-001"}),
+        ("(D-24-0618)", {"mfg-006"}),
+        ("PBK-6006的公差", {"mfg-006"}),
+        ("料號PBK-6006和FLG-2002", {"mfg-006", "mfg-002"}),
+        ("連接法蘭", {"mfg-002"}),
+    ],
+)
+def test_exact_parts_whole_codes_and_names(q, expect):
+    assert search_service.exact_parts(q, get_store().parts) == expect
+
+
+def test_exact_name_inside_a_longer_matched_name_counts_once():
+    """同時對上兩個名稱、其中一個包含另一個：只算長的（「連接法蘭」不算到名叫「法蘭」的圖紙）。"""
+    parts = [
+        {"id": "a", "name": {"zh": "法蘭"}, "part_no": "A-1", "drawing_no": "DA-1"},
+        {"id": "b", "name": {"zh": "連接法蘭"}, "part_no": "B-1", "drawing_no": "DB-1"},
+    ]
+    assert search_service.exact_parts("連接法蘭的公差", parts) == {"b"}
+    assert search_service.exact_parts("法蘭的公差", parts) == {"a"}
+
+
+def test_longer_code_is_ranked_by_meaning_not_forced_first(client):
+    """不存在的較長編號：沒有任何一張是 exact，名次照語意分數，不會把 mfg-001 強制排第一。"""
+    c = client_as("planner")
+    for q in ("BRK-10010", "D-24-01170"):
+        res = c.get("/api/v1/search/parts", params={"q": q}).json()
+        assert not any(x["exact"] for x in res["results"]), q
+        scores = [x["score"] for x in res["results"]]
+        assert scores == sorted(scores, reverse=True), q
+    res = c.get("/api/v1/search/parts", params={"q": "BRK-1001"}).json()
+    assert res["results"][0]["part"]["id"] == "mfg-001" and res["results"][0]["exact"]
+    assert [x["exact"] for x in res["results"]].count(True) == 1

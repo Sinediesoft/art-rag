@@ -262,20 +262,34 @@ def rectify_to_part(img: Image.Image, part: dict) -> Image.Image | None:
     return Image.fromarray(warped)
 
 
+def _norm(text: str) -> str:
+    """全形轉半形、小寫（「ＰＢＫ－６００６」＝「pbk-6006」）。"""
+    return unicodedata.normalize("NFKC", text).lower()
+
+
 def _compact(text: str) -> str:
-    """比對編號與名稱用：全形轉半形、去空白、小寫（「L型固定支架」＝「L 型固定支架」）。"""
-    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).lower()
+    """比對名稱用：再去掉空白（「L型固定支架」＝「L 型固定支架」）。"""
+    return re.sub(r"\s+", "", _norm(text))
+
+
+def _code_in(code: str, text: str) -> bool:
+    """完整的料號或圖號：前後不能再接英數字，也不能是「-英數字」的延伸
+    （BRK-10010、D-24-01170、D-24-0117-1、X-BRK-1001 都不是 BRK-1001／D-24-0117）。"""
+    c = re.escape(_norm(code))
+    return bool(re.search(rf"(?<![a-z0-9])(?<![a-z0-9][-_]){c}(?![a-z0-9]|[-_][a-z0-9])", text))
 
 
 def exact_parts(q: str, parts: list[dict]) -> set[str]:
     """問句裡完整寫出名稱、料號或圖號的圖紙（parts 只給看得到的）。
-    bge-m3 對「D-24-0117」這類編號分不清（只差幾個數字的段落分數很接近），編號要照字面比對。"""
-    nq = _compact(q)
-    return {
-        p["id"]
-        for p in parts
-        if any(_compact(t) in nq for t in (p["name"]["zh"], p["part_no"], p["drawing_no"]))
-    }
+    bge-m3 對「D-24-0117」這類編號分不清（只差幾個數字的段落分數很接近），編號要照字面比對。
+    編號要整個對上（_code_in）；名稱照字面包含，同時對上兩個名稱而其中一個包含另一個時只算長的
+    （「連接法蘭」不算到名叫「法蘭」的圖紙）。只在看得到的圖紙之間比，結果不受看不到的圖紙影響。"""
+    nq, cq = _norm(q), _compact(q)
+    by_code = {p["id"] for p in parts if any(_code_in(p[k], nq) for k in ("part_no", "drawing_no"))}
+    names = {p["id"]: _compact(p["name"]["zh"]) for p in parts}
+    hit = {pid: n for pid, n in names.items() if n and n in cq}
+    by_name = {pid for pid, n in hit.items() if not any(n != m and n in m for m in hit.values())}
+    return by_code | by_name
 
 
 @guarded("search_text", {"bge"})

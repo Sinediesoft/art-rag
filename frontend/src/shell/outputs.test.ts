@@ -55,6 +55,13 @@ describe("找到圖紙但問題答不出來", () => {
     expect(deriveOutputs(conv(t)).list.map((o) => o.partId)).toEqual(["mfg-006"]);
   });
 
+  it("第 7 段輸出檢查擋下：圖紙同樣是第 1 段確認看得到的，保留圖紙（回答沒送出，不給跳轉）", () => {
+    const t = chatTurn({ pipeline: [1, 2, 3, 4, 5, 6].map((n) => stage(n, "pass")).concat(stage(7, "block")) });
+    expect(foundDrawing(t)).toBe(true);
+    expect(ctaOf(t)).toBeNull();
+    expect(deriveOutputs(conv(t)).list.map((o) => o.partId)).toEqual(["mfg-006"]);
+  });
+
   it("/chat 第 1 段擋下（看不到或不存在）：不留下任何成果", () => {
     const t = chatTurn({ pipeline: [stage(1, "block")] });
     expect(foundDrawing(t)).toBe(false);

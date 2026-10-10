@@ -3,8 +3,9 @@
 結果存 eval/runs/<run_id>-drawing-retrieval.json。
 
 gold set：eval/drawing_retrieval/gold.json
-1. 照片：回報的截圖、知識庫原圖、三視圖各自的局部（知識庫與未收錄零件的圖紙，
-   切出後放大 1.3 倍）、模擬實拍（局部、傾斜、昏暗、反光、模糊）、未收錄的圖紙。
+1. 照片：回報的截圖、知識庫原圖、審查提出的方形小局部、三視圖各自的局部與視圖中央的方形小局部
+   （知識庫與未收錄零件的圖紙，切出後放大 1.3 或 2 倍）、模擬實拍（局部、傾斜、昏暗、反光、模糊）、
+   未收錄的圖紙。
    和 /search/any、智慧助理同一條路：領域路由 → identify_drawing
    （只在目前身分看得到的圖紙裡辨識）
 2. 文字：名稱、料號、圖號、描述各一句，送 search_parts_text
@@ -54,12 +55,21 @@ VIEWS = {
 }
 
 
-def view_crop(path: Path, box: tuple[int, int, int, int]) -> Image.Image:
-    """切出一個視圖、放大 1.3 倍（和回報的截圖差不多）。"""
+# 方形的小局部：每個視圖中央 180×180（視圖方框是 300×300，見 verify._DRAWING_VIEWS）
+PATCHES = {
+    "patch_right": (80, 160, 260, 340),
+    "patch_front": (460, 160, 640, 340),
+    "patch_top": (460, 510, 640, 690),
+}
+
+
+def view_crop(path: Path, box: tuple[int, int, int, int], factor: float = 1.3) -> Image.Image:
+    """切出一塊（版面座標）、放大 factor 倍（預設 1.3，和回報的截圖差不多）。"""
     img = Image.open(path).convert("RGB")
     s = img.width / 800
     crop = img.crop(tuple(round(v * s) for v in box))
-    return crop.resize((round(crop.width * 1.3), round(crop.height * 1.3)), Image.LANCZOS)
+    size = (round(crop.width * factor), round(crop.height * factor))
+    return crop.resize(size, Image.LANCZOS)
 
 
 def uploaded(raw: bytes | Image.Image) -> Image.Image:
@@ -94,6 +104,31 @@ def photo_cases(gold: dict, part_ids: set[str]) -> list[dict]:
                             "image": uploaded(view_crop(p, box)),
                         }
                     )
+            continue
+        if spec.get("generate") == "patches":
+            for p in sorted(x for g in spec["from"] for x in ROOT.glob(g)):
+                for variant, box in PATCHES.items():
+                    for factor in spec["factors"]:
+                        out.append(
+                            {
+                                "name": f"{p.stem}__{variant}_x{factor:g}",
+                                "variant": variant,
+                                "expect": p.stem if p.stem in part_ids else None,
+                                "image": uploaded(view_crop(p, box, factor)),
+                            }
+                        )
+            continue
+        if "crop" in spec:
+            p = ROOT / spec["crop"]
+            box, factor = tuple(spec["box"]), spec["factor"]
+            out.append(
+                {
+                    "name": f"{p.stem}__crop{list(box)}_x{factor:g}",
+                    "variant": spec["variant"],
+                    "expect": p.stem if p.stem in part_ids else None,
+                    "image": uploaded(view_crop(p, box, factor)),
+                }
+            )
             continue
         for p in sorted(ROOT.glob(spec["glob"])):
             stem = p.stem.split("__")[0]
