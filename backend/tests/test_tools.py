@@ -236,10 +236,18 @@ def test_route_compare_two_items(client):
 
 
 def test_route_compare_hides_confidential_drawing(client):
-    """業務比較一張看得到、一張機密的圖紙：第 1 段降級「查無資料」，不透露機密圖紙存在。"""
+    """業務比較一張看得到、一張機密的圖紙：機密的那張不認得（和不存在一樣，docs/adr/033 F），
+    不會出現在比較對象、實體或任何欄位，也不透露它存在。和知識庫沒有那張時的回應逐欄相同，
+    見 test_drawing_retrieval.py 的 test_hidden_drawing_text_looks_like_a_missing_one。"""
+    import json
+
     as_account(client, "sales_a")
     r = route(client, "比較連接法蘭和步進馬達安裝板")
-    assert r["blocked"] and r["blocked"]["degraded"]
+    text = json.dumps(r, ensure_ascii=False)
+    assert "mfg-002" not in text and "FLG-2002" not in text and "D-24-0203" not in text
+    cmp = r["dispatch"].get("compare") or {"refs": []}
+    assert all(ref != "part:mfg-002" for ref in cmp["refs"])
+    assert {e["id"] for e in r["entities"] if e["kind"] == "part"} <= {"mfg-004"}
 
 
 def test_route_batch_identify(client):

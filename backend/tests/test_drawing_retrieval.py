@@ -384,6 +384,82 @@ def test_overview_terms_only_drop_overview_words_and_document_kinds():
     assert guard.overview_terms("立式軸承座的重點") == guard.terms("立式軸承座")
 
 
+# ---------------------------------------------------------------- 文字提到看不到的圖紙（條件 7）
+class _IndexWithout:
+    """模擬知識庫裡沒有這些圖紙：實體索引不認得它們（其他都用真的索引）。"""
+
+    def __init__(self, real, ids: set[str]):
+        self.real, self.ids = real, ids
+
+    def find(self, text):
+        return [e for e in self.real.find(text) if e.kind != "part" or e.id not in self.ids]
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+
+def _route_view(r: dict) -> dict:
+    """/agent/route 回應裡和「認得哪些圖紙」有關的全部欄位；拿掉每次不同的編號、時間與票號本身。"""
+    keep = (
+        "question", "pii", "masked_text", "mapping", "entities", "photo", "intent", "risk",
+        "confidence", "margin", "ranked", "modify_op", "flags", "gate", "threshold", "gate_reason",
+        "options", "outcome", "short_circuit", "dispatch", "post_filter", "egress",
+    )  # fmt: skip
+    out = {k: r[k] for k in keep}
+    out["auth"] = {k: v for k, v in r["auth"].items() if k != "token"}
+    out["blocked"] = r["blocked"] and {k: v for k, v in r["blocked"].items() if k != "log_no"}
+    out["guard"] = r["guard"] and {k: v for k, v in r["guard"].items() if k != "call"}
+    out["router"] = {k: v for k, v in r["router"].items() if k != "latency_ms"}
+    out["route_ticket"] = bool(r["route_ticket"])
+    return out
+
+
+HIDDEN_TEXTS = [
+    "把連接法蘭轉成 3D",
+    "連接法蘭有哪些公差要求？",
+    "FLG-2002",
+    "D-24-0618 的圖紙",
+    "PBK-6006 的公差",
+    "立式軸承座",
+    "比較連接法蘭和步進馬達安裝板",
+    "法蘭還剩幾件可以出貨？",
+]
+
+
+@pytest.mark.parametrize("account", ["sales_a", "guest"])
+@pytest.mark.parametrize("text", HIDDEN_TEXTS)
+def test_hidden_drawing_text_looks_like_a_missing_one(client, monkeypatch, account, text):
+    """看不到的圖紙和知識庫裡沒有的圖紙，/agent/route 的回應逐欄相同（任務驗收條件 7）。
+    修正前：業務打 PBK-6006 會拿到 entities／mapping／dispatch 裡的 mfg-006 與名稱「立式軸承座」，
+    「把連接法蘭轉成 3D」降級成「查無資料」——知識庫沒有的名稱則沒有，兩者分得出來。"""
+    from app.agent.entities import get_index
+    from app.services import agent_service
+
+    c = client_as(account)
+    hidden = set(PARTS) - identity.visible_part_ids(
+        identity.get_account(account), get_store().parts
+    )
+    seen = c.post("/api/v1/agent/route", json={"question": text})
+    assert seen.status_code == 200, seen.text
+    real = get_index()
+    monkeypatch.setattr(agent_service, "get_index", lambda: _IndexWithout(real, hidden))
+    missing = c.post("/api/v1/agent/route", json={"question": text}).json()
+    assert _route_view(seen.json()) == _route_view(missing)
+    # 使用者沒打的識別資訊（ID、名稱、料號、圖號）一個都不出現
+    for pid in hidden:
+        for term in (pid, *PARTS[pid]):
+            assert term in text or term not in seen.text, (pid, term)
+
+
+def test_visible_drawing_text_is_still_resolved(client):
+    """對照組：看得到的身分照樣認得料號、圖號，分派到那張圖紙。"""
+    c = client_as("planner")
+    for text, pid in (("PBK-6006 的公差", "mfg-006"), ("把連接法蘭轉成 3D", "mfg-002")):
+        r = c.post("/api/v1/agent/route", json={"question": text}).json()
+        assert r["dispatch"]["part_id"] == pid and r["auth"]["filter"]["doc_level"] == "機密"
+        assert any(e["kind"] == "part" and e["id"] == pid for e in r["entities"])
+
+
 # ---------------------------------------------------------------- 文字查詢：名稱、料號、圖號
 PARTS = {
     "mfg-001": ("L 型固定支架", "BRK-1001", "D-24-0117"),
