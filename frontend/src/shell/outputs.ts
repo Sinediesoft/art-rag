@@ -81,6 +81,17 @@ function publicArt(t: Turn) {
   return t.route?.outcome === "pass" && p?.kind === "chat" && !!p.target.artwork_id && !p.error && (!!p.done?.degraded || p.sources?.post_filter?.gate?.passed === false);
 }
 
+/** 問答在第 6 段降級，但第 1 段（/agent/route 與 /chat 都）確認這張圖紙看得到：圖紙找到了，只是這個問題答不出來。
+ * 不給跳轉（ADR 016），模組右側仍保留這張圖紙；看不到或不存在的圖紙 /chat 在第 1 段就擋下，不會走到這裡 */
+export function foundDrawing(t: Turn) {
+  const p = t.part;
+  if (t.route?.outcome !== "pass" || p?.kind !== "chat" || !p.target.part_id || p.error) return false;
+  if (!(p.done?.degraded || p.sources?.post_filter?.gate?.passed === false)) return false;
+  const pipeline = p.done?.pipeline ?? p.sources?.pipeline ?? [];
+  const stage1 = pipeline.find((s) => s.stage === 1);
+  return stage1?.status === "pass" && visiblePart(t)?.id === p.target.part_id;
+}
+
 /** 這一輪的問句（已遮蔽個資） */
 export const questionOf = (t: Turn) => t.route?.question || t.text;
 
@@ -124,7 +135,7 @@ export function deriveOutputs(conv: Conv | null) {
     if (!keys.includes(o.key)) keys.push(o.key);
   };
   for (const t of conv?.turns ?? []) {
-    const d = domainOf(t) ?? (publicArt(t) ? "art" : null);
+    const d = domainOf(t) ?? (publicArt(t) ? "art" : foundDrawing(t) ? "factory" : null);
     if (!d) continue;
     const q = questionOf(t);
     const refs = t.archived?.refs;

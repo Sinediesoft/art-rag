@@ -828,9 +828,11 @@ def eval_runs():
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
         # 五段防護第 2 段（-guard）、影像比對（-align）、照片建檔（-intake）、
         # 畫作卡推測（-style、線性分類頭的訓練報告 -style-head）
-        # 與以圖搜圖同系列不同版本（-versions）、觀眾實拍照（-met-photos）的評估另有格式
+        # 與以圖搜圖同系列不同版本（-versions）、觀眾實拍照（-met-photos）、
+        # 圖紙文字與照片檢索（-drawing-retrieval）的評估另有格式
         if not p.name.endswith(
             (
+                "-drawing-retrieval.json",
                 "-cad.json",
                 "-router.json",
                 "-sql.json",

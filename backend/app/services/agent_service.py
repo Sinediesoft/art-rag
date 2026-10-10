@@ -17,6 +17,7 @@
 """
 
 import asyncio
+import re
 import time
 
 from app.agent import gate, guard, handoff, local_router
@@ -51,6 +52,19 @@ def _identify_photo(image_id: str, account: Account) -> dict:
         return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張圖紙", "domain": "mfg"}
     p = get_store().get_part(drawing["best_part_id"])
     return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"], "domain": "mfg"}
+
+
+def _names_photo(question: str, entities: list, photo: dict | None) -> bool:
+    """文字只寫了照片辨識出的那一件的名稱、料號或圖號（「立式軸承座」＋同一張圖紙的照片）：
+    沒有多說要做什麼，和只附照片一樣交給問答，不出澄清按鈕（TASK-20261010-001）。
+    只有文字的名稱照舊要澄清（eval/route_qa.jsonl r43、r44）。"""
+    kind = {"drawing": "part", "art": "artwork"}.get(photo["kind"] if photo else "")
+    if not kind or not entities or any(e.kind != kind or e.id != photo["id"] for e in entities):
+        return False
+    rest = question
+    for e in sorted(entities, key=lambda e: e.start, reverse=True):
+        rest = rest[: e.start] + rest[e.end :]
+    return not re.sub(r"[\s，,。？?！!、]", "", rest)
 
 
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:
@@ -183,13 +197,14 @@ async def route(
             op_probs=op_probs if op else {},
             model="使用者點選",
         )
-    elif not question and photo:
-        # 只有照片：依本機辨識結果決定
+    elif photo and (not question or _names_photo(question, entities, photo)):
+        # 只有照片（或文字只是照片那一件的名稱）：依本機辨識結果決定
         intent = PHOTO_INTENTS.get(photo_kind or "", "out_of_scope")
         result = System1Result(
             engine="local",
             intent_probs={k: float(k == intent) for k in cfg["intents"]},
             model="Chinese-CLIP 照片辨識",
+            detail={"photo_named": bool(question)},
         )
     else:
         async with memory_guard.flow("route", {"bge"}):
