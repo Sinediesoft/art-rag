@@ -267,7 +267,21 @@ export interface CadResultEvent {
   iou: number | null;
   /** 外框對齊到圖紙標註尺寸後的 IoU */
   iou_bbox: number | null;
+  /** 孔位校正（docs/adr/034）：OpenCV 從俯視圖找到的孔取代模型畫的垂直圓孔；舊紀錄沒有這欄 */
+  holes?: CadHoles | null;
   files: Record<string, string>;
+}
+
+export interface CadHoles {
+  status: "applied" | "skipped";
+  /** 沒校正的原因 */
+  reason: string | null;
+  /** 圖紙俯視圖偵測到的孔數 */
+  detected: number;
+  /** 移除的模型垂直圓孔數 */
+  removed?: number;
+  /** 依圖紙切出的孔數 */
+  applied?: number;
 }
 
 export interface CadDoneEvent {

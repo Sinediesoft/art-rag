@@ -5,6 +5,7 @@
    （Ortho2CAD 輸出的是 DeepCAD 正規化尺度，約 0–1，要等比放大回 mm）
 3. Ortho2CAD 生成 CadQuery 程式碼（逐字串流）
 4. 沙箱執行 → STL／STEP／回投影三視圖；知識庫零件另與標準模型比 IoU（論文的評估法）
+   有標準三視圖的零件，執行前把模型畫的垂直圓孔換成 OpenCV 在俯視圖找到的孔（docs/adr/034）
 
 全程只連本機或內網的推論伺服器，外送資料量恆為 0。strategy="hybrid" 是對照組：
 同一張圖改給未微調的 Qwen3-VL 產生程式碼，用來展示領域微調的效果。
@@ -23,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 
 from PIL import Image
 
+from app.cad.holes import hole_plan
 from app.cad.preprocess import model_input
 from app.cad.sandbox import WslTarget, extract_code, run_cad
 from app.core.config import REPO_ROOT, get_models_config, get_settings
@@ -91,6 +93,20 @@ async def read_dimensions(img: Image.Image) -> dict | None:
         except (ProviderUnavailable, json.JSONDecodeError):
             continue
     return None
+
+
+def hole_plan_for(part: dict | None, scale_to: dict | None):
+    """孔位校正（docs/adr/034）用哪張圖：有標準模型的知識庫零件用它的標準三視圖
+    （照片拉正後辨識出來的也一樣，不用照片）；回 (孔位, None) 或 (None, 不校正的原因)。"""
+    if part is None:
+        return None, "未收錄的圖紙版面不固定，孔位維持模型輸出"
+    if "cad" not in part:
+        return None, "照片建檔的圖紙不是標準三視圖版面，孔位維持模型輸出"
+    try:
+        return hole_plan(Image.open(REPO_ROOT / part["drawing"]), scale_to)
+    except Exception as e:  # 偵測失敗不影響重建，只是不校正
+        log.warning("cad_holes_failed", extra={"fields": {"part_id": part["id"], "error": str(e)}})
+        return None, "孔位偵測失敗，孔位維持模型輸出"
 
 
 async def _mock_stream(code: str) -> AsyncIterator[str]:
@@ -258,10 +274,12 @@ async def _reconstruct_stream(
     code = extract_code(answer)
     yield sse("executing", {"generation_ms": generation_ms, "code_chars": len(code)})
     gt_step = store.parts_dir / "gt" / f"{part['id']}.step" if part else None
+    holes, hole_reason = await asyncio.to_thread(hole_plan_for, part, scale_to)
     run = await run_cad(
         code,
         job_dir,
         scale_to=scale_to,
+        holes=holes,
         gt_step=gt_step if gt_step and gt_step.exists() else None,
         timeout_s=float(cfg["exec_timeout_s"]),
         wsl=wsl_target(),
@@ -280,6 +298,7 @@ async def _reconstruct_stream(
         "faces": d.get("faces"),
         "iou": d.get("iou"),
         "iou_bbox": d.get("iou_bbox"),
+        "holes": d.get("holes") or {"status": "skipped", "reason": hole_reason, "detected": 0},
         "files": files
         if run.ok
         else {"code.py": files["code.py"], "input.png": files["input.png"]},

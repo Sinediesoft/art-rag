@@ -176,6 +176,7 @@ async def run_cad(
     job_dir: Path,
     *,
     scale_to: dict | None = None,
+    holes: list[dict] | None = None,
     gt_step: Path | None = None,
     timeout_s: float = 60,
     trusted: bool = False,
@@ -186,6 +187,8 @@ async def run_cad(
     trusted=True 只給知識庫自己的標準模型（kb/cad/*.py）用，仍走同一個子行程。沒有 resource 模組的
     平台（Windows）上，子行程沒有 CPU 時間與檔案大小限制，只剩這裡的逾時（timeout_s + 15 秒）。
     wsl：沒有 resource 模組時，模型產生的程式碼改到 WSL2 執行；有 resource 模組的平台忽略。
+    holes：圖紙上的垂直孔（holes.detect_holes）；有給就換掉模型畫的垂直圓孔（docs/adr/034），
+    要搭配 scale_to（孔位依外形比例換算）。
     """
     in_wsl = not trusted and not LIMITS_AVAILABLE and wsl is not None
     if not trusted:
@@ -207,6 +210,7 @@ async def run_cad(
         "code_path": path((job_dir / "code.py").resolve()),
         "out_dir": path(job_dir.resolve()),
         "scale_to": scale_to,
+        "holes": holes if scale_to else None,
         "gt_step": path(gt_step.resolve()) if gt_step else None,
         "cpu_limit_s": int(timeout_s),
         "trusted": trusted,
