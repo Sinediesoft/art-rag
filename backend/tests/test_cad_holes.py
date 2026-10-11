@@ -520,6 +520,53 @@ def test_apply_holes_margin_never_crosses_the_gap(gap):
     assert inside(out, 0, 0, 40 - gap - 0.05)  # 下板頂面下 0.05 mm 仍是實心
 
 
+@pytest.mark.parametrize("existing_r", [1.0, 2.9, 3.0, 4.0])
+def test_apply_holes_existing_upper_hole_never_moves_cut_to_second_plate(existing_r):
+    """上板已經有孔（比圖紙小、差不多、剛好、比圖紙大）：孔軸上只剩下板的材料，
+    也不能把下板當成要鑽的第一段材料，3% 的點線誤差補償更不能越過空隙切傷下板。"""
+    import cadquery as cq
+
+    from app.cad.drawing import render_ortho
+    from app.cad.holes import apply_holes
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    shape = stacked_plates(1.0)
+    up = cq.Vector(0, 0, 1)
+    reference = shape.cut(cq.Solid.makeCylinder(3, 10, cq.Vector(0, 0, 40), up))
+    plan = detect_holes(render_ortho(reference), dims)
+    assert len(plan) == 1, plan
+    drilled = shape.cut(cq.Solid.makeCylinder(existing_r, 10, cq.Vector(0, 0, 40), up))
+    out, applied, reason = apply_holes(drilled, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 2.5, 0, 45)  # 上板的孔到圖紙的孔徑（不會縮小：比圖紙大的孔維持原樣）
+    for point in ((0, 0, 38.75), (0, 0, 30), (2.5, 0, 38.9), (-2.8, 0, 33)):
+        assert inside(out, *point), point  # 下板完整
+    lower = cq.Solid.makeBox(60, 40, 10, cq.Vector(-30, -20, 29))
+    assert out.intersect(lower).Volume() == pytest.approx(drilled.intersect(lower).Volume())
+
+
+def test_apply_holes_cuts_a_sheet_thinner_than_the_margin():
+    """頂部的薄板（1 mm）比 3% 容差（1.5 mm）還薄：孔照樣要切穿，不能被當成『孔已經在那裡』。"""
+    import cadquery as cq
+
+    from app.cad.holes import apply_holes
+
+    def box(x, y, z, w, d, h):
+        return cq.Workplane("XY").box(w, d, h, centered=False).translate((x, y, z))
+
+    shape = (
+        box(-30, -20, 0, 60, 40, 40)
+        .union(box(-30, -20, 49, 60, 40, 1))
+        .union(box(-30, -20, 0, 5, 40, 50))
+    ).val()
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 24.0, "z1": 25.0}]
+    out, applied, reason = apply_holes(shape, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 49.5)  # 薄板被鑽穿
+    assert inside(out, 0, 0, 39.5)  # 下面的塊體沒被碰
+
+
 def test_apply_holes_counts_existing_hole_without_cutting():
     """模型自己已經在同一個位置鑽穿了孔：算校正完成，不必再切。"""
     import cadquery as cq

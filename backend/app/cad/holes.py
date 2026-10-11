@@ -28,6 +28,7 @@ MIN_DOTS = 3  # 前視圖連續幾個點才算隱藏線
 Z_MARGIN = 0.03  # 切孔時上下各多切外形高度的 3%：點線端點有一個點距（4 px）的誤差
 NORMAL_EPS = 1e-6  # 草圖法向量的 X、Y 分量比 Z 小這麼多才算垂直：只容許浮點誤差，斜孔不算
 GEOM_EPS = 1e-6  # 草圖線圈的包含關係：圓要比外圈小這麼多才算在裡面（相切、壓邊都不算）
+FOOTPRINT = 0.98  # 看孔位有沒有材料時的半徑比例：略小一點，避免和模型既有孔壁剛好重合
 ARC_STEPS = 48  # 外圈的圓弧取樣成幾段折線來判斷包含關係
 
 
@@ -511,31 +512,29 @@ def strip_vertical_holes(code: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------- 在重建模型上切孔
-def _axis_spans(shape, x: float, y: float, r: float, bb, tol: float) -> list[tuple[float, float]]:
-    """孔軸（x, y）上材料佔的 z 區間 [(下, 上)]，由上到下排；相接的併成一段。
+def _column_spans(shape, x: float, y: float, r: float, bb, tol: float) -> list[tuple[float, float]]:
+    """孔的範圍（以 (x, y) 為中心、半徑 FOOTPRINT×r 的圓柱）裡材料佔的 z 區間 [(下, 上)]，
+    由上到下排；相接的併成一段，沒有材料回 []。
 
-    先看孔中心附近（孔徑的 1/4），那裡沒有材料才看整個孔徑；都沒有回 []。
+    看整個孔徑、不只看孔軸：模型在這裡已經鑽了小孔時，孔軸上只剩更下面的材料，不能把那一段
+    當成要鑽的第一段。
     """
     import cadquery as cq
 
-    for probe in (r / 4, r):
-        column = cq.Solid.makeCylinder(
-            probe, bb.zlen + 2, cq.Vector(x, y, bb.zmin - 1), cq.Vector(0, 0, 1)
-        )
-        pieces = sorted(
-            ((b.zmin, b.zmax) for b in (s.BoundingBox() for s in shape.intersect(column).Solids())),
-            key=lambda p: -p[1],
-        )
-        if not pieces:
-            continue
-        spans = [pieces[0]]
-        for lo, hi in pieces[1:]:
-            if hi >= spans[-1][0] - tol:
-                spans[-1] = (min(lo, spans[-1][0]), spans[-1][1])
-            else:
-                spans.append((lo, hi))
-        return spans
-    return []
+    column = cq.Solid.makeCylinder(
+        FOOTPRINT * r, bb.zlen + 2, cq.Vector(x, y, bb.zmin - 1), cq.Vector(0, 0, 1)
+    )
+    pieces = sorted(
+        ((b.zmin, b.zmax) for b in (s.BoundingBox() for s in shape.intersect(column).Solids())),
+        key=lambda p: -p[1],
+    )
+    spans: list[tuple[float, float]] = []
+    for lo, hi in pieces:
+        if spans and hi >= spans[-1][0] - tol:
+            spans[-1] = (min(lo, spans[-1][0]), spans[-1][1])
+        else:
+            spans.append((lo, hi))
+    return spans
 
 
 def apply_holes(shape, holes: list[dict], dims: dict):
@@ -543,8 +542,9 @@ def apply_holes(shape, holes: list[dict], dims: dict):
 
     座標依外形比例換算：圖紙上的 x／寬度＝模型上的 x／模型寬度（y、z 同理），
     所以模型外形略有誤差時，孔仍落在對應的位置（例如仍在底座凸緣的中間）。
-    從上方鑽穿第一段材料：沿孔軸找出由上往下遇到的第一段材料，點線端點多切的 3% 只留在那一段
-    材料或它和下一段之間的空隙裡，不會穿過空隙傷到下一段。
+    從上方鑽穿第一段材料：找出孔的範圍裡由上往下遇到的第一段材料，點線端點多切的 3% 只留在那一段
+    材料或它和下一段之間的空隙裡，不會穿過空隙傷到下一段。孔的深度範圍整個在第一段材料上方
+    （模型已經鑽好這個孔，剩下的是更下面的材料）就不切。
     """
     import cadquery as cq
 
@@ -562,9 +562,9 @@ def apply_holes(shape, holes: list[dict], dims: dict):
     for hole in holes:
         r = hole["r"]
         x, y = cx + hole["x"] * fx, cy + hole["y"] * fy
-        lo = cz + hole["z0"] * fz - margin
-        hi = cz + hole["z1"] * fz + margin
-        spans = _axis_spans(shape, x, y, r, bb, 1e-4 * bb.zlen)
+        bottom = cz + hole["z0"] * fz  # 孔底（圖紙點線的下端）
+        lo, hi = bottom - margin, cz + hole["z1"] * fz + margin
+        spans = _column_spans(shape, x, y, r, bb, 1e-4 * bb.zlen)
         if (
             not spans
             and shape.distance(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up)) > tol
@@ -576,17 +576,19 @@ def apply_holes(shape, holes: list[dict], dims: dict):
             if shape.intersect(above).Volume() > 0.02 * above.Volume():
                 return shape, 0, "模型外形和圖紙對不上（孔位上方有材料），孔位維持模型輸出"
         if not spans:
-            placed += 1  # 孔軸上沒有材料，不必再切
+            placed += 1  # 孔的範圍裡沒有材料，不必再切
             continue
         seg_lo, seg_hi = spans[0]  # 由上往下遇到的第一段材料
-        # 往下最多切到第一段的下緣再多一點：和下一段之間有空隙時只進到空隙的一半，不碰下一段
-        gap = (seg_lo - spans[1][1]) / 2 if len(spans) > 1 else margin
-        lo = max(lo, seg_lo - min(margin, gap))
-        if lo >= seg_hi:
-            placed += 1  # 孔的深度範圍在第一段材料上方，軸上全是空的：孔已經鑽好了
+        # 孔底在第一段材料的頂面或更上面（容差：3%，薄板最多取一半厚度）：孔已經鑽好了，
+        # 孔的範圍裡剩下的是更下面的材料，不是這個孔要鑽的
+        if bottom >= seg_hi - min(margin, (seg_hi - seg_lo) / 2):
+            placed += 1
             continue
         if hi <= seg_lo:
             continue  # 孔的深度範圍在第一段材料下方，切不到
+        # 往下最多切到第一段的下緣再多一點：和下一段之間有空隙時只進到空隙的一半，不碰下一段
+        gap = (seg_lo - spans[1][1]) / 2 if len(spans) > 1 else margin
+        lo = max(lo, seg_lo - min(margin, gap))
         cuts.append(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up))
     if not cuts and not placed:
         return shape, 0, "孔位落在模型外或孔深沒有碰到材料，孔位維持模型輸出"
