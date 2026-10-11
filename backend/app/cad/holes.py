@@ -30,8 +30,9 @@ NORMAL_EPS = 1e-6  # 草圖法向量的 X、Y 分量比 Z 小這麼多才算垂�
 GEOM_EPS = 1e-6  # 草圖線圈的包含關係：圓要比外圈小這麼多才算在裡面（相切、壓邊都不算）
 FOOTPRINT = 0.98  # 看孔位有沒有材料時的半徑比例：略小一點，避免和模型既有孔壁剛好重合
 EMPTY = 0.05  # 孔的範圍裡材料體積比這個比例還少，就當作沒有材料（已經鑽好的孔，孔徑差 4.5% 以內）
-# 沿孔軸找材料分段的取樣線：(圓心到取樣點的距離 ÷ 孔半徑, 點數)。圓心一條，另外兩圈
-LINE_RINGS = ((0.0, 1), (0.5, 6), (0.9, 12))
+DENSE = 0.5  # 一層材料：整個孔徑的橫截面材料比例至少是孔的範圍平均的這個比例
+DROP = 0.8  # 往下一段的材料比例低於上一段的這個比例，就當作這層結束（下面變空，或只剩連接的柱子）
+TAIL_MAX = 0.5  # 第一層下緣之下掛著的材料（斜面、曲面的尾巴）體積比例上限，再多就不當成同一層
 ARC_STEPS = 48  # 外圈的圓弧取樣成幾段折線來判斷包含關係
 
 
@@ -515,40 +516,70 @@ def strip_vertical_holes(code: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------- 在重建模型上切孔
-def _line_spans(shape, x: float, y: float, bb, tol: float) -> list[tuple[float, float]]:
-    """垂直線 (x, y) 上材料佔的 z 區間 [(下, 上)]，由上到下排；相接的併成一段，沒有材料回 []。
+def _solid_fraction(shape, cylinder) -> float:
+    """圓柱裡的材料體積比例（整個圓柱和實體求交，不是取樣）。"""
+    return shape.intersect(cylinder).Volume() / cylinder.Volume()
 
-    用一條線而不是一個圓柱：連通實體的 z 包圍盒會把旁邊的立壁連到的上下兩層併成一層，
-    線上的區間才是這條線真正穿過的材料。
+
+def _first_layer(shape, x: float, y: float, r: float, bb, core_hi: float, ref: float):
+    """孔的範圍裡由上往下遇到的第一層材料的下緣 z；找不到回 None。
+
+    「層」＝整個孔徑的橫截面都還有材料：把孔徑圓柱和實體求交，在交集的頂點高度切成一段一段，
+    每一段量整個孔徑裡的材料體積比例。從孔的範圍上緣往下，第一個比例不低於 DENSE×ref
+    （ref＝孔的範圍的平均比例）的段是這層的開頭；之後第一個比例低於 DENSE×ref、或比上一段
+    掉了 DROP 以上的段，上緣就是這層的下緣。孔邊的細立壁、孔徑內的小凸起、連接上下兩層的柱子
+    只佔橫截面的一部分，比例掉得比一層材料大，不會把上下兩層連成一層。
+    一直到模型底都是實的，下緣就是模型底。
     """
     import cadquery as cq
 
-    line = cq.Edge.makeLine(cq.Vector(x, y, bb.zmin - 1), cq.Vector(x, y, bb.zmax + 1))
-    pieces = sorted(
-        ((b.zmin, b.zmax) for b in (e.BoundingBox() for e in shape.intersect(line).Edges())),
-        key=lambda p: -p[1],
-    )
-    spans: list[tuple[float, float]] = []
-    for lo, hi in pieces:
-        if spans and hi >= spans[-1][0] - tol:
-            spans[-1] = (min(lo, spans[-1][0]), spans[-1][1])
+    rho = FOOTPRINT * r
+    up = cq.Vector(0, 0, 1)
+    column = cq.Solid.makeCylinder(rho, bb.zlen + 2, cq.Vector(x, y, bb.zmin - 1), up)
+    levels = {core_hi, bb.zmin}
+    levels.update(v.Z for v in shape.intersect(column).Vertices() if bb.zmin < v.Z < core_hi)
+    zs = sorted(levels, reverse=True)
+    prev = None  # 這層上一段的材料比例；None＝還沒進到這層
+    for upper, lower in zip(zs, zs[1:], strict=False):
+        if upper - lower < 1e-6 * bb.zlen:
+            continue
+        slab = cq.Solid.makeCylinder(rho, upper - lower, cq.Vector(x, y, lower), up)
+        fraction = _solid_fraction(shape, slab)
+        if prev is None:
+            if fraction >= DENSE * ref:
+                prev = fraction
+        elif fraction < DENSE * ref or fraction < DROP * prev:
+            return upper  # 比例掉了一大截：下面是空隙，或只剩連接上下兩層的柱子
         else:
-            spans.append((lo, hi))
-    return spans
+            prev = fraction
+    return bb.zmin if prev is not None else None
 
 
-def _sample_points(x: float, y: float, r: float) -> list[tuple[float, float]]:
-    """孔的範圍內的取樣點（圓心＋兩圈）；起始角度錯開 0.31 rad，避免剛好落在軸向對齊的面上。"""
-    pts = []
-    for ratio, n in LINE_RINGS:
-        for k in range(n):
-            a = 0.31 + 2 * math.pi * k / n
-            pts.append((x + ratio * r * math.cos(a), y + ratio * r * math.sin(a)))
-    return pts
+def _layer_floor(shape, x: float, y: float, r: float, zone_lo: float, zone_hi: float, tiny: float):
+    """第一層下緣 zone_hi 之下、容差範圍 zone_lo…zone_hi 內，切孔最低能切到哪。
 
+    把孔徑圓柱和實體在這個範圍求交：每一塊材料都要「掛在第一層下緣」（頂面被 zone_hi 切平）、
+    而且沒有一直延伸到範圍的底（例如斜面、曲面的尾巴，整塊都在範圍內），總體積也夠小，
+    才算第一層的一部分，可以一起切掉。只要有一塊不是（別層的凸起、立壁連到下面的材料），
+    或範圍裡沒有材料，就停在第一層下緣 zone_hi。
+    """
+    import cadquery as cq
 
-def _solid_fraction(shape, cylinder) -> float:
-    return shape.intersect(cylinder).Volume() / cylinder.Volume()
+    if zone_hi - zone_lo <= tiny:
+        return zone_hi
+    up = cq.Vector(0, 0, 1)
+    zone = cq.Solid.makeCylinder(r, zone_hi - zone_lo, cq.Vector(x, y, zone_lo), up)
+    pieces = shape.intersect(zone).Solids()
+    if not pieces:
+        return zone_hi
+    boxes = [p.BoundingBox() for p in pieces]
+    if not all(b.zmax >= zone_hi - tiny and b.zmin > zone_lo + tiny for b in boxes):
+        return zone_hi
+    low = min(b.zmin for b in boxes)
+    envelope = cq.Solid.makeCylinder(r, zone_hi - low, cq.Vector(x, y, low), up)
+    if sum(p.Volume() for p in pieces) > TAIL_MAX * envelope.Volume():
+        return zone_hi
+    return low - tiny
 
 
 def apply_holes(shape, holes: list[dict], dims: dict):
@@ -557,12 +588,13 @@ def apply_holes(shape, holes: list[dict], dims: dict):
     座標依外形比例換算：圖紙上的 x／寬度＝模型上的 x／模型寬度（y、z 同理），
     所以模型外形略有誤差時，孔仍落在對應的位置（例如仍在底座凸緣的中間）。
 
-    從上方鑽穿第一段材料：
+    從上方鑽穿第一段材料，每一步都用整個孔徑的體積驗證，不靠取樣：
     - 孔的範圍（圖紙孔深去掉兩端 3% 容差）裡沒有材料＝模型已經鑽好這個孔，不切。
-    - 否則沿孔的範圍內多條垂直線，找出各線由上往下遇到的第一層材料（跟孔的範圍重疊的那層）；
-      點線端點多切的 3% 往下最多只到那層的下緣再多一點，和下一層之間有空隙時只進到空隙的一半，
-      取各條線中最保守（最高）的下界，所以孔邊的立壁連到下一層，也不會讓容差穿過空隙傷到下一層。
-    - 孔的範圍裡有材料、卻沒有任何一條線落在上面，分不出材料分段就不切。
+    - 否則找出孔的範圍裡由上往下的第一層材料（_first_layer），切孔下緣停在這層的下緣，
+      不管圖紙孔深（或 3% 容差）有沒有延伸到下面。下緣之下容差範圍內，只有掛在這層下緣、
+      整塊都在範圍內的尾巴（斜面、曲面）才一起切掉（_layer_floor）；別層的凸起、立壁連到
+      下面材料的，一律不碰。分不出第一層材料就不切，維持模型輸出。
+    - 孔底在第一層裡面（圖紙孔深比第一層短）：多切 3% 容差，最多到第一層下緣。
     """
     import cadquery as cq
 
@@ -600,21 +632,21 @@ def apply_holes(shape, holes: list[dict], dims: dict):
         e = min(margin, (top - bottom) / 4)
         core_lo, core_hi = bottom + e, top - e
         core = cq.Solid.makeCylinder(FOOTPRINT * r, core_hi - core_lo, cq.Vector(x, y, core_lo), up)
-        if core_hi <= core_lo or _solid_fraction(shape, core) <= EMPTY:
+        ref = _solid_fraction(shape, core) if core_hi > core_lo else 0.0
+        if ref <= EMPTY:
             placed += 1
             continue
-        floors = []
-        for px, py in _sample_points(x, y, r):
-            spans = _line_spans(shape, px, py, bb, 1e-4 * bb.zlen)
-            for i, (seg_lo, seg_hi) in enumerate(spans):
-                if seg_hi > core_lo and seg_lo < core_hi:  # 這條線在孔的範圍裡遇到的第一層材料
-                    gap = (seg_lo - spans[i + 1][1]) / 2 if i + 1 < len(spans) else margin
-                    floors.append(seg_lo - min(margin, gap))
-                    break
-        if not floors:
-            why.append("孔的範圍裡的材料分段無法判斷")
+        exit_z = _first_layer(shape, x, y, r, bb, core_hi, ref)
+        if exit_z is None:
+            why.append("分不出孔的範圍裡的第一段材料")
             continue
-        lo = max(lo, max(floors))
+        tiny = 1e-4 * bb.zlen
+        lo_run = exit_z - tiny  # 第一層下緣再多一點點，確實穿透
+        if lo < lo_run:
+            # 圖紙孔深＋容差比第一層長：停在第一層下緣，只多帶走掛在下緣的尾巴
+            lo = max(lo, _layer_floor(shape, x, y, r, lo, lo_run, tiny))
+        else:
+            lo = max(lo, lo_run)
         if lo >= hi:
             why.append("孔的深度範圍沒有碰到材料")
             continue

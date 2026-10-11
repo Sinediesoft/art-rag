@@ -586,6 +586,136 @@ def test_apply_holes_web_beside_axis_does_not_hide_the_gap(existing_r):
     assert inside(out, 2.25, 0, 35)  # 下板上的立壁段也在
 
 
+_LAYER_PLAN: dict = {}
+
+
+def layered_model(*pads):
+    """上板 z＝40…50（60×40）、下層基座 z＝0…29，遠處立壁相連；pads 是下層上的凸起／肋
+    (x, y, w, d, 頂面 z)，從 z＝29 長到頂面，頂面都低於上板下緣 40（中間隔著空隙）。
+    回 (實體, 圖紙孔位, 外形)：圖紙孔位是參考模型（只在上板鑽中心 Ø6 孔）真實渲染、偵測的結果。"""
+    import cadquery as cq
+
+    from app.cad.drawing import render_ortho
+
+    def box(x, y, z, w, d, h):
+        return cq.Workplane("XY").box(w, d, h, centered=False).translate((x, y, z))
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    base = box(-30, -20, 40, 60, 40, 10).union(box(-30, -20, 0, 60, 40, 29))
+    base = base.union(box(-30, -20, 0, 5, 40, 50))
+    if "plan" not in _LAYER_PLAN:
+        reference = base.val().cut(
+            cq.Solid.makeCylinder(3, 10, cq.Vector(0, 0, 40), cq.Vector(0, 0, 1))
+        )
+        _LAYER_PLAN["plan"] = detect_holes(render_ortho(reference), dims)
+    model = base
+    for x, y, w, d, top in pads:
+        model = model.union(box(x, y, 29, w, d, top - 29))
+    return model.val(), _LAYER_PLAN["plan"], dims
+
+
+def lower_volume_kept(before, after, below: float) -> tuple[float, float]:
+    """z＜below 的材料體積：切孔前後（切孔不該動到這個範圍）。"""
+    import cadquery as cq
+
+    zone = cq.Solid.makeBox(60, 40, below, cq.Vector(-30, -20, 0))
+    return before.intersect(zone).Volume(), after.intersect(zone).Volume()
+
+
+def test_apply_holes_lower_pad_between_sample_points_is_preserved():
+    """下層基座上一個局部凸起（x＝1…1.4、y＝0.7…1.1、頂面 z＝39，與上板隔 1 mm）落在孔徑內：
+    審查用固定取樣線漏掉了它，容差切傷凸起。整個孔徑的驗證不能漏。"""
+    from app.cad.holes import apply_holes
+
+    shape, plan, dims = layered_model((1.0, 0.7, 0.4, 0.4, 39.0))
+    assert inside(shape, 1.2, 0.9, 38.75)
+    out, applied, reason = apply_holes(shape, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 45) and not inside(out, 2.5, 0, 45)  # 上板鑽穿
+    assert inside(out, 1.2, 0.9, 38.75)  # 凸起完整
+    before, after = lower_volume_kept(shape, out, 39.9)
+    assert after == pytest.approx(before, rel=1e-9)
+
+
+@pytest.mark.parametrize(
+    "pads",
+    [
+        [(2.0, -0.2, 0.8, 0.4, 39.9)],  # 凸起頂面離上板只有 0.1 mm
+        [(-1.0, -2.6, 0.3, 2.0, 38.0)],  # 細肋
+        [(0.5, 0.5, 2.0, 2.0, 36.0)],  # 大一點的凸台
+        [(-2.7, 0.3, 0.4, 0.4, 39.0), (2.6, -0.5, 0.3, 0.3, 39.5), (0.1, -2.5, 0.2, 0.2, 38.5)],
+        [(0.0, 0.0, 0.2, 0.2, 39.95)],  # 正在孔軸上，頂面幾乎貼著上板
+        [(-2.9, -0.5, 5.8, 1.0, 40.0)],  # 一條肋橫過孔徑，把上下兩層連起來（約 21%）
+        [(-2.2, -2.2, 4.4, 4.4, 40.0)],  # 一根粗柱佔孔徑的大半（約 75%），連著上下兩層
+    ],
+    ids=[
+        "almost-touching",
+        "thin-rib",
+        "boss",
+        "three-pads",
+        "on-axis",
+        "bridge-rib",
+        "bridge-pillar",
+    ],
+)
+def test_apply_holes_never_cuts_lower_material_below_the_first_layer(pads):
+    from app.cad.holes import apply_holes
+
+    shape, plan, dims = layered_model(*pads)
+    out, applied, reason = apply_holes(shape, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 45)
+    before, after = lower_volume_kept(shape, out, 39.89)
+    assert after == pytest.approx(before, rel=1e-9)
+
+
+def test_apply_holes_random_lower_features_are_never_cut():
+    """亂數放進孔徑內的下層小凸起／肋（固定種子）：不論取樣點落在哪，下層體積都不能少。"""
+    import random
+
+    from app.cad.holes import apply_holes
+
+    rng = random.Random(20261011)
+    for case in range(12):
+        pads = []
+        for _ in range(rng.randint(1, 4)):
+            w, d = rng.uniform(0.15, 1.2), rng.uniform(0.15, 1.2)
+            while True:
+                x, y = rng.uniform(-3, 3), rng.uniform(-3, 3)
+                if (abs(x) + w) ** 2 + (abs(y) + d) ** 2 < 2.9**2:
+                    break
+            pads.append((x, y, w, d, rng.uniform(33.0, 39.8)))
+        shape, plan, dims = layered_model(*pads)
+        out, applied, reason = apply_holes(shape, plan, dims)
+        assert (applied, reason) == (1, None), (case, pads)
+        assert not inside(out, 0, 0, 45), (case, pads)
+        before, after = lower_volume_kept(shape, out, 39.89)
+        assert after == pytest.approx(before, rel=1e-9), (case, pads)
+
+
+def test_apply_holes_opens_the_hole_fully_into_a_curved_ceiling():
+    """孔通到下面的橫向圓孔（天花板是曲面，越靠孔邊越低）：孔要在整個孔徑通到橫孔，
+    不能因為只切到曲面最高點而在孔邊留一圈材料；橫孔下方的材料不能碰。"""
+    import cadquery as cq
+
+    from app.cad.drawing import render_ortho
+    from app.cad.holes import apply_holes
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 40.0}
+    block = cq.Workplane("XY").box(60, 40, 40, centered=(True, True, False)).val()
+    bore = cq.Solid.makeCylinder(10, 60, cq.Vector(0, -30, 15), cq.Vector(0, 1, 0))
+    model = block.cut(bore)
+    reference = model.cut(cq.Solid.makeCylinder(3, 20, cq.Vector(0, 0, 22), cq.Vector(0, 0, 1)))
+    plan = detect_holes(render_ortho(reference), dims)
+    assert len(plan) == 1, plan
+    out, applied, reason = apply_holes(model, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 30) and not inside(out, 2.8, 0, 35)  # 注油孔
+    ceiling_at_rim = 15 + (100 - 2.8**2) ** 0.5  # x＝2.8 處橫孔頂 ≈ 24.6
+    assert not inside(out, 2.8, 0, ceiling_at_rim + 0.05)  # 孔邊也通到橫孔
+    assert inside(out, 0, 0, 3) and inside(out, 12, 0, 15)  # 橫孔下方、旁邊的材料沒動
+
+
 def test_apply_holes_shallow_blind_hole_is_cut_not_counted_as_existing():
     """100 mm 高的塊體頂部要一個 2 mm 深的淺孔（比 3% 容差還淺）：孔的範圍裡是實心，
     不能因為孔底落在容差內就當成『孔已經鑽好』。"""
@@ -602,15 +732,14 @@ def test_apply_holes_shallow_blind_hole_is_cut_not_counted_as_existing():
     assert inside(out, 0, 0, 80) and inside(out, 0, 0, 50)  # 下面仍是實心（多鑽最多 3%）
 
 
-def test_apply_holes_keeps_model_when_material_layers_cannot_be_told(monkeypatch):
-    """孔的範圍裡有材料、卻找不到任何一條取樣線落在那層材料上（例如只剩孔徑內的細柱）：
-    分不出第一段材料就不切，維持模型原樣並說明原因。"""
+def test_apply_holes_keeps_model_when_first_layer_cannot_be_told(monkeypatch):
+    """分不出孔的範圍裡哪一層是第一段材料：不切，維持模型原樣並說明原因。"""
     from app.cad import holes as H
 
-    monkeypatch.setattr(H, "_line_spans", lambda *args, **kwargs: [])
+    monkeypatch.setattr(H, "_first_layer", lambda *args, **kwargs: None)
     shape, plan, dims = plate_pair_with_web()
     out, applied, reason = H.apply_holes(shape, plan, dims)
-    assert applied == 0 and "無法判斷" in reason and "維持模型輸出" in reason
+    assert applied == 0 and "第一段材料" in reason and "維持模型輸出" in reason
     assert out.Volume() == pytest.approx(shape.Volume())
 
 
