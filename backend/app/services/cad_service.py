@@ -95,11 +95,17 @@ async def read_dimensions(img: Image.Image) -> dict | None:
     return None
 
 
-def hole_plan_for(part: dict | None, scale_to: dict | None):
+HOLE_LAYOUTS = ("kb", "rectified")  # 圖紙版面是標準三視圖的才校正；upload＝照片沒拉正，版面不固定
+
+
+def hole_plan_for(part: dict | None, scale_to: dict | None, layout: str):
     """孔位校正（docs/adr/034）用哪張圖：有標準模型的知識庫零件用它的標準三視圖
-    （照片拉正後辨識出來的也一樣，不用照片）；回 (孔位, None) 或 (None, 不校正的原因)。"""
+    （照片拉正後辨識出來的也一樣，不用照片）；回 (孔位, None) 或 (None, 不校正的原因)。
+    layout 是 3D 重建實際用的圖紙版面：照片沒拉正（upload）時，即使辨識出知識庫零件也不校正。"""
     if part is None:
         return None, "未收錄的圖紙版面不固定，孔位維持模型輸出"
+    if layout not in HOLE_LAYOUTS:
+        return None, f"照片沒有拉正成圖紙版面（{layout}），孔位維持模型輸出"
     if "cad" not in part:
         return None, "照片建檔的圖紙不是標準三視圖版面，孔位維持模型輸出"
     try:
@@ -274,7 +280,7 @@ async def _reconstruct_stream(
     code = extract_code(answer)
     yield sse("executing", {"generation_ms": generation_ms, "code_chars": len(code)})
     gt_step = store.parts_dir / "gt" / f"{part['id']}.step" if part else None
-    holes, hole_reason = await asyncio.to_thread(hole_plan_for, part, scale_to)
+    holes, hole_reason = await asyncio.to_thread(hole_plan_for, part, scale_to, layout)
     run = await run_cad(
         code,
         job_dir,
