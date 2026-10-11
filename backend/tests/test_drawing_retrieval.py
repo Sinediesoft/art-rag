@@ -264,6 +264,44 @@ def test_no_data_is_kept_when_the_question_asks_several_things(question):
     assert drop_stray_no_data(answer, question) == answer
 
 
+# codex-review a53604d F1：分行問兩件事（兩個問號不在同一行）
+MULTILINE_QUESTIONS = [
+    "立式軸承座用什麼材料？\n包裝方式呢？",
+    "立式軸承座用什麼材料？\r\n包裝方式呢？",
+]
+MULTILINE_ANSWERS = [
+    "材料為 FC250 灰口鑄鐵 [1]。\n知識庫中沒有這方面的資料。",
+    "材料為 FC250 灰口鑄鐵 [1]。\n\n包裝方式：\n知識庫中沒有這方面的資料。",
+]
+
+
+@pytest.mark.parametrize("question", MULTILINE_QUESTIONS)
+@pytest.mark.parametrize("answer", MULTILINE_ANSWERS)
+def test_no_data_is_kept_for_questions_on_several_lines(question, answer):
+    assert drop_stray_no_data(answer, question) == answer
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "材料為 FC250 [1]。\n\n包裝方式：\n知識庫中沒有這方面的資料。",
+        "材料為 FC250 [1]。\n**包裝方式**\n知識庫中沒有這方面的資料。",
+        "材料為 FC250 [1]。\n- 包裝方式\n  知識庫中沒有這方面的資料。",
+    ],
+)
+def test_no_data_under_a_sub_heading_is_kept(answer):
+    """前一行是子標題：拒答句在回答那個標題，就算問題只問一件事也保留。"""
+    assert drop_stray_no_data(answer, "立式軸承座") == answer
+
+
+def test_two_questions_on_one_line_or_across_lines_are_treated_alike():
+    answer = MULTILINE_ANSWERS[0]
+    one_line = MULTILINE_QUESTIONS[0].replace("\n", "")
+    assert drop_stray_no_data(answer, one_line) == answer
+    # 對照：只問一件事時照舊拿掉結尾套話
+    assert drop_stray_no_data(answer, "立式軸承座用什麼材料？") == "材料為 FC250 灰口鑄鐵 [1]。"
+
+
 class _Reply(providers.MockProvider):
     def __init__(self, reply: str):
         super().__init__(strategy="hybrid", model="fake-qwen")
@@ -316,6 +354,25 @@ def test_partly_answerable_question_keeps_the_no_data_part(
     res = c.post(
         "/api/v1/chat", json={"question": "立式軸承座的材料和包裝方式？", "part_id": "mfg-006"}
     )
+    events = parse_sse(res.text)
+    text = "".join(x["text"] for e, x in events if e == "token")
+    done = next(x for e, x in events if e == "done")
+    stage7 = next(s for s in done["pipeline"] if s["stage"] == 7)
+    assert done["degraded"] is False and stage7["status"] == "pass"
+    assert text == reply and "拿掉" not in stage7["detail"]
+
+
+@pytest.mark.parametrize("question", MULTILINE_QUESTIONS)
+@pytest.mark.parametrize("reply", MULTILINE_ANSWERS)
+def test_question_on_several_lines_keeps_the_no_data_part(
+    client, realistic_retrieval, monkeypatch, question, reply
+):
+    """codex-review a53604d F1：分行問材料與包裝方式（LF、CRLF），
+    包裝方式沒資料的說明要原樣送出。"""
+    monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
+    monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
+    c = client_as("planner")
+    res = c.post("/api/v1/chat", json={"question": question, "part_id": "mfg-006"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
     done = next(x for e, x in events if e == "done")
