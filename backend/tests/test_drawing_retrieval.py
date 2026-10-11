@@ -224,13 +224,12 @@ REPORTED_ANSWER = (
     [
         (REPORTED_ANSWER, REPORTED_ANSWER.rsplit("  \n", 1)[0]),
         ("材料為 FC250 [1]。知識庫中沒有這方面的資料。", "材料為 FC250 [1]。"),
-        ("知識庫中沒有這方面的資料。材料為 FC250 [1]。", "材料為 FC250 [1]。"),
         ("材料為 FC250 [1]。\n\n知識庫中沒有這方面的資料 [1]", "材料為 FC250 [1]。"),
         ("瀑布是白色的 [畫面]。知識庫中沒有這方面的資料。", "瀑布是白色的 [畫面]。"),
     ],
 )
 def test_stray_no_data_after_a_cited_answer_is_dropped(answer, expected):
-    assert drop_stray_no_data(answer) == expected
+    assert drop_stray_no_data(answer, "立式軸承座") == expected
 
 
 @pytest.mark.parametrize(
@@ -241,10 +240,28 @@ def test_stray_no_data_after_a_cited_answer_is_dropped(answer, expected):
         "知識庫中沒有這方面的資料 [0]。",  # 關檢索的對照組：[0] 不算引用
         "材料為 FC250 [1]。",
         "材料為 FC250。知識庫中沒有這方面的資料。",  # 沒有引用：不知道前面是不是答案，原樣保留
+        # codex-review 9bb6b32 F2：接在句中、說明哪一部分沒資料的，不是套話
+        "材料為 FC250 灰口鑄鐵 [1]。包裝方式：知識庫中沒有這方面的資料。",
+        "材料為 FC250 灰口鑄鐵 [1]。由於知識庫中沒有這方面的資料，因此無法確認包裝方式。",
+        "材料為 FC250 [1]。文件寫著「知識庫中沒有這方面的資料。」",
+        "知識庫中沒有這方面的資料。材料為 FC250 [1]。",  # 不在最後：可能在說另一部分
+        "材料為 FC250 [1]。知識庫中沒有這方面的資料。中心高 40 mm [2]。",
+        # codex-review 9bb6b32 F1：句中的拒答句拿掉會把前後接起來（PBK-＋6006）
+        "材料為鋁合金 [1]。PBK-知識庫中沒有這方面的資料。6006",
     ],
 )
 def test_real_no_data_answers_are_kept(answer):
-    assert drop_stray_no_data(answer) == answer
+    assert drop_stray_no_data(answer, "立式軸承座") == answer
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["立式軸承座的材料和包裝方式？", "材料、包裝方式", "材料以及包裝", "材料是什麼？包裝呢？"],
+)
+def test_no_data_is_kept_when_the_question_asks_several_things(question):
+    """問了好幾件事：結尾的通用拒答句可能在說其中一件沒資料，不確定就保留。"""
+    answer = "材料為 FC250 [1]。知識庫中沒有這方面的資料。"
+    assert drop_stray_no_data(answer, question) == answer
 
 
 class _Reply(providers.MockProvider):
@@ -279,6 +296,71 @@ def test_found_drawing_answer_does_not_end_with_no_data(
         assert "沒有這方面的資料" not in text
         assert text.startswith("此圖紙為立式軸承座") and text.endswith("底面平面度 0.03 mm [2]。")
         assert "拿掉" in stage7["detail"]
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "材料為 FC250 灰口鑄鐵 [1]。包裝方式：知識庫中沒有這方面的資料。",
+        "材料為 FC250 灰口鑄鐵 [1]。由於知識庫中沒有這方面的資料，因此無法確認包裝方式。",
+        "材料為 FC250 灰口鑄鐵 [1]。知識庫中沒有這方面的資料。",
+    ],
+)
+def test_partly_answerable_question_keeps_the_no_data_part(
+    client, realistic_retrieval, monkeypatch, reply
+):
+    """codex-review 9bb6b32 F2：材料答得出來、包裝方式沒有資料——說明缺哪一部分的句子要原樣送出。"""
+    monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
+    monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
+    c = client_as("planner")
+    res = c.post(
+        "/api/v1/chat", json={"question": "立式軸承座的材料和包裝方式？", "part_id": "mfg-006"}
+    )
+    events = parse_sse(res.text)
+    text = "".join(x["text"] for e, x in events if e == "token")
+    done = next(x for e, x in events if e == "done")
+    stage7 = next(s for s in done["pipeline"] if s["stage"] == 7)
+    assert done["degraded"] is False and stage7["status"] == "pass"
+    assert text == reply and "拿掉" not in stage7["detail"]
+
+
+def test_spliced_hidden_part_number_is_never_sent(client, realistic_retrieval, monkeypatch):
+    """codex-review 9bb6b32 F1：業務看不到 mfg-006；
+    句中的拒答句不拿掉，PBK- 和 6006 不會被接起來。"""
+    reply = "材料為鋁合金 [1]。PBK-知識庫中沒有這方面的資料。6006"
+    hidden = guard.hidden_terms(identity.get_account("sales_a"), get_store().parts)
+    assert guard.check_output(reply, [{"text": "x"}], hidden, []) == []
+    monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
+    monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
+    c = client_as("sales_a")
+    res = c.post("/api/v1/chat", json={"question": "步進馬達安裝板的材料？", "part_id": "mfg-004"})
+    events = parse_sse(res.text)
+    text = "".join(x["text"] for e, x in events if e == "token")
+    assert "PBK-6006" not in text
+    assert guard.check_output(text, [{"text": "x"}], hidden, []) == []
+
+
+def test_answer_changed_after_the_output_check_is_checked_again(
+    client, realistic_retrieval, monkeypatch
+):
+    """codex-review 9bb6b32 F1：第 7 段送出的是拿掉拒答句後的版本，那一版也要過輸出檢查；
+    沒過就照第 7 段擋下（原輸出、改過的版本都不送出）。"""
+    reply = "材料為鋁合金 [1]。知識庫中沒有這方面的資料。"
+    monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
+    monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
+    # 模擬後處理產生了未授權料號：檢查必須看送出的那一版
+    monkeypatch.setattr(
+        chat_service, "drop_stray_no_data", lambda answer, question: "PBK-6006 [1]。"
+    )
+    c = client_as("sales_a")
+    res = c.post("/api/v1/chat", json={"question": "步進馬達安裝板的材料？", "part_id": "mfg-004"})
+    events = parse_sse(res.text)
+    text = "".join(x["text"] for e, x in events if e == "token")
+    done = next(x for e, x in events if e == "done")
+    stage7 = next(s for s in done["pipeline"] if s["stage"] == 7)
+    assert "PBK-6006" not in text and "沒有這方面的資料" not in text
+    assert done["degraded"] is True and stage7["status"] == "block"
+    assert "未授權文件" in stage7["detail"]
 
 
 def test_found_drawing_but_unanswerable_question_keeps_the_drawing(

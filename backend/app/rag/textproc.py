@@ -10,8 +10,14 @@ from pathlib import Path
 
 # prompt 第 3 條規定的拒答句（answer_v1–v4、drawing_v1–v2 同一句）
 NO_DATA = "知識庫中沒有這方面的資料。"
-_NO_DATA_RE = re.compile(r"[ \t]*知識庫中沒有這方面的資料[。.]?(?:[ \t]*\[\d+\])*[ \t]*\n?")
+# 只認結尾那一句：前面是開頭、換行或句號／問號／驚嘆號
+# （不是「包裝方式：」「由於」「「」這類接在句中的），後面只能是引用編號、空白到結尾
+_TRAILING_NO_DATA_RE = re.compile(
+    r"(?:^|(?<=[\n。！？!?]))[ \t]*知識庫中沒有這方面的資料[。.]?(?:[ \t]*\[\d+\])*\s*\Z"
+)
 _CITED_RE = re.compile(r"\[(?:[1-9]\d*|畫面)\]")
+# 問題同時問了好幾件事：通用拒答句可能是在說其中一件沒資料，不能確定是多餘的
+_MULTI_ASK_RE = re.compile(r"[和與及跟、，,；;／/]|以及|還有|或是|或者|並且|分別|各自|[？?].+[？?]")
 
 
 @lru_cache
@@ -54,13 +60,20 @@ def to_taiwan(text: str) -> str:
     return "".join(ch if ch in keep else conv.convert(ch) for ch in text)
 
 
-def drop_stray_no_data(answer: str) -> str:
-    """已經引用資料回答了，又在後面補一句「知識庫中沒有這方面的資料。」：拿掉那句。
+def drop_stray_no_data(answer: str, question: str = "") -> str:
+    """已經引用資料回答了，又在最後補一句獨立的「知識庫中沒有這方面的資料。」：拿掉那句。
     小模型常把 prompt 第 3 條當成結尾套話（TASK-20261010-001：附 mfg-006 截圖問「立式軸承座」，
-    三句都引用段落，最後一句卻說知識庫沒有資料）。沒有任何引用時是真的答不出來，整段保留。"""
-    if NO_DATA[:-1] not in answer:
+    三句都引用段落，最後一句卻說知識庫沒有資料）。
+
+    不能確定是多餘套話時整段保留：沒有任何引用（真的答不出來）、不在最後或接在句中
+    （「包裝方式：…」「由於…，因此…」、引號內）、問題同時問了好幾件事（可能在說其中一件沒資料）。
+    只截掉結尾、不拼接前後片段，拿掉後前面那段原樣不動。"""
+    if NO_DATA[:-1] not in answer or _MULTI_ASK_RE.search(question):
         return answer
-    rest = _NO_DATA_RE.sub("", answer)
+    m = _TRAILING_NO_DATA_RE.search(answer)
+    if not m:
+        return answer
+    rest = answer[: m.start()].rstrip()
     if not _CITED_RE.search(rest):
         return answer
-    return re.sub(r"\n{3,}", "\n\n", rest).rstrip()
+    return rest
