@@ -545,6 +545,75 @@ def test_apply_holes_existing_upper_hole_never_moves_cut_to_second_plate(existin
     assert out.intersect(lower).Volume() == pytest.approx(drilled.intersect(lower).Volume())
 
 
+def plate_pair_with_web(*, existing_r: float | None = None):
+    """上板 z＝40…50、下板 z＝29…39（隔 1 mm），遠處立壁相連；孔邊另有一根細立壁（x＝2…2.5、
+    y＝±0.25、z＝29…50）貫穿兩板之間的空隙。回 (實體, 圖紙孔位, 外形)。"""
+    import cadquery as cq
+
+    from app.cad.drawing import render_ortho
+
+    def box(x, y, z, w, d, h):
+        return cq.Workplane("XY").box(w, d, h, centered=False).translate((x, y, z))
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    base = box(-30, -20, 40, 60, 40, 10).union(box(-30, -20, 29, 60, 40, 10))
+    base = base.union(box(-30, -20, 0, 5, 40, 50))
+    reference = base.val().cut(
+        cq.Solid.makeCylinder(3, 10, cq.Vector(0, 0, 40), cq.Vector(0, 0, 1))
+    )
+    plan = detect_holes(render_ortho(reference), dims)
+    assert len(plan) == 1, plan
+    shape = base.union(box(2, -0.25, 29, 0.5, 0.5, 21)).val()
+    if existing_r is not None:
+        shape = shape.cut(
+            cq.Solid.makeCylinder(existing_r, 10, cq.Vector(0, 0, 40), cq.Vector(0, 0, 1))
+        )
+    return shape, plan, dims
+
+
+@pytest.mark.parametrize("existing_r", [None, 1.0])
+def test_apply_holes_web_beside_axis_does_not_hide_the_gap(existing_r):
+    """孔邊有一根立壁把兩板連成同一個實體：孔軸在兩板之間仍有空隙，下板不能被切傷。
+    （連通實體的 z 包圍盒是 29…50，不能當成孔軸上連續的材料。）"""
+    from app.cad.holes import apply_holes
+
+    shape, plan, dims = plate_pair_with_web(existing_r=existing_r)
+    out, applied, reason = apply_holes(shape, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 45) and not inside(out, 1.5, 0, 45)  # 上板鑽到圖紙孔徑
+    for point in ((0, 0, 38.75), (0, 0, 30), (-1.5, 1.0, 38.9)):
+        assert inside(out, *point), point  # 下板完整
+    assert inside(out, 2.25, 0, 35)  # 下板上的立壁段也在
+
+
+def test_apply_holes_shallow_blind_hole_is_cut_not_counted_as_existing():
+    """100 mm 高的塊體頂部要一個 2 mm 深的淺孔（比 3% 容差還淺）：孔的範圍裡是實心，
+    不能因為孔底落在容差內就當成『孔已經鑽好』。"""
+    import cadquery as cq
+
+    from app.cad.holes import apply_holes
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 100.0}
+    block = cq.Workplane("XY").box(60, 40, 100, centered=(True, True, False)).val()
+    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 48.0, "z1": 50.0}]
+    out, applied, reason = apply_holes(block, plan, dims)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 99) and not inside(out, 2.5, 0, 98.5)  # 淺孔切出來了
+    assert inside(out, 0, 0, 80) and inside(out, 0, 0, 50)  # 下面仍是實心（多鑽最多 3%）
+
+
+def test_apply_holes_keeps_model_when_material_layers_cannot_be_told(monkeypatch):
+    """孔的範圍裡有材料、卻找不到任何一條取樣線落在那層材料上（例如只剩孔徑內的細柱）：
+    分不出第一段材料就不切，維持模型原樣並說明原因。"""
+    from app.cad import holes as H
+
+    monkeypatch.setattr(H, "_line_spans", lambda *args, **kwargs: [])
+    shape, plan, dims = plate_pair_with_web()
+    out, applied, reason = H.apply_holes(shape, plan, dims)
+    assert applied == 0 and "無法判斷" in reason and "維持模型輸出" in reason
+    assert out.Volume() == pytest.approx(shape.Volume())
+
+
 def test_apply_holes_cuts_a_sheet_thinner_than_the_margin():
     """頂部的薄板（1 mm）比 3% 容差（1.5 mm）還薄：孔照樣要切穿，不能被當成『孔已經在那裡』。"""
     import cadquery as cq

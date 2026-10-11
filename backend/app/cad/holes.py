@@ -29,6 +29,9 @@ Z_MARGIN = 0.03  # 切孔時上下各多切外形高度的 3%：點線端點有�
 NORMAL_EPS = 1e-6  # 草圖法向量的 X、Y 分量比 Z 小這麼多才算垂直：只容許浮點誤差，斜孔不算
 GEOM_EPS = 1e-6  # 草圖線圈的包含關係：圓要比外圈小這麼多才算在裡面（相切、壓邊都不算）
 FOOTPRINT = 0.98  # 看孔位有沒有材料時的半徑比例：略小一點，避免和模型既有孔壁剛好重合
+EMPTY = 0.05  # 孔的範圍裡材料體積比這個比例還少，就當作沒有材料（已經鑽好的孔，孔徑差 4.5% 以內）
+# 沿孔軸找材料分段的取樣線：(圓心到取樣點的距離 ÷ 孔半徑, 點數)。圓心一條，另外兩圈
+LINE_RINGS = ((0.0, 1), (0.5, 6), (0.9, 12))
 ARC_STEPS = 48  # 外圈的圓弧取樣成幾段折線來判斷包含關係
 
 
@@ -512,20 +515,17 @@ def strip_vertical_holes(code: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------- 在重建模型上切孔
-def _column_spans(shape, x: float, y: float, r: float, bb, tol: float) -> list[tuple[float, float]]:
-    """孔的範圍（以 (x, y) 為中心、半徑 FOOTPRINT×r 的圓柱）裡材料佔的 z 區間 [(下, 上)]，
-    由上到下排；相接的併成一段，沒有材料回 []。
+def _line_spans(shape, x: float, y: float, bb, tol: float) -> list[tuple[float, float]]:
+    """垂直線 (x, y) 上材料佔的 z 區間 [(下, 上)]，由上到下排；相接的併成一段，沒有材料回 []。
 
-    看整個孔徑、不只看孔軸：模型在這裡已經鑽了小孔時，孔軸上只剩更下面的材料，不能把那一段
-    當成要鑽的第一段。
+    用一條線而不是一個圓柱：連通實體的 z 包圍盒會把旁邊的立壁連到的上下兩層併成一層，
+    線上的區間才是這條線真正穿過的材料。
     """
     import cadquery as cq
 
-    column = cq.Solid.makeCylinder(
-        FOOTPRINT * r, bb.zlen + 2, cq.Vector(x, y, bb.zmin - 1), cq.Vector(0, 0, 1)
-    )
+    line = cq.Edge.makeLine(cq.Vector(x, y, bb.zmin - 1), cq.Vector(x, y, bb.zmax + 1))
     pieces = sorted(
-        ((b.zmin, b.zmax) for b in (s.BoundingBox() for s in shape.intersect(column).Solids())),
+        ((b.zmin, b.zmax) for b in (e.BoundingBox() for e in shape.intersect(line).Edges())),
         key=lambda p: -p[1],
     )
     spans: list[tuple[float, float]] = []
@@ -537,14 +537,32 @@ def _column_spans(shape, x: float, y: float, r: float, bb, tol: float) -> list[t
     return spans
 
 
+def _sample_points(x: float, y: float, r: float) -> list[tuple[float, float]]:
+    """孔的範圍內的取樣點（圓心＋兩圈）；起始角度錯開 0.31 rad，避免剛好落在軸向對齊的面上。"""
+    pts = []
+    for ratio, n in LINE_RINGS:
+        for k in range(n):
+            a = 0.31 + 2 * math.pi * k / n
+            pts.append((x + ratio * r * math.cos(a), y + ratio * r * math.sin(a)))
+    return pts
+
+
+def _solid_fraction(shape, cylinder) -> float:
+    return shape.intersect(cylinder).Volume() / cylinder.Volume()
+
+
 def apply_holes(shape, holes: list[dict], dims: dict):
     """在（已縮放成 mm 的）重建模型上依圖紙孔位切孔，回 (實體, 已切孔數, 不校正的原因)。
 
     座標依外形比例換算：圖紙上的 x／寬度＝模型上的 x／模型寬度（y、z 同理），
     所以模型外形略有誤差時，孔仍落在對應的位置（例如仍在底座凸緣的中間）。
-    從上方鑽穿第一段材料：找出孔的範圍裡由上往下遇到的第一段材料，點線端點多切的 3% 只留在那一段
-    材料或它和下一段之間的空隙裡，不會穿過空隙傷到下一段。孔的深度範圍整個在第一段材料上方
-    （模型已經鑽好這個孔，剩下的是更下面的材料）就不切。
+
+    從上方鑽穿第一段材料：
+    - 孔的範圍（圖紙孔深去掉兩端 3% 容差）裡沒有材料＝模型已經鑽好這個孔，不切。
+    - 否則沿孔的範圍內多條垂直線，找出各線由上往下遇到的第一層材料（跟孔的範圍重疊的那層）；
+      點線端點多切的 3% 往下最多只到那層的下緣再多一點，和下一層之間有空隙時只進到空隙的一半，
+      取各條線中最保守（最高）的下界，所以孔邊的立壁連到下一層，也不會讓容差穿過空隙傷到下一層。
+    - 孔的範圍裡有材料、卻沒有任何一條線落在上面，分不出材料分段就不切。
     """
     import cadquery as cq
 
@@ -559,39 +577,50 @@ def apply_holes(shape, holes: list[dict], dims: dict):
     up = cq.Vector(0, 0, 1)
     cuts = []
     placed = 0  # 模型自己已經在同一個位置鑽了孔
+    why: list[str] = []  # 沒有切的孔各自的原因
     for hole in holes:
         r = hole["r"]
         x, y = cx + hole["x"] * fx, cy + hole["y"] * fy
-        bottom = cz + hole["z0"] * fz  # 孔底（圖紙點線的下端）
-        lo, hi = bottom - margin, cz + hole["z1"] * fz + margin
-        spans = _column_spans(shape, x, y, r, bb, 1e-4 * bb.zlen)
-        if (
-            not spans
-            and shape.distance(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up)) > tol
-        ):
-            continue  # 碰不到模型（孔位落在模型外）
+        bottom, top = cz + hole["z0"] * fz, cz + hole["z1"] * fz  # 圖紙點線的下端、上端
+        lo, hi = bottom - margin, top + margin
         # 俯視圖畫成實線圓＝從上方看得到：孔的上方要是空的，否則模型外形和圖紙對不上
         if hi < bb.zmax:
             above = cq.Solid.makeCylinder(r / 2, bb.zmax - hi + 1, cq.Vector(x, y, hi), up)
             if shape.intersect(above).Volume() > 0.02 * above.Volume():
                 return shape, 0, "模型外形和圖紙對不上（孔位上方有材料），孔位維持模型輸出"
-        if not spans:
-            placed += 1  # 孔的範圍裡沒有材料，不必再切
+        span = cq.Solid.makeCylinder(FOOTPRINT * r, hi - lo, cq.Vector(x, y, lo), up)
+        if _solid_fraction(shape, span) <= EMPTY:
+            # 切孔範圍裡沒有材料：模型已經在這裡鑽穿了，或孔位根本在模型外
+            if shape.distance(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up)) > tol:
+                why.append("孔位落在模型外")
+            else:
+                placed += 1
             continue
-        seg_lo, seg_hi = spans[0]  # 由上往下遇到的第一段材料
-        # 孔底在第一段材料的頂面或更上面（容差：3%，薄板最多取一半厚度）：孔已經鑽好了，
-        # 孔的範圍裡剩下的是更下面的材料，不是這個孔要鑽的
-        if bottom >= seg_hi - min(margin, (seg_hi - seg_lo) / 2):
+        # 孔的範圍（去掉兩端的點線誤差）：裡面沒有材料＝孔已經鑽好，剩下的是更下面的材料
+        e = min(margin, (top - bottom) / 4)
+        core_lo, core_hi = bottom + e, top - e
+        core = cq.Solid.makeCylinder(FOOTPRINT * r, core_hi - core_lo, cq.Vector(x, y, core_lo), up)
+        if core_hi <= core_lo or _solid_fraction(shape, core) <= EMPTY:
             placed += 1
             continue
-        if hi <= seg_lo:
-            continue  # 孔的深度範圍在第一段材料下方，切不到
-        # 往下最多切到第一段的下緣再多一點：和下一段之間有空隙時只進到空隙的一半，不碰下一段
-        gap = (seg_lo - spans[1][1]) / 2 if len(spans) > 1 else margin
-        lo = max(lo, seg_lo - min(margin, gap))
+        floors = []
+        for px, py in _sample_points(x, y, r):
+            spans = _line_spans(shape, px, py, bb, 1e-4 * bb.zlen)
+            for i, (seg_lo, seg_hi) in enumerate(spans):
+                if seg_hi > core_lo and seg_lo < core_hi:  # 這條線在孔的範圍裡遇到的第一層材料
+                    gap = (seg_lo - spans[i + 1][1]) / 2 if i + 1 < len(spans) else margin
+                    floors.append(seg_lo - min(margin, gap))
+                    break
+        if not floors:
+            why.append("孔的範圍裡的材料分段無法判斷")
+            continue
+        lo = max(lo, max(floors))
+        if lo >= hi:
+            why.append("孔的深度範圍沒有碰到材料")
+            continue
         cuts.append(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up))
     if not cuts and not placed:
-        return shape, 0, "孔位落在模型外或孔深沒有碰到材料，孔位維持模型輸出"
+        return shape, 0, f"{why[0] if why else '孔位落在模型外'}，孔位維持模型輸出"
     for cyl in cuts:
         shape = shape.cut(cyl)
     return shape, len(cuts) + placed, None
