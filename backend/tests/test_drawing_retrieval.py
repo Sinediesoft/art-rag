@@ -219,6 +219,10 @@ REPORTED_ANSWER = (
 )
 
 
+# 唯一確認過的情境：問題只是指名這張圖紙（名稱、料號、圖號）或預設概覽問句，沒有任何具體要問的事
+BARE = ["立式軸承座", "Pillow Block Housing", "PBK-6006", "D-24-0618", DEFAULT_Q]
+
+
 @pytest.mark.parametrize(
     "answer, expected",
     [
@@ -229,7 +233,52 @@ REPORTED_ANSWER = (
     ],
 )
 def test_stray_no_data_after_a_cited_answer_is_dropped(answer, expected):
-    assert drop_stray_no_data(answer, "立式軸承座") == expected
+    assert drop_stray_no_data(answer, "立式軸承座", BARE) == expected
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "立式軸承座",
+        " 立式軸承座。\n",  # 空白、標點不影響
+        "立式軸承座？",
+        "pillow block housing",  # 英文名稱，大小寫不論
+        "pbk-6006",
+        "ＰＢＫ－６００６",  # 全形
+        "D-24-0618",
+        DEFAULT_Q,
+        "這張圖紙的重點是什麼",
+    ],
+)
+def test_stray_no_data_is_dropped_only_for_a_bare_reference(question):
+    answer = "材料為 FC250 [1]。知識庫中沒有這方面的資料。"
+    assert drop_stray_no_data(answer, question, BARE) == "材料為 FC250 [1]。"
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "",
+        "立式軸承座的材料",
+        "立式軸承座用什麼材料？",
+        "立式軸承座 包裝",  # 名稱後面接了別的字
+        "立式軸承座立式軸承座",
+        "PBK-6006 D-24-0618",
+        "這張圖紙的重點和包裝是什麼？",
+        "請介紹這幅畫",  # 別的領域的預設問句不是這張圖紙的
+    ],
+)
+def test_stray_no_data_is_kept_for_anything_that_asks_something(question):
+    """只要問題不是純粹指名這張圖紙或預設概覽問句，就無法確定拒答句是多餘的：原樣保留。"""
+    answer = "材料為 FC250 [1]。知識庫中沒有這方面的資料。"
+    assert drop_stray_no_data(answer, question, BARE) == answer
+
+
+def test_stray_no_data_is_never_dropped_without_a_confirmed_reference():
+    """呼叫端沒有給可確認的指名（預設）：什麼問題都不拿掉。"""
+    answer = "材料為 FC250 [1]。知識庫中沒有這方面的資料。"
+    assert drop_stray_no_data(answer, "立式軸承座") == answer
+    assert drop_stray_no_data(answer, DEFAULT_Q) == answer
 
 
 @pytest.mark.parametrize(
@@ -251,7 +300,7 @@ def test_stray_no_data_after_a_cited_answer_is_dropped(answer, expected):
     ],
 )
 def test_real_no_data_answers_are_kept(answer):
-    assert drop_stray_no_data(answer, "立式軸承座") == answer
+    assert drop_stray_no_data(answer, "立式軸承座", BARE) == answer
 
 
 @pytest.mark.parametrize(
@@ -261,7 +310,24 @@ def test_real_no_data_answers_are_kept(answer):
 def test_no_data_is_kept_when_the_question_asks_several_things(question):
     """問了好幾件事：結尾的通用拒答句可能在說其中一件沒資料，不確定就保留。"""
     answer = "材料為 FC250 [1]。知識庫中沒有這方面的資料。"
-    assert drop_stray_no_data(answer, question) == answer
+    assert drop_stray_no_data(answer, question, BARE) == answer
+
+
+# codex-review fcef1f9 F1：第二個問題省略句尾問號（沒有連接詞、換行、兩個問號），
+# 不能因為「沒命中多問句清單」就推定只問一件事
+UNMARKED_QUESTIONS = [
+    "立式軸承座用什麼材料？包裝方式呢",
+    "立式軸承座用什麼材料?包裝方式呢",
+    "立式軸承座用什麼材料？ 包裝方式呢",
+    "立式軸承座材料是什麼 包裝呢",
+    "材料 包裝",
+]
+
+
+@pytest.mark.parametrize("question", UNMARKED_QUESTIONS)
+def test_no_data_is_kept_when_the_second_question_has_no_question_mark(question):
+    answer = "材料為 FC250 灰口鑄鐵 [1]。\n知識庫中沒有這方面的資料。"
+    assert drop_stray_no_data(answer, question, BARE) == answer
 
 
 # codex-review a53604d F1：分行問兩件事（兩個問號不在同一行）
@@ -278,7 +344,7 @@ MULTILINE_ANSWERS = [
 @pytest.mark.parametrize("question", MULTILINE_QUESTIONS)
 @pytest.mark.parametrize("answer", MULTILINE_ANSWERS)
 def test_no_data_is_kept_for_questions_on_several_lines(question, answer):
-    assert drop_stray_no_data(answer, question) == answer
+    assert drop_stray_no_data(answer, question, BARE) == answer
 
 
 @pytest.mark.parametrize(
@@ -290,16 +356,17 @@ def test_no_data_is_kept_for_questions_on_several_lines(question, answer):
     ],
 )
 def test_no_data_under_a_sub_heading_is_kept(answer):
-    """前一行是子標題：拒答句在回答那個標題，就算問題只問一件事也保留。"""
-    assert drop_stray_no_data(answer, "立式軸承座") == answer
+    """前一行是子標題：拒答句在回答那個標題，就算問題只是指名這張圖紙也保留。"""
+    assert drop_stray_no_data(answer, "立式軸承座", BARE) == answer
 
 
 def test_two_questions_on_one_line_or_across_lines_are_treated_alike():
     answer = MULTILINE_ANSWERS[0]
     one_line = MULTILINE_QUESTIONS[0].replace("\n", "")
-    assert drop_stray_no_data(answer, one_line) == answer
-    # 對照：只問一件事時照舊拿掉結尾套話
-    assert drop_stray_no_data(answer, "立式軸承座用什麼材料？") == "材料為 FC250 灰口鑄鐵 [1]。"
+    assert drop_stray_no_data(answer, one_line, BARE) == answer
+    assert drop_stray_no_data(answer, MULTILINE_QUESTIONS[0], BARE) == answer
+    # 對照：問題只是指名這張圖紙時照舊拿掉結尾套話
+    assert drop_stray_no_data(answer, "立式軸承座", BARE) == "材料為 FC250 灰口鑄鐵 [1]。"
 
 
 class _Reply(providers.MockProvider):
@@ -312,17 +379,19 @@ class _Reply(providers.MockProvider):
             yield piece
 
 
+@pytest.mark.parametrize("question", ["立式軸承座", "PBK-6006", "D-24-0618", DEFAULT_Q])
 @pytest.mark.parametrize("reply", [REPORTED_ANSWER, NO_DATA])
 def test_found_drawing_answer_does_not_end_with_no_data(
-    client, realistic_retrieval, monkeypatch, reply
+    client, realistic_retrieval, monkeypatch, reply, question
 ):
     """修正前：照片＋「立式軸承座」找到 mfg-006、三句都引用段落，
     最後一句卻是「知識庫中沒有這方面的資料。」。
-    答完才補的那句不送出、第 7 段註明拿掉了；整段都答不出來時照舊回拒答句。"""
+    問題只是指名這張圖紙（名稱、料號、圖號）或預設概覽問句時，答完才補的那句不送出、
+    第 7 段註明拿掉了；整段都答不出來時照舊回拒答句。"""
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
     c = client_as("planner")
-    res = c.post("/api/v1/chat", json={"question": "立式軸承座", "part_id": "mfg-006"})
+    res = c.post("/api/v1/chat", json={"question": question, "part_id": "mfg-006"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
     done = next(x for e, x in events if e == "done")
@@ -362,12 +431,13 @@ def test_partly_answerable_question_keeps_the_no_data_part(
     assert text == reply and "拿掉" not in stage7["detail"]
 
 
-@pytest.mark.parametrize("question", MULTILINE_QUESTIONS)
+@pytest.mark.parametrize("question", [*MULTILINE_QUESTIONS, *UNMARKED_QUESTIONS])
 @pytest.mark.parametrize("reply", MULTILINE_ANSWERS)
 def test_question_on_several_lines_keeps_the_no_data_part(
     client, realistic_retrieval, monkeypatch, question, reply
 ):
     """codex-review a53604d F1：分行問材料與包裝方式（LF、CRLF），
+    codex-review fcef1f9 F1：第二個問題省略句尾問號（全形、半形、空白隔開、沒有任何標點）；
     包裝方式沒資料的說明要原樣送出。"""
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
@@ -407,7 +477,7 @@ def test_answer_changed_after_the_output_check_is_checked_again(
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
     # 模擬後處理產生了未授權料號：檢查必須看送出的那一版
     monkeypatch.setattr(
-        chat_service, "drop_stray_no_data", lambda answer, question: "PBK-6006 [1]。"
+        chat_service, "drop_stray_no_data", lambda answer, question, bare=(): "PBK-6006 [1]。"
     )
     c = client_as("sales_a")
     res = c.post("/api/v1/chat", json={"question": "步進馬達安裝板的材料？", "part_id": "mfg-004"})

@@ -5,6 +5,8 @@
 """
 
 import re
+import unicodedata
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,9 +18,8 @@ _TRAILING_NO_DATA_RE = re.compile(
     r"(?:^|(?<=[\n。！？!?]))[ \t]*知識庫中沒有這方面的資料[。.]?(?:[ \t]*\[\d+\])*\s*\Z"
 )
 _CITED_RE = re.compile(r"\[(?:[1-9]\d*|畫面)\]")
-# 問題同時問了好幾件事：通用拒答句可能是在說其中一件沒資料，不能確定是多餘的。
-# 換行也算（分行問兩件事；CRLF 同樣有 \n）；問號另外數整段（不看換行）
-_MULTI_ASK_RE = re.compile(r"[和與及跟、，,；;／/\r\n]|以及|還有|或是|或者|並且|分別|各自")
+# 比對「問題是不是純粹指名這份文件」時忽略的空白與標點（兩邊都先 NFKC，全形標點已轉半形）
+_IGNORED_RE = re.compile(r"[\s,.?!:;、。，．？！：；「」『』〈〉《》()（）]+")
 # 拿掉拒答句後，前面那段要以句號／問號／驚嘆號或引用結尾；結尾是「包裝方式：」這類子標題時，
 # 拒答句是在回答那個標題
 _ENDS_SENTENCE_RE = re.compile(r"(?:[。！？!?.]|\[(?:\d+|畫面)\])\Z")
@@ -64,16 +65,26 @@ def to_taiwan(text: str) -> str:
     return "".join(ch if ch in keep else conv.convert(ch) for ch in text)
 
 
-def drop_stray_no_data(answer: str, question: str = "") -> str:
+def _squash(text: str) -> str:
+    return _IGNORED_RE.sub("", unicodedata.normalize("NFKC", text)).casefold()
+
+
+def drop_stray_no_data(answer: str, question: str = "", bare: Iterable[str] = ()) -> str:
     """已經引用資料回答了，又在最後補一句獨立的「知識庫中沒有這方面的資料。」：拿掉那句。
     小模型常把 prompt 第 3 條當成結尾套話（TASK-20261010-001：附 mfg-006 截圖問「立式軸承座」，
     三句都引用段落，最後一句卻說知識庫沒有資料）。
 
-    不能確定是多餘套話時整段保留：沒有任何引用（真的答不出來）、不在最後或接在句中
-    （「包裝方式：…」「由於…，因此…」、引號內）、前一行是子標題（「包裝方式：」換行再接拒答句）、
-    問題同時問了好幾件事（連接詞、分行或兩個以上問號；可能在說其中一件沒資料）。
+    只在確認問題沒有任何具體要問的事時才拿：question 必須是 bare 其中之一（呼叫端給的「純粹指名這份
+    文件」的字串：名稱、料號、圖號，或只附照片時的預設概覽問句；忽略空白、標點、大小寫與全半形）。
+    問題裡多了任何字（另一個問題、省略問號的第二問句…）就無法證明拒答句是多餘的，整段保留；
+    bare 預設是空的，所以沒有可確認的指名時永遠不拿。
+    即使問題是純粹指名，這些情況也保留：沒有任何引用（真的答不出來）、不在最後或接在句中
+    （「包裝方式：…」「由於…，因此…」、引號內）、前一行是子標題（「包裝方式：」換行再接拒答句）。
     只截掉結尾、不拼接前後片段，拿掉後前面那段原樣不動。"""
-    if NO_DATA[:-1] not in answer or _asks_several(question):
+    if NO_DATA[:-1] not in answer:
+        return answer
+    asked = _squash(question)
+    if not asked or asked not in {_squash(b) for b in bare}:
         return answer
     m = _TRAILING_NO_DATA_RE.search(answer)
     if not m:
@@ -82,8 +93,3 @@ def drop_stray_no_data(answer: str, question: str = "") -> str:
     if not _CITED_RE.search(rest) or not _ENDS_SENTENCE_RE.search(rest):
         return answer
     return rest
-
-
-def _asks_several(question: str) -> bool:
-    q = question.strip()
-    return bool(_MULTI_ASK_RE.search(q)) or q.count("？") + q.count("?") >= 2
