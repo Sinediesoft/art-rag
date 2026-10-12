@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from PIL import Image, UnidentifiedImageError
 from starlette.concurrency import run_in_threadpool
 
 from app.agent import guard, jev
@@ -60,7 +61,11 @@ async def upload_image(file: UploadFile = File(...)):
     raw = await file.read()
     if len(raw) > s.upload_max_mb * 1024 * 1024:
         raise AppError("IMAGE_TOO_LARGE", f"圖片超過 {s.upload_max_mb} MB", 413)
-    img = load_image(raw)  # EXIF 轉正、縮圖；重新編碼後不留 EXIF／GPS
+    try:
+        img = load_image(raw)  # EXIF 轉正、縮圖；重新編碼後不留 EXIF／GPS
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as e:
+        # 宣稱是圖片但讀不出來：回 415，不讓 PIL 的例外（含記憶體位址）變成 500 回給使用者
+        raise AppError("IMAGE_TYPE_NOT_ALLOWED", "讀不出這張圖片，只收 JPEG、PNG、WebP", 415) from e
     image_id = "img_" + uuid.uuid4().hex[:16]
     s.uploads_dir.mkdir(parents=True, exist_ok=True)
     (s.uploads_dir / f"{image_id}.jpg").write_bytes(to_jpeg_bytes(img))

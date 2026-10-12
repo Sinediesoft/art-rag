@@ -52,9 +52,11 @@ def encode(claims: dict, secret: str) -> str:
 def peek(token: str) -> dict:
     """不驗簽章、只解出 payload（給前端示範竄改憑證、與錯誤訊息用）。"""
     try:
-        return json.loads(_b64d(token.split(".")[1]))
+        claims = json.loads(_b64d(token.split(".")[1]))
     except (IndexError, ValueError):
         return {}
+    # 合法 JSON 但不是物件（例如陣列）時，呼叫端的 .get 會丟例外變成 500
+    return claims if isinstance(claims, dict) else {}
 
 
 def decode(token: str, secret: str, issuer: str, now: float | None = None) -> dict:
@@ -67,6 +69,9 @@ def decode(token: str, secret: str, issuer: str, now: float | None = None) -> di
         claims = json.loads(_b64d(body))
     except ValueError as e:
         raise TokenError("TOKEN_INVALID", "身分憑證無法解析") from e
+    # 合法 JSON 但不是物件（例如 W10＝[]）時，下面的 .get 會丟 AttributeError 變成 500
+    if not isinstance(header, dict) or not isinstance(claims, dict):
+        raise TokenError("TOKEN_INVALID", "身分憑證無法解析")
     if header.get("alg") != ALG:
         raise TokenError("TOKEN_INVALID", f"不接受的簽章演算法：{header.get('alg')}（只收 {ALG}）")
     if header.get("kid") != key_id(secret):

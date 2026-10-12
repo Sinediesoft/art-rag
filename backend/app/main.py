@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.agent import guard, local_router
 from app.analysis import style
@@ -19,6 +20,7 @@ from app.core.errors import (
     AppError,
     app_error_handler,
     error_body,
+    http_error_handler,
     unhandled_error_handler,
     validation_error_handler,
 )
@@ -92,8 +94,13 @@ app = FastAPI(
         "SSE 事件見 shared/sse_events.md。"
     ),
     lifespan=lifespan,
+    # 完整的 API 清單只在展示模式提供；正式環境（DEMO_CONTROLS=false）不公開 /docs 與 /openapi.json
+    docs_url="/docs" if get_settings().demo_controls else None,
+    redoc_url="/redoc" if get_settings().demo_controls else None,
+    openapi_url="/openapi.json" if get_settings().demo_controls else None,
 )
 app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
@@ -152,6 +159,9 @@ if _dist.is_dir():
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
         # 先解析成絕對路徑再確認仍在 dist/ 底下：擋掉 /%2e%2e/%2e%2e/.env 這類路徑穿越
+        if path == "api" or path.startswith("api/"):
+            # 不存在的 API 回 JSON 的 404，不要回前端頁面（200）讓呼叫端誤以為成功
+            raise AppError("NOT_FOUND", "沒有這個 API", 404)
         file = (_dist_root / path).resolve()
         if path and file.is_relative_to(_dist_root) and file.is_file():
             return FileResponse(file)

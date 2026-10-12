@@ -57,4 +57,7 @@
 | `FORBIDDEN` | 403 | 展示模式沒開或不是受信任來源的請求（`DEMO_CONTROLS=false`（預設），或請求不是來自 `DEMO_TRUSTED_HOSTS` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`；ADR 030）；或 `/chat` 帶 `inject` 但未同時開啟 `EVAL_INJECTION=true`、`EVAL_CONTROLS=true` 且來自受信任來源（干擾段落注入只給評估用，ADR 019） |
 | `COMPARE_KIND_MISMATCH` | 422 | 兩件並排比較（`/compare/items`、`/compare/summary`）的兩件不同類：一幅畫和一張圖紙（docs/adr/017） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
-| `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |
+| `INTERNAL_ERROR` | 500 | 其他未預期錯誤；訊息固定為「伺服器內部錯誤」，例外內容只寫伺服器 log（用 `request_id` 對照） |
+| `NOT_FOUND` | 404 | 沒有這個 API（`/api/...` 底下不存在的路徑） |
+| `METHOD_NOT_ALLOWED` | 405 | 這個 API 不接受這種 HTTP 方法 |
+| `HTTP_ERROR` | 其他 4xx | 框架層的其他 HTTP 錯誤 |
