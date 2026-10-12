@@ -170,7 +170,8 @@ def score_distractor(q: dict, res: dict) -> dict:
 def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     ans = res["answer"]
     if q.get("expect_refusal"):
-        ok = "沒有" in ans and not re.search(r"\d{3,}", ans)
+        # 「查無資料」是第 6 段生成閘門的降級回應（docs/adr/030），也算拒答
+        ok = ("沒有" in ans or "查無資料" in ans) and not re.search(r"\d{3,}", ans)
         return ok, ok
     answer_ok = all(any(k in ans for k in group) for group in q["keywords"])
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)} - {0}
