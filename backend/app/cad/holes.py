@@ -30,9 +30,11 @@ NORMAL_EPS = 1e-6  # 草圖法向量的 X、Y 分量比 Z 小這麼多才算垂�
 GEOM_EPS = 1e-6  # 草圖線圈的包含關係：圓要比外圈小這麼多才算在裡面（相切、壓邊都不算）
 FOOTPRINT = 0.98  # 看孔位有沒有材料時的半徑比例：略小一點，避免和模型既有孔壁剛好重合
 EMPTY = 0.05  # 孔的範圍裡材料體積比這個比例還少，就當作沒有材料（已經鑽好的孔，孔徑差 4.5% 以內）
-RISE = (
-    1e-4  # 切孔範圍裡材料比例下降之後，又比最低點多出這麼多（比例，不是百分比）就是碰到下一段材料
+DEPTH_TOL = (
+    0.02  # 第一塊材料的底部和圖紙孔底差多少算對得上：最大外形尺寸的比例（點線一個點距約 1.5%）
 )
+BLOCK_EPS = 1e-9  # 孔徑圓柱和實體的交集裡，體積比圓柱還小這麼多的碎片當作數值雜訊
+OTHER_EPS = 1e-8  # 切除範圍碰到第一塊以外的材料，體積超過切除圓柱的這個比例就不校正
 ARC_STEPS = 48  # 外圈的圓弧取樣成幾段折線來判斷包含關係
 
 
@@ -521,52 +523,22 @@ def _solid_fraction(shape, cylinder) -> float:
     return shape.intersect(cylinder).Volume() / cylinder.Volume()
 
 
-def _fraction_profile(shape, x: float, y: float, r: float, z_lo: float, z_hi: float):
-    """切孔範圍 z_lo…z_hi 內，整個孔徑（半徑 r）每一段的材料體積比例，由上到下：[(上, 下, 比例)]。
+def _bore_blocks(shape, x: float, y: float, r: float, bb):
+    """孔徑圓柱（半徑 r、整個高度）和實體求交，拆成互不相連的材料塊：[(塊, zmin, zmax)]。
 
-    把孔徑圓柱和實體求交，在交集的頂點高度（凸起、肋、柱子的頂面與底面都會有頂點）切成一段
-    一段，每一段量整個橫截面的材料體積比例；不取樣，小到幾乎看不見的凸起也會讓那一段的比例變大。
+    連通是幾何上的：兩塊材料只要在孔徑內有任何地方相連（粗柱、細立壁、肋、曲面上的薄壁），
+    就是同一塊；不靠材料比例，也不靠取樣。體積小到只是數值雜訊的碎片不算。
     """
     import cadquery as cq
 
-    up = cq.Vector(0, 0, 1)
-    column = cq.Solid.makeCylinder(r, z_hi - z_lo, cq.Vector(x, y, z_lo), up)
-    levels = {z_lo, z_hi}
-    levels.update(v.Z for v in shape.intersect(column).Vertices() if z_lo < v.Z < z_hi)
-    zs = sorted(levels, reverse=True)
-    profile = []
-    for upper, lower in zip(zs, zs[1:], strict=False):
-        if upper - lower < 1e-9 * max(abs(z_hi), abs(z_lo), 1.0):
-            continue
-        slab = cq.Solid.makeCylinder(r, upper - lower, cq.Vector(x, y, lower), up)
-        profile.append((upper, lower, _solid_fraction(shape, slab)))
-    return profile
-
-
-def _next_material(profile) -> float | None:
-    """材料比例『下降後又回升』＝碰到下一段材料：回升那一段的上緣 z；沒有回 None。
-
-    從第一段有材料的地方往下看。比例單調下降（包含一路降到 0，例如孔通到橫孔的曲面穿通，
-    或下面是空的）不算；進到材料之前的上升（空氣 → 材料、倒角）也不算。比例降下去之後，
-    只要某一段又比最低點多出 RISE，不論降了多少（柱子連著上下兩層時只降一點點），都算。
-    """
-    previous = None  # 上一段的比例；None＝還沒進到材料
-    trough = None  # 下降之後的最低比例；None＝還沒下降
-    for upper, _lower, fraction in profile:
-        if previous is None:
-            if fraction > RISE:
-                previous = fraction
-            continue
-        if trough is None:
-            if fraction < previous - RISE:
-                trough = fraction
-            else:
-                previous = fraction
-        elif fraction > trough + RISE:
-            return upper
-        else:
-            trough = min(trough, fraction)
-    return None
+    column = cq.Solid.makeCylinder(r, bb.zlen + 2, cq.Vector(x, y, bb.zmin - 1), cq.Vector(0, 0, 1))
+    noise = BLOCK_EPS * column.Volume()
+    blocks = []
+    for solid in shape.intersect(column).Solids():
+        if solid.Volume() > noise:
+            box = solid.BoundingBox()
+            blocks.append((solid, box.zmin, box.zmax))
+    return sorted(blocks, key=lambda b: -b[2])
 
 
 def apply_holes(shape, holes: list[dict], dims: dict):
@@ -575,12 +547,13 @@ def apply_holes(shape, holes: list[dict], dims: dict):
     座標依外形比例換算：圖紙上的 x／寬度＝模型上的 x／模型寬度（y、z 同理），
     所以模型外形略有誤差時，孔仍落在對應的位置（例如仍在底座凸緣的中間）。
 
-    從上方鑽穿第一段材料，用整個孔徑的體積驗證，不靠取樣：
+    從上方鑽穿第一段材料，用整個孔徑的連通塊判斷（2026-10-12 人類負責人的決定）：
     - 孔的範圍（圖紙孔深去掉兩端 3% 容差）裡沒有材料＝模型已經鑽好這個孔，不切。
-    - 否則沿孔由上往下量切除範圍（含深度容差）內整個孔徑的材料體積比例；比例下降之後又回升
-      （例如 1 → 0 → 1 的兩板之間、1 → 0.82 → 1 的柱子連著兩板）就是碰到下一段材料，
-      整個 3D 重建都不校正，維持模型輸出並寫明原因。比例一路單調下降（包含降到 0，
-      例如孔通到橫孔的曲面穿通）才切。
+    - 否則把孔徑圓柱和實體求交，拆成互不相連的材料塊（_bore_blocks），只切從頂面往下連通的
+      第一塊。第一塊的底部和圖紙孔底對不上（差超過容差），或切除範圍碰到第一塊以外的材料，
+      整個 3D 重建都不校正，維持模型輸出並寫明原因。切孔下緣是第一塊的底部再多一點點，
+      所以兩板之間的空隙再小，下板也不會被碰到；粗柱、水平通孔、球形腔把上下材料連成一塊，
+      第一塊一路到底，和圖紙孔深對不上，不校正；真正的盲孔也一樣（接受）。
     """
     import cadquery as cq
 
@@ -624,19 +597,28 @@ def apply_holes(shape, holes: list[dict], dims: dict):
         if core_hi <= core_lo or _solid_fraction(shape, core) <= EMPTY:
             placed += 1
             continue
-        z_lo, z_hi = max(lo, bb.zmin), min(hi, bb.zmax)  # 切除範圍裡有模型的部分
-        if z_hi - z_lo <= tol:
+        blocks = _bore_blocks(shape, x, y, r, bb)
+        if not blocks:
             why.append("孔的深度範圍沒有碰到材料")
             continue
-        z_next = _next_material(_fraction_profile(shape, x, y, r, z_lo, z_hi))
-        if z_next is not None:
+        first, first_lo, first_hi = blocks[0]  # 從頂面往下連通的第一塊
+        depth_tol = max(margin, DEPTH_TOL * max(bb.xlen, bb.ylen, bb.zlen))
+        if abs(first_lo - bottom) > depth_tol:
             return (
                 shape,
                 0,
-                f"孔的深度範圍（含容差）碰到下一段材料（z≈{z_next:.1f} mm，材料比例下降後又回升），"
-                "孔位維持模型輸出",
+                f"孔徑內從頂面往下連通的第一塊材料，底部（z≈{first_lo:.1f} mm）和圖紙孔底"
+                f"（z≈{bottom:.1f} mm）對不上（連著下一段材料，或圖紙是盲孔），孔位維持模型輸出",
             )
-        cuts.append(cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up))
+        tiny = 1e-4 * bb.zlen
+        lo, hi = first_lo - tiny, max(hi, first_hi + tiny)  # 只切第一塊：下緣停在它的底部
+        cut = cq.Solid.makeCylinder(r, hi - lo, cq.Vector(x, y, lo), up)
+        touched = sum(
+            other.intersect(cut).Volume() for other, _, other_hi in blocks[1:] if other_hi > lo
+        )
+        if touched > OTHER_EPS * cut.Volume():
+            return shape, 0, "切除範圍碰到第一塊以外的下一段材料，孔位維持模型輸出"
+        cuts.append(cut)
     if not cuts and not placed:
         return shape, 0, f"{why[0] if why else '孔位落在模型外'}，孔位維持模型輸出"
     for cyl in cuts:

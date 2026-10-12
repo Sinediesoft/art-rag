@@ -518,35 +518,41 @@ def assert_untouched(out, applied, reason, shape, *, why=None):
     assert out.Volume() == pytest.approx(shape.Volume(), rel=1e-12)
 
 
-def test_apply_holes_corrects_a_hole_when_the_next_plate_is_outside_the_cut_range():
-    """上板中心的貫穿孔，下板在 3 mm 空隙之下（3% 容差只有 1.5 mm，碰不到）：切穿上板，
-    下板完整。"""
+@pytest.mark.parametrize("gap", [3.0, 1.0, 0.2])
+def test_apply_holes_drills_only_the_first_plate(gap):
+    """上板＋空隙＋下板：孔徑圓柱和實體求交，上板是從頂面往下連通的第一塊，底部和圖紙孔深對得上。
+    切孔停在上板下緣，不論空隙多小，下板都完整。"""
     from app.cad.holes import apply_holes
 
-    shape, plan = stacked_plates(3.0)
+    shape, plan = stacked_plates(gap)
     out, applied, reason = apply_holes(shape, plan, DIMS_50)
     assert (applied, reason) == (1, None)
     assert not inside(out, 0, 0, 45) and not inside(out, 0, 0, 40.3)  # 上板鑽穿到下緣
-    assert inside(out, 0, 0, 36.9) and inside(out, 0, 0, 30)  # 空隙下面的下板沒被碰
+    for z in (30 - gap + 0.5, 39.9 - gap):
+        assert inside(out, 0, 0, z) and inside(out, 2.9, 0, z)  # 空隙下面的下板完整
     assert out.Volume() == pytest.approx(shape.Volume() - math.pi * 3**2 * 10, rel=2e-3)
 
 
-def test_apply_holes_skips_when_the_next_plate_is_inside_the_cut_range():
-    """下板只在 1 mm 空隙之下，切孔範圍（含 3% 容差）會碰到它：沿孔由上往下量材料比例
-    1 → 0 → 1（下降後回升）＝碰到下一段材料，不校正，維持模型原樣並說明原因。"""
+def test_apply_holes_drills_only_the_first_of_three_plates():
     from app.cad.holes import apply_holes
 
-    shape, plan = stacked_plates(1.0)
-    out, applied, reason = apply_holes(shape, plan, DIMS_50)
-    assert_untouched(out, applied, reason, shape, why="下一段材料")
+    base = box(-30, -20, 40, 60, 40, 10).union(box(-30, -20, 28, 60, 40, 10))
+    base = base.union(box(-30, -20, 16, 60, 40, 10)).union(box(-30, -20, 0, 5, 40, 50))
+    plan = detected_plan("three", base)
+    out, applied, reason = apply_holes(base.val(), plan, DIMS_50)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 45)
+    assert inside(out, 0, 0, 37.5) and inside(out, 0, 0, 33) and inside(out, 0, 0, 21)
 
 
 @pytest.mark.parametrize("gap", [1.0, 0.2])
-def test_apply_holes_skips_when_the_drawn_hole_runs_into_the_next_plate(gap):
-    """圖紙孔底比上板下緣低、已經在下板裡：圖紙的孔深本身就碰到下一段材料，不校正。"""
+def test_apply_holes_skips_when_the_first_block_ends_away_from_the_drawn_depth(gap):
+    """圖紙孔底已經在下板裡（比上板下緣低），第一塊的底部和圖紙孔深差超過容差：不校正，
+    維持模型原樣並說明原因。"""
     from app.cad.holes import apply_holes
 
-    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 40 - gap - 25 - 1.0, "z1": 25.0}]
+    depth = 5.0  # 圖紙孔底在上板下緣之下 5 mm
+    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 40 - depth - 25, "z1": 25.0}]
     shape, _ = stacked_plates(gap)
     out, applied, reason = apply_holes(shape, plan, DIMS_50)
     assert_untouched(out, applied, reason, shape, why="下一段材料")
@@ -555,12 +561,11 @@ def test_apply_holes_skips_when_the_drawn_hole_runs_into_the_next_plate(gap):
 @pytest.mark.parametrize(
     ("gap", "existing_r", "cut"),
     [(3.0, 1.0, True), (3.0, 2.9, False), (3.0, 3.0, False), (3.0, 4.0, False)]
-    + [(1.0, 1.0, None), (1.0, 2.9, False), (1.0, 3.0, False), (1.0, 4.0, False)],
+    + [(1.0, 1.0, True), (1.0, 2.9, False), (1.0, 3.0, False), (1.0, 4.0, False)],
 )
 def test_apply_holes_existing_upper_hole_never_moves_cut_to_second_plate(gap, existing_r, cut):
-    """上板已經有孔（比圖紙小、差不多、剛好、比圖紙大）：孔軸上只剩下板的材料，
-    不能把下板當成要鑽的第一段材料。空隙大於容差：小孔擴到圖紙孔徑；其餘已經鑽好，不切。
-    空隙小於容差、小孔要擴孔時，切孔範圍會碰到下板：不校正。"""
+    """上板已經有孔（比圖紙小、差不多、剛好、比圖紙大）：比圖紙小的孔擴到圖紙孔徑，其餘已經
+    鑽好，不切；不論哪一種，下板都完整。"""
     import cadquery as cq
 
     from app.cad.holes import apply_holes
@@ -570,38 +575,29 @@ def test_apply_holes_existing_upper_hole_never_moves_cut_to_second_plate(gap, ex
         cq.Solid.makeCylinder(existing_r, 10, cq.Vector(0, 0, 40), cq.Vector(0, 0, 1))
     )
     out, applied, reason = apply_holes(drilled, plan, DIMS_50)
+    assert (applied, reason) == (1, None)
     lower = cq.Solid.makeBox(60, 40, 10, cq.Vector(-30, -20, 30 - gap))
     assert out.intersect(lower).Volume() == pytest.approx(drilled.intersect(lower).Volume())
-    if cut is None:
-        assert_untouched(out, applied, reason, drilled, why="下一段材料")
-        return
-    assert (applied, reason) == (1, None)
     assert not inside(out, 2.5, 0, 45)  # 上板的孔到圖紙的孔徑（比圖紙大的孔不會縮小）
     if not cut:
         assert out.Volume() == pytest.approx(drilled.Volume(), rel=1e-9)
 
 
 @pytest.mark.parametrize("gap", [3.0, 1.0])
-def test_apply_holes_web_beside_axis_never_touches_the_lower_plate(gap):
-    """孔邊有一根細立壁把兩板連成同一個實體。空隙大於容差：切穿上板（連立壁一起切），
-    下板完整；空隙小於容差：切孔範圍會碰到下板，不校正。"""
+def test_apply_holes_skips_when_a_web_connects_the_plates_inside_the_bore(gap):
+    """孔徑內一根細立壁把兩板連成同一塊：從頂面往下連通的第一塊一路到下板底，和圖紙孔深對不上：
+    不校正，維持模型原樣並說明原因。"""
     from app.cad.holes import apply_holes
 
     shape, plan = stacked_plates(gap, web=True)
     out, applied, reason = apply_holes(shape, plan, DIMS_50)
-    if gap < 1.5:
-        assert_untouched(out, applied, reason, shape, why="下一段材料")
-        return
-    assert (applied, reason) == (1, None)
-    assert not inside(out, 0, 0, 45) and not inside(out, 1.5, 0, 45)
-    for point in ((0, 0, 36.9), (0, 0, 30), (-1.5, 1.0, 36.9), (2.25, 0, 35)):
-        assert inside(out, *point), point  # 下板與下板上的立壁段都在
+    assert_untouched(out, applied, reason, shape, why="下一段材料")
 
 
 @pytest.mark.parametrize("size", [3.0, 4.0, 4.8, 5.4])
 def test_apply_holes_skips_when_a_dense_pillar_bridges_the_plates(size):
-    """兩板之間一根方柱佔孔徑的三成到九成多（邊長 3～5.4 mm）：材料比例 1 → 0.3…0.95 → 1。
-    不論比例降了多少，只要下降後回升就是碰到下一段材料：不校正，下板孔側一點都不能少。"""
+    """兩板之間一根方柱佔孔徑的三成到九成多（邊長 3～5.4 mm，4.8 mm 約 82% 是審查的重現）：
+    柱子把兩板連成同一塊，不論佔多少比例都不校正，下板孔側一點都不能少。"""
     from app.cad.holes import apply_holes
 
     shape, plan = stacked_plates(1.0, pillar=size)
@@ -610,19 +606,43 @@ def test_apply_holes_skips_when_a_dense_pillar_bridges_the_plates(size):
     assert inside(out, 2.8, 0, 38.75)  # 孔側的下板
 
 
-def test_apply_holes_skips_when_a_cavity_splits_the_layer():
-    """第一層材料裡有一道橫向的槽（材料比例 1 → 0.67 → 1）：下降後回升，分不出槽下面
-    是同一層還是下一段材料，不校正。"""
+@pytest.mark.parametrize("kind", ["horizontal-hole", "sphere"])
+def test_apply_holes_skips_when_a_cavity_leaves_the_block_connected(kind):
+    """孔徑內有水平通孔（Ø4，中心 z＝39）或球形腔（半徑 2，中心 z＝39），材料比例在曲面上先降後升
+    （審查 0219543 的重現）：孔徑圓柱和實體的交集仍連成一塊，一路到底面，和圖紙孔深（10 mm 深）
+    對不上：不校正，體積與腔下方重新出現的材料都不變。"""
+    import cadquery as cq
+
+    from app.cad.drawing import render_ortho
+    from app.cad.holes import apply_holes
+
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    block = cq.Workplane("XY").box(60, 40, 50, centered=(True, True, False)).val()
+    reference = block.cut(cq.Solid.makeCylinder(3, 10, cq.Vector(0, 0, 40), cq.Vector(0, 0, 1)))
+    plan = detect_holes(render_ortho(reference), dims)
+    assert len(plan) == 1, plan
+    if kind == "horizontal-hole":
+        cavity = cq.Solid.makeCylinder(2, 60, cq.Vector(0, -30, 39), cq.Vector(0, 1, 0))
+    else:
+        cavity = cq.Solid.makeSphere(2, cq.Vector(0, 0, 39))
+    shape = block.cut(cavity)
+    out, applied, reason = apply_holes(shape, plan, dims)
+    assert_untouched(out, applied, reason, shape, why="下一段材料")
+    assert inside(shape, 1.99, 0, 38.661) and inside(out, 1.99, 0, 38.661)  # 腔下方重新出現的材料
+
+
+def test_apply_holes_skips_a_true_blind_hole():
+    """真正的盲孔：圖紙只有 10 mm 深的孔，模型是實心塊體一路到底。第一塊的底部（底面）和圖紙孔深
+    對不上，不校正（人類接受）。"""
     import cadquery as cq
 
     from app.cad.holes import apply_holes
 
-    block = cq.Workplane("XY").box(60, 40, 40, centered=(True, True, False)).val()
-    slot = cq.Solid.makeBox(60, 2, 3, cq.Vector(-30, -1, 20))
-    shape = block.cut(slot)
-    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": -15.0, "z1": 20.0}]
-    out, applied, reason = apply_holes(shape, plan, {"width": 60.0, "depth": 40.0, "height": 40.0})
-    assert_untouched(out, applied, reason, shape, why="下一段材料")
+    dims = {"width": 60.0, "depth": 40.0, "height": 50.0}
+    block = cq.Workplane("XY").box(60, 40, 50, centered=(True, True, False)).val()
+    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 15.0, "z1": 25.0}]
+    out, applied, reason = apply_holes(block, plan, dims)
+    assert_untouched(out, applied, reason, block, why="下一段材料")
 
 
 _LOWER = {"base_top": 29.0}
@@ -630,17 +650,15 @@ _LOWER = {"base_top": 29.0}
 
 def layered_model(*pads):
     """上板 z＝40…50（60×40）、下層基座 z＝0…29，遠處立壁相連；pads 是下層上的凸起／肋
-    (x, y, w, d, 頂面 z)，從 z＝29 長到頂面，頂面都低於上板下緣 40（中間隔著空隙）。
-    回 (實體, 圖紙孔位, 外形, 切孔下限)：圖紙孔位是參考模型（只在上板鑽中心 Ø6 孔）真實渲染、
-    偵測的結果；切孔下限＝孔底減 3% 容差，凸起頂面高過它就在切孔範圍內。"""
+    (x, y, w, d, 頂面 z)，從 z＝29 長到頂面。回 (實體, 圖紙孔位, 外形)：圖紙孔位是參考模型
+    （只在上板鑽中心 Ø6 孔）真實渲染、偵測的結果。"""
     base = box(-30, -20, 40, 60, 40, 10).union(box(-30, -20, 0, 60, 40, 29))
     base = base.union(box(-30, -20, 0, 5, 40, 50))
     plan = detected_plan("layered", base)
     model = base
     for x, y, w, d, top in pads:
         model = model.union(box(x, y, 29, w, d, top - 29))
-    floor = 25 + plan[0]["z0"] - 0.03 * 50
-    return model.val(), plan, DIMS_50, floor
+    return model.val(), plan, DIMS_50
 
 
 def lower_volume_kept(before, after, below: float) -> tuple[float, float]:
@@ -652,14 +670,15 @@ def lower_volume_kept(before, after, below: float) -> tuple[float, float]:
 
 
 def check_pads(pads):
-    """凸起頂面都在切孔範圍之下：校正，下層完整；有任何一個高過切孔下限：不校正，維持原樣。"""
+    """凸起都和上板隔著空隙（頂面低於上板下緣）：上板是第一塊，切孔停在它的下緣，凸起與下層完整。
+    凸起的頂面碰到上板（頂面＝40）：連成同一塊，和圖紙孔深對不上，不校正。"""
     from app.cad.holes import apply_holes
 
-    shape, plan, dims, floor = layered_model(*pads)
+    shape, plan, dims = layered_model(*pads)
     out, applied, reason = apply_holes(shape, plan, dims)
-    before, after = lower_volume_kept(shape, out, 39.89)
+    before, after = lower_volume_kept(shape, out, 39.9)
     assert after == pytest.approx(before, rel=1e-9), pads
-    if any(top > floor for *_, top in pads):
+    if any(top >= 40.0 for *_, top in pads):
         assert_untouched(out, applied, reason, shape, why="下一段材料")
     else:
         assert (applied, reason) == (1, None), pads
@@ -668,14 +687,17 @@ def check_pads(pads):
 
 def test_apply_holes_lower_pad_between_old_sample_lines_is_never_cut():
     """下層基座上一個局部凸起（x＝1…1.4、y＝0.7…1.1、頂面 z＝39，與上板隔 1 mm）落在孔徑內：
-    審查用固定取樣線漏掉了它，容差切傷凸起。整個孔徑的體積驗證不能漏：切孔範圍碰到它，不校正。"""
+    審查用固定取樣線漏掉了它，容差切傷凸起。凸起和上板不相連，切孔停在上板下緣，凸起完整。"""
     from app.cad.holes import apply_holes
 
-    shape, plan, dims, floor = layered_model((1.0, 0.7, 0.4, 0.4, 39.0))
-    assert inside(shape, 1.2, 0.9, 38.75) and floor < 39.0
+    shape, plan, dims = layered_model((1.0, 0.7, 0.4, 0.4, 39.0))
+    assert inside(shape, 1.2, 0.9, 38.75)
     out, applied, reason = apply_holes(shape, plan, dims)
-    assert_untouched(out, applied, reason, shape, why="下一段材料")
-    assert inside(out, 1.2, 0.9, 38.75)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 45) and not inside(out, 2.5, 0, 45)
+    assert inside(out, 1.2, 0.9, 38.75)  # 凸起完整
+    before, after = lower_volume_kept(shape, out, 39.9)
+    assert after == pytest.approx(before, rel=1e-9)
 
 
 @pytest.mark.parametrize(
@@ -683,29 +705,31 @@ def test_apply_holes_lower_pad_between_old_sample_lines_is_never_cut():
     [
         [(2.0, -0.2, 0.8, 0.4, 39.9)],  # 凸起頂面離上板只有 0.1 mm
         [(-1.0, -2.6, 0.3, 2.0, 38.0)],  # 細肋
-        [(0.5, 0.5, 2.0, 2.0, 36.0)],  # 大一點的凸台，頂面在切孔範圍之下
+        [(0.5, 0.5, 2.0, 2.0, 36.0)],  # 大一點的凸台
         [(-2.7, 0.3, 0.4, 0.4, 39.0), (2.6, -0.5, 0.3, 0.3, 39.5), (0.1, -2.5, 0.2, 0.2, 38.5)],
         [(0.0, 0.0, 0.2, 0.2, 39.95)],  # 正在孔軸上，頂面幾乎貼著上板
         [(-2.9, -0.5, 5.8, 1.0, 38.0)],  # 一條橫過孔徑的肋
-        [(0.5, 0.5, 2.0, 2.0, 30.0), (-2.7, 0.3, 0.4, 0.4, 35.0)],  # 都在切孔範圍之下：照常校正
+        [(-2.9, -0.5, 5.8, 1.0, 40.0)],  # 一條肋橫過孔徑，連到上板（約 21%）：連成一塊，不校正
+        [(-2.2, -2.2, 4.4, 4.4, 40.0)],  # 一根粗柱連到上板（約 75%）：連成一塊，不校正
     ],
     ids=[
         "almost-touching",
         "thin-rib",
-        "boss-below",
+        "boss",
         "three-pads",
         "on-axis",
         "wide-rib",
-        "far-below",
+        "bridge-rib",
+        "bridge-pillar",
     ],
 )
-def test_apply_holes_lower_features_inside_the_cut_range_stop_the_correction(pads):
+def test_apply_holes_lower_features_never_get_cut(pads):
     check_pads(pads)
 
 
 def test_apply_holes_random_lower_features_are_never_cut():
-    """亂數放進孔徑內的下層小凸起／肋（固定種子）：碰到切孔範圍就不校正，否則照常校正；
-    不論哪一種，下層體積都不能少。"""
+    """亂數放進孔徑內的下層小凸起／肋（固定種子，頂面都低於上板下緣）：切孔停在上板下緣，
+    下層體積一律不變。"""
     import random
 
     rng = random.Random(20261011)
@@ -717,7 +741,7 @@ def test_apply_holes_random_lower_features_are_never_cut():
                 x, y = rng.uniform(-3, 3), rng.uniform(-3, 3)
                 if (abs(x) + w) ** 2 + (abs(y) + d) ** 2 < 2.9**2:
                     break
-            pads.append((x, y, w, d, rng.uniform(30.0, 39.8)))
+            pads.append((x, y, w, d, rng.uniform(30.0, 39.9)))
         check_pads(pads)
 
 
@@ -742,22 +766,6 @@ def test_apply_holes_opens_the_hole_fully_into_a_curved_ceiling():
     ceiling_at_rim = 15 + (100 - 2.8**2) ** 0.5  # x＝2.8 處橫孔頂 ≈ 24.6
     assert not inside(out, 2.8, 0, ceiling_at_rim + 0.05)  # 孔邊也通到橫孔
     assert inside(out, 0, 0, 3) and inside(out, 12, 0, 15)  # 橫孔下方、旁邊的材料沒動
-
-
-def test_apply_holes_shallow_blind_hole_is_cut_not_counted_as_existing():
-    """100 mm 高的塊體頂部要一個 2 mm 深的淺孔（比 3% 容差還淺）：孔的範圍裡是實心，
-    不能因為孔底落在容差內就當成『孔已經鑽好』。"""
-    import cadquery as cq
-
-    from app.cad.holes import apply_holes
-
-    dims = {"width": 60.0, "depth": 40.0, "height": 100.0}
-    block = cq.Workplane("XY").box(60, 40, 100, centered=(True, True, False)).val()
-    plan = [{"x": 0.0, "y": 0.0, "r": 3.0, "z0": 48.0, "z1": 50.0}]
-    out, applied, reason = apply_holes(block, plan, dims)
-    assert (applied, reason) == (1, None)
-    assert not inside(out, 0, 0, 99) and not inside(out, 2.5, 0, 98.5)  # 淺孔切出來了
-    assert inside(out, 0, 0, 80) and inside(out, 0, 0, 50)  # 下面仍是實心（多鑽最多 3%）
 
 
 def test_apply_holes_cuts_a_sheet_thinner_than_the_margin():
