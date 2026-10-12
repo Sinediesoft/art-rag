@@ -1,7 +1,7 @@
 """CadQuery 執行子行程（由 sandbox.run_cad 啟動，不要直接 import）。
 
 stdin 收到工作 JSON → 以受限的內建函式執行程式碼 → 取出變數 solid →
-（選擇性）依圖紙標註尺寸等比縮放 →（選擇性）依圖紙孔位校正垂直孔（docs/adr/034）→
+（選擇性）依圖紙標註尺寸等比縮放 →（選擇性）依圖紙孔位校正垂直孔（docs/adr/035）→
 輸出 STL、STEP、回投影三視圖，與標準模型比 IoU。
 結果寫到 out_dir/result.json；任何例外都寫成 {"ok": false, "error": ...}。
 Windows 沒有 resource 模組：只執行知識庫自己的標準模型（trusted），模型產生的程式碼一律拒絕。
@@ -150,7 +150,7 @@ def main() -> None:
         shape = _build(code, target, result)
         result["exec_ms"] = round((time.perf_counter() - t0) * 1000)
         if holes:
-            # 模型畫的垂直圓孔已拿掉，依圖紙切孔（docs/adr/034）
+            # 模型畫的垂直圓孔已拿掉，依圖紙切孔（docs/adr/035）
             shape, applied, reason = apply_holes(shape, holes, target)
             if not applied and removed:
                 # 校正不了：模型自己畫的孔也要留著，改回原本的程式碼

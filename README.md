@@ -36,7 +36,7 @@ security_leak_check）→ ⑤ **Jev Score** 評分重排（最多 3 段）→ �
 工廠圖紙 ─► CLIP 粗篩 ─► ORB 幾何驗證（只看三視圖區）─► 拉正後比對線條重合度 ─► 辨識結果／「知識庫中沒有這張圖紙」
          ─► 裁掉標題欄、縮到 224×224 ─► Ortho2CAD（llama-server，Qwen3-VL-8B 微調）─► CadQuery 程式碼（串流）
          ─► AST 白名單＋受限子行程＋sandbox-exec ─► 依標註尺寸等比縮放
-         ─► 孔位校正：OpenCV 從標準三視圖的俯視圖找圓孔，取代模型畫的垂直孔（ADR 034）─► STL／STEP／回投影三視圖／IoU
+         ─► 孔位校正：OpenCV 從標準三視圖的俯視圖找圓孔，取代模型畫的垂直孔（ADR 035）─► STL／STEP／回投影三視圖／IoU
          └─ 未收錄圖紙：本地 Qwen3-VL 讀圖上尺寸；製程問答走同一條 RAG（drawing_v1），雲端一律拒絕
 
 庫存問題 ─► schema＋欄位值＋範例（sql_v2）─► 本地 Qwen3-VL 寫 SQL（串流）─► 靜態檢查（只准一條 SELECT）

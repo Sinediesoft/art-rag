@@ -263,7 +263,7 @@ export function ModelView({ o }: { o: Output }) {
   );
 }
 
-/** 孔位校正（docs/adr/034）：校正了顯示孔數，沒校正把原因放在 title */
+/** 孔位校正（docs/adr/035）：校正了顯示孔數，沒校正把原因放在 title */
 function HoleStatus({ holes }: { holes?: CadResultEvent["holes"] }) {
   const s = holeStatus(holes);
   return s ? <span title={s.title}>{s.label}</span> : <>—</>;

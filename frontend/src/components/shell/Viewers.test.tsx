@@ -131,7 +131,7 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
     expect(screen.queryByTestId("model-viewer")).toBeNull();
   });
 
-  it("孔位校正（docs/adr/034）：校正了就顯示孔數；沒校正顯示原因；舊紀錄沒有這欄顯示 —", async () => {
+  it("孔位校正（docs/adr/035）：校正了就顯示孔數；沒校正顯示原因；舊紀錄沒有這欄顯示 —", async () => {
     const cases: [unknown, string, string | null][] = [
       [{ status: "applied", reason: null, detected: 3, removed: 3, applied: 3 }, "已校正 3 孔", null],
       [

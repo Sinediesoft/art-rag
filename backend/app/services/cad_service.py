@@ -5,7 +5,7 @@
    （Ortho2CAD 輸出的是 DeepCAD 正規化尺度，約 0–1，要等比放大回 mm）
 3. Ortho2CAD 生成 CadQuery 程式碼（逐字串流）
 4. 沙箱執行 → STL／STEP／回投影三視圖；知識庫零件另與標準模型比 IoU（論文的評估法）
-   有標準三視圖的零件，執行前把模型畫的垂直圓孔換成 OpenCV 在俯視圖找到的孔（docs/adr/034）
+   有標準三視圖的零件，執行前把模型畫的垂直圓孔換成 OpenCV 在俯視圖找到的孔（docs/adr/035）
 
 全程只連本機或內網的推論伺服器，外送資料量恆為 0。strategy="hybrid" 是對照組：
 同一張圖改給未微調的 Qwen3-VL 產生程式碼，用來展示領域微調的效果。
@@ -99,7 +99,7 @@ HOLE_LAYOUTS = ("kb", "rectified")  # 圖紙版面是標準三視圖的才校正
 
 
 def hole_plan_for(part: dict | None, scale_to: dict | None, layout: str):
-    """孔位校正（docs/adr/034）用哪張圖：有標準模型的知識庫零件用它的標準三視圖
+    """孔位校正（docs/adr/035）用哪張圖：有標準模型的知識庫零件用它的標準三視圖
     （照片拉正後辨識出來的也一樣，不用照片）；回 (孔位, None) 或 (None, 不校正的原因)。
     layout 是 3D 重建實際用的圖紙版面：照片沒拉正（upload）時，即使辨識出知識庫零件也不校正。"""
     if part is None:
