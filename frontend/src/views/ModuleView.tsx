@@ -5,6 +5,7 @@ import { AccountMenu, pendingCount, Popover, StatusChip, useTokenRenewal, WriteN
 import { Composer } from "../components/shell/Composer";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
+import { SettingsMenu } from "../components/shell/SettingsMenu";
 import { Showcase } from "../components/shell/Showcase";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
@@ -154,6 +155,14 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
             </button>
             <Popover open={menu === "account"} onClose={close} className="menu--right">
               <AccountMenu onClose={close} />
+            </Popover>
+          </div>
+          <div className="topbar__slot">
+            <button type="button" className={`mtop__btn${menu === "settings" ? " is-open" : ""}`} onClick={() => setMenu(menu === "settings" ? null : "settings")} aria-expanded={menu === "settings"} title="設定" aria-label="設定">
+              <Icon name="settings" strokeWidth={1.5} />
+            </button>
+            <Popover open={menu === "settings"} onClose={close} className="menu--right menu--settings">
+              <SettingsMenu />
             </Popover>
           </div>
         </div>

@@ -20,7 +20,7 @@ from app.core.config import (
     kb_version,
 )
 from app.core.errors import AppError
-from app.rag import providers
+from app.rag import conflict_check, providers, rearrange
 from app.rag.kb import current_kb_hash
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.text2sql import load_examples, prompt_versions
@@ -940,6 +940,11 @@ async def system_status(request: Request, response: Response):
             jev_configured=ok,
             detail="已設定" if ok else "未設定或已停用：第 2、4～6 段改用地端規則",
             model=s.jev_model,
+        ),
+        chat_defaults=S.ChatDefaultsBrief(
+            rearrange=rearrange.enabled(),
+            conflict_check=conflict_check.enabled(),
+            send_image=chat_service.send_image_enabled(),
         ),
     )
 

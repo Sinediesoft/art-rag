@@ -7,7 +7,7 @@ import { acknowledgeWrite, dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
 import { Icon } from "./Icons";
 
-export type Menu = "security" | "account" | "tools" | null;
+export type Menu = "security" | "account" | "tools" | "settings" | null;
 
 /** 來源：ArtRAG-前端demo/source/src/components/Chrome.tsx。從觸發按鈕垂下的選單；點外面或 Esc 關閉 */
 export function Popover({ open, onClose, children, className = "" }: { open: boolean; onClose: () => void; children: ReactNode; className?: string }) {

@@ -605,6 +605,7 @@ Text-to-SQL P50 3.0 秒（Q4 2.5 秒）。Q8 加 Ortho2CAD 超過 16 GB 不能�
 
 回答前先請本地模型挑出有幫助的段落，只用挑中的（MIRA 的 Rearrange，見 ADR 008）。
 開關：請求的 `rearrange` ＞ `.env` 的 `REARRANGE` ＞ `shared/models.yaml` 的 `rearrange.enabled`（預設 true）。
+網頁上每個人可以在頁首右上角的「設定」自己選「預設／開／關」（只存在那個瀏覽器，ADR 034）；矛盾檢查、回答附圖也在那裡。
 智慧助理的第 4 段只把不送 Jev 的內部、機密段落交給它挑（公開段落由 Jev 判斷關聯性）。
 2026-09-30 在 Windows 筆電（GTX 1650）上的開關對照（16 題）：
 

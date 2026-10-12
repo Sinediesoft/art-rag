@@ -412,6 +412,57 @@ describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL
   });
 });
 
+describe("頁首設定（Q-2026-10-12-02）：存在瀏覽器，從下一題開始帶進問答請求", () => {
+  const chatBodies = (t: ReturnType<typeof factoryBackend>) => t.calls.filter((c) => c.method === "POST" && c.path === "/chat").map((c) => c.body as Record<string, unknown>);
+  const pick = (group: string, option: string) => fireEvent.click(within(screen.getByRole("radiogroup", { name: group })).getByRole("radio", { name: option }));
+
+  it("入口：深淺色收進設定；段落篩選設成「關」→ 下一題的 /chat 帶 rearrange=false，回答下方標出用了你的設定", async () => {
+    const t = factoryBackend();
+    renderApp();
+    await ready();
+    expect(screen.queryByLabelText("切換成淺色")).toBeNull();
+    fireEvent.click(screen.getByLabelText("設定"));
+    // 伺服器預設來自 /status 的 chat_defaults
+    await waitFor(() => expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "預設（開）" }).getAttribute("aria-checked")).toBe("true"));
+    pick("入口深淺色", "淺色");
+    expect(document.documentElement.dataset.theme).toBe("light");
+    pick("段落篩選", "關");
+    expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "關" }).getAttribute("aria-checked")).toBe("true");
+    expect(JSON.parse(localStorage.getItem("artrag-settings-v1")!).rearrange).toBe("off");
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await ask("連接法蘭有哪些公差要求？");
+    await idle();
+    const [body] = chatBodies(t);
+    expect(body.rearrange).toBe(false);
+    // 其他兩項是「預設」：不帶欄位，由伺服器決定
+    expect("conflict_check" in body || "send_image" in body).toBe(false);
+    expect(document.body.textContent).toContain("依你的設定：段落篩選 關");
+  });
+
+  it("功能頁的問答也套用；策略比較頁一律照伺服器預設", async () => {
+    localStorage.setItem("artrag-settings-v1", JSON.stringify({ rearrange: "off", conflict_check: "on", send_image: "server" }));
+    const t = factoryBackend();
+    t.on("GET", "/artworks", () => json({ items: [{ id: "npm-000001", title_zh: "早春圖", artist_zh: "郭熙" }], total: 1 }));
+    renderApp("/drawings/mfg-002/chat");
+    const input = await screen.findByPlaceholderText(/問這張圖紙的製程/);
+    fireEvent.change(input, { target: { value: "外徑公差多少？" } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+    });
+    await waitFor(() => expect(chatBodies(t)).toHaveLength(1));
+    expect(chatBodies(t)[0]).toMatchObject({ part_id: "mfg-002", rearrange: false, conflict_check: true });
+    expect("send_image" in chatBodies(t)[0]).toBe(false);
+    await waitFor(() => expect(document.body.textContent).toContain("依你的設定：段落篩選 關・矛盾檢查 開"));
+    cleanup();
+
+    renderApp("/compare");
+    fireEvent.click(await screen.findByText("並排比較"));
+    await waitFor(() => expect(chatBodies(t).length).toBeGreaterThan(1));
+    for (const b of chatBodies(t).slice(1)) expect(b).toMatchObject({ rearrange: null, conflict_check: null, send_image: null });
+  });
+});
+
 describe("入口：沒有模組可以跳轉時，功能頁的交接連結要在", () => {
   it("批次辨識：入口給「打開批次辨識」，點了到 /batch", async () => {
     const t = factoryBackend();

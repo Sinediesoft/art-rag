@@ -2076,6 +2076,20 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * ChatDefaultsBrief
+         * @description 問答開關的伺服器預設（.env 覆寫 models.yaml 之後的結果）：
+         *     設定面板「依伺服器預設」旁邊顯示目前開或關。請求的 rearrange／conflict_check／send_image
+         *     留 null 時就照這個；三個都不影響第 1～7 段安全關卡。
+         */
+        ChatDefaultsBrief: {
+            /** Rearrange */
+            rearrange: boolean;
+            /** Conflict Check */
+            conflict_check: boolean;
+            /** Send Image */
+            send_image: boolean;
+        };
         /** ChatRequest */
         ChatRequest: {
             /** Question */
@@ -4595,6 +4609,7 @@ export interface components {
             };
             memory?: components["schemas"]["MemoryStatus"] | null;
             system1: components["schemas"]["System1Brief"];
+            chat_defaults: components["schemas"]["ChatDefaultsBrief"];
         };
         /** StockLocation */
         StockLocation: {

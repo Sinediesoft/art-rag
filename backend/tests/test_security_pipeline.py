@@ -272,6 +272,20 @@ def test_status_needs_a_token_and_has_no_private_endpoints(client):
     assert "http" not in r.text and "recent_" not in r.text and "thresholds" not in r.text
 
 
+def test_status_reports_chat_defaults_after_env_override(client, monkeypatch):
+    """設定面板「依伺服器預設」顯示的值：.env 覆寫 models.yaml 之後的結果，只有開／關"""
+    monkeypatch.setattr(get_settings(), "rearrange", "false")
+    monkeypatch.setattr(get_settings(), "conflict_check", "")
+    monkeypatch.setattr(get_settings(), "send_image", "off")
+    body = client_as("guest").get("/api/v1/status").json()
+    cfg = config.get_models_config()
+    assert body["chat_defaults"] == {
+        "rearrange": False,
+        "conflict_check": cfg.conflict_check.enabled,
+        "send_image": False,
+    }
+
+
 @pytest.mark.parametrize("account", ["guest", "sales_a", "wh1", "planner"])
 def test_diagnostics_security_logs_and_audit_need_admin_view(client, account):
     c = client_as(account)
