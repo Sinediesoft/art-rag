@@ -4780,6 +4780,30 @@
         "type": "object",
         "title": "ChangePreviewRequest"
       },
+      "ChatDefaultsBrief": {
+        "properties": {
+          "rearrange": {
+            "type": "boolean",
+            "title": "Rearrange"
+          },
+          "conflict_check": {
+            "type": "boolean",
+            "title": "Conflict Check"
+          },
+          "send_image": {
+            "type": "boolean",
+            "title": "Send Image"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rearrange",
+          "conflict_check",
+          "send_image"
+        ],
+        "title": "ChatDefaultsBrief",
+        "description": "問答開關的伺服器預設（.env 覆寫 models.yaml 之後的結果）：\n設定面板「依伺服器預設」旁邊顯示目前開或關。請求的 rearrange／conflict_check／send_image\n留 null 時就照這個；三個都不影響第 1～7 段安全關卡。"
+      },
       "ChatRequest": {
         "properties": {
           "question": {
@@ -11002,6 +11026,9 @@
           },
           "system1": {
             "$ref": "#/components/schemas/System1Brief"
+          },
+          "chat_defaults": {
+            "$ref": "#/components/schemas/ChatDefaultsBrief"
           }
         },
         "type": "object",
@@ -11012,7 +11039,8 @@
           "demo_warning",
           "eval_controls",
           "strategies",
-          "system1"
+          "system1",
+          "chat_defaults"
         ],
         "title": "StatusResponse",
         "description": "登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。\n不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"

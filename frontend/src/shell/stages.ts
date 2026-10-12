@@ -1,5 +1,6 @@
 import type { RouteResponse } from "../api/client";
 import type { DoneEvent, ErrorEvent, GuardCheck, JevCallInfo, PipelineStage, PostFilterInfo, SourcesEvent } from "../api/sse";
+import type { Applied } from "./settings";
 import type { Part, Turn } from "./types";
 
 /**
@@ -71,14 +72,16 @@ function judgeText(call: JevCallInfo | null, fallback: string | null, localWhat:
   return localWhat;
 }
 
-function verifyDetail(pf: PostFilterInfo) {
+function verifyDetail(pf: PostFilterInfo, applied?: Applied) {
   const rr = pf.rearrange;
   const local =
     rr && rr.candidates > 1
       ? rr.fallback
         ? `相似度（Qwen3-VL 判斷失敗：${rr.fallback}）`
         : `本地 Qwen3-VL 判斷 ${rr.candidates} 段・${(rr.ms / 1000).toFixed(1)} 秒`
-      : "相似度";
+      : applied?.rearrange === false
+        ? "相似度（段落篩選已關：你的設定）"
+        : "相似度";
   const how: string[] = [];
   if (pf.verify.call || pf.verify.fallback_reason) how.push(judgeText(pf.verify.call, pf.verify.fallback_reason, "改在地端判斷"));
   if (pf.local) how.push(`${pf.local} 段${pf.mode === "jev" ? "內部／機密段落不出廠，" : ""}在地端判斷（規則掃描＋${local}）`);
@@ -314,7 +317,7 @@ function chatStages(r: RouteResponse, mod: ModuleProgress, filterText: string | 
   out.push(stage("retrieve", n ? "ok" : "warn", `bge-m3 向量檢索・${sources.filter?.text ?? filterText} → ${n ? `${n} 段候選` : "0 段（權限內沒有符合的文件塊）"}`));
   if (!pf) out.push(...rest("verify", "skip", "沒有段落要驗證").slice(0, 3));
   else {
-    out.push(stage("verify", pf.flagged.length ? "warn" : pf.candidates ? "ok" : "skip", verifyDetail(pf), { checks: pf.verify.checks }));
+    out.push(stage("verify", pf.flagged.length ? "warn" : pf.candidates ? "ok" : "skip", verifyDetail(pf, mod.part?.kind === "chat" ? mod.part.applied : undefined), { checks: pf.verify.checks }));
     const rr = pf.rerank;
     out.push(
       rr

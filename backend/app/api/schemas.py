@@ -477,6 +477,16 @@ class System1Brief(BaseModel):
     model: str
 
 
+class ChatDefaultsBrief(BaseModel):
+    """問答開關的伺服器預設（.env 覆寫 models.yaml 之後的結果）：
+    設定面板「依伺服器預設」旁邊顯示目前開或關。請求的 rearrange／conflict_check／send_image
+    留 null 時就照這個；三個都不影響第 1～7 段安全關卡。"""
+
+    rearrange: bool
+    conflict_check: bool
+    send_image: bool
+
+
 class StatusResponse(BaseModel):
     """登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。
     不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"""
@@ -489,6 +499,7 @@ class StatusResponse(BaseModel):
     strategies: dict[str, StrategyBrief]
     memory: "MemoryStatus | None" = None
     system1: System1Brief
+    chat_defaults: ChatDefaultsBrief
 
 
 class DiagnosticsResponse(BaseModel):

@@ -228,6 +228,6 @@ export const done = (over: Record<string, unknown> = {}) => ({
 export function baseHandlers(t: Transport, current = "planner") {
   t.on("GET", "/auth/accounts", () => json(accounts(current)));
   t.on("GET", "/status", () =>
-    json({ status: "ok", outage_simulated: false, demo_controls: true, demo_warning: null, eval_controls: false, strategies: {}, memory: null, system1: { jev_configured: false, detail: "沒有金鑰", model: "", timeout_s: 1.5 } }),
+    json({ status: "ok", outage_simulated: false, demo_controls: true, demo_warning: null, eval_controls: false, strategies: {}, memory: null, system1: { jev_configured: false, detail: "沒有金鑰", model: "", timeout_s: 1.5 }, chat_defaults: { rearrange: true, conflict_check: true, send_image: true } }),
   );
 }

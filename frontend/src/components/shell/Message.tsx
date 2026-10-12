@@ -6,6 +6,7 @@ import type { SourceItem } from "../../api/sse";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
 import { canRerun, hasMark, REJECTED, writeUnconfirmed } from "../../shell/persist";
+import { appliedText } from "../../shell/settings";
 import { ctaOf, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
 import { dispatchOf } from "../../shell/runner";
 import { buildStages, egressOf, gatewayStages, progressOf, summaryOf } from "../../shell/stages";
@@ -428,6 +429,12 @@ function ChatBody({ turn, part: p }: { turn: Turn; part: ChatPart }) {
         <p className="answer__note is-warn">
           <Icon name="info" />
           參考資料的說法不一致（{p.sources.conflict_check.refs.map((n) => `[${n}]`).join("")}），回答已指出差異。
+        </p>
+      )}
+      {p.text && appliedText(p.applied) && (
+        <p className="answer__note">
+          <Icon name="settings" />
+          {appliedText(p.applied)}
         </p>
       )}
       {p.error && (

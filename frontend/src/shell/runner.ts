@@ -1,6 +1,7 @@
 import { api, ApiError, type ChangePreviewRequest, type RouteResponse } from "../api/client";
 import { streamChat, streamInventoryAsk, streamReconstruct, streamScheduleSolve } from "../api/sse";
 import { resultUnknown } from "../api/writes";
+import { withChatSettings } from "./settings";
 import type { ApiFailure, ChangePart, Part, ReconstructPart, SchedulePart, Turn } from "./types";
 
 /**
@@ -109,8 +110,10 @@ async function runPart(route: RouteResponse, part: Part, update: Update, signal:
       case "chat": {
         const fallbackQ = part.target.part_id ? "這張圖紙的重點是什麼？" : "請介紹這幅畫";
         let failed = false;
+        const { body, applied } = withChatSettings({ question: d.question || fallbackQ, ...part.target, route_ticket: route.route_ticket });
+        setPart<typeof part>(update, (p) => ({ ...p, applied }));
         await streamChat(
-          { question: d.question || fallbackQ, ...part.target, route_ticket: route.route_ticket },
+          body,
           {
             onSources: (sources) => setPart<typeof part>(update, (p) => ({ ...p, sources, status: "streaming" })),
             onToken: (text) => setPart<typeof part>(update, (p) => ({ ...p, text: p.text + text, status: "streaming" })),
