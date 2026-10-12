@@ -819,6 +819,153 @@ def test_apply_holes_skips_hole_outside_model():
     assert applied == 0 and "模型外" in reason and out.Volume() == pytest.approx(plate.Volume())
 
 
+# ---------------------------------------------------------------- 退件修正（architecture b3bf22e）
+# 孔位校正是全有或全無：任何一個計畫孔做不到，就在切任何孔之前整體回退（ADR 034）
+BLOCK_50 = {"width": 50.0, "depth": 50.0, "height": 50.0}
+GOOD_HOLE = {"x": 0.0, "y": 0.0, "r": 3.0, "z0": -25.0, "z1": 25.0}  # 實心塊體的貫穿孔
+OUTSIDE_HOLE = {"x": 100.0, "y": 0.0, "r": 3.0, "z0": -25.0, "z1": 25.0}
+BLIND_HOLE = {"x": 10.0, "y": 0.0, "r": 3.0, "z0": -10.0, "z1": 25.0}  # 圖紙孔底在塊體中間
+
+
+def solid_block():
+    return box(-25, -25, 0, 50, 50, 50).val()
+
+
+def test_apply_holes_good_hole_alone_is_cut():
+    """對照組：好孔單獨給時照常切，後面的回退測試才有意義。"""
+    from app.cad.holes import apply_holes
+
+    block = solid_block()
+    out, applied, reason = apply_holes(block, [GOOD_HOLE], BLOCK_50)
+    assert (applied, reason) == (1, None)
+    assert not inside(out, 0, 0, 25)
+    assert out.Volume() == pytest.approx(block.Volume() - math.pi * 3**2 * 50, rel=1e-3)
+
+
+@pytest.mark.parametrize("bad_first", [False, True])
+@pytest.mark.parametrize(
+    ("bad", "why"),
+    [(OUTSIDE_HOLE, "模型外"), (BLIND_HOLE, "對不上")],
+    ids=["outside-the-model", "blind-hole"],
+)
+def test_apply_holes_rolls_back_every_hole_when_one_cannot_be_applied(bad, why, bad_first):
+    """architecture b3bf22e 的重現：50 mm 塊體，中心貫穿孔可切，另一個孔落在模型外／圖紙是盲孔。
+    不論先後，一律 applied＝0、原因寫明、形狀不變（好孔也不能切），runner 才會用原程式碼重建。"""
+    from app.cad.holes import apply_holes
+
+    block = solid_block()
+    plan = [bad, GOOD_HOLE] if bad_first else [GOOD_HOLE, bad]
+    out, applied, reason = apply_holes(block, plan, BLOCK_50)
+    assert_untouched(out, applied, reason, block, why=why)
+    assert inside(out, 0, 0, 25)  # 好孔也沒切
+
+
+def test_apply_holes_rolls_back_when_the_bore_finds_no_material(monkeypatch):
+    """孔徑圓柱裡拆不出材料塊（理論上不會發生的防線）：同樣整體回退，不能只略過這個孔。"""
+    from app.cad import holes as holes_module
+
+    real = holes_module._bore_blocks
+    monkeypatch.setattr(
+        holes_module, "_bore_blocks", lambda s, x, y, r, bb: [] if x > 5 else real(s, x, y, r, bb)
+    )
+    block = solid_block()
+    out, applied, reason = holes_module.apply_holes(
+        block, [GOOD_HOLE, {**GOOD_HOLE, "x": 10.0}], BLOCK_50
+    )
+    assert_untouched(out, applied, reason, block, why="沒有碰到材料")
+    assert inside(out, 0, 0, 25)
+
+
+def test_apply_holes_counts_existing_hole_next_to_a_cut():
+    """反向對照：模型已鑽好的孔不是失敗，和要切的孔並存時兩個都算（applied＝2）。"""
+    import cadquery as cq
+
+    from app.cad.holes import apply_holes
+
+    bore = cq.Solid.makeCylinder(3, 60, cq.Vector(10, 0, -5), cq.Vector(0, 0, 1))
+    drilled = solid_block().cut(bore)
+    existing = {**GOOD_HOLE, "x": 10.0}
+    out, applied, reason = apply_holes(drilled, [GOOD_HOLE, existing], BLOCK_50)
+    assert (applied, reason) == (2, None)
+    assert not inside(out, 0, 0, 25) and not inside(out, 10, 0, 25)
+
+
+PLATE_WITH_MODEL_HOLE = """import cadquery as cq
+solid = cq.Workplane('XY').box(60, 40, 10, centered=(True, True, False))
+wp1 = cq.Workplane('XY')
+loop1 = wp1.moveTo(-10, 0).circle(3)
+solid1 = wp1.add(loop1).extrude(10)
+solid = solid.cut(solid1)
+"""
+PLATE_DIMS = {"width": 60.0, "depth": 40.0, "height": 10.0}
+
+
+@needs_limits
+def test_run_cad_restores_model_holes_when_one_planned_hole_fails(tmp_path):
+    """模型在 x＝−10 畫了垂直孔（校正會先移除）。圖紙孔位在 x＝+10，另一個孔落在模型外：
+    整體回退，模型原本的孔恢復、+10 的孔不切、結果寫明跳過原因。只給好孔時照常校正。"""
+    good = {"x": 10.0, "y": 0.0, "r": 3.0, "z0": -5.0, "z1": 5.0}
+    outside = {"x": 100.0, "y": 0.0, "r": 3.0, "z0": -5.0, "z1": 5.0}
+    plain = asyncio.run(
+        run_cad(PLATE_WITH_MODEL_HOLE, tmp_path / "a", scale_to=PLATE_DIMS, wsl=WSL)
+    )
+    ok = asyncio.run(
+        run_cad(PLATE_WITH_MODEL_HOLE, tmp_path / "b", scale_to=PLATE_DIMS, holes=[good], wsl=WSL)
+    )
+    bad = asyncio.run(
+        run_cad(
+            PLATE_WITH_MODEL_HOLE,
+            tmp_path / "c",
+            scale_to=PLATE_DIMS,
+            holes=[good, outside],
+            wsl=WSL,
+        )
+    )
+    assert plain.ok and ok.ok and bad.ok, (plain.error, ok.error, bad.error)
+
+    assert ok.data["holes"]["status"] == "applied" and ok.data["holes"]["removed"] == 1
+    snapped = load_step(tmp_path / "b" / "model.step")
+    assert inside(snapped, -10, 0, 5) and not inside(snapped, 10, 0, 5)  # 孔搬到圖紙位置
+
+    info = bad.data["holes"]
+    assert info["status"] == "skipped" and info["applied"] == 0 and info["removed"] == 0
+    assert "模型外" in info["reason"] and info["detected"] == 2
+    kept = load_step(tmp_path / "c" / "model.step")
+    assert not inside(kept, -10, 0, 5)  # 模型自己的孔恢復
+    assert inside(kept, 10, 0, 5)  # 好孔沒有單獨生效
+    assert bad.data["volume"] == pytest.approx(plain.data["volume"], rel=1e-9)
+
+
+@needs_limits
+def test_reconstruct_stream_reports_skipped_reason_when_one_hole_fails(client, monkeypatch):
+    """SSE 結果：多孔計畫中一個孔落在模型外，整個校正跳過、帶原因，3D 維持標準模型。"""
+    import json
+
+    from app.services import cad_service
+
+    real = cad_service.hole_plan_for
+
+    def with_outside_hole(*args, **kwargs):
+        holes, reason = real(*args, **kwargs)
+        return [*holes, {"x": 500.0, "y": 0.0, "r": 3.0, "z0": -36.0, "z1": 36.0}], reason
+
+    monkeypatch.setattr(cad_service, "hole_plan_for", with_outside_hole)
+    r = client.post("/api/v1/cad/reconstruct", json={"part_id": "mfg-006"})
+    events = [
+        (lines["event"], json.loads(lines["data"]))
+        for lines in (
+            dict(line.split(": ", 1) for line in block.splitlines())
+            for block in r.text.strip().split("\n\n")
+        )
+    ]
+    result = next(d for e, d in events if e == "result")
+    assert result["ok"], result["error"]
+    holes = result["holes"]
+    assert holes["status"] == "skipped" and holes["applied"] == 0 and holes["detected"] == 4
+    assert "模型外" in holes["reason"]
+    assert result["iou"] > 0.95
+
+
 @needs_limits
 def test_reconstruct_with_unrectified_photo_keeps_model_as_is(client):
     """已知零件加一張對不上的照片：拉正失敗（版面 upload），不能套標準三視圖的孔位。"""

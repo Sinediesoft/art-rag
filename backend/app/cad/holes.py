@@ -554,6 +554,10 @@ def apply_holes(shape, holes: list[dict], dims: dict):
       整個 3D 重建都不校正，維持模型輸出並寫明原因。切孔下緣是第一塊的底部再多一點點，
       所以兩板之間的空隙再小，下板也不會被碰到；粗柱、水平通孔、球形腔把上下材料連成一塊，
       第一塊一路到底，和圖紙孔深對不上，不校正；真正的盲孔也一樣（接受）。
+
+    全有或全無（2026-10-12 人類負責人的決定）：任何一個孔無法映射、落在模型外、深度範圍沒有材料、
+    深度對不上或會碰到第一塊以外的材料，就在切任何孔之前回 (原實體, 0, 原因)；不保留部分校正。
+    runner 看到 applied＝0 會用原本的程式碼重建，被移除的模型孔才會恢復。
     """
     import cadquery as cq
 
@@ -568,7 +572,6 @@ def apply_holes(shape, holes: list[dict], dims: dict):
     up = cq.Vector(0, 0, 1)
     cuts = []
     placed = 0  # 模型自己已經在同一個位置鑽了孔
-    why: list[str] = []  # 沒有切的孔各自的原因
     for hole in holes:
         r = hole["r"]
         x, y = cx + hole["x"] * fx, cy + hole["y"] * fy
@@ -587,9 +590,8 @@ def apply_holes(shape, holes: list[dict], dims: dict):
             in_outline = bb.xmin <= x <= bb.xmax and bb.ymin <= y <= bb.ymax
             if gap <= tol or (in_outline and gap <= r):
                 placed += 1
-            else:
-                why.append("孔位落在模型外")
-            continue
+                continue
+            return shape, 0, "孔位落在模型外，孔位維持模型輸出"
         # 孔的範圍（去掉兩端的點線誤差）：裡面沒有材料＝孔已經鑽好，剩下的是更下面的材料
         e = min(margin, (top - bottom) / 4)
         core_lo, core_hi = bottom + e, top - e
@@ -599,8 +601,7 @@ def apply_holes(shape, holes: list[dict], dims: dict):
             continue
         blocks = _bore_blocks(shape, x, y, r, bb)
         if not blocks:
-            why.append("孔的深度範圍沒有碰到材料")
-            continue
+            return shape, 0, "孔的深度範圍沒有碰到材料，孔位維持模型輸出"
         first, first_lo, first_hi = blocks[0]  # 從頂面往下連通的第一塊
         depth_tol = max(margin, DEPTH_TOL * max(bb.xlen, bb.ylen, bb.zlen))
         if abs(first_lo - bottom) > depth_tol:
@@ -620,7 +621,7 @@ def apply_holes(shape, holes: list[dict], dims: dict):
             return shape, 0, "切除範圍碰到第一塊以外的下一段材料，孔位維持模型輸出"
         cuts.append(cut)
     if not cuts and not placed:
-        return shape, 0, f"{why[0] if why else '孔位落在模型外'}，孔位維持模型輸出"
+        return shape, 0, "沒有可校正的孔，孔位維持模型輸出"
     for cyl in cuts:
         shape = shape.cut(cyl)
     return shape, len(cuts) + placed, None
