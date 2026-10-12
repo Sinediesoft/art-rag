@@ -5515,6 +5515,18 @@
             "title": "Overlap",
             "description": "拉正後的線條重合度（0–1）；未驗證為 null"
           },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage",
+            "description": "照片涵蓋圖紙三視圖幾何區的比例（0–1）；低於 partial_cover 時門檻改用 partial_min_overlap。未驗證為 null"
+          },
           "verified": {
             "type": "boolean",
             "title": "Verified"
@@ -5574,6 +5586,16 @@
             "type": "number",
             "title": "Min Overlap"
           },
+          "partial_cover": {
+            "type": "number",
+            "title": "Partial Cover",
+            "description": "照片涵蓋比例低於此值視為只拍到一部分"
+          },
+          "partial_min_overlap": {
+            "type": "number",
+            "title": "Partial Min Overlap",
+            "description": "只拍到一部分時線條重合要到的門檻"
+          },
           "matched": {
             "type": "boolean",
             "title": "Matched"
@@ -5607,6 +5629,8 @@
           "threshold",
           "min_inliers",
           "min_overlap",
+          "partial_cover",
+          "partial_min_overlap",
           "matched",
           "best_part_id",
           "latency_ms",
@@ -8620,7 +8644,8 @@
           },
           "score": {
             "type": "number",
-            "title": "Score"
+            "title": "Score",
+            "description": "bge-m3 與這張圖紙最相關段落的相似度"
           },
           "topic": {
             "type": "string",
@@ -8629,6 +8654,12 @@
           "snippet": {
             "type": "string",
             "title": "Snippet"
+          },
+          "exact": {
+            "type": "boolean",
+            "title": "Exact",
+            "description": "問句裡完整寫了這張圖紙的名稱、料號或圖號：排在語意相似的結果前面",
+            "default": false
           }
         },
         "type": "object",

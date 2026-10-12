@@ -380,8 +380,10 @@ def test_department_scope_in_generation_prompt(client, dept_account, spies):
     chat(c, question="步進馬達安裝板和其他零件比較有什麼不同？", part_id="mfg-004")
     for b in spies["build"]:
         assert {s["part_id"] for s in b["sources"]} <= {"mfg-004"}
+    # 部門外的圖紙在實體解析就當成不存在（docs/adr/033 F）：不指定、不帶出 ID，也不給「換誰可以」
     r = c.post("/api/v1/agent/route", json={"question": "把連接法蘭轉成 3D"}).json()
-    assert r["outcome"] == "degraded" and r["auth"]["retry"] is None
+    assert r["dispatch"]["part_id"] is None and r["auth"]["retry"] is None
+    assert "mfg-002" not in json.dumps(r, ensure_ascii=False)
 
 
 def test_metadata_filter_and_can_view_part_agree():

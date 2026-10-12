@@ -1,0 +1,42 @@
+{
+  "_說明": "圖紙文字與照片檢索的固定 gold set（TASK-20261010-001）。make eval-drawing-retrieval 讀這個檔。expect＝應該找到的圖紙；null＝知識庫沒有這張，應回報無法辨識、不可指向其他圖紙。photos 的 from_name：檔名前綴是知識庫圖紙就以它為答案，不是（kb_staging 未加入、未收錄零件）就是 null。目前身分看不到 expect 時，正確答案一律是 null（和不存在一樣）。",
+  "photos": [
+    {"path": "eval/drawing_retrieval/mfg-006__reported-screenshot.png", "expect": "mfg-006", "variant": "reported", "note": "使用者回報的桌面截圖（截圖 2026-10-10 晚上7.58.16.png）：前視圖局部、放大約 1.3 倍、沒有標題欄"},
+    {"glob": "kb/drawings/mfg-*.png", "variant": "original", "note": "知識庫原圖"},
+    {"crop": "kb/drawings/mfg-006.png", "box": [120, 200, 290, 370], "factor": 1.3, "variant": "review_crop", "note": "codex-review 7601cda F1：方形小局部（對應點約 90×90 px），base 可辨識、7601cda 被分布條件擋掉"},
+    {"crop": "kb/drawings/mfg-005.png", "box": [460, 140, 660, 340], "factor": 1.3, "variant": "review_crop", "note": "同上 F1"},
+    {"crop": "kb/drawings/mfg-002.png", "box": [380, 400, 600, 620], "factor": 2.0, "variant": "review_crop", "note": "同上 F1（放大 2 倍）"},
+    {"generate": "patches", "from": ["kb/drawings/mfg-*.png", "eval/drawing_photos/unknown/unknown-0?.png"], "factors": [1.3, 2.0], "note": "方形小局部：每個視圖中央 180×180 版面像素，放大 1.3 與 2 倍；未收錄零件的同樣局部是拒答樣本"},
+    {"generate": "views", "from": ["kb/drawings/mfg-*.png", "eval/drawing_photos/unknown/unknown-0?.png"], "note": "局部特徵照片：每張圖紙切出右視圖、前視圖、上視圖（連尺寸標註）並放大 1.3 倍，和回報截圖同一種；未收錄零件的視圖是最容易混淆的拒答樣本"},
+    {"glob": "eval/drawing_photos/known/mfg-00[1-6]__*.jpg", "variant": "from_name", "note": "模擬實拍：局部 crop、傾斜 tilt、昏暗 dim、反光 glare、模糊 blur（make_drawing_photos.py）"},
+    {"glob": "eval/drawing_photos/known/mfg-007__*.jpg", "variant": "from_name", "note": "kb_staging 的治具定位板：make demo-add 之前不在知識庫，應無法辨識"},
+    {"glob": "eval/drawing_photos/unknown/*", "variant": "from_name", "note": "版面、標題欄相同但零件不同的圖紙：最難的拒答情境"}
+  ],
+  "texts": [
+    {"q": "L 型固定支架", "expect": "mfg-001", "by": "名稱"},
+    {"q": "BRK-1001", "expect": "mfg-001", "by": "料號"},
+    {"q": "D-24-0117", "expect": "mfg-001", "by": "圖號"},
+    {"q": "輸送線上裝光電感測器的鋁合金支架", "expect": "mfg-001", "by": "描述"},
+    {"q": "連接法蘭", "expect": "mfg-002", "by": "名稱"},
+    {"q": "FLG-2002", "expect": "mfg-002", "by": "料號"},
+    {"q": "D-24-0203", "expect": "mfg-002", "by": "圖號"},
+    {"q": "減速機輸出軸和滾筒之間的剛性連接件", "expect": "mfg-002", "by": "描述"},
+    {"q": "階梯傳動軸", "expect": "mfg-003", "by": "名稱"},
+    {"q": "SFT-3003", "expect": "mfg-003", "by": "料號"},
+    {"q": "D-24-0311", "expect": "mfg-003", "by": "圖號"},
+    {"q": "輸送滾筒的主軸，兩端裝 6204 軸承", "expect": "mfg-003", "by": "描述"},
+    {"q": "步進馬達安裝板", "expect": "mfg-004", "by": "名稱"},
+    {"q": "MTP-4004", "expect": "mfg-004", "by": "料號"},
+    {"q": "D-24-0425", "expect": "mfg-004", "by": "圖號"},
+    {"q": "固定 NEMA 23 馬達用的鋁板", "expect": "mfg-004", "by": "描述"},
+    {"q": "T 型槽螺帽", "expect": "mfg-005", "by": "名稱"},
+    {"q": "TSN-5005", "expect": "mfg-005", "by": "料號"},
+    {"q": "D-24-0502", "expect": "mfg-005", "by": "圖號"},
+    {"q": "把治具鎖在工作台 T 槽上的螺帽", "expect": "mfg-005", "by": "描述"},
+    {"q": "立式軸承座", "expect": "mfg-006", "by": "名稱"},
+    {"q": "PBK-6006", "expect": "mfg-006", "by": "料號"},
+    {"q": "D-24-0618", "expect": "mfg-006", "by": "圖號"},
+    {"q": "支撐輸送滾筒軸、裝 6202 軸承的鑄鐵座", "expect": "mfg-006", "by": "描述"}
+  ],
+  "accounts": ["planner", "sales_a"]
+}

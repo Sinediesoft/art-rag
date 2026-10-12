@@ -5,7 +5,8 @@
 1. 認證與授權：JWT 的簽章與效期在 API 閘道就驗過（沒過是 401，根本到不了這裡）；
    這裡用憑證裡的角色檢查「要做的事」能不能做（功能、動作權限），並產生第 3 段的 Metadata Filter。
    要做什麼由本地分流判斷（照片在本機用 Chinese-CLIP 辨識，不送 Jev；文字用關鍵字＋bge-m3）。
-   沒過 → 拒絕並記錄，不送 Jev、不碰資料；指定了看不到的圖紙只回「查無資料」（不透露它存在）
+   沒過 → 拒絕並記錄，不送 Jev、不碰資料。看不到的圖紙在實體解析就當成不存在
+   （不代號化、不分派、回應裡沒有它的 ID 與名稱，docs/adr/033 F）
 2. Jev 意圖路由／防護欄（Jev Choice）：只送代號化文字，判斷正常查詢／Prompt 注入／無關閒聊；
    注入 → 拒絕並記錄；閒聊 → 快速短路回覆（不檢索、不生成）。叫不到 Jev 才改地端規則
 3～7 由分派到的模組執行（/chat 做 Metadata Filter 檢索、Jev Noul 雙重驗證、Jev Score 重排、
@@ -17,6 +18,7 @@
 """
 
 import asyncio
+import re
 import time
 
 from app.agent import gate, guard, handoff, local_router
@@ -27,18 +29,17 @@ from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard, search_service
-from app.services.identity import Account, Auth, level_rank, visible_part_ids
+from app.services.identity import Auth, level_rank, visible_part_ids
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 只有照片、沒有文字時，問答模組用的預設問句（交接票綁這句話）
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
 
 
-def _identify_photo(image_id: str, account: Account) -> dict:
+def _identify_photo(image_id: str, visible: set[str]) -> dict:
     """照片是畫作還是圖紙：和以圖搜圖、問答同一個領域路由（docs/adr/007），只跑該領域的辨識。
     路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。
-    圖紙只在目前身分看得到的圖紙裡辨識（docs/adr/030）：看不到的不讀、不回名稱。"""
-    visible = visible_part_ids(account, get_store().parts)
+    圖紙只在目前身分看得到的圖紙裡辨識（visible，docs/adr/030）：看不到的不讀、不回名稱。"""
     found = search_service.identify_any(image_id, part_ids=visible)
     if found["route"]["domain"] == "art":
         art = found["artwork_result"]
@@ -51,6 +52,19 @@ def _identify_photo(image_id: str, account: Account) -> dict:
         return {"kind": "unknown", "id": None, "label": "知識庫中沒有這張圖紙", "domain": "mfg"}
     p = get_store().get_part(drawing["best_part_id"])
     return {"kind": "drawing", "id": p["id"], "label": p["name"]["zh"], "domain": "mfg"}
+
+
+def _names_photo(question: str, entities: list, photo: dict | None) -> bool:
+    """文字只寫了照片辨識出的那一件的名稱、料號或圖號（「立式軸承座」＋同一張圖紙的照片）：
+    沒有多說要做什麼，和只附照片一樣交給問答，不出澄清按鈕（TASK-20261010-001）。
+    只有文字的名稱照舊要澄清（eval/route_qa.jsonl r43、r44）。"""
+    kind = {"drawing": "part", "art": "artwork"}.get(photo["kind"] if photo else "")
+    if not kind or not entities or any(e.kind != kind or e.id != photo["id"] for e in entities):
+        return False
+    rest = question
+    for e in sorted(entities, key=lambda e: e.start, reverse=True):
+        rest = rest[: e.start] + rest[e.end :]
+    return not re.sub(r"[\s，,。？?！!、]", "", rest)
 
 
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:
@@ -157,10 +171,14 @@ async def route(
     cfg = get_agent_config()
     # 0. 個資遮蔽：之後只看遮蔽後的文字
     question, pii = guard.mask_pii(question.strip())
-    photo = await asyncio.to_thread(_identify_photo, image_id, account) if image_id else None
+    visible = visible_part_ids(account, get_store().parts)
+    photo = await asyncio.to_thread(_identify_photo, image_id, visible) if image_id else None
     photo_kind = photo["kind"] if photo else None
     index = await asyncio.to_thread(get_index)
-    entities = index.find(question)
+    # 看不到的圖紙和不存在一樣（docs/adr/033 F）：名稱、料號、圖號不認成實體——不代號化、
+    # 不影響分流、不分派、不出現在回應（entities、mapping、dispatch、auth.filter）。
+    # 不存在的名稱本來就是原文送 Jev，看不到的也一樣，回應才分不出兩者
+    entities = [e for e in index.find(question) if e.kind != "part" or e.id in visible]
     masked = index.pseudonymize(question, entities)
 
     # 本地分流：判斷要交給哪個模組（第 1 段授權要知道要做什麼；Jev 只判斷是不是查詢）
@@ -183,13 +201,14 @@ async def route(
             op_probs=op_probs if op else {},
             model="使用者點選",
         )
-    elif not question and photo:
-        # 只有照片：依本機辨識結果決定
+    elif photo and (not question or _names_photo(question, entities, photo)):
+        # 只有照片（或文字只是照片那一件的名稱）：依本機辨識結果決定
         intent = PHOTO_INTENTS.get(photo_kind or "", "out_of_scope")
         result = System1Result(
             engine="local",
             intent_probs={k: float(k == intent) for k in cfg["intents"]},
             model="Chinese-CLIP 照片辨識",
+            detail={"photo_named": bool(question)},
         )
     else:
         async with memory_guard.flow("route", {"bge"}):

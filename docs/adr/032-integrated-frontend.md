@@ -20,7 +20,7 @@
 3. **成果全部來自真實回應**（`shell/outputs.ts` 的 `deriveOutputs`）：
    | 成果 | 來源 |
    |---|---|
-   | 圖紙 | 第 1 段確認看得到的那一張（`auth.filter.doc_level` 不是 null）或圖紙查找第 1 名；展示區讀 `/parts/{id}` |
+   | 圖紙 | 第 1 段確認看得到的那一張（`auth.filter.doc_level` 不是 null）或圖紙查找第 1 名；展示區讀 `/parts/{id}`。問答在第 6 段降級但 `/chat` 第 1 段也通過時仍保留（找到圖紙、問題答不出來，ADR 033；不給跳轉） |
    | 3D | `/cad/reconstruct` 的 `model.stl`（按「開始轉換」才執行） |
    | 庫存／查詢 | `/inventory/ask` 的結果表 |
    | 排程 | 目前排程 `/production/overview`；按「開始排程」後 `/schedule/solve` 的解 |

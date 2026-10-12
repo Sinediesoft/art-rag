@@ -189,12 +189,17 @@ def test_sales_asking_about_a_confidential_drawing_does_not_learn_it_exists(clie
     assert r["outcome"] == "pass" and r["auth"]["filter"]["levels"] == ["公開", "內部"]
 
 
-def test_reconstructing_an_invisible_drawing_is_degraded_not_explained(client):
+def test_reconstructing_an_invisible_drawing_is_not_explained(client):
+    """2026-10-10 起（docs/adr/033 F）：看不到的圖紙在實體解析就當成不存在——
+    不帶出圖紙 ID、不指定對象，也不給「換誰可以」；和不存在的名稱走同一條路
+    （逐欄比對見 test_drawing_retrieval.py 的
+    test_hidden_drawing_text_looks_like_a_missing_one）。"""
     as_account(client, "sales_a")
     r = route(client, "把連接法蘭轉成 3D")
-    assert r["outcome"] == "degraded" and r["blocked"]["degraded"] is True
-    assert r["blocked"]["reason"] == DEGRADE and r["auth"]["retry"] is None
-    assert r["guard"] is None and r["egress"]["bytes"] == 0
+    assert r["dispatch"]["part_id"] is None and r["auth"]["retry"] is None
+    assert all(e["kind"] != "part" for e in r["entities"]) and r["mapping"] == {}
+    assert "mfg-002" not in json.dumps(r, ensure_ascii=False)
+    assert (r["auth"]["filter"] or {}).get("doc_id") is None
 
 
 def test_factory_data_does_not_depend_on_drawing_confidentiality(client):

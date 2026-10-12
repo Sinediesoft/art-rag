@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, assetUrl } from "../../api/client";
-import { useStatus, useSwitchAccount } from "../../api/hooks";
+import { usePart, useStatus, useSwitchAccount } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
 import { canRerun, hasMark, REJECTED, writeUnconfirmed } from "../../shell/persist";
-import { ctaOf, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
+import { ctaOf, foundDrawing, KIND_LABEL, thumbOf, visiblePart, type Output } from "../../shell/outputs";
 import { dispatchOf } from "../../shell/runner";
 import { buildStages, egressOf, gatewayStages, progressOf, summaryOf } from "../../shell/stages";
 import type { ChangePart, ChatPart, ComparePart, ReconstructPart, SchedulePart, SqlPart, Turn } from "../../shell/types";
@@ -385,6 +385,27 @@ function Archived({ turn }: { turn: Turn }) {
   );
 }
 
+/** 降級說明照後端 pipeline 實際擋下的段落寫；found＝第 1 段確認看得到的圖紙名稱（找到圖紙、問題答不出來） */
+function degradedNote(p: ChatPart, found?: string) {
+  const stage = (p.done?.pipeline ?? p.sources?.pipeline ?? []).find((s) => s.status === "block")?.stage;
+  const why =
+    stage === 1
+      ? "回覆「查無資料」（不透露有沒有這份文件），沒有讀取文件、沒有呼叫 LLM"
+      : stage === 7
+        ? "第 7 段輸出檢查沒過，原回答沒有送出，改回覆「查無資料」"
+        : found
+          ? "第 6 段生成閘門判斷這張圖紙的資料答不出這個問題，回覆「查無資料」，沒有呼叫 LLM"
+          : "第 6 段生成閘門判斷權限內沒有可答的內容，回覆「查無資料」，沒有呼叫 LLM";
+  return found ? `已找到圖紙〈${found}〉；${why}` : why;
+}
+
+/** 圖紙對象卡：料號、圖號由 /parts/{id} 帶目前的 JWT 讀取（看不到的後端回 403，只顯示等級） */
+function PartSubject({ id, title, level }: { id: string; title: string; level: string }) {
+  const { data: p } = usePart(id);
+  const no = p ? `${p.part_no}・${p.drawing_no} rev.${p.revision}・` : "";
+  return <Subject kind="part" id={id} title={title} meta={`${no}圖紙・${level}`} />;
+}
+
 function Subject({ kind, id, title, meta }: { kind: "part" | "artwork"; id: string; title: string; meta: string }) {
   const src = kind === "part" ? `/api/v1/parts/${encodeURIComponent(id)}/drawing?size=thumb` : `/api/v1/artworks/${encodeURIComponent(id)}/image?size=thumb`;
   return (
@@ -408,11 +429,12 @@ function ChatBody({ turn, part: p }: { turn: Turn; part: ChatPart }) {
   const r = turn.route!;
   const d = dispatchOf(r);
   const vis = visiblePart(turn);
+  const found = foundDrawing(turn);
   const pf = p.sources?.post_filter;
   return (
     <div className="answer">
       {th.mode === "brief" && p.target.artwork_id && <Subject kind="artwork" id={p.target.artwork_id} title={d.artwork_label ?? p.target.artwork_id} meta="作品・知識庫" />}
-      {th.mode === "brief" && vis && <Subject kind="part" id={vis.id} title={vis.label} meta={`圖紙・${vis.level}`} />}
+      {th.mode === "brief" && vis && <PartSubject id={vis.id} title={vis.label} level={vis.level} />}
       {p.status === "retrieving" && <Pending label="檢索知識庫中…（第 3 段 Metadata Filter）" />}
       {p.status === "streaming" && !p.text && <Pending label={`已取回 ${p.sources?.sources.length ?? 0} 段資料，第 4～6 段驗證後等待本地模型回答…`} />}
       {pf && !(pf.gate && !pf.gate.passed) && (pf.flagged.length > 0 || th.mode === "full") && (
@@ -449,7 +471,8 @@ function ChatBody({ turn, part: p }: { turn: Turn; part: ChatPart }) {
       )}
       {p.done?.degraded && (
         <p className="answer__note">
-          <Icon name="lock" />第 6 段生成閘門判斷權限內沒有可答的內容，回覆「查無資料」，沒有呼叫 LLM
+          <Icon name="lock" />
+          {degradedNote(p, found ? vis?.label : undefined)}
         </p>
       )}
       {p.done && !p.done.degraded && th.mode === "full" && (
@@ -635,7 +658,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
   if (th.mode === "brief")
     return (
       <div className="answer">
-        {vis && <Subject kind="part" id={vis.id} title={vis.label} meta={`圖紙・${vis.level}`} />}
+        {vis && <PartSubject id={vis.id} title={vis.label} level={vis.level} />}
         <RichText
           text={
             source

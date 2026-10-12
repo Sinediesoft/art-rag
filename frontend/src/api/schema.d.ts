@@ -2397,6 +2397,11 @@ export interface components {
              * @description 拉正後的線條重合度（0–1）；未驗證為 null
              */
             overlap: number | null;
+            /**
+             * Coverage
+             * @description 照片涵蓋圖紙三視圖幾何區的比例（0–1）；低於 partial_cover 時門檻改用 partial_min_overlap。未驗證為 null
+             */
+            coverage?: number | null;
             /** Verified */
             verified: boolean;
         };
@@ -2417,6 +2422,16 @@ export interface components {
             min_inliers: number;
             /** Min Overlap */
             min_overlap: number;
+            /**
+             * Partial Cover
+             * @description 照片涵蓋比例低於此值視為只拍到一部分
+             */
+            partial_cover: number;
+            /**
+             * Partial Min Overlap
+             * @description 只拍到一部分時線條重合要到的門檻
+             */
+            partial_min_overlap: number;
             /** Matched */
             matched: boolean;
             /** Best Part Id */
@@ -3684,12 +3699,21 @@ export interface components {
         /** PartTextSearchHit */
         PartTextSearchHit: {
             part: components["schemas"]["PartSummary"];
-            /** Score */
+            /**
+             * Score
+             * @description bge-m3 與這張圖紙最相關段落的相似度
+             */
             score: number;
             /** Topic */
             topic: string;
             /** Snippet */
             snippet: string;
+            /**
+             * Exact
+             * @description 問句裡完整寫了這張圖紙的名稱、料號或圖號：排在語意相似的結果前面
+             * @default false
+             */
+            exact: boolean;
         };
         /** PartTextSearchResponse */
         PartTextSearchResponse: {

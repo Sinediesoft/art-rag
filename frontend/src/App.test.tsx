@@ -1317,3 +1317,130 @@ describe("建檔頁卸載後的晚到回應（第 8 次 code review F3：共用�
     expect(cached()).not.toContain("SYNTH_SAVED");
   });
 });
+
+describe("照片查工廠圖紙（TASK-20261010-001：上傳立式軸承座的局部截圖顯示「查無資料」）", () => {
+  const DEFAULT_Q = "這張圖紙的重點是什麼？";
+  const PART_006 = {
+    id: "mfg-006",
+    part_no: "PBK-6006",
+    drawing_no: "D-24-0618",
+    revision: "D",
+    name: { zh: "立式軸承座" },
+    category: "軸承座",
+    material: "FC250 灰口鑄鐵",
+    density_g_cm3: 7.25,
+    surface: "塗漆",
+    company: "",
+    owner: "機械設計課",
+    confidentiality: "機密",
+    geometry: {},
+    descriptions: [],
+    tags: [],
+    drawing_url: "/api/v1/parts/mfg-006/drawing",
+    thumb_url: "/api/v1/parts/mfg-006/drawing?size=thumb",
+    model_url: null,
+    step_url: null,
+  };
+  const pass = (n: number) => ({ stage: n, name: "", status: "pass", by: "地端", detail: "" });
+  /** /agent/route：照片在本機辨識成 mfg-006，第 1 段確認看得到（doc_level），交給圖紙問答 */
+  const photoRoute = (question = "") =>
+    factoryRoute({
+      question,
+      photo: { kind: "drawing", id: "mfg-006", label: "立式軸承座", domain: "mfg" },
+      dispatch: { module: "drawing_qa", artwork_id: null, part_id: "mfg-006", part_label: "立式軸承座", question: question || DEFAULT_Q },
+      auth: {
+        ...factoryRoute().auth,
+        filter: { domain: "mfg", domain_label: "工廠圖紙", clearance: 2, depts: ["機械設計課"], levels: ["公開", "內部", "機密"], doc_id: "mfg-006", doc_label: "立式軸承座", doc_level: "機密", text: "" },
+      },
+    });
+  const backend = () => {
+    const t = factoryBackend();
+    t.on("POST", "/images", () => json({ image_id: "img-006" }));
+    t.on("POST", "/agent/route", ({ body }) => json(photoRoute((body as { question: string }).question)));
+    t.on("GET", "/parts/mfg-006", () => json(PART_006));
+    t.on("POST", "/chat", () =>
+      sse([
+        ["sources", sources("機密", { part_id: "mfg-006", artwork_id: null })],
+        ["token", { text: "立式軸承座支撐輸送滾筒軸 [1]。" }],
+        ["done", done({ pipeline: [1, 2, 3, 4, 5, 6, 7].map(pass) })],
+      ]),
+    );
+    return t;
+  };
+  const sendPhoto = async (text = "") => {
+    await ready();
+    await act(async () => {
+      fireEvent.change(screen.getAllByTestId("composer-file").at(-1)!, { target: { files: [new File(["x"], "截圖.png", { type: "image/png" })] } });
+    });
+    await waitFor(() => expect(screen.getAllByAltText("附加的照片").length).toBeGreaterThan(0));
+    if (text) fireEvent.change(screen.getAllByLabelText("輸入問題").at(-1)!, { target: { value: text } });
+    await act(async () => {
+      fireEvent.click(screen.getAllByLabelText("送出").at(-1)!);
+    });
+    await idle();
+  };
+  const lastAi = () => [...document.querySelectorAll(".msg--ai")].at(-1) as HTMLElement;
+  const chatBodies = (t: ReturnType<typeof mockTransport>) => t.calls.filter((c) => c.path === "/chat").map((c) => c.body as Record<string, unknown>);
+
+  it("入口只附照片：問答帶 mfg-006 與交接票，簡介顯示料號、圖號；進入工廠模組右側是這張圖紙", async () => {
+    const t = backend();
+    renderApp();
+    await sendPhoto();
+    expect(chatBodies(t)).toEqual([{ question: DEFAULT_Q, part_id: "mfg-006", route_ticket: "ticket-must-not-be-stored" }]);
+    expect(lastAi().textContent).not.toContain("查無資料");
+    await waitFor(() => expect(lastAi().querySelector(".subject__meta")?.textContent).toContain("PBK-6006・D-24-0618 rev.D"));
+    expect(lastAi().querySelector(".subject__title")?.textContent).toBe("立式軸承座");
+    fireEvent.click(document.querySelector(".jump--factory")!);
+    await waitFor(() => expect(where).toMatch(/^\/factory\//));
+    await waitFor(() => expect(document.querySelector(".titleblock")?.textContent).toContain("PBK-6006"));
+    expect(document.querySelector(".titleblock")?.textContent).toContain("D-24-0618");
+
+    // 在工廠模組裡再附一次照片，加上名稱：同一張圖紙，不出現「查無資料」
+    await sendPhoto("立式軸承座");
+    expect(chatBodies(t).at(-1)).toEqual({ question: "立式軸承座", part_id: "mfg-006", route_ticket: "ticket-must-not-be-stored" });
+    expect(lastAi().textContent).not.toContain("查無資料");
+    expect(document.querySelector(".titleblock")?.textContent).toContain("PBK-6006");
+  });
+
+  it("圖紙找到了、問題答不出來：說明找到〈立式軸承座〉，保留料號圖號；第 6 段降級照樣不給跳轉", async () => {
+    const t = backend();
+    const pipeline = [1, 2, 3, 4, 5].map(pass).concat({ stage: 6, name: "生成閘門", status: "block", by: "地端", detail: "" });
+    const src = sources("機密", { part_id: "mfg-006", artwork_id: null, sources: [], pipeline });
+    src.post_filter.gate = { ...src.post_filter.gate, passed: false, message: "查無資料" };
+    t.on("POST", "/chat", () => sse([["sources", src], ["token", { text: "查無資料：在你目前可以查閱的資料中，找不到能回答這個問題的內容。" }], ["done", done({ degraded: true, pipeline })]]));
+    renderApp();
+    await sendPhoto("這張圖紙的包裝方式？");
+    expect(lastAi().textContent).toContain("已找到圖紙〈立式軸承座〉；第 6 段生成閘門");
+    await waitFor(() => expect(lastAi().querySelector(".subject__meta")?.textContent).toContain("PBK-6006"));
+    expect(lastAi().querySelector(".jump")).toBeNull();
+    expect(lastAi().querySelector(".deeplinks")).toBeNull();
+  });
+
+  it("第 7 段輸出檢查擋下：說明照實際擋下的段落寫，不寫成第 6 段", async () => {
+    const t = backend();
+    const pipeline = [1, 2, 3, 4, 5, 6].map(pass).concat({ stage: 7, name: "本地 LLM", status: "block", by: "地端", detail: "" });
+    t.on("POST", "/chat", () =>
+      sse([["sources", sources("機密", { part_id: "mfg-006", artwork_id: null, pipeline })], ["token", { text: "查無資料：在你目前可以查閱的資料中，找不到能安全回答這個問題的內容。" }], ["done", done({ degraded: true, pipeline })]]),
+    );
+    renderApp();
+    await sendPhoto();
+    expect(lastAi().textContent).toContain("已找到圖紙〈立式軸承座〉；第 7 段輸出檢查沒過");
+    expect(lastAi().textContent).not.toContain("第 6 段生成閘門");
+    expect(lastAi().querySelector(".jump")).toBeNull();
+  });
+
+  it("沒有權限（照片辨識不到）：和知識庫沒有的圖紙一樣，不讀圖紙、不顯示任何圖紙資訊", async () => {
+    const t = backend();
+    t.on("POST", "/agent/route", () =>
+      json(route({ question: "", intent: "out_of_scope", gate: "out_of_scope", photo: { kind: "unknown", id: null, label: "知識庫中沒有這張圖紙", domain: "mfg" }, dispatch: { artwork_id: null, part_id: null, question: "" }, route_ticket: null })),
+    );
+    renderApp();
+    await sendPhoto();
+    expect(chatBodies(t)).toEqual([]);
+    expect(t.calls.some((c) => c.path.startsWith("/parts/"))).toBe(false);
+    const text = document.body.textContent ?? "";
+    for (const s of ["立式軸承座", "PBK-6006", "D-24-0618", "mfg-006"]) expect(text).not.toContain(s);
+    expect(lastAi().querySelector(".subject")).toBeNull();
+    expect(lastAi().querySelector(".jump")).toBeNull();
+  });
+});

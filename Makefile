@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -29,6 +29,7 @@ help:
 	@echo "make eval-send-image 問答附圖／不附圖對照（Issue #2）：正確率、引用、首字與總時間"
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
+	@echo "make eval-drawing-retrieval 圖紙文字與照片檢索評估（不用開後端，要先 make index）：回報的截圖、原圖、單一視圖、模擬實拍、未收錄圖紙，名稱／料號／圖號／描述；生管與業務各跑一次，指錯或看不到的圖紙出現就失敗"
 	@echo "make eval-style  畫作卡推測評估（不用開後端、不用索引）：風格大類、細分流派、題材、媒材的正確率，「像畫作」把關擋下圖紙照片"
 	@echo "make eval-style-met 畫作卡推測＋大都會評估集（555 件，第一次會從 Met 開放 API 抓圖到 data/met_eval/，約 56 MB）：畫作 340 幅、雕塑陶瓷器物與老照片 215 件，門檻掃描"
 	@echo "make style-head  重訓畫作卡的媒材分類頭（大都會館藏 2,010 幅，第一次會抓圖約 215 MB）：輸出 shared/style_head_v1.npz 與和零樣本的比較；換 Chinese-CLIP 後要重跑"
@@ -168,6 +169,10 @@ eval-router:
 # 色彩分析（docs/adr/010）：在程序內執行，不用開後端
 eval-color:
 	$(PY) eval/run_color_eval.py
+
+# 圖紙文字與照片檢索（docs/adr/033）：在程序內執行，不用開後端
+eval-drawing-retrieval:
+	$(PY) eval/run_drawing_retrieval_eval.py
 
 # 畫作卡推測（docs/adr/018）：在程序內執行，不用開後端、不用索引；正解在 eval/style_truth.json
 eval-style:
