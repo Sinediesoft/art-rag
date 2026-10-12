@@ -251,9 +251,22 @@ def _save(d: dict) -> None:
     tmp.replace(path)
 
 
-def draft_file(draft_id: str, name: str) -> Path:
+def _owned(draft_id: str, account: Account | None) -> dict:
+    """讀草稿並確認這個身分可以碰它：建立者本人或能收錄的主管。
+    不能碰的一律回「找不到」，不透露這份草稿存在；沒有記錄建立者的舊草稿只有主管能碰。
+    account 為 None 只給程式內部呼叫（測試、背景工作）。"""
+    d = _load(draft_id)
+    if account is None or account.can("kb_intake"):
+        return d
+    if d.get("created_by") and d["created_by"] == account.id:
+        return d
+    raise AppError("INTAKE_DRAFT_NOT_FOUND", "找不到這份建檔草稿，可能已超過保存期限", 404)
+
+
+def draft_file(draft_id: str, name: str, account: Account | None = None) -> Path:
     if name not in FILES:
         raise AppError("VALIDATION_ERROR", "只提供 " + "、".join(sorted(FILES)), 422)
+    _owned(draft_id, account)
     path = _dir(draft_id) / name
     if not path.is_file():
         raise AppError("INTAKE_DRAFT_NOT_FOUND", "找不到這份建檔草稿，可能已超過保存期限", 404)
@@ -505,13 +518,19 @@ async def intake_stream(
     """
     models = {"clip"} if domain == "art" else {"clip", "qwen"}
     visible = visible_part_ids(account, get_store().parts) if account is not None else None
-    events = _intake_stream(image_id, request_id, domain, visible)
+    events = _intake_stream(
+        image_id, request_id, domain, visible, account.id if account is not None else None
+    )
     async for e in memory_guard.stream("intake", models, events):
         yield e
 
 
 async def _intake_stream(
-    image_id: str, request_id: str, hint: str | None, visible: set[str] | None = None
+    image_id: str,
+    request_id: str,
+    hint: str | None,
+    visible: set[str] | None = None,
+    created_by: str | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     s, cfg = get_settings(), get_models_config().intake
@@ -642,6 +661,8 @@ async def _intake_stream(
         "domain": domain,
         "status": "draft",
         "created_at": _now(),
+        # 只有建立者本人和能收錄的主管看得到、改得了這份草稿（之前沒記，任何人知道 ID 就能改）
+        "created_by": created_by,
         "image_id": image_id,
         "proposed_id": _next_id(spec.id_prefix, "mfg") if domain == "mfg" else None,
         "item_id": None,
@@ -756,14 +777,14 @@ def _read_check(extraction: dict, values: dict) -> dict:
 
 
 # ---------------------------------------------------------------- 人修改、捨棄
-def get_draft(draft_id: str) -> dict:
-    return _view(_load(draft_id))
+def get_draft(draft_id: str, account: Account | None = None) -> dict:
+    return _view(_owned(draft_id, account))
 
 
-def update_draft(draft_id: str, values: dict) -> dict:
+def update_draft(draft_id: str, values: dict, account: Account | None = None) -> dict:
     """人改過的欄位來源標成「人」，再重新套規則（人填過的欄位規則不動）。"""
     with _lock:
-        d = _load(draft_id)
+        d = _owned(draft_id, account)
         spec = _spec(d["domain"])
         if d["status"] not in EDITABLE:
             raise AppError("INTAKE_CLOSED", "這份草稿已經收錄或正在收錄，不能再修改", 409)
@@ -780,9 +801,9 @@ def update_draft(draft_id: str, values: dict) -> dict:
     return _view(d)
 
 
-def discard_draft(draft_id: str) -> None:
+def discard_draft(draft_id: str, account: Account | None = None) -> None:
     with _lock:
-        d = _load(draft_id)
+        d = _owned(draft_id, account)
         if d["status"] == "indexing":
             raise AppError("INTAKE_CLOSED", "這份草稿正在收錄、重建索引，不能捨棄", 409)
         shutil.rmtree(_dir(draft_id), ignore_errors=True)

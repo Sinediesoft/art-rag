@@ -85,3 +85,34 @@ def test_security_logs_are_manager_only(client, monkeypatch):
     assert denied.json()["error"]["code"] == "PERMISSION_DENIED"
     as_account(client, "manager")
     assert len(client.get("/api/v1/security/logs").json()["items"]) == 2
+
+
+# ---------------------------------------------------------------- 資安審查補的權限（2026-10-12）
+def test_eval_results_are_manager_only(client):
+    """評估結果含工廠資料庫的問句與產生的 SQL（看得出資料表結構），只給主管。"""
+    paths = ("/api/v1/eval/runs", "/api/v1/eval/sql-runs", "/api/v1/eval/cad-runs",
+             "/api/v1/eval/route-runs")  # fmt: skip
+    as_account(client, "guest")
+    for path in paths:
+        r = client.get(path)
+        assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED", path
+    as_account(client, "manager")
+    for path in paths:
+        assert client.get(path).status_code == 200, path
+
+
+def test_stopping_a_schedule_needs_schedule_run(client):
+    for account in ("guest", "wh1", "manager"):
+        as_account(client, account)
+        assert client.post("/api/v1/schedule/stop").status_code == 403, account
+    as_account(client, "planner")
+    assert client.post("/api/v1/schedule/stop").status_code == 200
+
+
+def test_demo_admin_actions_need_demo_reset(client):
+    """模擬斷線、手動釋放模型：信任主機之外還要是生管或主管，訪客不能讓服務停擺。"""
+    as_account(client, "guest")
+    assert client.post("/api/v1/admin/outage", json={"enabled": True}).status_code == 403
+    assert client.post("/api/v1/admin/memory/release").status_code == 403
+    as_account(client, "planner")
+    assert client.post("/api/v1/admin/outage", json={"enabled": False}).status_code == 200

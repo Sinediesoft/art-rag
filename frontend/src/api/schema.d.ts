@@ -544,7 +544,7 @@ export interface paths {
         get: operations["get_intake_api_v1_intake__draft_id__get"];
         /**
          * Update Intake
-         * @description 人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。
+         * @description 人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。只有建立者本人或主管能改。
          */
         put: operations["update_intake_api_v1_intake__draft_id__put"];
         post?: never;
@@ -947,7 +947,7 @@ export interface paths {
         put?: never;
         /**
          * Stop Schedule
-         * @description 提前結束目前的求解，採用目前最佳解。
+         * @description 提前結束目前的求解，採用目前最佳解。和開始排程一樣只有生管能做。
          */
         post: operations["stop_schedule_api_v1_schedule_stop_post"];
         delete?: never;
@@ -1098,6 +1098,7 @@ export interface paths {
         /**
          * Sql Eval Runs
          * @description 工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+         *     含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。
          */
         get: operations["sql_eval_runs_api_v1_eval_sql_runs_get"];
         put?: never;
@@ -1496,7 +1497,7 @@ export interface components {
             clearance: number;
             /**
              * Views
-             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）
+             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）
              * @default []
              */
             views: string[];

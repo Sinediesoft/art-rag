@@ -506,14 +506,14 @@ async def create_intake(body: S.IntakeRequest, request: Request):
 
 
 @router.get("/intake/{draft_id}", response_model=S.IntakeDraft, tags=["intake"])
-def get_intake(draft_id: str):
-    return intake_service.get_draft(draft_id)
+def get_intake(draft_id: str, request: Request):
+    return intake_service.get_draft(draft_id, identity.current(request))
 
 
 @router.put("/intake/{draft_id}", response_model=S.IntakeDraft, tags=["intake"])
-def update_intake(draft_id: str, body: S.IntakeUpdate):
-    """人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。"""
-    return intake_service.update_draft(draft_id, body.values)
+def update_intake(draft_id: str, body: S.IntakeUpdate, request: Request):
+    """人在確認頁修改欄位；改過的欄位來源標成「人」，並重新驗證。只有建立者本人或主管能改。"""
+    return intake_service.update_draft(draft_id, body.values, identity.current(request))
 
 
 @router.post("/intake/{draft_id}/commit", response_model=S.IntakeDraft, tags=["intake"])
@@ -529,15 +529,15 @@ def commit_intake(draft_id: str, request: Request):
 
 
 @router.delete("/intake/{draft_id}", response_model=S.OkResponse, tags=["intake"])
-def discard_intake(draft_id: str):
-    intake_service.discard_draft(draft_id)
+def discard_intake(draft_id: str, request: Request):
+    intake_service.discard_draft(draft_id, identity.current(request))
     return S.OkResponse()
 
 
 @router.get("/intake/{draft_id}/{name}", response_class=FileResponse, tags=["intake"])
-def get_intake_file(draft_id: str, name: str):
+def get_intake_file(draft_id: str, name: str, request: Request):
     """草稿的原照片（photo.jpg）、要存進知識庫的圖（圖紙 drawing.png、畫作 image.jpg）。"""
-    return FileResponse(intake_service.draft_file(draft_id, name))
+    return FileResponse(intake_service.draft_file(draft_id, name, identity.current(request)))
 
 
 # -------------------------------------------------------- 畫面區域的草稿與收錄（docs/adr/029）
@@ -778,8 +778,9 @@ async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
 
 
 @router.post("/schedule/stop", response_model=S.OkResponse, tags=["production"])
-async def stop_schedule():
-    """提前結束目前的求解，採用目前最佳解。"""
+async def stop_schedule(request: Request):
+    """提前結束目前的求解，採用目前最佳解。和開始排程一樣只有生管能做。"""
+    identity.require(identity.current(request), "schedule_run", "結束排程")
     return S.OkResponse(ok=await schedule_service.stop())
 
 
@@ -810,6 +811,8 @@ def memory_status():
 def release_memory(request: Request):
     """展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。"""
     identity.require_demo(request, "手動釋放模型")
+    # 只看主機的話，同一台機器上任何身分（含訪客）都能卸載模型
+    identity.require(identity.current(request), "demo_reset", "手動釋放模型")
     g = memory_guard.guard
     event = g.check("手動釋放", set(g.current_models), force=True)
     return {"event": event, "status": g.status()}
@@ -822,7 +825,8 @@ def feedback(body: S.FeedbackRequest):
 
 
 @router.get("/eval/runs", response_model=S.EvalRunsResponse, tags=["eval"])
-def eval_runs():
+def eval_runs(request: Request):
+    identity.require_view(identity.current(request), "eval", "評估結果")
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
@@ -851,22 +855,26 @@ def eval_runs():
 
 
 @router.get("/eval/cad-runs", response_model=S.CadEvalRunsResponse, tags=["eval"])
-def cad_eval_runs():
+def cad_eval_runs(request: Request):
     """工廠圖紙評估（make eval-cad）：圖紙辨識與 Ortho2CAD 3D 重建。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-cad.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
 
 
 @router.get("/eval/sql-runs", response_model=S.SqlEvalRunsResponse, tags=["eval"])
-def sql_eval_runs():
-    """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。"""
+def sql_eval_runs(request: Request):
+    """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+    含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-sql.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
 
 
 @router.get("/eval/route-runs", response_model=S.RouteEvalRunsResponse, tags=["eval"])
-def route_eval_runs():
+def route_eval_runs(request: Request):
     """智慧助理路由評估（make eval-route）：Jev 與本地路由的正確率、修改誤判、延遲、外送量。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-route.json"), reverse=True)[:10]
     runs = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
     for r in runs:  # 清單只回摘要，逐題結果留在檔案
@@ -1067,6 +1075,7 @@ def _system1_status() -> S.System1Status:
 def simulate_outage(body: S.OutageRequest, request: Request):
     """展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/030）。"""
     identity.require_demo(request, "模擬斷線")
+    identity.require(identity.current(request), "demo_reset", "模擬斷線")
     providers.OUTAGE["enabled"] = body.enabled
     return S.OkResponse()
 

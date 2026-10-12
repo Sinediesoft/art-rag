@@ -491,3 +491,27 @@ def test_draft_not_found_and_discard(client, reads):
     assert client.get(f"/api/v1/intake/{did}/secret.txt").status_code == 422
     assert client.delete(f"/api/v1/intake/{did}").status_code == 200
     assert client.get(f"/api/v1/intake/{did}").status_code == 404
+
+
+def test_draft_is_only_visible_to_its_creator_and_managers(client, reads):
+    """建檔草稿只有建立者本人與能收錄的主管碰得到；其他人讀、改、刪、拿照片都當作找不到
+    （之前任何人知道草稿 ID 就能在主管收錄前改欄位）。"""
+    as_account(client, "planner")
+    did = ready_draft(client, reads)["draft_id"]
+    try:
+        as_account(client, "wh1")
+        for r in (
+            client.get(f"/api/v1/intake/{did}"),
+            client.put(f"/api/v1/intake/{did}", json={"values": {"owner": "公開"}}),
+            client.get(f"/api/v1/intake/{did}/photo.jpg"),
+            client.delete(f"/api/v1/intake/{did}"),
+        ):
+            assert r.status_code == 404 and r.json()["error"]["code"] == "INTAKE_DRAFT_NOT_FOUND"
+        as_account(client, "planner")
+        assert fields(client.get(f"/api/v1/intake/{did}").json())["owner"]["value"] == "生產技術課"
+        assert client.get(f"/api/v1/intake/{did}/photo.jpg").status_code == 200
+        as_account(client, "manager")
+        assert client.get(f"/api/v1/intake/{did}").status_code == 200
+    finally:
+        as_account(client, "manager")
+        client.delete(f"/api/v1/intake/{did}")

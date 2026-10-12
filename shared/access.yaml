@@ -57,6 +57,7 @@ views:
   diagnostics: [manager]
   security_logs: [manager]
   audit: [manager]
+  eval: [manager]          # 評估結果（/eval/*）：SQL 評估含資料表結構（docs/adr/030 補）
 
 # 每種操作開放修改的欄位（其他欄位一律不開放，例如訂單的已出貨數量）
 fields:
