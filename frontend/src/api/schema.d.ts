@@ -4,6 +4,48 @@
  */
 
 export interface paths {
+    "/api/v1/auth/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Accounts
+         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
+         *     放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。
+         */
+        get: operations["list_accounts_api_v1_auth_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch Account
+         * @description 展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
+         *     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。
+         */
+        post: operations["switch_account_api_v1_auth_switch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -13,7 +55,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload Image */
+        /**
+         * Upload Image
+         * @description 上傳照片：記下擁有者（目前帳號）。之後原圖、色彩、對位、辨識、問答、建檔、批次與 3D 重建
+         *     都只接受擁有者與擁有者授權（PUT /images/{id}/acl）的帳號；知道 image_id 不夠。
+         */
         post: operations["upload_image_api_v1_images_post"];
         delete?: never;
         options?: never;
@@ -28,9 +74,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Image */
+        /**
+         * Get Image
+         * @description 擁有者與授權帳號才讀得到；不存在和沒有權限同一個 404（不透露別人的照片存不存在）。
+         */
         get: operations["get_image_api_v1_images__image_id__get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{image_id}/acl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Image Acl
+         * @description 擁有者明確授權其他帳號使用這張照片（整份取代；清單空白＝只有自己）。非擁有者 404。
+         */
+        put: operations["set_image_acl_api_v1_images__image_id__acl_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -126,6 +195,27 @@ export interface paths {
         get: operations["get_photo_alignment_overlay_api_v1_images__image_id__align_png_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/search/any": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search Any
+         * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
+         *     判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。
+         */
+        post: operations["search_any_api_v1_search_any_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -251,6 +341,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/artworks/{artwork_id}/region-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Region Draft
+         * @description 藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；
+         *     解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。
+         */
+        post: operations["create_region_draft_api_v1_artworks__artwork_id__region_drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Region Drafts
+         * @description 待收錄（能收錄的身分才看得到）與自己送出的草稿。
+         */
+        get: operations["list_region_drafts_api_v1_region_drafts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Commit Region Draft
+         * @description 收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。
+         *
+         *     回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。
+         */
+        post: operations["commit_region_draft_api_v1_region_drafts__draft_id__commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Return Region Draft
+         * @description 主管退回（附原因），藝術家在自己的草稿清單看得到。
+         */
+        post: operations["return_region_draft_api_v1_region_drafts__draft_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/region-drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw Region Draft
+         * @description 送出的人撤回還沒收錄的草稿。
+         */
+        delete: operations["withdraw_region_draft_api_v1_region_drafts__draft_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat": {
         parameters: {
             query?: never;
@@ -268,6 +461,23 @@ export interface paths {
          *     inject 只在受信任的評估模式開放；send_image 與 conflict_check 不會略過安全關卡。
          */
         post: operations["chat_api_v1_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Feedback */
+        post: operations["feedback_api_v1_feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -366,27 +576,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/search/any": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search Any
-         * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
-         *     判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。
-         */
-        post: operations["search_any_api_v1_search_any_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/search/parts": {
         parameters: {
             query?: never;
@@ -418,10 +607,69 @@ export interface paths {
         put?: never;
         /**
          * Reconstruct
-         * @description 工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。
-         *     要能使用工廠圖紙；指定或照片辨識出的圖紙也要看得到（資料範圍）。
+         * @description 工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型（在 API 行程內執行的舊入口；
+         *     建議改用 `POST /cad/jobs` 背景工作）。要能使用工廠圖紙；指定的圖紙、上傳的照片、
+         *     照片辨識出的圖紙也都要有權限（資料範圍）。
          */
         post: operations["reconstruct_api_v1_cad_reconstruct_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cad/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cad Job
+         * @description 已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。
+         *     還在執行或沒有摘要的工作用 `GET /jobs/{id}` 查狀態。
+         */
+        get: operations["get_cad_job_api_v1_cad_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/parts/{part_id}/reconstructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Part Reconstructions */
+        get: operations["list_part_reconstructions_api_v1_parts__part_id__reconstructions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cad/jobs/{job_id}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Cad File
+         * @description 3D 重建的檔案（舊網址，和 `GET /jobs/{id}/artifacts/{name}` 同一套授權）。
+         */
+        get: operations["get_cad_file_api_v1_cad_jobs__job_id___name__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -540,7 +788,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Intake */
+        /**
+         * Get Intake
+         * @description 建檔的人與能收錄的身分（主管）才讀得到；其他人和不存在同一個 404。
+         */
         get: operations["get_intake_api_v1_intake__draft_id__get"];
         /**
          * Update Intake
@@ -590,163 +841,6 @@ export interface paths {
          * @description 草稿的原照片（photo.jpg）、要存進知識庫的圖（圖紙 drawing.png、畫作 image.jpg）。
          */
         get: operations["get_intake_file_api_v1_intake__draft_id___name__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/artworks/{artwork_id}/region-drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Region Draft
-         * @description 藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；
-         *     解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。
-         */
-        post: operations["create_region_draft_api_v1_artworks__artwork_id__region_drafts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/region-drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Region Drafts
-         * @description 待收錄（能收錄的身分才看得到）與自己送出的草稿。
-         */
-        get: operations["list_region_drafts_api_v1_region_drafts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/region-drafts/{draft_id}/commit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Commit Region Draft
-         * @description 收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。
-         *
-         *     回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。
-         */
-        post: operations["commit_region_draft_api_v1_region_drafts__draft_id__commit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/region-drafts/{draft_id}/return": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Return Region Draft
-         * @description 主管退回（附原因），藝術家在自己的草稿清單看得到。
-         */
-        post: operations["return_region_draft_api_v1_region_drafts__draft_id__return_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/region-drafts/{draft_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Withdraw Region Draft
-         * @description 送出的人撤回還沒收錄的草稿。
-         */
-        delete: operations["withdraw_region_draft_api_v1_region_drafts__draft_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/cad/jobs/{job_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Cad Job
-         * @description 已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。
-         */
-        get: operations["get_cad_job_api_v1_cad_jobs__job_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/parts/{part_id}/reconstructions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Part Reconstructions */
-        get: operations["list_part_reconstructions_api_v1_parts__part_id__reconstructions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/cad/jobs/{job_id}/{name}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Cad File */
-        get: operations["get_cad_file_api_v1_cad_jobs__job_id___name__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -824,6 +918,9 @@ export interface paths {
         /**
          * Inventory Ask
          * @description Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。
+         *     直接打這個端點也先過共用的輸入防護（第 2 段的地端 hard-block，擋下回 403 INPUT_BLOCKED、
+         *     不呼叫模型）；SQL 的 SELECT 白名單與唯讀連線照舊。這是工具，沒有檢索段落，
+         *     所以不經過 RAG 的第 3～6 段。
          */
         post: operations["inventory_ask_api_v1_inventory_ask_post"];
         delete?: never;
@@ -886,6 +983,7 @@ export interface paths {
          * @description 從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
          *
          *     權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
+         *     帶 Idempotency-Key 時，重送（連按、網路重試）拿到同一張工單，不會多開。
          */
         post: operations["create_work_order_api_v1_production_work_orders_post"];
         delete?: never;
@@ -928,6 +1026,7 @@ export interface paths {
          * @description 把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
          *
          *     只有生管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
+         *     這是在 API 行程內求解的舊入口（連線中斷就停止）；背景工作請用 POST /schedule/jobs。
          */
         post: operations["solve_schedule_api_v1_schedule_solve_post"];
         delete?: never;
@@ -947,7 +1046,9 @@ export interface paths {
         put?: never;
         /**
          * Stop Schedule
-         * @description 提前結束目前的求解，採用目前最佳解。
+         * @description 提前結束目前的求解，採用目前最佳的合法解（照常驗證並寫回）——和取消不同：
+         *     取消（POST /jobs/{id}/cancel）放棄、不寫回。要 schedule_run（生管）；訪客、業務、倉管、
+         *     藝術家都是 403，也不會碰到任何求解。同時作用在背景工作與 API 行程內的舊入口。
          */
         post: operations["stop_schedule_api_v1_schedule_stop_post"];
         delete?: never;
@@ -994,6 +1095,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cad/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Cad Job
+         * @description 建立 3D 重建背景工作（gpu 佇列，由獨立 worker 執行）：授權通過後回 202、job_id 與事件網址。
+         *     要能使用工廠圖紙；指定的圖紙、上傳的照片都要有權限。離開頁面不會取消工作。
+         */
+        post: operations["create_cad_job_api_v1_cad_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Schedule Job
+         * @description 建立排程背景工作（schedule 佇列）：只有生管（schedule_run）；排程範圍已有排隊或執行中的
+         *     工作回 409 SCHEDULE_BUSY。帶 input_version 而且和伺服器現在的版本不同，
+         *     回 409 SCHEDULE_INPUT_CHANGED。
+         */
+        post: operations["create_schedule_job_api_v1_schedule_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Jobs
+         * @description 目前身分看得到的工作（最新的在前）；重新整理後用 active=true 找回排隊或執行中的工作。
+         */
+        get: operations["list_jobs_api_v1_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Job
+         * @description 工作的狀態、進度、結果與安全的錯誤訊息（不含模型輸出與程式碼）。
+         */
+        get: operations["get_job_api_v1_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Events
+         * @description 進度與終止事件。每個事件有持久化遞增的 id；斷線後帶 Last-Event-ID（瀏覽器 EventSource
+         *     自動帶，fetch 版自己帶）只收尚未收到的事件，不重複。終態（succeeded／failed／cancelled）
+         *     送出後串流結束。每一輪都重驗目前權限：被撤權就送 error 事件並結束。
+         */
+        get: operations["job_events_api_v1_jobs__job_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Job
+         * @description 取消工作：排隊中直接取消；執行中請 worker 停止，取消後不會再發布成功或寫回任何結果。
+         *     已進入寫回階段 409 JOB_COMMITTING（會完成）、已結束 409 JOB_ALREADY_FINISHED。
+         *     和排程的「提前結束」（POST /schedule/stop，採用目前最佳解並寫回）不同。
+         */
+        post: operations["cancel_job_api_v1_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/artifacts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Artifact
+         * @description 受保護的產物預覽或下載（白名單檔名：input.png、code.py、model.stl、model.step、reproj.png）。
+         *     工作完成後才發布；每次請求都重驗目前身分對這個工作的授權。
+         */
+        get: operations["job_artifact_api_v1_jobs__job_id__artifacts__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory": {
         parameters: {
             query?: never;
@@ -1028,23 +1277,6 @@ export interface paths {
          * @description 展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。
          */
         post: operations["release_memory_api_v1_admin_memory_release_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/feedback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Feedback */
-        post: operations["feedback_api_v1_feedback_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1211,7 +1443,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/accounts": {
+    "/api/v1/security/logs": {
         parameters: {
             query?: never;
             header?: never;
@@ -1219,11 +1451,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Accounts
-         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
-         *     放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。
+         * Security Logs
+         * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
+         *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
+         *     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。
          */
-        get: operations["list_accounts_api_v1_auth_accounts_get"];
+        get: operations["security_logs_api_v1_security_logs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1232,21 +1465,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/switch": {
+    "/api/v1/audit": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Switch Account
-         * @description 展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
-         *     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。
+         * Audit Log
+         * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
+         *     要 access.yaml 的 views.audit（docs/adr/030）。
          */
-        post: operations["switch_account_api_v1_auth_switch_post"];
+        get: operations["audit_log_api_v1_audit_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1308,6 +1541,7 @@ export interface paths {
         /**
          * Change Commit
          * @description 按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。
+         *     帶 Idempotency-Key 時，重送拿到先前的回應（不會重複異動）。
          */
         post: operations["change_commit_api_v1_changes__pending_id__commit_post"];
         delete?: never;
@@ -1327,7 +1561,7 @@ export interface paths {
         put?: never;
         /**
          * Change Request Approval
-         * @description 超過額度：建立待核准單（AP-）送主管。
+         * @description 超過額度：建立待核准單（AP-）送主管。帶 Idempotency-Key 時重送不會建立第二張。
          */
         post: operations["change_request_approval_api_v1_changes__pending_id__request_approval_post"];
         delete?: never;
@@ -1369,6 +1603,7 @@ export interface paths {
         /**
          * Approve
          * @description 主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。
+         *     帶 Idempotency-Key 時重送拿到先前的結果；沒帶也不會重複寫入（單據已不是待核准）。
          */
         post: operations["approve_api_v1_approvals__ap_no__approve_post"];
         delete?: never;
@@ -1391,49 +1626,6 @@ export interface paths {
          * @description 主管退回（要附理由，申請人在「我的申請」看得到）。
          */
         post: operations["return_approval_api_v1_approvals__ap_no__return_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/security/logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Security Logs
-         * @description 七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、
-         *     第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。
-         *     只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。
-         */
-        get: operations["security_logs_api_v1_security_logs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Audit Log
-         * @description 稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。
-         *     要 access.yaml 的 views.audit（docs/adr/030）。
-         */
-        get: operations["audit_log_api_v1_audit_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1920,6 +2112,25 @@ export interface components {
             runs: {
                 [key: string]: unknown;
             }[];
+        };
+        /** CadJobCreate */
+        CadJobCreate: {
+            /**
+             * Part Id
+             * @description 知識庫圖紙
+             */
+            part_id?: string | null;
+            /**
+             * Image Id
+             * @description 上傳的圖紙照片（要是自己的或擁有者授權的）
+             */
+            image_id?: string | null;
+            /**
+             * Strategy
+             * @default ortho2cad
+             * @enum {string}
+             */
+            strategy: "ortho2cad" | "hybrid";
         };
         /** CadJobListResponse */
         CadJobListResponse: {
@@ -2619,6 +2830,23 @@ export interface components {
              */
             demo_warning: string | null;
         };
+        /** ImageAcl */
+        ImageAcl: {
+            /** Image Id */
+            image_id: string;
+            /** Owner Id */
+            owner_id: string;
+            /** Accounts */
+            accounts: string[];
+        };
+        /** ImageAclUpdate */
+        ImageAclUpdate: {
+            /**
+             * Accounts
+             * @description 可以使用這張照片的其他帳號 id（整份取代）
+             */
+            accounts?: string[];
+        };
         /** ImageAlignment */
         ImageAlignment: {
             target: components["schemas"]["AlignTarget"];
@@ -3104,6 +3332,149 @@ export interface components {
             };
             /** Answers */
             answers: components["schemas"]["JevAnswerRow"][];
+        };
+        /** Job */
+        Job: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cad" | "schedule";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Owner Id */
+            owner_id: string;
+            /** Attempt */
+            attempt: number;
+            /** Max Attempts */
+            max_attempts: number;
+            /** Cancel Requested */
+            cancel_requested: boolean;
+            /** Stop Requested */
+            stop_requested: boolean;
+            /** Progress */
+            progress?: {
+                [key: string]: unknown;
+            } | null;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+            error?: components["schemas"]["JobError"] | null;
+            /** Input Version */
+            input_version?: string | null;
+            /**
+             * Params
+             * @description 建立時的參數（秒數、引擎、策略）
+             */
+            params?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Target
+             * @description 3D 重建的來源：{part_id}、{image_id} 或兩者（排程為 null）
+             */
+            target?: {
+                [key: string]: unknown;
+            } | null;
+            /** Created At */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Last Event Id */
+            last_event_id: number;
+            /** Status Url */
+            status_url: string;
+            /** Events Url */
+            events_url: string;
+            /**
+             * Artifacts
+             * @default []
+             */
+            artifacts: components["schemas"]["JobArtifact"][];
+        };
+        /** JobArtifact */
+        JobArtifact: {
+            /** Name */
+            name: string;
+            /** Url */
+            url: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** JobCancelResponse */
+        JobCancelResponse: {
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "cancelled" | "cancelling" | "already_cancelled";
+            job: components["schemas"]["Job"];
+        };
+        /** JobCreated */
+        JobCreated: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "cad" | "schedule";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+            /** Status Url */
+            status_url: string;
+            /** Events Url */
+            events_url: string;
+            /**
+             * Idempotent Replay
+             * @description true＝相同帳號／操作／Idempotency-Key 的相同請求，回傳的是先前建立的工作
+             */
+            idempotent_replay: boolean;
+            /**
+             * Delayed Dispatch
+             * @description true＝工作已建立但 broker 暫時不通，留在 outbox 等恢復後投遞（維持 queued）
+             */
+            delayed_dispatch: boolean;
+        };
+        /** JobError */
+        JobError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** JobListResponse */
+        JobListResponse: {
+            /** Items */
+            items: components["schemas"]["Job"][];
+        };
+        /** JobsBrief */
+        JobsBrief: {
+            /** Enabled */
+            enabled: boolean;
+            /** Database Ok */
+            database_ok: boolean;
+            /** Broker Ok */
+            broker_ok: boolean;
+            /** Pending Dispatch */
+            pending_dispatch: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /** LightnessStats */
         LightnessStats: {
@@ -3843,6 +4214,13 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
+            /**
+             * Input Version
+             * @description 目前的排程輸入版本（工單、途程、機台、行事曆）；建立排程工作時帶回
+             */
+            input_version?: string | null;
+            /** @description 排程範圍裡排隊或執行中的背景工作（重新整理後找回進度用） */
+            active_job?: components["schemas"]["Job"] | null;
         };
         /** RankedIntent */
         RankedIntent: {
@@ -4252,6 +4630,25 @@ export interface components {
              */
             machines: string[];
         };
+        /** ScheduleJobCreate */
+        ScheduleJobCreate: {
+            /**
+             * Seconds
+             * @description 求解秒數；預設 20
+             */
+            seconds?: number | null;
+            /**
+             * Engine
+             * @default timefold
+             * @enum {string}
+             */
+            engine: "timefold" | "greedy";
+            /**
+             * Input Version
+             * @description 您畫面上的輸入版本（GET /production/overview 的 input_version）；和伺服器現在的不同回 409 SCHEDULE_INPUT_CHANGED，不會用過期的資料排程
+             */
+            input_version?: string | null;
+        };
         /** ScheduleKpis */
         ScheduleKpis: {
             /** N Work Orders */
@@ -4394,6 +4791,14 @@ export interface components {
              * @enum {string}
              */
             engine: "timefold" | "greedy";
+        };
+        /** ScheduleStopRequest */
+        ScheduleStopRequest: {
+            /**
+             * Job Id
+             * @description 要提前結束的排程工作；沒給＝目前執行中的
+             */
+            job_id?: string | null;
         };
         /** ScheduleWorkOrder */
         ScheduleWorkOrder: {
@@ -4610,6 +5015,8 @@ export interface components {
             memory?: components["schemas"]["MemoryStatus"] | null;
             system1: components["schemas"]["System1Brief"];
             chat_defaults: components["schemas"]["ChatDefaultsBrief"];
+            /** @description 背景工作系統（Redis＋工作資料庫＋worker）；沒啟用時 enabled=false */
+            jobs?: components["schemas"]["JobsBrief"] | null;
         };
         /** StockLocation */
         StockLocation: {
@@ -4933,6 +5340,68 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_accounts_api_v1_auth_accounts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    switch_account_api_v1_auth_switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     upload_image_api_v1_images_post: {
         parameters: {
             query?: never;
@@ -4983,6 +5452,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_image_acl_api_v1_images__image_id__acl_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageAclUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAcl"];
+                };
             };
             /** @description Client Error */
             "4XX": {
@@ -5140,6 +5644,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_any_api_v1_search_any_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnySearchResponse"];
+                };
             };
             /** @description Client Error */
             "4XX": {
@@ -5368,6 +5905,167 @@ export interface operations {
             };
         };
     };
+    create_region_draft_api_v1_artworks__artwork_id__region_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artwork_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegionDraftRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_region_drafts_api_v1_region_drafts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraftsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    commit_region_draft_api_v1_region_drafts__draft_id__commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    return_region_draft_api_v1_region_drafts__draft_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegionDraftReturn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionDraft"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    withdraw_region_draft_api_v1_region_drafts__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     chat_api_v1_chat_post: {
         parameters: {
             query?: never;
@@ -5388,6 +6086,39 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    feedback_api_v1_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Client Error */
@@ -5555,39 +6286,6 @@ export interface operations {
             };
         };
     };
-    search_any_api_v1_search_any_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImageSearchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnySearchResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     search_parts_api_v1_search_parts_get: {
         parameters: {
             query: {
@@ -5641,6 +6339,98 @@ export interface operations {
                 content: {
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cad_job_api_v1_cad_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadJobSummary"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_part_reconstructions_api_v1_parts__part_id__reconstructions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                part_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadJobListResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cad_file_api_v1_cad_jobs__job_id___name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Client Error */
             "4XX": {
@@ -5975,259 +6765,6 @@ export interface operations {
             };
         };
     };
-    create_region_draft_api_v1_artworks__artwork_id__region_drafts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                artwork_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegionDraftRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegionDraft"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_region_drafts_api_v1_region_drafts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegionDraftsResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    commit_region_draft_api_v1_region_drafts__draft_id__commit_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegionDraft"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    return_region_draft_api_v1_region_drafts__draft_id__return_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegionDraftReturn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RegionDraft"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    withdraw_region_draft_api_v1_region_drafts__draft_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_cad_job_api_v1_cad_jobs__job_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CadJobSummary"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    list_part_reconstructions_api_v1_parts__part_id__reconstructions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                part_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CadJobListResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_cad_file_api_v1_cad_jobs__job_id___name__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                job_id: string;
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     inventory_schema_api_v1_inventory_schema_get: {
         parameters: {
             query?: never;
@@ -6413,7 +6950,10 @@ export interface operations {
     create_work_order_api_v1_production_work_orders_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409 */
+                "Idempotency-Key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -6446,7 +6986,10 @@ export interface operations {
     cancel_work_order_api_v1_production_work_orders__wo_no__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409 */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 wo_no: string;
             };
@@ -6514,7 +7057,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ScheduleStopRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -6596,6 +7143,241 @@ export interface operations {
             };
         };
     };
+    create_cad_job_api_v1_cad_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409 */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CadJobCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreated"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_schedule_job_api_v1_schedule_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409 */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleJobCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCreated"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_jobs_api_v1_jobs_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+                active?: boolean;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobListResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_job_api_v1_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    job_events_api_v1_jobs__job_id__events_get: {
+        parameters: {
+            query?: {
+                /** @description 沒有 Last-Event-ID 標頭時的續接位置 */
+                after?: number;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE：持久化的進度事件 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_job_api_v1_jobs__job_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobCancelResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    job_artifact_api_v1_jobs__job_id__artifacts__name__get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     memory_status_api_v1_memory_get: {
         parameters: {
             query?: never;
@@ -6641,39 +7423,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemoryReleaseResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    feedback_api_v1_feedback_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeedbackRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Client Error */
@@ -6923,9 +7672,11 @@ export interface operations {
             };
         };
     };
-    list_accounts_api_v1_auth_accounts_get: {
+    security_logs_api_v1_security_logs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6938,7 +7689,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountsResponse"];
+                    "application/json": components["schemas"]["SecurityLogsResponse"];
                 };
             };
             /** @description Client Error */
@@ -6952,18 +7703,16 @@ export interface operations {
             };
         };
     };
-    switch_account_api_v1_auth_switch_post: {
+    audit_log_api_v1_audit_get: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SwitchAccountRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -6971,7 +7720,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountsResponse"];
+                    "application/json": components["schemas"]["AuditResponse"];
                 };
             };
             /** @description Client Error */
@@ -7054,7 +7803,10 @@ export interface operations {
     change_commit_api_v1_changes__pending_id__commit_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409 */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 pending_id: string;
             };
@@ -7085,7 +7837,10 @@ export interface operations {
     change_request_approval_api_v1_changes__pending_id__request_approval_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409 */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 pending_id: string;
             };
@@ -7149,7 +7904,10 @@ export interface operations {
     approve_api_v1_approvals__ap_no__approve_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409 */
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 ap_no: string;
             };
@@ -7203,68 +7961,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalDecision"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    security_logs_api_v1_security_logs_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SecurityLogsResponse"];
-                };
-            };
-            /** @description Client Error */
-            "4XX": {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    audit_log_api_v1_audit_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditResponse"];
                 };
             };
             /** @description Client Error */

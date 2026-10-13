@@ -466,3 +466,16 @@ def test_database_down_is_reported_as_unavailable(jobs_env, monkeypatch):
         monkeypatch.undo()
         config.get_settings.cache_clear()
         db.close()
+
+
+def test_cad_jobs_per_owner_are_capped(jobs, settings):
+    settings(jobs_max_active_per_owner=2)
+    cad(part="mfg-001")
+    cad(part="mfg-002")
+    with pytest.raises(AppError) as e:
+        cad(part="mfg-003")
+    assert e.value.status == 429 and e.value.code == "JOBS_LIMIT_REACHED"
+    cad(owner="planner", part="mfg-003")  # 上限是每個帳號各自算
+    first = jobs.sql("SELECT id FROM jobs WHERE owner_id = 'manager' ORDER BY created_at LIMIT 1")
+    store.cancel(first[0]["id"])  # 取消一個就空出一個
+    cad(part="mfg-004")

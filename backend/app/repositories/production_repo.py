@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
   actor_label TEXT NOT NULL, action TEXT NOT NULL, op TEXT, ref_no TEXT, summary TEXT,
   detail TEXT, request_id TEXT
 );
+CREATE TABLE IF NOT EXISTS idempotency (
+  account_id TEXT NOT NULL, operation TEXT NOT NULL, idem_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL, state TEXT NOT NULL, response TEXT, created_at TEXT NOT NULL,
+  PRIMARY KEY (account_id, operation, idem_key)
+);
 CREATE TABLE IF NOT EXISTS schedule_ops (
   run_id TEXT NOT NULL, op_id TEXT NOT NULL, wo_no TEXT NOT NULL, part_id TEXT NOT NULL,
   op_seq INTEGER NOT NULL, op_name TEXT NOT NULL, kind TEXT NOT NULL, machine_id TEXT,
@@ -432,8 +437,83 @@ class ProductionRepo:
                 conn.executescript(
                     "DELETE FROM work_orders; DELETE FROM schedule_runs; DELETE FROM schedule_ops;"
                     " DELETE FROM data_changes; DELETE FROM approvals; DELETE FROM audit_log;"
+                    " DELETE FROM idempotency;"
                 )
                 self._bump(conn)
+                conn.commit()
+            finally:
+                conn.close()
+
+    # ------------------------------------------------------------ 冪等（Idempotency-Key）
+    def idem_begin(self, account_id: str, operation: str, key: str, request_hash: str,
+                   stale_s: float = 120) -> tuple[str, dict | None]:  # fmt: skip
+        """開始一次帶 key 的寫入。回傳 ("new", None)＝輪到你執行；("replay", 先前的回應)；
+        ("conflict", None)＝同一個 key 用在參數不同的請求；("busy", None)＝同一個請求還在執行。
+        整段是 BEGIN IMMEDIATE：跨行程也只有一個人拿到 "new"。"""
+        with self._lock:
+            conn = self._conn()
+            conn.isolation_level = None
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM idempotency WHERE account_id = ? AND operation = ?"
+                    " AND idem_key = ?",
+                    (account_id, operation, key),
+                ).fetchone()
+                now = datetime.now(UTC)
+                if row is not None:
+                    age = (now - datetime.fromisoformat(row["created_at"])).total_seconds()
+                    if row["request_hash"] != request_hash:
+                        out = ("conflict", None)
+                    elif row["state"] == "done":
+                        out = ("replay", json.loads(row["response"]))
+                    elif age < stale_s:
+                        out = ("busy", None)
+                    else:  # 前一個執行者當掉了（沒有 done 也沒有 abort）：接手
+                        conn.execute(
+                            "UPDATE idempotency SET created_at = ? WHERE account_id = ?"
+                            " AND operation = ? AND idem_key = ?",
+                            (now.isoformat(), account_id, operation, key),
+                        )
+                        out = ("new", None)
+                else:
+                    conn.execute(
+                        "INSERT INTO idempotency VALUES (?, ?, ?, ?, 'running', NULL, ?)",
+                        (account_id, operation, key, request_hash, now.isoformat()),
+                    )
+                    out = ("new", None)
+                conn.execute("COMMIT")
+                return out
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+
+    def idem_finish(self, account_id: str, operation: str, key: str, response: dict) -> None:
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE idempotency SET state = 'done', response = ? WHERE account_id = ?"
+                    " AND operation = ? AND idem_key = ?",
+                    (json.dumps(response, ensure_ascii=False), account_id, operation, key),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def idem_abort(self, account_id: str, operation: str, key: str) -> None:
+        """執行失敗（沒有寫入）：放掉 key，讓使用者修正後可以用同一個 key 再送。"""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "DELETE FROM idempotency WHERE account_id = ? AND operation = ?"
+                    " AND idem_key = ? AND state = 'running'",
+                    (account_id, operation, key),
+                )
                 conn.commit()
             finally:
                 conn.close()

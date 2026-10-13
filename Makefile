@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -54,7 +54,14 @@ help:
 	@echo "--- 智慧助理（System 1：Jev／本地路由）---"
 	@echo "make eval-route  智慧助理本地分流的意圖正確率＋第 2 段誤擋、誤短路（不是 eval-router 的領域路由；需後端在執行；沒金鑰只跑地端規則）"
 	@echo "make eval-guard  七段權限控管第 2 段：Jev Choice 與地端規則對 eval/guard_qa.jsonl 的攔截率、誤擋率、閒聊短路率（需後端在執行）"
-	@echo "make ci          CI 會跑的檢查：知識庫、lint、型別、單元測試、openapi 同步"
+	@echo "--- 背景工作（Redis＋Celery＋PostgreSQL，docs/adr/036）---"
+	@echo "make jobs-up       啟動 PostgreSQL 與 Redis 容器（只綁本機）"
+	@echo "make jobs-migrate  套用背景工作的資料表（版本化 migration，可重複執行）"
+	@echo "make jobs-status   migration 版本與各狀態的工作數、待投遞數"
+	@echo "make worker-gpu    3D 重建 worker（gpu 佇列，另開一個終端機）"
+	@echo "make worker-schedule 排程求解 worker（schedule 佇列，另開一個終端機）"
+	@echo "make test-jobs     背景工作的測試（自己建立隔離的 PostgreSQL＋Redis＋worker；需要 brew install postgresql@17 redis）"
+	@echo "make ci          CI 會跑的檢查：知識庫、lint、型別、單元與背景工作整合測試、openapi 同步"
 
 # --compile-bytecode：CadQuery 在 sandbox-exec 裡不能寫 .pyc，沒預先編譯時每次 import 要 14 秒，
 # make index 同時跑 6 個標準模型會超過 60 秒逾時
@@ -106,7 +113,7 @@ demo: build
 	cd backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 demo-all:
-	$(MAKE) -j3 ortho2cad scheduler demo
+	$(MAKE) -j5 ortho2cad scheduler worker-gpu worker-schedule demo
 
 # ---- 工廠機械加工圖：Ortho2CAD（Qwen3-VL-8B 微調，三視圖 → CadQuery）----
 ortho2cad-setup:
@@ -148,6 +155,30 @@ eval-guard:
 
 test:
 	cd backend && uv run pytest -q
+
+# 背景工作的測試：隔離的 PostgreSQL＋Redis＋獨立 worker 行程（缺 PostgreSQL／Redis 時失敗，不是略過）
+test-jobs:
+	cd backend && uv run pytest -q tests/test_jobs_store.py tests/test_jobs_api.py tests/test_jobs_runner.py tests/test_jobs_integration.py tests/test_jobs_coordination.py
+
+# ---- 背景工作（docs/adr/036）----
+jobs-up:
+	$(COMPOSE) up -d --wait db redis
+
+jobs-stop:
+	$(COMPOSE) stop redis
+
+jobs-migrate:
+	cd backend && uv run python -m app.jobs.admin migrate
+
+jobs-status:
+	cd backend && uv run python -m app.jobs.admin status
+
+# worker 是獨立行程：--pool=solo（一次處理一個工作）；GPU 同時最多 JOBS_GPU_SLOTS 個由資料庫租約限制
+worker-gpu:
+	cd backend && uv run celery -A app.jobs.celery_app worker -Q gpu --pool=solo -n gpu@%h -l INFO
+
+worker-schedule:
+	cd backend && uv run celery -A app.jobs.celery_app worker -Q schedule --pool=solo -n schedule@%h -l INFO
 
 lint:
 	cd backend && uv run ruff check .. && uv run ruff format --check ..

@@ -1,9 +1,11 @@
 """工廠資料庫：固定查詢與 Text-to-SQL（唯讀）。"""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Path, Request
 from fastapi.responses import StreamingResponse
 
+from app.agent import guard
 from app.api import schemas as S
+from app.api.deps import ID_PATTERN
 from app.core.errors import AppError
 from app.rag.text2sql import load_examples, prompt_versions
 from app.repositories.inventory_repo import get_inventory_repo
@@ -38,7 +40,7 @@ def inventory_overview(request: Request):
 
 
 @router.get("/inventory/parts/{part_id}", response_model=S.PartInventory, tags=["inventory"])
-def part_inventory(part_id: str, request: Request):
+def part_inventory(request: Request, part_id: str = Path(pattern=ID_PATTERN)):
     """單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。"""
     identity.require_domain(identity.current(request), "factory")
     data = get_inventory_repo().part_inventory(part_id)
@@ -60,8 +62,13 @@ def part_inventory(part_id: str, request: Request):
     },
 )
 async def inventory_ask(body: S.InventoryAskRequest, request: Request):
-    """Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。"""
-    identity.require_domain(identity.current(request), "factory")
+    """Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。
+    直接打這個端點也先過共用的輸入防護（第 2 段的地端 hard-block，擋下回 403 INPUT_BLOCKED、
+    不呼叫模型）；SQL 的 SELECT 白名單與唯讀連線照舊。這是工具，沒有檢索段落，
+    所以不經過 RAG 的第 3～6 段。"""
+    account = identity.current(request)
+    identity.require_domain(account, "factory")
+    guard.tool_input_check(body.question, account, request.state.request_id, "庫存查詢")
     stream = sql_service.ask_stream(
         question=body.question,
         request_id=request.state.request_id,

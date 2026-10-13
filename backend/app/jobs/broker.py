@@ -8,7 +8,7 @@ import redis
 
 from app.core.config import get_settings
 from app.core.logging import log
-from app.jobs import db, store
+from app.jobs import coordination, db, store
 from app.jobs.celery_app import RUN_TASK, celery
 
 _log = logging.getLogger("artrag.jobs")
@@ -79,13 +79,18 @@ def maintenance_once(stall_s: float | None = None) -> dict:
 class Maintenance(threading.Thread):
     """背景維護執行緒（API 行程與 worker 行程各自可以開）。資料庫或 broker 暫時不通就等下一輪。"""
 
-    def __init__(self) -> None:
+    def __init__(self, worker: tuple[str, list[str]] | None = None) -> None:
         super().__init__(daemon=True, name="jobs-maintenance")
         self._stop_evt = threading.Event()
+        self.worker = worker  # (名稱, 佇列)：worker 行程順便登記自己還活著
 
     def run(self) -> None:
         interval = get_settings().jobs_dispatch_interval_s
-        while not self._stop_evt.wait(interval):
+        while True:
+            if self.worker:
+                coordination.register_worker(*self.worker)
+            if self._stop_evt.wait(interval):
+                return
             with suppress(db.JobsUnavailable):
                 try:
                     maintenance_once()

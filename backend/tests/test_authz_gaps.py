@@ -357,3 +357,28 @@ def test_intake_draft_belongs_to_its_creator_and_the_manager(client, monkeypatch
     as_account(client, "sales_a")
     assert client.delete(f"/api/v1/intake/{draft_id}").status_code == 404
     assert (folder / "draft.json").is_file()  # 別人刪不掉
+
+
+def test_chat_with_someone_elses_photo_runs_no_stage(client, monkeypatch):
+    """第 1 段的資源授權：別人的照片 404，後面的檢索、Jev、生成端都沒有被呼叫。"""
+    from app.agent import jev
+    from app.services import chat_service
+
+    image_id = upload(client)
+    calls = []
+    monkeypatch.setattr(chat_service, "retrieve", lambda *a, **k: calls.append("retrieve") or [])
+    monkeypatch.setattr(
+        chat_service,
+        "get_provider",
+        lambda *a, **k: calls.append("generate") or pytest.fail("生成端"),
+    )
+
+    async def no_jev(*a, **k):
+        calls.append("jev")
+        raise jev.JevUnavailable("測試")
+
+    monkeypatch.setattr(jev, "ask", no_jev)
+    as_account(client, "planner")
+    r = client.post("/api/v1/chat", json={"question": "這張圖紙是什麼？", "image_id": image_id})
+    assert r.status_code == 404 and code(r) == "IMAGE_NOT_FOUND"
+    assert calls == []

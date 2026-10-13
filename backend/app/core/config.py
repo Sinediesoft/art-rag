@@ -139,6 +139,8 @@ class Settings(BaseSettings):
     jobs_lease_s: float = 30.0  # worker 租約；超過沒心跳就當 worker 掛了，工作回到佇列重試
     jobs_heartbeat_s: float = 5.0
     jobs_max_attempts: int = 3
+    # 每個帳號同時排隊或執行中的 3D 重建上限（避免佇列被灌爆）；排程本來就同一範圍只有一個
+    jobs_max_active_per_owner: int = 5
     jobs_gpu_slots: int = 1  # GPU 重工作（3D 重建）同時最多幾個，跨所有 worker 行程
     jobs_poll_s: float = 0.5  # 事件串流輪詢資料庫的間隔
     jobs_event_retention_days: int = 7

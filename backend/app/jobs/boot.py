@@ -4,7 +4,7 @@ import logging
 import shutil
 
 from app.core.config import get_settings
-from app.jobs import broker, db, store
+from app.jobs import broker, coordination, db, store
 from app.services import cad_access
 
 _log = logging.getLogger("artrag.jobs")
@@ -29,7 +29,7 @@ def init() -> broker.Maintenance | None:
     return m
 
 
-def init_worker() -> broker.Maintenance:
+def init_worker(name: str = "", queues: list[str] | None = None) -> broker.Maintenance:
     """worker 行程啟動：載入索引（3D 重建要查知識庫圖紙）、庫存資料庫，並開維護執行緒——
     API 行程不在時，租約恢復與 outbox 投遞仍照常進行。索引和模型版本不符就拒絕啟動。"""
     from app.core.logging import setup_logging
@@ -43,9 +43,16 @@ def init_worker() -> broker.Maintenance:
     except Exception as e:  # noqa: BLE001 — 庫存資料有誤只影響寫回後的重建，不擋 worker 啟動
         _log.warning("庫存資料庫建立失敗：%s", e)
     cad_access.set_job_lookup(_lookup)
-    m = broker.Maintenance()
+    m = broker.Maintenance((name or default_name(), queues or []))
     m.start()
     return m
+
+
+def default_name() -> str:
+    import os
+    import socket
+
+    return f"worker@{socket.gethostname()}:{os.getpid()}"
 
 
 def purge(ttl_days: float) -> int:
@@ -73,12 +80,20 @@ def status() -> dict:
             "broker_ok": False,
             "pending_dispatch": 0,
             "counts": {},
+            "workers": [],
         }
     db_ok = db.ping()
+    pending, counts = 0, {}
+    if db_ok:
+        try:
+            pending, counts = store.pending_outbox(), store.counts()
+        except db.JobsUnavailable:  # ping 之後又斷線：狀態頁照樣回得出來
+            db_ok = False
     return {
         "enabled": True,
         "database_ok": db_ok,
         "broker_ok": broker.broker_ok(),
-        "pending_dispatch": store.pending_outbox() if db_ok else 0,
-        "counts": store.counts() if db_ok else {},
+        "pending_dispatch": pending,
+        "counts": counts,
+        "workers": coordination.workers(),
     }

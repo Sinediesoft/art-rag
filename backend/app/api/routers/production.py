@@ -1,16 +1,18 @@
 """工廠工單排程：工單管理、排程求解與結果（舊的 SSE 入口；背景工作在 jobs.py）。"""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Path, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from app import jobs
 from app.api import schemas as S
+from app.api.deps import ID_PATTERN, IDEMPOTENCY
 from app.core.errors import AppError
 from app.jobs import legacy, service
 from app.repositories.production_repo import get_production_repo
 from app.services import (
     change_service,
+    idempotency,
     identity,
     schedule_service,
     security,
@@ -28,7 +30,7 @@ async def production_overview(request: Request):
 
 
 @router.get("/production/parts/{part_id}", response_model=S.PartPlan, tags=["production"])
-async def part_plan(part_id: str, request: Request):
+async def part_plan(request: Request, part_id: str = Path(pattern=ID_PATTERN)):
     """圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。"""
     identity.require_domain(identity.current(request), "factory")
     return await schedule_service.part_plan(part_id)
@@ -40,41 +42,71 @@ async def part_plan(part_id: str, request: Request):
     status_code=201,
     tags=["production"],
 )
-def create_work_order(body: S.WorkOrderCreate, request: Request):
+def create_work_order(
+    body: S.WorkOrderCreate,
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = IDEMPOTENCY,
+):
     """從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
 
     權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
+    帶 Idempotency-Key 時，重送（連按、網路重試）拿到同一張工單，不會多開。
     """
     account = identity.current(request)
     params = body.model_dump()
-    change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
-    row = schedule_service.create_work_order(
-        body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note,
-        created_by=account.id,
-    )  # fmt: skip
-    get_production_repo().add_audit(
-        {"actor_id": account.id, "actor_label": account.label, "action": "寫入", "op": "wo_create",
-         "ref_no": row["wo_no"], "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉"
-         f"{row['qty']} 件", "detail": None, "request_id": request.state.request_id}
-    )  # fmt: skip
+
+    def create() -> dict:
+        change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
+        row = schedule_service.create_work_order(
+            body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note,
+            created_by=account.id,
+        )  # fmt: skip
+        get_production_repo().add_audit(
+            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
+             "op": "wo_create", "ref_no": row["wo_no"],
+             "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉{row['qty']} 件",
+             "detail": None, "request_id": request.state.request_id}
+        )  # fmt: skip
+        return row
+
+    row, replay = idempotency.run(account.id, "wo_create", idempotency_key, params, create)
+    if replay:
+        response.headers["Idempotent-Replayed"] = "true"
     return row
 
 
 @router.delete("/production/work-orders/{wo_no}", response_model=S.OkResponse, tags=["production"])
-def cancel_work_order(wo_no: str, request: Request):
+def cancel_work_order(
+    wo_no: str,
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = IDEMPOTENCY,
+):
     """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。"""
-    w = get_production_repo().get_work_order(wo_no)
-    if not w or w["status"] != "已開立":
-        schedule_service.cancel_work_order(wo_no)  # 回 404 WORK_ORDER_NOT_FOUND
     account = identity.current(request)
-    change_service.direct("wo_cancel", {"wo_no": wo_no}, account, request.state.request_id, "API")
-    schedule_service.cancel_work_order(wo_no)
-    get_production_repo().add_audit(
-        {"actor_id": account.id, "actor_label": account.label, "action": "寫入", "op": "wo_cancel",
-         "ref_no": wo_no, "summary": f"取消工單 {wo_no}", "detail": None,
-         "request_id": request.state.request_id}
-    )  # fmt: skip
-    return S.OkResponse()
+
+    def cancel() -> dict:
+        w = get_production_repo().get_work_order(wo_no)
+        if not w or w["status"] != "已開立":
+            schedule_service.cancel_work_order(wo_no)  # 回 404 WORK_ORDER_NOT_FOUND
+        change_service.direct(
+            "wo_cancel", {"wo_no": wo_no}, account, request.state.request_id, "API"
+        )
+        schedule_service.cancel_work_order(wo_no)
+        get_production_repo().add_audit(
+            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
+             "op": "wo_cancel", "ref_no": wo_no, "summary": f"取消工單 {wo_no}", "detail": None,
+             "request_id": request.state.request_id}
+        )  # fmt: skip
+        return {"ok": True}
+
+    out, replay = idempotency.run(
+        account.id, "wo_cancel", idempotency_key, {"wo_no": wo_no}, cancel
+    )
+    if replay:
+        response.headers["Idempotent-Replayed"] = "true"
+    return out
 
 
 @router.post(

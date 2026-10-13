@@ -35,7 +35,21 @@ export function mockTransport(): Transport {
 export const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
 export const apiError = (status: number, code: string, message = code) => json({ error: { code, message, request_id: `req-${code}` } }, status);
 
-const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+const frame = (event: string, data: unknown, id?: number) => `${id ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+/** 背景工作的事件串流：事件 id 從 first 開始連續遞增（和後端持久化的 seq 一樣），可從 Last-Event-ID 之後續接 */
+export function jobSse(events: [string, unknown][], first = 1) {
+  const enc = new TextEncoder();
+  return new Response(
+    new ReadableStream({
+      start(c) {
+        events.forEach(([e, d], i) => c.enqueue(enc.encode(frame(e, d, first + i))));
+        c.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+}
 
 /** 一次給完的 SSE */
 export function sse(events: [string, unknown][]) {
@@ -66,7 +80,7 @@ export function liveSse() {
       });
       return new Response(stream, { headers: { "Content-Type": "text/event-stream" } });
     },
-    push: (event: string, data: unknown) => !closed && ctrl.enqueue(enc.encode(frame(event, data))),
+    push: (event: string, data: unknown, id?: number) => !closed && ctrl.enqueue(enc.encode(frame(event, data, id))),
     close: () => {
       if (closed) return;
       closed = true;

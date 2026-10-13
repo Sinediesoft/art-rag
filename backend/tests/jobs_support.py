@@ -1,4 +1,4 @@
-"""背景工作的測試環境（TASK-20261013-001）：自建隔離的 PostgreSQL、Redis、假 Timefold 與 Celery worker。
+"""背景工作的測試環境（TASK-20261013-001）：隔離的 PostgreSQL、Redis、假 Timefold、Celery worker。
 
 - PostgreSQL／Redis：在暫存資料夾 initdb／啟動，隨機埠，只綁 127.0.0.1；不連既有服務、不碰既有資料
 - 假 Timefold：行程內的 HTTP 伺服器，回傳後端自己算出的合法排程與分數（可設定求解多久、可被停止）
@@ -28,11 +28,13 @@ HINT = "需要 PostgreSQL 與 Redis 才能做背景工作的測試：brew instal
 
 
 def find_bin(name: str, extra: tuple[str, ...] = ()) -> str | None:
+    import glob
+
     dirs = [
         *extra,
         "/opt/homebrew/opt/postgresql@17/bin",
         "/usr/local/opt/postgresql@17/bin",
-        "/usr/lib/postgresql/17/bin",
+        *sorted(glob.glob("/usr/lib/postgresql/*/bin"), reverse=True),  # Debian／Ubuntu（apt）
         "/opt/homebrew/bin",
         "/usr/local/bin",
     ]

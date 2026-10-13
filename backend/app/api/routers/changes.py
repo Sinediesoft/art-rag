@@ -1,14 +1,21 @@
 """共用：資料異動與主管核准（change_service）。"""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from app.api import schemas as S
+from app.api.deps import IDEMPOTENCY
 from app.services import (
     change_service,
+    idempotency,
     identity,
 )
 
 router = APIRouter()
+
+
+def _mark(response: Response, replay: bool) -> None:
+    if replay:
+        response.headers["Idempotent-Replayed"] = "true"
 
 
 @router.post("/changes/preview", response_model=S.ChangePreview, tags=["agent"])
@@ -24,17 +31,47 @@ async def change_preview(body: S.ChangePreviewRequest, request: Request):
 
 
 @router.post("/changes/{pending_id}/commit", response_model=S.ChangeCommitted, tags=["agent"])
-def change_commit(pending_id: str, request: Request):
-    """按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。"""
-    return change_service.commit(pending_id, identity.current(request), request.state.request_id)
+def change_commit(
+    pending_id: str,
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = IDEMPOTENCY,
+):
+    """按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。
+    帶 Idempotency-Key 時，重送拿到先前的回應（不會重複異動）。"""
+    account = identity.current(request)
+    out, replay = idempotency.run(
+        account.id,
+        "change_commit",
+        idempotency_key,
+        {"pending_id": pending_id},
+        lambda: change_service.commit(pending_id, account, request.state.request_id),
+    )
+    _mark(response, replay)
+    return out
 
 
 @router.post("/changes/{pending_id}/request-approval", response_model=S.Approval, tags=["agent"])
-def change_request_approval(pending_id: str, body: S.ApprovalRequest, request: Request):
-    """超過額度：建立待核准單（AP-）送主管。"""
-    return change_service.request_approval(
-        pending_id, identity.current(request), body.note, request.state.request_id
+def change_request_approval(
+    pending_id: str,
+    body: S.ApprovalRequest,
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = IDEMPOTENCY,
+):
+    """超過額度：建立待核准單（AP-）送主管。帶 Idempotency-Key 時重送不會建立第二張。"""
+    account = identity.current(request)
+    out, replay = idempotency.run(
+        account.id,
+        "request_approval",
+        idempotency_key,
+        {"pending_id": pending_id, "note": body.note},
+        lambda: change_service.request_approval(
+            pending_id, account, body.note, request.state.request_id
+        ),
     )
+    _mark(response, replay)
+    return out
 
 
 @router.get("/approvals", response_model=S.ApprovalsResponse, tags=["agent"])
@@ -45,11 +82,25 @@ def list_approvals(request: Request):
 
 
 @router.post("/approvals/{ap_no}/approve", response_model=S.ApprovalDecision, tags=["agent"])
-def approve(ap_no: str, body: S.ApprovalRequest, request: Request):
-    """主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。"""
-    return change_service.approve(
-        ap_no, identity.current(request), body.note, request.state.request_id
+def approve(
+    ap_no: str,
+    body: S.ApprovalRequest,
+    request: Request,
+    response: Response,
+    idempotency_key: str | None = IDEMPOTENCY,
+):
+    """主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。
+    帶 Idempotency-Key 時重送拿到先前的結果；沒帶也不會重複寫入（單據已不是待核准）。"""
+    account = identity.current(request)
+    out, replay = idempotency.run(
+        account.id,
+        "approve",
+        idempotency_key,
+        {"ap_no": ap_no, "note": body.note},
+        lambda: change_service.approve(ap_no, account, body.note, request.state.request_id),
     )
+    _mark(response, replay)
+    return out
 
 
 @router.post("/approvals/{ap_no}/return", response_model=S.ApprovalDecision, tags=["agent"])

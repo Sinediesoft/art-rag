@@ -71,6 +71,11 @@ def public(job: dict, *, with_artifacts: bool = True) -> dict:
         "result": job["result"],
         "error": job["error"],
         "input_version": job["input_version"],
+        "params": job["params"],
+        # 3D 重建的來源（圖紙或自己的照片）：找回進行中的工作、避免重複建立時比對用
+        "target": ({k: v for k, v in job["resource"].items() if v} or None)
+        if job["kind"] == "cad"
+        else None,
         "created_at": store.iso(job["created_at"]),
         "started_at": store.iso(job["started_at"]),
         "finished_at": store.iso(job["finished_at"]),

@@ -507,3 +507,46 @@ def test_cad_job_for_someone_elses_photo_is_refused_at_run_time(clean, client):
     job = store.get(jid)
     assert job["status"] == "failed" and job["error"]["code"] == "IMAGE_NOT_FOUND"
     assert json.dumps(job["error"]).count("img_") == 0
+
+
+def test_unexpected_errors_never_leak_their_text(clean, monkeypatch):
+    """例外訊息可能夾帶路徑、帳密、模型輸出：工作的錯誤只留固定的短訊息，細節只在伺服器日誌。"""
+    secret = "password=hunter2 /Users/someone/.env SECRET_MODEL_OUTPUT"
+
+    def boom(*a, **k):
+        raise RuntimeError(secret)
+
+    monkeypatch.setattr(cad_service, "_reconstruct_stream", boom)
+    jid = cad_job(part="mfg-002")
+    assert runner.execute(jid, "w1") == "done"
+    job = store.get(jid)
+    assert job["status"] == "failed" and job["error"]["code"] == "INTERNAL_ERROR"
+    blob = str(job["error"]) + str(store.events_after(jid, 0, 100))
+    assert "hunter2" not in blob and ".env" not in blob and "SECRET_MODEL_OUTPUT" not in blob
+
+
+def test_workers_never_call_jev_or_the_cloud(clean, monkeypatch):
+    """背景工作不外送：成功的排程與 3D 重建都沒有呼叫 Jev，也沒有連到非本機的位址。"""
+    from app.agent import jev
+
+    calls = []
+
+    async def no_jev(*a, **k):
+        calls.append("jev")
+        raise jev.JevUnavailable("測試")
+
+    monkeypatch.setattr(jev, "ask", no_jev)
+    import httpx
+
+    real_send = httpx.AsyncClient.send
+
+    async def guard_send(self, request, **kw):
+        host = request.url.host
+        assert host in ("127.0.0.1", "localhost", "::1"), f"連到非本機位址 {host}"
+        return await real_send(self, request, **kw)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", guard_send)
+    clean.fake.duration = 1
+    jid = schedule_job()
+    assert runner.execute(jid, "w1") == "done" and store.get(jid)["status"] == "succeeded"
+    assert calls == []

@@ -32,10 +32,10 @@ export function ReconstructPage() {
   const jobId = params.get("job");
   const part = usePart(id);
   const { data: health } = useStatus();
-  const { state, start, load } = useReconstruct();
+  const { state, start, load, attach, cancel } = useReconstruct();
   const [strategy, setStrategy] = useState<CadStrategy>("ortho2cad");
   const [now, setNow] = useState(Date.now());
-  const running = (["preparing", "generating", "executing"] as CadStatus[]).includes(state.status);
+  const running = (["queued", "preparing", "generating", "executing"] as CadStatus[]).includes(state.status);
 
   useEffect(() => {
     if (jobId) void load(jobId);
@@ -132,6 +132,37 @@ export function ReconstructPage() {
       )}
 
       <Pipeline state={state.status} hasMeta={!!meta} result={result} cached={state.cached} />
+
+      {state.status === "queued" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-card p-3 text-sm text-ink-80">
+          <Spinner /> 排隊中：等背景 worker 領取（3D 重建一次只跑一個，載入模型需要 GPU）。離開這一頁不會取消，回來會接回進度。
+          <button type="button" className="btn-ghost" onClick={() => void cancel()}>
+            取消
+          </button>
+        </div>
+      )}
+      {(state.status === "preparing" || state.status === "generating" || state.status === "executing") && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-ink-80">
+          背景工作執行中，離開這一頁不會取消。
+          <button type="button" className="btn-ghost" onClick={() => void cancel()}>
+            取消（不產生模型）
+          </button>
+        </div>
+      )}
+      {state.reconnecting > 0 && running && (
+        <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">進度串流中斷，正在重新連線（第 {state.reconnecting} 次）；工作不受影響。</div>
+      )}
+      {state.status === "cancelled" && (
+        <div className="rounded-xl border border-hairline bg-card p-3 text-sm text-ink-80">已取消，沒有產生模型。按「重新產生」可以再做一次。</div>
+      )}
+      {state.status === "stopped" && state.jobId && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
+          這個畫面停止追蹤了；工作仍在背景執行。
+          <button type="button" className="btn-ghost" onClick={() => attach(state.jobId!)}>
+            重新連線
+          </button>
+        </div>
+      )}
 
       {error && (
         <ErrorMessage
@@ -261,7 +292,7 @@ function Pipeline({
       {steps.map((label, i) => {
         const failed = state === "error" && i === at;
         const finished = cached || i < at || (state === "done" && (i < 3 || !!result?.ok));
-        const active = !cached && i === at && state !== "done" && state !== "error";
+        const active = !cached && i === at && !["done", "error", "cancelled", "stopped"].includes(state);
         return (
           <li
             key={label}
@@ -327,11 +358,13 @@ function CodePanel({
         }`}
       >
         {code ||
-          (status === "preparing"
-            ? "前處理圖紙中…"
-            : status === "generating"
-              ? "等待 Ortho2CAD 回應…"
-              : "")}
+          (status === "queued"
+            ? "排隊中…"
+            : status === "preparing"
+              ? "前處理圖紙中…"
+              : status === "generating" || status === "executing"
+                ? "程式碼完成後，從受保護的下載端點取回（進度事件裡不含模型輸出）…"
+                : "")}
       </pre>
       {status === "executing" && (
         <p className="mt-2 flex items-center gap-2 text-sm text-accent">

@@ -402,3 +402,35 @@ def test_access_config_reloads_when_the_file_changes(shared_copy):
     assert not identity.get_account("planner").can("schedule_run")  # 不用重啟
     cfg = copy.deepcopy(config.get_access_config())
     assert "schedule_run" not in cfg["roles"]["planner"]["ops"]
+
+
+def test_api_restart_keeps_jobs_queryable_and_workers_pick_them_up(env, client):
+    """API 行程重啟（連線池、broker 連線重建）：狀態仍可查，工作照常由 worker 完成。"""
+    from app.jobs import db
+
+    env.fake.duration = 1
+    job_id = create_schedule(client)
+    db.close()  # 連線池重建＝新的 API 行程
+    broker._url["broker"] = None
+    as_account(client, "planner")
+    assert client.get(f"/api/v1/jobs/{job_id}").json()["status"] == "queued"
+    env.start_worker("schedule", "sched1")
+    env.wait_status(job_id, "succeeded", timeout=60)
+    assert client.get(f"/api/v1/jobs/{job_id}").json()["status"] == "succeeded"
+
+
+def test_health_status_lists_live_workers_and_dependencies(env, client):
+    """健康狀態：PostgreSQL、Redis、待投遞數、各狀態工作數，以及活著的 worker（kill 後會消失）。"""
+    as_account(client, "planner")
+    body = client.get("/api/v1/status").json()["jobs"]
+    assert body["enabled"] and body["database_ok"] and body["broker_ok"] and body["workers"] == []
+    w = env.start_worker("schedule", "sched1")
+    env.wait_until(
+        lambda: client.get("/api/v1/status").json()["jobs"]["workers"], 30, "worker 登記"
+    )
+    workers = client.get("/api/v1/status").json()["jobs"]["workers"]
+    assert workers[0]["queues"] == ["schedule"] and workers[0]["pid"] == w.proc.pid
+    w.kill()
+    env.wait_until(
+        lambda: not client.get("/api/v1/status").json()["jobs"]["workers"], 40, "worker 消失"
+    )

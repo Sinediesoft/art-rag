@@ -149,6 +149,19 @@ def create_job(
             existing = _by_key(conn, owner_id, kind, idempotency_key)
             if existing:
                 return _replay(existing, rhash), False
+        if kind == "cad":
+            active = conn.execute(
+                "SELECT count(*) AS n FROM jobs WHERE owner_id = %s AND kind = 'cad'"
+                " AND status IN ('queued', 'running')",
+                (owner_id,),
+            ).fetchone()["n"]
+            if active >= s.jobs_max_active_per_owner:
+                raise AppError(
+                    "JOBS_LIMIT_REACHED",
+                    f"您已有 {active} 個 3D 重建在排隊或執行中"
+                    f"（上限 {s.jobs_max_active_per_owner}），請等它們完成或取消幾個再建立",
+                    429,
+                )
         try:
             with conn.transaction():  # savepoint：唯一約束衝突時只回滾這個 INSERT
                 conn.execute(

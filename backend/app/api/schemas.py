@@ -696,9 +696,13 @@ class PartTextSearchResponse(BaseModel):
 
 
 class ReconstructRequest(BaseModel):
-    part_id: str | None = Field(default=None, description="知識庫圖紙")
+    part_id: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$", description="知識庫圖紙"
+    )
     image_id: str | None = Field(
-        default=None, description="上傳的圖紙照片；與 part_id 同時給代表照片已辨識為該圖紙"
+        default=None,
+        pattern=r"^[A-Za-z0-9_.-]{1,64}$",
+        description="上傳的圖紙照片；與 part_id 同時給代表照片已辨識為該圖紙",
     )
     strategy: Literal["ortho2cad", "hybrid"] = Field(
         default="ortho2cad", description="ortho2cad＝主模型；hybrid＝未微調的 Qwen3-VL（對照組）"
@@ -1644,9 +1648,13 @@ class ImageAcl(BaseModel):
 
 
 class CadJobCreate(BaseModel):
-    part_id: str | None = Field(default=None, description="知識庫圖紙")
+    part_id: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$", description="知識庫圖紙"
+    )
     image_id: str | None = Field(
-        default=None, description="上傳的圖紙照片（要是自己的或擁有者授權的）"
+        default=None,
+        pattern=r"^[A-Za-z0-9_.-]{1,64}$",
+        description="上傳的圖紙照片（要是自己的或擁有者授權的）",
     )
     strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
 
@@ -1700,6 +1708,10 @@ class Job(BaseModel):
     result: dict | None = None
     error: JobError | None = None
     input_version: str | None = None
+    params: dict | None = Field(default=None, description="建立時的參數（秒數、引擎、策略）")
+    target: dict | None = Field(
+        default=None, description="3D 重建的來源：{part_id}、{image_id} 或兩者（排程為 null）"
+    )
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
@@ -1722,12 +1734,20 @@ class ScheduleStopRequest(BaseModel):
     job_id: str | None = Field(default=None, description="要提前結束的排程工作；沒給＝目前執行中的")
 
 
+class JobWorker(BaseModel):
+    name: str
+    queues: list[str]
+    pid: int
+    age_s: float = Field(description="距離上次登記幾秒；超過 15 秒沒更新就會從清單消失")
+
+
 class JobsBrief(BaseModel):
     enabled: bool
     database_ok: bool
     broker_ok: bool
     pending_dispatch: int
     counts: dict[str, int]
+    workers: list[JobWorker] = Field(default_factory=list, description="存活的 worker 行程")
 
 
 HealthResponse.model_rebuild()

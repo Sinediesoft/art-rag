@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import socket
+import time
 import uuid
 
 import redis
@@ -43,6 +44,38 @@ def _warn(e: Exception) -> None:
     if not _warned:
         _warned = True
         _log.warning("Redis 不可用，模型使用登記只看本行程：%s", e)
+
+
+WORKER_PREFIX = "artrag:worker:"
+WORKER_TTL_S = 15
+
+
+def register_worker(name: str, queues: list[str]) -> None:
+    """worker 行程的存活登記（短效 key，維護執行緒定期續約）：健康狀態頁看得到哪些 worker 活著。"""
+    r = client()
+    if r is None:
+        return
+    try:
+        body = {"name": name, "queues": queues, "pid": os.getpid(), "at": time.time()}
+        r.set(WORKER_PREFIX + name, json.dumps(body), ex=WORKER_TTL_S)
+    except redis.RedisError as e:
+        _warn(e)
+
+
+def workers() -> list[dict]:
+    r = client()
+    if r is None:
+        return []
+    out = []
+    try:
+        for key in r.scan_iter(match=WORKER_PREFIX + "*", count=100):
+            raw = r.get(key)
+            if raw:
+                w = json.loads(raw)
+                out.append({**w, "age_s": round(max(0.0, time.time() - w["at"]), 1)})
+    except (redis.RedisError, ValueError) as e:
+        _warn(e)
+    return sorted(out, key=lambda w: w["name"])
 
 
 def publish_usage(in_use: dict[str, int]) -> None:

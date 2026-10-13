@@ -1,10 +1,20 @@
 """路由共用的小工具：圖紙存在與可見性檢查、以圖搜圖結果的資料範圍過濾。"""
 
-from fastapi import Request
+from fastapi import Header, Request
 
 from app.core.errors import AppError
 from app.repositories.index_store import get_store
 from app.services import identity
+
+# 圖紙、料號這類 id 的結構化驗證（固定查詢的路徑參數）：只收英數字與 . _ -
+ID_PATTERN = r"^[A-Za-z0-9_.-]{1,64}$"
+
+IDEMPOTENCY = Header(
+    default=None,
+    alias="Idempotency-Key",
+    description="重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應"
+    "（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+)
 
 
 def part_or_404(part_id: str) -> dict:

@@ -10,9 +10,14 @@ _maintenance = None
 
 
 @worker_ready.connect
-def _on_worker_ready(**_kw) -> None:
+def _on_worker_ready(sender=None, **_kw) -> None:
     global _maintenance
-    _maintenance = boot.init_worker()
+    name = getattr(sender, "hostname", "") or ""
+    try:
+        queues = sorted(sender.app.amqp.queues.consume_from)
+    except Exception:  # noqa: BLE001 — 取不到佇列名稱只影響健康狀態頁的顯示
+        queues = []
+    _maintenance = boot.init_worker(name, queues)
 
 
 @celery.task(bind=True, name=RUN_TASK, acks_late=True, max_retries=None)

@@ -638,6 +638,9 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
             "APPROVAL_REQUIRED", "超過額度，需要送主管核准：" + "；".join(pend.reasons), 409
         )
     with _write_lock:
+        # 同一張確認卡同時送兩次：拿到鎖之後再確認它還在，後到的不會再寫一次
+        if pending_id not in _pending:
+            raise AppError("CHANGE_NOT_FOUND", "確認卡已過期或已使用，請重新輸入一次", 404)
         checks = authorize(account, pend.op, pend.params)
         if any(c["ok"] is False for c in checks):
             _pending.pop(pending_id, None)
@@ -819,6 +822,12 @@ def approve(ap_no: str, account: Account, note: str | None, request_id: str) -> 
     prod = get_production_repo()
     requester = get_account(ap["requester_id"])
     with _write_lock:
+        # 同一張申請同時核准兩次：拿到鎖之後再確認它還在待核准，後到的不會再寫一次
+        now = prod.get_approval(ap_no)
+        if not now or now["status"] != "待核准":
+            raise AppError(
+                "APPROVAL_CLOSED", f"{ap_no} 已經是「{now['status'] if now else '?'}」", 409
+            )
         get_inventory_repo().ensure_built(force=True)
         # 申請人的權限可能在申請後被收回：核准前再驗一次申請人的權限
         checks = authorize(requester, ap["op"], ap["params"])

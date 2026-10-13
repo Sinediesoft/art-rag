@@ -25,6 +25,8 @@ export interface ThreadActions {
   startReconstruct: (turnId: string) => void;
   startSchedule: (turnId: string) => void;
   cancelTask: (turnId: string) => void;
+  /** 排程「提前結束」：採用目前最佳的合法解並寫回（取消才是放棄、不寫回） */
+  stopSchedule: (turnId: string) => void;
   commitChange: (turnId: string, note: string | null) => void;
   outputsOf: (turnId: string) => Output[];
   activeOutput: string | null;
@@ -676,7 +678,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
       </div>
     );
   const j = p.job;
-  const idx = !j ? -1 : j.status === "preparing" ? 0 : j.status === "generating" ? 1 : j.status === "executing" ? 2 : 3;
+  const idx = !j ? -1 : j.status === "queued" ? -1 : j.status === "preparing" ? 0 : j.status === "generating" ? 1 : j.status === "executing" ? 2 : 3;
   const res = j?.result;
   return (
     <div className={`panel-card taskcard is-${j ? j.status : p.cancelled ? "cancelled" : "confirm"}`}>
@@ -711,6 +713,18 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
       )}
       {!j && !source && <p className="taskcard__note">附一張圖紙照片，或說出圖紙名稱再問一次。</p>}
       {p.cancelled && !j && <p className="taskcard__note">已取消，沒有載入模型。</p>}
+      {j?.status === "queued" && (
+        <div className="taskcard__run">
+          <p className="taskcard__stats num">
+            <span>
+              <Spinner /> 排隊中：等背景 worker 領取（3D 重建一次只跑一個，載入模型需要 GPU）
+            </span>
+          </p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.cancelTask(turn.id)}>
+            取消
+          </button>
+        </div>
+      )}
       {j && (j.status === "preparing" || j.status === "generating" || j.status === "executing") && (
         <div className="taskcard__run">
           <ol className="stagelist">
@@ -731,12 +745,36 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
             ))}
           </ol>
           <button type="button" className="btn btn--ghost" onClick={() => th.cancelTask(turn.id)}>
-            停止
+            取消
           </button>
         </div>
       )}
-      {j?.status === "stopped" && <p className="taskcard__note">已停止。</p>}
-      {j?.status === "error" && j.error && <ErrorNote title="3D 重建失敗" message={j.error.message} code={j.error.code} requestId={j.error.request_id} />}
+      {j?.status === "stopped" && (
+        <div className="taskcard__actions">
+          <p className="taskcard__note">這個畫面停止追蹤了；工作仍在背景執行，可以重新連線取回進度與結果。</p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.startReconstruct(turn.id)}>
+            重新連線
+          </button>
+        </div>
+      )}
+      {j?.status === "cancelled" && (
+        <div className="taskcard__actions">
+          <p className="taskcard__note">已取消，沒有產生模型。</p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.startReconstruct(turn.id)}>
+            重新開始
+          </button>
+        </div>
+      )}
+      {j?.status === "error" && j.error && (
+        <>
+          <ErrorNote title="3D 重建失敗" message={j.error.message} code={j.error.code} requestId={j.error.request_id} />
+          <div className="taskcard__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => th.startReconstruct(turn.id)}>
+              重試
+            </button>
+          </div>
+        </>
+      )}
       {j?.status === "done" && res && (
         <div className="taskcard__result fade-in">
           {res.ok ? (
@@ -805,6 +843,18 @@ function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
         </div>
       )}
       {p.cancelled && !j && <p className="taskcard__note">已取消。</p>}
+      {j?.status === "queued" && (
+        <div className="taskcard__run">
+          <p className="taskcard__stats num">
+            <span>
+              <Spinner /> 排隊中：等背景 worker 領取
+            </span>
+          </p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.cancelTask(turn.id)}>
+            取消
+          </button>
+        </div>
+      )}
       {j && (j.status === "starting" || j.status === "solving") && (
         <div className="taskcard__run">
           <p className="taskcard__stats num">
@@ -823,13 +873,42 @@ function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
             )}
           </p>
           {j.meta?.fallback_reason && <p className="hint">Timefold 連不上，改用簡易排程：{j.meta.fallback_reason}</p>}
-          <button type="button" className="btn btn--ghost" onClick={() => th.cancelTask(turn.id)}>
-            停止
+          <div className="taskcard__actions">
+            <button type="button" className="btn btn--ghost" disabled={j.stopping} onClick={() => th.stopSchedule(turn.id)}>
+              {j.stopping ? "收尾中…" : "提前結束（採用目前最佳解）"}
+            </button>
+            <button type="button" className="btn btn--ghost" onClick={() => th.cancelTask(turn.id)}>
+              取消（不寫回）
+            </button>
+          </div>
+        </div>
+      )}
+      {j?.status === "stopped" && (
+        <div className="taskcard__actions">
+          <p className="taskcard__note">這個畫面停止追蹤了；排程仍在背景執行，可以重新連線取回進度與結果。</p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.startSchedule(turn.id)}>
+            重新連線
           </button>
         </div>
       )}
-      {j?.status === "stopped" && <p className="taskcard__note">已停止。</p>}
-      {j?.status === "error" && j.error && <ErrorNote title="排程失敗" message={j.error.message} code={j.error.code} requestId={j.error.request_id} />}
+      {j?.status === "cancelled" && (
+        <div className="taskcard__actions">
+          <p className="taskcard__note">已取消，沒有寫回任何排程結果。</p>
+          <button type="button" className="btn btn--ghost" onClick={() => th.startSchedule(turn.id)}>
+            重新開始
+          </button>
+        </div>
+      )}
+      {j?.status === "error" && j.error && (
+        <>
+          <ErrorNote title="排程失敗" message={j.error.message} code={j.error.code} requestId={j.error.request_id} />
+          <div className="taskcard__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => th.startSchedule(turn.id)}>
+              重試
+            </button>
+          </div>
+        </>
+      )}
       {j?.status === "done" && k && (
         <div className="taskcard__result fade-in">
           <Specs

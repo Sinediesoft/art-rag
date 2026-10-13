@@ -1,5 +1,5 @@
 # 畫語 ArtRAG 的 Docker Compose（企劃書 §七：Ollama 原生安裝在主機上，其餘服務進 Docker）。
-# 目前只有資料庫 db：開發時每位組員本機只跑它，後端與前端在本機熱重載。
+# 資料庫 db 與背景工作的 broker redis：開發時每位組員本機只跑它們，後端、worker 與前端在本機熱重載。
 # Nginx、後端容器之後補在同一份檔案（B）。
 #
 # 在專案根目錄執行（make db-up 相同）：
@@ -30,6 +30,27 @@ services:
       retries: 20
     # 資料只有幾十筆，用不到多少記憶體；12–16 GB 的筆電要把記憶體留給 Ollama 與 embedding 模型
     mem_limit: 512m
+
+  # 背景工作的 broker（TASK-20261013-001、docs/adr/036）：3D 重建與排程的訊息佇列。
+  # 工作的狀態與事件以 PostgreSQL 為準，Redis 只傳遞「該執行哪個 job_id」：沒有持久化也沒關係
+  # （訊息遺失會由 outbox 補投遞）。同樣只綁本機，不對區網或公網開放。
+  redis:
+    image: redis:7.4.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 128m
+
+# worker 與 API 一樣跑在主機上（需要本機的 CadQuery、Ortho2CAD 與 Timefold 連線）：
+#   make worker-gpu        3D 重建（gpu 佇列，同時最多 JOBS_GPU_SLOTS 個，預設 1）
+#   make worker-schedule   排程求解（schedule 佇列）
+# 資料表結構：make jobs-migrate（版本化 migration，可重複執行）
 
 volumes:
   pgdata:

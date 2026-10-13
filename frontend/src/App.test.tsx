@@ -6,7 +6,7 @@ import App from "./App";
 import { readMarks, STORAGE_KEY, UNCONFIRMED_PREFIX } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
-import { account, accounts, baseHandlers, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
+import { account, accounts, baseHandlers, done, factoryRoute, jobSse, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
 
 // 照片前處理用 canvas，jsdom 沒有：直接把檔案交給上傳
 vi.mock("./lib/image", () => ({ preprocessImage: async (f: File) => f }));
@@ -360,14 +360,24 @@ describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL
         return json(factoryRoute({ question: q, intent: "reconstruct", intent_label: "3D 重建", gate: "confirm", dispatch: { module: "reconstruct", part_id: "mfg-002", part_label: "連接法蘭", artwork_id: null, question: q } }));
       return json(factoryRoute({ question: q }));
     });
-    t.on("POST", "/cad/reconstruct", () =>
-      sse([
-        ["meta", { request_id: "r", job_id: "job-9", strategy: "ortho2cad", model: "mock", image_id: null, part: null, identified: null, layout: "kb", input_url: "", input_size: [1, 1], scale_to: null, scale_source: null }],
-        ["executing", {}],
-        ["result", { ok: true, error: null, code: "SYNTH_CAD_CODE", valid: true, repaired: false, raw_dims: null, dims: { width: 111, depth: 222, height: 33 }, scale: 1, volume: 1, faces: 12, iou: 0.99, iou_bbox: 0.99, files: { "model.stl": "/api/v1/cad/jobs/job-9/model.stl" } }],
-        ["done", { request_id: "r", job_id: "job-9", strategy: "ortho2cad", model: "mock", latency_ms: { first_token: 1, generation: 1, exec: 1, total: 2800 }, tokens: { input: 1, output: 1 }, egress: { images: 0, chunks: 0, bytes: 0 } }],
+    // 3D 重建走背景工作：建立（202）→ 訂閱事件 → 取結果與受保護的產物
+    const JOB = "cad_0123456789abcdef";
+    const meta = { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "mock", image_id: null, part: null, identified: null, layout: "kb", input_url: "", input_size: [1, 1], scale_to: null, scale_source: null };
+    const cadResult = { ok: true, error: null, valid: true, repaired: false, raw_dims: null, dims: { width: 111, depth: 222, height: 33 }, scale: 1, volume: 1, faces: 12, iou: 0.99, iou_bbox: 0.99, files: { "model.stl": `/api/v1/jobs/${JOB}/artifacts/model.stl`, "code.py": `/api/v1/jobs/${JOB}/artifacts/code.py` } };
+    const cadDone = { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "mock", latency_ms: { first_token: 1, generation: 1, exec: 1, total: 2800 }, tokens: { input: 1, output: 1 }, egress: { images: 0, chunks: 0, bytes: 0 } };
+    t.on("GET", "/jobs", () => json({ items: [] }));
+    t.on("POST", "/cad/jobs", () => json({ job_id: JOB, kind: "cad", status: "queued", status_url: `/api/v1/jobs/${JOB}`, events_url: `/api/v1/jobs/${JOB}/events`, idempotent_replay: false, delayed_dispatch: false }, 202));
+    t.on("GET", `/jobs/${JOB}/events`, () =>
+      jobSse([
+        ["created", { status: "queued", kind: "cad" }],
+        ["started", { attempt: 1, resource: "gpu:0" }],
+        ["meta", meta],
+        ["stage", { stage: "executing", label: "沙箱執行中" }],
+        ["succeeded", { status: "succeeded" }],
       ]),
     );
+    t.on("GET", `/jobs/${JOB}`, () => json({ id: JOB, kind: "cad", status: "succeeded", owner_id: "planner", attempt: 1, max_attempts: 3, cancel_requested: false, stop_requested: false, progress: null, result: { meta, result: cadResult, done: cadDone }, error: null, created_at: "2026-10-13T00:00:00+00:00", last_event_id: 5, status_url: "", events_url: "", artifacts: [] }));
+    t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("SYNTH_CAD_CODE", { status: 200 }));
     renderApp();
     await ask("連接法蘭有哪些公差要求？");
     await idle();
@@ -1493,5 +1503,258 @@ describe("照片查工廠圖紙（TASK-20261010-001：上傳立式軸承座的�
     for (const s of ["立式軸承座", "PBK-6006", "D-24-0618", "mfg-006"]) expect(text).not.toContain(s);
     expect(lastAi().querySelector(".subject")).toBeNull();
     expect(lastAi().querySelector(".jump")).toBeNull();
+  });
+});
+
+describe("背景工作（TASK-20261013-001）：3D 重建與排程在 worker 執行，畫面只是訂閱", () => {
+  const JOB = "cad_0123456789abcdef";
+  const SCH = "sch_0123456789abcdef";
+  const jobBody = (over: Record<string, unknown> = {}) => ({
+    id: JOB,
+    kind: "cad",
+    status: "running",
+    owner_id: "planner",
+    attempt: 1,
+    max_attempts: 3,
+    cancel_requested: false,
+    stop_requested: false,
+    progress: null,
+    result: null,
+    error: null,
+    created_at: "2026-10-13T00:00:00+00:00",
+    last_event_id: 2,
+    status_url: "",
+    events_url: "",
+    artifacts: [],
+    ...over,
+  });
+  const reconstructBackend = () => {
+    const t = factoryBackend();
+    t.on("POST", "/agent/route", ({ body }) => {
+      const q = (body as { question: string }).question;
+      if (!q.includes("3D")) return json(factoryRoute({ question: q }));
+      return json(
+        factoryRoute({
+          question: q,
+          intent: "reconstruct",
+          intent_label: "3D 重建",
+          gate: "confirm",
+          dispatch: { module: "reconstruct", part_id: "mfg-002", part_label: "連接法蘭", artwork_id: null, question: q },
+        }),
+      );
+    });
+    t.on("GET", "/jobs", () => json({ items: [] }));
+    t.on("POST", "/cad/jobs", () => json({ job_id: JOB, kind: "cad", status: "queued", status_url: "", events_url: "", idempotent_replay: false, delayed_dispatch: false }, 202));
+    return t;
+  };
+  /** 進入工廠模組之後才有「開始」按鈕（入口只給簡介） */
+  const enterFactory = async (question: string) => {
+    renderApp();
+    await ask("連接法蘭有哪些公差要求？");
+    await idle();
+    fireEvent.click(document.querySelector(".jump--factory")!);
+    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await ask(question);
+    await idle();
+  };
+  const startCad = async () => {
+    await enterFactory("把連接法蘭轉成 3D");
+    fireEvent.click(screen.getByText("開始轉換"));
+  };
+
+  it("按「開始轉換」→ 排隊中；按「取消」送 POST /jobs/{id}/cancel，等到「已取消」事件才顯示已取消，並且可以重新開始", async () => {
+    const t = reconstructBackend();
+    const live = liveSse();
+    t.on("GET", `/jobs/${JOB}/events`, ({ signal }) => live.respond(signal));
+    t.on("POST", `/jobs/${JOB}/cancel`, () => json({ result: "cancelling", job: jobBody({ cancel_requested: true }) }));
+    t.on("GET", `/jobs/${JOB}`, () => json(jobBody({ status: "cancelled" })));
+    await startCad();
+    act(() => live.push("created", { status: "queued", kind: "cad" }, 1));
+    await waitFor(() => expect(document.body.textContent).toContain("排隊中"));
+    expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toHaveLength(1);
+    fireEvent.click(screen.getAllByText("取消").at(-1)!);
+    await waitFor(() => expect(t.calls.some((c) => c.path === `/jobs/${JOB}/cancel`)).toBe(true));
+    expect(document.body.textContent).not.toContain("已取消，沒有產生模型"); // 還沒收到終態事件
+    act(() => {
+      live.push("cancelled", { status: "cancelled" }, 2);
+      live.close();
+    });
+    await waitFor(() => expect(document.body.textContent).toContain("已取消，沒有產生模型"));
+    expect(screen.getByText("重新開始")).toBeTruthy();
+  });
+
+  it("切換身分只停止訂閱：不取消工作，舊身分的進度與結果不再寫回畫面", async () => {
+    const t = reconstructBackend();
+    let current = "planner";
+    t.on("GET", "/auth/accounts", () => json(accounts(current)));
+    t.on("POST", "/auth/switch", ({ body }) => {
+      current = (body as { account_id: string }).account_id;
+      return json(accounts(current));
+    });
+    const live = liveSse();
+    let streamAborted = false;
+    t.on("GET", `/jobs/${JOB}/events`, ({ signal }) => {
+      signal?.addEventListener("abort", () => (streamAborted = true));
+      return live.respond(signal);
+    });
+    await startCad();
+    act(() => live.push("created", { status: "queued", kind: "cad" }, 1));
+    await waitFor(() => expect(document.body.textContent).toContain("排隊中"));
+    fireEvent.click(accountButton("生管"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+    });
+    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    expect(streamAborted).toBe(true); // 訂閱停了
+    expect(t.calls.filter((c) => c.path.includes("/cancel"))).toEqual([]); // 工作沒有被取消
+    // 舊身分的串流晚到的事件（合成值）不會回填
+    act(() => {
+      live.push("meta", { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "mock", part: { id: "SYNTH_PRIVATE_PART" } }, 3);
+      live.push("succeeded", { status: "succeeded" }, 4);
+      live.close();
+    });
+    await new Promise((r) => setTimeout(r, 30));
+    expect(document.body.textContent).not.toContain("SYNTH_PRIVATE_PART");
+    expect(t.calls.filter((c) => c.path === `/jobs/${JOB}`)).toEqual([]); // 也沒有再去讀舊身分的工作
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY) ?? "").not.toContain("SYNTH_PRIVATE_PART"));
+  });
+
+  it("事件串流斷線：自動用 Last-Event-ID 重連，完成後顯示結果（模型、程式碼來自受保護的產物端點）", async () => {
+    const t = reconstructBackend();
+    let n = 0;
+    const meta = { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "mock", image_id: null, part: null, identified: null, layout: "kb", input_url: "", input_size: [1, 1], scale_to: null, scale_source: null };
+    const res = { ok: true, error: null, valid: true, repaired: false, raw_dims: null, dims: { width: 10, depth: 20, height: 30 }, scale: 1, volume: 1, faces: 6, iou: 0.97, iou_bbox: 0.97, files: { "model.stl": `/api/v1/jobs/${JOB}/artifacts/model.stl`, "code.py": `/api/v1/jobs/${JOB}/artifacts/code.py` } };
+    t.on("GET", `/jobs/${JOB}/events`, ({ headers }) => {
+      n++;
+      if (n === 1) return jobSse([["created", {}], ["started", { attempt: 1 }]]); // 串流斷了
+      expect(headers.get("Last-Event-ID")).toBe("2");
+      return jobSse([["meta", meta], ["succeeded", {}]], 3);
+    });
+    t.on("GET", `/jobs/${JOB}`, () => json(jobBody({ status: "succeeded", result: { meta, result: res, done: { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "mock", latency_ms: { first_token: 1, generation: 1, exec: 1, total: 1500 }, tokens: { input: 1, output: 1 }, egress: { images: 0, chunks: 0, bytes: 0 } } } })));
+    t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq  # SYNTH_CODE"));
+    await startCad();
+    await waitFor(() => expect(document.body.textContent).toContain("10×20×30"), { timeout: 4000 });
+    expect(n).toBe(2);
+    fireEvent.click(screen.getByText("CadQuery 程式碼"));
+    expect(document.body.textContent).toContain("SYNTH_CODE");
+    expect(screen.getByText("下載 STL").getAttribute("href")).toBe(`/api/v1/jobs/${JOB}/artifacts/model.stl`);
+  });
+
+  it("排程：提前結束和取消是兩個按鈕；提前結束送 POST /schedule/stop 並帶 job_id，不是取消", async () => {
+    const t = factoryBackend();
+    t.on("POST", "/agent/route", ({ body }) =>
+      json(
+        factoryRoute(
+          !(body as { question: string }).question.includes("排程")
+            ? { question: (body as { question: string }).question }
+            : {
+          question: (body as { question: string }).question,
+          intent: "schedule",
+          intent_label: "生產排程",
+          gate: "confirm",
+          dispatch: { module: "schedule", part_id: null, artwork_id: null, question: "重新排程" },
+            },
+        ),
+      ),
+    );
+    t.on("GET", "/jobs", () => json({ items: [] }));
+    t.on("POST", "/schedule/jobs", () => json({ job_id: SCH, kind: "schedule", status: "queued", status_url: "", events_url: "", idempotent_replay: false, delayed_dispatch: false }, 202));
+    const live = liveSse();
+    t.on("GET", `/jobs/${SCH}/events`, ({ signal }) => live.respond(signal));
+    t.on("POST", "/schedule/stop", () => json({ ok: true }));
+    await enterFactory("重新排程所有未完工工單");
+    fireEvent.click(screen.getByText("開始排程"));
+    act(() => {
+      live.push("created", { status: "queued", kind: "schedule" }, 1);
+      live.push("started", { attempt: 1, resource: "schedule:plant" }, 2);
+      live.push("meta", { engine: "timefold", engine_label: "Timefold Solver", engine_version: "1", fallback_reason: null, seconds: 20, unimproved_seconds: 8, problem: {}, work_orders: [], machines: [], axis: [] }, 3);
+    });
+    await waitFor(() => expect(screen.getByText("提前結束（採用目前最佳解）")).toBeTruthy());
+    expect(screen.getByText("取消（不寫回）")).toBeTruthy();
+    fireEvent.click(screen.getByText("提前結束（採用目前最佳解）"));
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/schedule/stop")).toBe(true));
+    expect(t.calls.find((c) => c.path === "/schedule/stop")?.body).toEqual({ job_id: SCH });
+    expect(t.calls.filter((c) => c.path.includes("/cancel"))).toEqual([]);
+  });
+});
+
+describe("排程頁與 3D 重建頁：回到頁面接回進行中的工作（不重複建立）", () => {
+  const SCH = "sch_0123456789abcdef";
+  const overview = (active: unknown) => ({
+    plan_start: "2026-10-01",
+    calendar: { shifts: [], workdays: [1, 2, 3, 4, 5], holidays: [], day_minutes: 480 },
+    priority_weights: { 一般: 1, 急件: 3 },
+    machine_types: [],
+    machines: [],
+    work_orders: [{ wo_no: "WO-1", part_id: "mfg-002", part_name: "連接法蘭", qty: 10, priority: "一般", weight: 1, status: "已開立", source: "系統開立", release_on: "2026-10-01", due_on: "2026-10-09", release_min: 0, due_min: 2400, note: null, n_ops: 3 }],
+    skipped: [],
+    problem: { plan_start: "2026-10-01", day_minutes: 480, n_work_orders: 1, n_operations: 3, n_machines: 0, n_pinned: 0, total_work_min: 100, skipped: [] },
+    engine: { available: true, engine: "timefold", detail: "ok" },
+    current: null,
+    runs: [],
+    solving: !!active,
+    settings: { solve_seconds: 20, max_seconds: 60 },
+    input_version: "sv1:abc",
+    active_job: active,
+  });
+  const running = {
+    id: SCH,
+    kind: "schedule",
+    status: "running",
+    owner_id: "planner",
+    attempt: 1,
+    max_attempts: 3,
+    cancel_requested: false,
+    stop_requested: false,
+    progress: null,
+    result: null,
+    error: null,
+    created_at: "2026-10-13T00:00:00+00:00",
+    last_event_id: 3,
+    status_url: "",
+    events_url: "",
+    artifacts: [],
+  };
+  const meta = { engine: "timefold", engine_label: "Timefold Solver", engine_version: "1", fallback_reason: null, seconds: 20, unimproved_seconds: 8, problem: {}, work_orders: [], machines: [], axis: [] };
+
+  it("排程頁重新整理：overview 有進行中的工作就接回它的進度，不建立新工作；提前結束、取消各送各的請求", async () => {
+    const t = factoryBackend();
+    t.on("GET", "/production/overview", () => json(overview(running)));
+    t.on("GET", "/jobs", () => json({ items: [running] }));
+    const live = liveSse();
+    t.on("GET", `/jobs/${SCH}/events`, ({ signal }) => live.respond(signal));
+    t.on("POST", "/schedule/stop", () => json({ ok: true }));
+    t.on("POST", `/jobs/${SCH}/cancel`, () => json({ result: "cancelling", job: { ...running, cancel_requested: true } }));
+    renderApp("/schedule");
+    await waitFor(() => expect(t.calls.some((c) => c.path === `/jobs/${SCH}/events`)).toBe(true));
+    expect(t.calls.filter((c) => c.method === "POST" && c.path === "/schedule/jobs")).toHaveLength(0);
+    act(() => {
+      live.push("created", {}, 1);
+      live.push("started", { attempt: 1 }, 2);
+      live.push("meta", meta, 3);
+    });
+    const stopBtn = await screen.findByText("提前結束，採用目前最佳解");
+    fireEvent.click(stopBtn);
+    await waitFor(() => expect(t.calls.some((c) => c.path === "/schedule/stop")).toBe(true));
+    expect(t.calls.find((c) => c.path === "/schedule/stop")?.body).toEqual({ job_id: SCH });
+    fireEvent.click(screen.getByText("取消（不寫回）"));
+    await waitFor(() => expect(t.calls.some((c) => c.path === `/jobs/${SCH}/cancel`)).toBe(true));
+  });
+
+  it("離開排程頁只停止訂閱：不送取消也不送提前結束", async () => {
+    const t = factoryBackend();
+    t.on("GET", "/production/overview", () => json(overview(running)));
+    t.on("GET", "/jobs", () => json({ items: [running] }));
+    const live = liveSse();
+    let aborted = false;
+    t.on("GET", `/jobs/${SCH}/events`, ({ signal }) => {
+      signal?.addEventListener("abort", () => (aborted = true));
+      return live.respond(signal);
+    });
+    const view = renderApp("/schedule");
+    await waitFor(() => expect(t.calls.some((c) => c.path === `/jobs/${SCH}/events`)).toBe(true));
+    view.unmount();
+    expect(aborted).toBe(true);
+    expect(t.calls.filter((c) => c.path.includes("/cancel") || c.path === "/schedule/stop")).toEqual([]);
   });
 });

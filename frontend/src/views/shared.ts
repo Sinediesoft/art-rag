@@ -42,6 +42,7 @@ export function useThreadActions(conv: Conv | null, mode: "brief" | "full", ask:
     startReconstruct: (turnId) => id && shell.startReconstruct(id, turnId),
     startSchedule: (turnId) => id && shell.startSchedule(id, turnId),
     cancelTask: (turnId) => id && shell.cancelTask(id, turnId),
+    stopSchedule: (turnId) => id && shell.stopSchedule(id, turnId),
     commitChange: (turnId, note) => id && shell.commitChange(id, turnId, note),
     outputsOf: (turnId) => {
       const keys = outputs.byTurn[turnId] ?? [];
