@@ -78,3 +78,26 @@ def test_scheduler_errors_do_not_carry_internal_urls(monkeypatch):
     with pytest.raises(timefold_client.SchedulerUnavailable) as e:
         asyncio.run(timefold_client._call("GET", "/health"))
     assert "127.0.0.1" not in str(e.value)
+
+
+@pytest.mark.parametrize("image_id", ["%00", "img_%00", "x" * 300, "img_0000000000000000%27"])
+def test_malformed_image_id_is_404_not_500(client, image_id):
+    """含 NUL 的 ID 會讓 PostgreSQL 丟例外；格式不對一律當作找不到。"""
+    for suffix in ("", "/colors", "/colormap.png", "/style"):
+        r = client.get(f"/api/v1/images/{image_id}{suffix}")
+        assert r.status_code == 404 and r.json()["error"]["code"] == "IMAGE_NOT_FOUND", suffix
+
+
+def test_scheduler_status_does_not_show_its_address(monkeypatch):
+    from app.core.config import get_settings
+    from app.services import schedule_service
+
+    monkeypatch.setattr(get_settings(), "scheduler_mode", "real")
+    monkeypatch.setattr(get_settings(), "scheduler_base_url", "http://127.0.0.1:9")
+
+    async def down():
+        return None
+
+    monkeypatch.setattr(timefold_client, "health", down)
+    status = asyncio.run(schedule_service.engine_status())
+    assert status["available"] is False and "127.0.0.1" not in status["detail"]

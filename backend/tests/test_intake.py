@@ -515,3 +515,22 @@ def test_draft_is_only_visible_to_its_creator_and_managers(client, reads):
     finally:
         as_account(client, "manager")
         client.delete(f"/api/v1/intake/{did}")
+
+
+def test_failed_rebuild_keeps_exception_details_out_of_the_draft(client, reads, kb, monkeypatch):
+    """收錄失敗時草稿只寫例外類型：建立者也讀得到草稿，例外內容可能含資料庫位址、路徑。"""
+
+    def broken():
+        raise RuntimeError("postgresql://artrag:secret@10.0.0.5/artrag 連線失敗")
+
+    as_account(client, "warehouse")
+    draft = ready_draft(client, reads)
+    monkeypatch.setattr(intake_service, "_rebuild_index", broken)
+    r = commit_as_manager(client, draft["draft_id"])
+    assert r.status_code == 200, r.text
+    as_account(client, "warehouse")
+    failed = client.get(f"/api/v1/intake/{draft['draft_id']}").json()
+    assert failed["status"] == "failed"
+    assert failed["commit"]["error"].startswith("重建索引失敗（RuntimeError）")
+    assert "postgresql" not in json.dumps(failed, ensure_ascii=False)
+    as_account(client, "guest")
