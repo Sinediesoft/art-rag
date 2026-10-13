@@ -288,7 +288,7 @@ async def route(
         guard_ms = round((time.perf_counter() - g0) * 1000)
         if not guard_res.passed:
             tag = guard_res.tag or "惡意輸入"
-            judge = "雲端 Jev（只收代號化文字）" if guard_res.engine == "jev" else "地端規則"
+            judge = guard_res.judge
             no = guard.log_block(2, tag, account, logged_text, request_id, judge)
             blocked = {
                 "stage": 2,

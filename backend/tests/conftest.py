@@ -27,6 +27,8 @@ def mock_env(tmp_path_factory):
             "SCHEDULER_MODE": "mock",
             "MEMORY_GUARD": "false",
             "JEV_API_KEY": "",
+            # laya測試：本機 .env 填了 Laya 金鑰也不會真的呼叫 Unsloth Studio
+            "LAYA_API_KEY": "",
             "REARRANGE": "false",
             "DEMO_CONTROLS": "true",
             "DEMO_TRUSTED_HOSTS": '["testclient"]',

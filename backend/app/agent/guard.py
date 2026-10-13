@@ -42,7 +42,9 @@ import httpx
 from app.agent import jev
 from app.agent.entities import Entity, get_index
 from app.core.config import get_agent_config, get_settings
-from app.rag import rearrange as rearrange_mod
+
+# [laya測試] 段落篩選（Qwen3-VL 挑地端段落）只在註解掉的地端判斷裡用；要恢復就取消註解
+# from app.rag import rearrange as rearrange_mod
 from app.rag.prompt import load_template
 from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.logs_repo import get_logs_repo
@@ -491,6 +493,14 @@ class GuardResult:
     def egress_bytes(self) -> int:
         return self.call["bytes"] if self.call else 0
 
+    @property
+    def judge(self) -> str:
+        """拒絕並記錄的判斷者。[laya測試] engine＝jev 也可能是本機 Laya（看回覆的 model）。"""
+        if self.engine != "jev":
+            return "地端規則"
+        model = str((self.call or {}).get("model", ""))
+        return "本機 Laya" if model.startswith("laya") else "雲端 Jev（只收代號化文字）"
+
     def public(self) -> dict:
         return {
             "passed": self.passed,
@@ -596,36 +606,41 @@ async def guard_input(
     tag = None
     fallback = None
     reply = None
-    # 確定性的 hard-block 永遠先跑（docs/adr/030）：命中就擋，Jev 不能覆寫，也不必再送 Jev
-    direct, suspects = _local_hits(text)
-    eff = risk or risk_hint or "read"
-    said = "、".join(f"「{m}」" for _, m in suspects)
-    if direct or (suspects and eff in ("heavy", "write")):
-        if direct:
-            detail = f"命中「{direct[0]}」（「{direct[1]}」）→ 攔截（地端硬性規則，Jev 不能覆寫）"
-            tag = direct[0]
-        else:
-            detail = (
-                f"{'＋'.join(r for r, _ in suspects)}（{said}），又要{RISK_VERB[eff]} → 越權嘗試"
-                "（地端硬性規則，Jev 不能覆寫）"
-            )
-            tag = "越權嘗試"
-        return GuardResult(
-            passed=False,
-            engine="local",
-            checks=[Check("intent_guard", "意圖防護", "地端", False, detail)],
-            tag=tag,
-            reason=detail,
-            verdict="attack",
-            overrides=True,
-        )
+    # [laya測試] 地端規則註解：hard-block 不跑，全部交給 Jev／Laya 判斷
+    # （開發/laya測試-開發日誌.md）。
+    # 要恢復就把下面這段取消註解，並刪掉 suspects 的空清單。
+    # # 確定性的 hard-block 永遠先跑（docs/adr/030）：命中就擋，Jev 不能覆寫，也不必再送 Jev
+    # direct, suspects = _local_hits(text)
+    # eff = risk or risk_hint or "read"
+    # said = "、".join(f"「{m}」" for _, m in suspects)
+    # if direct or (suspects and eff in ("heavy", "write")):
+    #     if direct:
+    #         detail = f"命中「{direct[0]}」（「{direct[1]}」）→ 攔截（地端硬性規則，Jev 不能覆寫）"
+    #         tag = direct[0]
+    #     else:
+    #         detail = (
+    #             f"{'＋'.join(r for r, _ in suspects)}（{said}），又要{RISK_VERB[eff]} → 越權嘗試"
+    #             "（地端硬性規則，Jev 不能覆寫）"
+    #         )
+    #         tag = "越權嘗試"
+    #     return GuardResult(
+    #         passed=False,
+    #         engine="local",
+    #         checks=[Check("intent_guard", "意圖防護", "地端", False, detail)],
+    #         tag=tag,
+    #         reason=detail,
+    #         verdict="attack",
+    #         overrides=True,
+    #     )
+    suspects: list[tuple[str, str]] = []
 
-    if use_jev:
-        state, questions = _input_request(pseudo, photo_kind)
-        try:
-            reply = await jev.ask(state, questions)
-        except jev.JevUnavailable as e:
-            fallback = str(e)
+    # [laya測試] 一律問決策模型：use_jev＝可以送雲端 Jev（叫不到改問 Laya）；
+    # False（engine=local）只問 Laya
+    state, questions = _input_request(pseudo, photo_kind)
+    try:
+        reply = await jev.ask(state, questions, cloud=use_jev)
+    except jev.JevUnavailable as e:
+        fallback = str(e)
 
     keys = list(VERDICT_LABEL)
     if reply is not None:
@@ -645,6 +660,9 @@ async def guard_input(
             else "query"
         )
         p = probs[verdict]
+        # [laya測試] API 的 by 只有地端／Jev：Laya 的判斷也標 Jev，說明文字寫是誰
+        who = reply.who
+        fallback = reply.note if reply.engine == "laya" else None
         if verdict == "attack":
             checks.append(
                 Check(
@@ -652,10 +670,10 @@ async def guard_input(
                     "意圖防護",
                     "Jev",
                     False,
-                    f"Jev Choice 判為「Prompt 注入或越權」（{p:.2f}）→ 攔截，不進檢索",
+                    f"{who} Choice 判為「Prompt 注入或越權」（{p:.2f}）→ 攔截，不進檢索",
                 )
             )
-            tag = "提示詞注入"
+            tag = "提示詞注入" if who == "Jev" else "提示詞注入（Laya）"
         elif verdict == "chitchat":
             checks.append(
                 Check(
@@ -663,7 +681,7 @@ async def guard_input(
                     "意圖防護",
                     "Jev",
                     True,
-                    f"Jev Choice 判為「無關閒聊」（{p:.2f}）→ 快速短路回覆，不檢索、不生成",
+                    f"{who} Choice 判為「無關閒聊」（{p:.2f}）→ 快速短路回覆，不檢索、不生成",
                     warn=True,
                 )
             )
@@ -674,7 +692,7 @@ async def guard_input(
                     "意圖防護",
                     "Jev",
                     True,
-                    f"Jev Choice 判為「正常查詢」（{p:.2f}）"
+                    f"{who} Choice 判為「正常查詢」（{p:.2f}）"
                     + ("" if best == "query" else f"；最高的是{VERDICT_LABEL[best]}但不到門檻"),
                     warn=best != "query",
                 )
@@ -696,53 +714,68 @@ async def guard_input(
         engine = "jev"
         overrides_flag = verdict == "attack" or bool(suspects)
     else:
-        # 叫不到 Jev 時的備援：hard-block 上面已經跑過；規則未命中時再問本地模型
+        # [laya測試] 地端規則註解：Jev、Laya 都叫不到（或回應不合格）時不放行，直接擋下
+        # （不可以把叫不到當成放行，docs/adr/030）。要恢復就把下面這段取消註解，並刪掉擋下的那段。
+        # # 叫不到 Jev 時的備援：hard-block 上面已經跑過；規則未命中時再問本地模型
+        # call = None
+        # verdict = "query"
+        # llm = await local_llm_verdict(text)
+        # if llm[0] == "attack":
+        #     # 規則認不出的語意式說法：本地 Qwen3-VL 再判斷一次（docs/adr/023）
+        #     checks.append(
+        #         Check(
+        #             "intent_guard",
+        #             "意圖防護",
+        #             "地端",  # API 的 by 只有地端／Jev；是本地模型判斷的寫在說明裡
+        #             False,
+        #             f"地端規則沒命中，本地 Qwen3-VL 判為「Prompt 注入或越權」"
+        #             f"（{llm[2]} ms）→ 攔截",
+        #         )
+        #     )
+        #     tag, verdict = "提示詞注入（地端模型）", "attack"
+        # elif local_intent == "out_of_scope":
+        #     checks.append(
+        #         Check(
+        #             "intent_guard",
+        #             "意圖防護",
+        #             "地端",
+        #             True,
+        #             "本地分流判為超出範圍（閒聊）→ 快速短路回覆",
+        #             warn=True,
+        #         )
+        #     )
+        #     verdict = "chitchat"
+        # else:
+        #     note = f"；有{said}的說法，但只是查詢，身分以第 1 段的憑證為準" if suspects else ""
+        #     llm_note = (
+        #         f"；{llm[1]}（{llm[2]} ms）"
+        #         if llm[0] == "query"
+        #         else "（換句話說的攻擊認不出來）"
+        #         if llm[1] == "未啟用"
+        #         else f"；{llm[1]}，只用地端規則"
+        #     )
+        #     checks.append(
+        #         Check(
+        #             "intent_guard",
+        #             "意圖防護",
+        #             "地端",
+        #             True,
+        #             "沒有命中已知的注入樣式" + llm_note + note,
+        #             warn=bool(suspects),
+        #         )
+        #     )
         call = None
         verdict = "query"
-        llm = await local_llm_verdict(text)
-        if llm[0] == "attack":
-            # 規則認不出的語意式說法：本地 Qwen3-VL 再判斷一次（docs/adr/023）
-            checks.append(
-                Check(
-                    "intent_guard",
-                    "意圖防護",
-                    "地端",  # API 的 by 只有地端／Jev；是本地模型判斷的寫在說明裡
-                    False,
-                    f"地端規則沒命中，本地 Qwen3-VL 判為「Prompt 注入或越權」（{llm[2]} ms）→ 攔截",
-                )
+        checks.append(
+            Check(
+                "intent_guard",
+                "意圖防護",
+                "地端",
+                False,
+                f"Jev 與 Laya 都叫不到（{fallback}），地端規則已註解（laya測試）→ 擋下，不放行",
             )
-            tag, verdict = "提示詞注入（地端模型）", "attack"
-        elif local_intent == "out_of_scope":
-            checks.append(
-                Check(
-                    "intent_guard",
-                    "意圖防護",
-                    "地端",
-                    True,
-                    "本地分流判為超出範圍（閒聊）→ 快速短路回覆",
-                    warn=True,
-                )
-            )
-            verdict = "chitchat"
-        else:
-            note = f"；有{said}的說法，但只是查詢，身分以第 1 段的憑證為準" if suspects else ""
-            llm_note = (
-                f"；{llm[1]}（{llm[2]} ms）"
-                if llm[0] == "query"
-                else "（換句話說的攻擊認不出來）"
-                if llm[1] == "未啟用"
-                else f"；{llm[1]}，只用地端規則"
-            )
-            checks.append(
-                Check(
-                    "intent_guard",
-                    "意圖防護",
-                    "地端",
-                    True,
-                    "沒有命中已知的注入樣式" + llm_note + note,
-                    warn=bool(suspects),
-                )
-            )
+        )
+        tag = "決策模型無法使用"
         engine = "local"
         overrides_flag = bool(suspects)
 
@@ -768,6 +801,19 @@ class StageInfo:
     call: dict | None = None
     fallback_reason: str | None = None
     ms: int = 0
+    # [laya測試] 同一段問了兩次（公開段落送 Jev、不出廠的送 Laya）時，
+    # 第二次的紀錄放這裡（畫面只顯示 call）
+    extra_calls: list[dict] = field(default_factory=list)
+
+    def add_call(self, info: dict) -> None:
+        if self.call is None:
+            self.call = info
+        else:
+            self.extra_calls.append(info)
+
+    def add_reason(self, why: str | None) -> None:
+        if why:
+            self.fallback_reason = f"{self.fallback_reason}；{why}" if self.fallback_reason else why
 
     def public(self) -> dict:
         return {
@@ -809,7 +855,7 @@ class PostResult:
     @property
     def calls(self) -> list[dict]:
         stages = [self.verify, self.rerank, self.gate]
-        return [s.call for s in stages if s and s.call]
+        return [c for s in stages if s for c in ([s.call] if s.call else []) + s.extra_calls]
 
     @property
     def egress_bytes(self) -> int:
@@ -881,9 +927,12 @@ def passage_risk(text: str) -> str | None:
     return local_leak(text)
 
 
-async def _ask(state: dict, questions: dict) -> tuple[jev.JevReply | None, str | None]:
+async def _ask(
+    state: dict, questions: dict, cloud: bool = True
+) -> tuple[jev.JevReply | None, str | None]:
+    """cloud＝可以送雲端 Jev（叫不到改問 Laya）；False＝只問本機 Laya（laya測試）。"""
     try:
-        return await jev.ask(state, questions, timeout_s=POST_TIMEOUT_S), None
+        return await jev.ask(state, questions, timeout_s=POST_TIMEOUT_S, cloud=cloud), None
     except jev.JevUnavailable as e:
         return None, str(e)
 
@@ -962,17 +1011,26 @@ async def process_passages(
     th = float(g["jev_threshold"])
     n = len(sources)
     pid = {s["chunk_id"]: f"p{i + 1}" for i, s in enumerate(sources)}
-    # 沒標等級的段落當機密（預設不允許）
-    leak_by_rule = {s["chunk_id"]: local_leak(s["text"], s.get("level", "機密")) for s in sources}
-    use_jev = mode == "jev" and jev.status()[0]
-    public = [s for s in sources if s.get("level") == "公開"] if mode == "jev" else []
+    # [laya測試] 地端規則註解：洩密改由 Jev／Laya 的 security_leak_check 判斷。
+    # 要恢復就取消註解、刪掉下一行
+    # # 沒標等級的段落當機密（預設不允許）
+    # leak_by_rule = {s["chunk_id"]: local_leak(s["text"], s.get("level", "機密")) for s in sources}
+    leak_by_rule: dict[str, str | None] = {s["chunk_id"]: None for s in sources}
+    # [laya測試] 公開段落可以送雲端 Jev（叫不到改問 Laya）；內部、機密段落、沒有 Jev 金鑰、
+    # mode＝local 時只送本機 Laya（Laya 不出廠，送遮蔽個資後的原文，不必代號化）
+    cloud_ok = mode == "jev" and jev.jev_status()[0]
+    public = [s for s in sources if s.get("level") == "公開"] if cloud_ok else []
+    public_ids = {s["chunk_id"] for s in public}
+    private = [s for s in sources if s["chunk_id"] not in public_ids]
+    raw = {s["chunk_id"]: mask_pii(s["text"])[0] for s in sources}
 
     # 代號化一次，第 4～6 段共用同一套代號（只代號化會送 Jev 的公開內容）
     pseudo: dict[str, str] = {}
     mapping: dict = {}
     pq = mask_pii(question)[0]
+    mq = pq  # 只送 Laya 的請求用（不代號化）
     card_public = bool(card) and card.get("level") == "公開"
-    if public or (mode == "jev" and card_public):
+    if public or (cloud_ok and card_public):
         idx = get_index()
         texts = [pq, *(mask_pii(s["text"])[0] for s in public)]
         if card_public:
@@ -983,19 +1041,26 @@ async def process_passages(
         if card_public:
             pseudo["__card__"] = out[-1]
 
+    # [laya測試] (段落, 可以送雲端, 問題, 段落文字)：公開段落一組、不出廠的一組（只送 Laya）
+    groups = [(public, True, pq, pseudo), (private, False, mq, raw)]
+
     # ---------------------------------------------------------------- 第 4 段：Jev Noul 雙重驗證
     t4 = time.perf_counter()
     verify = StageInfo("local")
     jev_leak: dict[str, float] = {}
     jev_rel: dict[str, float] = {}
-    if public:
+    who_of: dict[str, str] = {}  # 段落是 Jev 還是 Laya 判斷的
+    sent_cloud: set[str] = set()  # 真的送到雲端 Jev 的段落
+    for group, cloud, q, text_of in groups:
+        if not group:
+            continue
         state = {
             "context": g["passage_context"],
-            "question": pq,
-            "passages": [{"id": pid[s["chunk_id"]], "text": pseudo[s["chunk_id"]]} for s in public],
+            "question": q,
+            "passages": [{"id": pid[s["chunk_id"]], "text": text_of[s["chunk_id"]]} for s in group],
         }
         questions: dict = {}
-        for s in public:
+        for s in group:
             i = pid[s["chunk_id"]]
             questions[f"{i}_relevant"] = {
                 "type": "noul",
@@ -1005,33 +1070,42 @@ async def process_passages(
                 "type": "noul",
                 "instructions": g["passage_leak"].format(id=i),
             }
-        reply, verify.fallback_reason = await _ask(state, questions)
+        reply, why = await _ask(state, questions, cloud)
+        verify.add_reason(why)
         if reply:
             try:
-                rel = {s["chunk_id"]: reply.noul(f"{pid[s['chunk_id']]}_relevant") for s in public}
-                leak = {s["chunk_id"]: reply.noul(f"{pid[s['chunk_id']]}_leak") for s in public}
+                rel = {s["chunk_id"]: reply.noul(f"{pid[s['chunk_id']]}_relevant") for s in group}
+                leak = {s["chunk_id"]: reply.noul(f"{pid[s['chunk_id']]}_leak") for s in group}
             except jev.JevUnavailable as e:
-                # 任一題缺欄或數字不合格：整批改地端判斷（洩密規則本來就每段都跑）
-                verify.fallback_reason = str(e)
+                # 任一題缺欄或數字不合格：這一組都當沒判斷（地端規則已註解 → 剔除，不放行）
+                verify.add_reason(str(e))
             else:
-                jev_rel, jev_leak = rel, leak
+                jev_rel.update(rel)
+                jev_leak.update(leak)
+                who_of.update({cid: reply.who for cid in rel})
+                if reply.engine == "jev":
+                    sent_cloud |= set(rel)
+                elif cloud:
+                    verify.add_reason(reply.note)
                 verify.engine = "jev"
-                verify.call = _call_info(
-                    4,
-                    reply,
-                    [pq, *(f"{pid[s['chunk_id']]}：{pseudo[s['chunk_id']]}" for s in public)],
-                    mapping,
-                    [
-                        {
-                            "label": f"{pid[s['chunk_id']]}・〈{s['title']}〉{s['topic']}："
-                            "is_relevant／security_leak_check",
-                            "value": f"{jev_rel[s['chunk_id']]:.2f}／{jev_leak[s['chunk_id']]:.2f}",
-                            "alert": jev_leak[s["chunk_id"]] >= th,
-                        }
-                        for s in public
-                    ],
+                verify.add_call(
+                    _call_info(
+                        4,
+                        reply,
+                        [q, *(f"{pid[s['chunk_id']]}：{text_of[s['chunk_id']]}" for s in group)],
+                        mapping if cloud else {},
+                        [
+                            {
+                                "label": f"{pid[s['chunk_id']]}・〈{s['title']}〉{s['topic']}："
+                                "is_relevant／security_leak_check",
+                                "value": f"{rel[s['chunk_id']]:.2f}／{leak[s['chunk_id']]:.2f}",
+                                "alert": leak[s["chunk_id"]] >= th,
+                            }
+                            for s in group
+                        ],
+                    )
                 )
-    cloud_ids = set(jev_rel)
+    cloud_ids = set(jev_rel)  # [laya測試] Jev 或 Laya 判斷過的段落（名稱沿用）
 
     def leaked(s: dict) -> bool:
         return bool(leak_by_rule[s["chunk_id"]]) or jev_leak.get(s["chunk_id"], 0.0) >= th
@@ -1046,22 +1120,24 @@ async def process_passages(
     picked: set[str] = set()
     clean_ids = {s["chunk_id"] for s in clean}
     relevant = {cid for cid in cloud_ids if jev_rel[cid] >= th and cid in clean_ids}
-    local = [s for s in clean if s["chunk_id"] not in cloud_ids]
-    # 不送 Jev 的段落在地端判斷：段落篩選開著由本地 Qwen3-VL 挑；
-    # 關掉、失敗或只有 1 段時看相似度或關鍵詞覆蓋率
-    if len(local) > 1 and rearrange_mod.enabled(rearrange):
-        got, rearrange_info = await rearrange_mod.rearrange(question, local, strategy)
-        if not rearrange_info["fallback"]:
-            judged = {s["chunk_id"] for s in local[: rearrange_info["candidates"]]}
-            picked = set() if rearrange_info.get("none") else {p["chunk_id"] for p in got}
-    floor = float(g["local_relevance_min"])
-    pcov = float(g["local_gate"]["passage_coverage"])
-    qterms = terms(question)
-    lex = {s["chunk_id"]: coverage(qterms, _passage_terms(s)) for s in local}
-    for s in local:
-        cid = s["chunk_id"]
-        if (cid in picked) if cid in judged else (s["score"] >= floor or lex[cid] >= pcov):
-            relevant.add(cid)
+    # [laya測試] 地端規則註解：Jev、Laya 都沒判斷到的段落不放行（當作與提問無關）。
+    # 要恢復就把下面這段取消註解（段落篩選、相似度、關鍵詞覆蓋率）
+    # local = [s for s in clean if s["chunk_id"] not in cloud_ids]
+    # # 不送 Jev 的段落在地端判斷：段落篩選開著由本地 Qwen3-VL 挑；
+    # # 關掉、失敗或只有 1 段時看相似度或關鍵詞覆蓋率
+    # if len(local) > 1 and rearrange_mod.enabled(rearrange):
+    #     got, rearrange_info = await rearrange_mod.rearrange(question, local, strategy)
+    #     if not rearrange_info["fallback"]:
+    #         judged = {s["chunk_id"] for s in local[: rearrange_info["candidates"]]}
+    #         picked = set() if rearrange_info.get("none") else {p["chunk_id"] for p in got}
+    # floor = float(g["local_relevance_min"])
+    # pcov = float(g["local_gate"]["passage_coverage"])
+    # qterms = terms(question)
+    # lex = {s["chunk_id"]: coverage(qterms, _passage_terms(s)) for s in local}
+    # for s in local:
+    #     cid = s["chunk_id"]
+    #     if (cid in picked) if cid in judged else (s["score"] >= floor or lex[cid] >= pcov):
+    #         relevant.add(cid)
 
     for s in sources:
         cid = s["chunk_id"]
@@ -1070,18 +1146,21 @@ async def process_passages(
         if leaked(s):
             score = jev_leak.get(cid)
             if score is not None and score >= th:
-                why = f"security_leak_check 有洩密風險（{score:.2f}）"
+                why = f"{who_of[cid]} security_leak_check 有洩密風險（{score:.2f}）"
             else:
                 by, why = "地端", f"地端規則：{leak_by_rule[cid]}"
             verify.checks.append(Check(i, f"段落 {i[1:]}", by, False, f"{_head(s)}{why} → 剔除"))
             continue
         if cid in cloud_ids:
-            rel = f"is_relevant {jev_rel[cid]:.2f}・security_leak_check {jev_leak[cid]:.2f}"
+            rel = (
+                f"{who_of[cid]} is_relevant {jev_rel[cid]:.2f}"
+                f"・security_leak_check {jev_leak[cid]:.2f}"
+            )
         elif cid in judged:
             verdict = "判斷有幫助" if cid in picked else "判斷沒幫助"
             rel = f"Qwen3-VL {verdict}（相似度 {s['score']:.2f}）・地端規則無洩密"
         else:
-            rel = f"相似度 {s['score']:.2f}・關鍵詞覆蓋 {lex[cid]:.2f}・地端規則無洩密"
+            rel = f"Jev、Laya 都沒有判斷（相似度 {s['score']:.2f}），地端規則已註解"
         ok = cid in relevant
         verify.checks.append(
             Check(
@@ -1104,13 +1183,15 @@ async def process_passages(
     top = float(len(levels) - 1)
     to_score = [s for s in verified if s["chunk_id"] in cloud_ids]
     jev_score: dict[str, float] = {}
-    if to_score:
+    for group, cloud, q, text_of in groups:
+        ids = {s["chunk_id"] for s in group}
+        part = [s for s in to_score if s["chunk_id"] in ids]
+        if not part:
+            continue
         state = {
             "context": g["score_context"],
-            "question": pq,
-            "passages": [
-                {"id": pid[s["chunk_id"]], "text": pseudo[s["chunk_id"]]} for s in to_score
-            ],
+            "question": q,
+            "passages": [{"id": pid[s["chunk_id"]], "text": text_of[s["chunk_id"]]} for s in part],
         }
         questions = {
             f"{pid[s['chunk_id']]}_score": {
@@ -1118,37 +1199,43 @@ async def process_passages(
                 "instructions": g["score_question"].format(id=pid[s["chunk_id"]]),
                 "criteria": levels,
             }
-            for s in to_score
+            for s in part
         }
-        reply, rerank.fallback_reason = await _ask(state, questions)
+        reply, why = await _ask(state, questions, cloud)
+        rerank.add_reason(why)
         if reply:
             bad: list[str] = []
-            for s in to_score:
+            for s in part:
                 try:
                     jev_score[s["chunk_id"]] = reply.score(f"{pid[s['chunk_id']]}_score", top)
+                    who_of[s["chunk_id"]] = reply.who
                 except jev.JevUnavailable as e:
                     bad.append(str(e))
             if bad:
                 # 無效分數不當成高分：這些段落排在所有有效評分之後（明確的安全備援）
-                rerank.fallback_reason = "；".join(bad[:3])
-            if jev_score:
+                rerank.add_reason("；".join(bad[:3]))
+            if reply.engine == "laya" and cloud:
+                rerank.add_reason(reply.note)
+            if any(s["chunk_id"] in jev_score for s in part):
                 rerank.engine = "jev"
-                rerank.call = _call_info(
-                    5,
-                    reply,
-                    [f"{pid[s['chunk_id']]}：{pseudo[s['chunk_id']]}" for s in to_score],
-                    mapping,
-                    [
-                        {
-                            "label": f"{pid[s['chunk_id']]}・〈{s['title']}〉{s['topic']}："
-                            f"Score（0～{len(levels) - 1}）",
-                            "value": f"{jev_score[s['chunk_id']]:.2f}"
-                            if s["chunk_id"] in jev_score
-                            else "無效",
-                            "alert": jev_score.get(s["chunk_id"], 0.0) < min_score,
-                        }
-                        for s in to_score
-                    ],
+                rerank.add_call(
+                    _call_info(
+                        5,
+                        reply,
+                        [f"{pid[s['chunk_id']]}：{text_of[s['chunk_id']]}" for s in part],
+                        mapping if cloud else {},
+                        [
+                            {
+                                "label": f"{pid[s['chunk_id']]}・〈{s['title']}〉{s['topic']}："
+                                f"Score（0～{len(levels) - 1}）",
+                                "value": f"{jev_score[s['chunk_id']]:.2f}"
+                                if s["chunk_id"] in jev_score
+                                else "無效",
+                                "alert": jev_score.get(s["chunk_id"], 0.0) < min_score,
+                            }
+                            for s in part
+                        ],
+                    )
                 )
 
     def level_of(x: float) -> str:
@@ -1178,9 +1265,11 @@ async def process_passages(
         cid = s["chunk_id"]
         i = pid[cid]
         if cid in jev_score:
-            by, how = "Jev", f"Score {jev_score[cid]:.2f}（{level_of(jev_score[cid])}）"
+            by = "Jev"
+            how = f"{who_of[cid]} Score {jev_score[cid]:.2f}（{level_of(jev_score[cid])}）"
         elif cid in cloud_ids:
-            by, how = "地端", f"Jev 評分不能用，照 is_relevant {jev_rel[cid]:.2f} 排在有效評分之後"
+            by = "地端"
+            how = f"{who_of[cid]} 評分不能用，照 is_relevant {jev_rel[cid]:.2f} 排在有效評分之後"
         else:
             by, how = "地端", f"相似度 {s['score']:.2f}"
         if cid in order:
@@ -1210,8 +1299,13 @@ async def process_passages(
     # ---------------------------------------------------------------- 第 6 段：生成閘門
     t6 = time.perf_counter()
     gate = GateInfo("local")
-    all_public = all(s["chunk_id"] in cloud_ids for s in kept) and (card is None or card_public)
-    comp_ok, comp_detail = local_compliant(question, kept)
+    # [laya測試] 留下的都是公開內容才可以送雲端 Jev（叫不到改問 Laya）；其他只送本機 Laya
+    all_public = all(s["chunk_id"] in public_ids for s in kept) and (card is None or card_public)
+    gate_cloud = cloud_ok and all_public
+    gq, gtext = (pq, pseudo) if gate_cloud else (mq, raw)
+    # [laya測試] 地端規則註解：合規只看 Jev／Laya。要恢復就取消註解、刪掉下一行
+    # comp_ok, comp_detail = local_compliant(question, kept)
+    comp_ok, comp_detail = True, ""
     if not kept and card is None:
         gate.passed = False
         gate.checks.append(
@@ -1225,84 +1319,98 @@ async def process_passages(
         )
     else:
         jev_done = False
-        if use_jev and all_public:
-            state = {
-                "context": g["gate_context"],
-                "question": pq,
-                "passages": [
-                    {"id": pid[s["chunk_id"]], "text": pseudo[s["chunk_id"]]} for s in kept
-                ],
-            }
-            if card_public:
-                state["work"] = pseudo["__card__"]
-            questions = {
-                "answerable": {"type": "noul", "instructions": g["gate_answerable"]},
-                "compliant": {"type": "noul", "instructions": g["gate_compliant"]},
-            }
-            reply, gate.fallback_reason = await _ask(state, questions)
-            if reply:
-                try:
-                    ans, comp = reply.noul("answerable"), reply.noul("compliant")
-                except jev.JevUnavailable as e:
-                    gate.fallback_reason = str(e)  # 改地端閘門，不自動放行
-                else:
-                    jev_done = True
-                    gate.engine = "jev"
-                    # Jev 只能增加阻擋：地端的合規檢查沒過，Jev 說合規也不放行
-                    gate.passed = ans >= th and comp >= th and comp_ok
-                    gate.checks += [
-                        Check(
-                            "answerable",
-                            "可答性",
-                            "Jev",
-                            ans >= th,
-                            f"只依{'作品資料與' if card else ''} {len(kept)} 段參考資料"
-                            f"{'能' if ans >= th else '不能'}回答（{ans:.2f}）",
-                        ),
-                        Check(
-                            "compliant",
-                            "合規",
-                            "Jev",
-                            comp >= th,
-                            f"{'不會' if comp >= th else '可能會'}洩漏個資、帳密或內部資料"
-                            f"（{comp:.2f}）",
-                        ),
-                    ]
-                    if not comp_ok:
-                        gate.checks.append(
-                            Check("compliant_local", "合規（地端）", "地端", False, comp_detail)
-                        )
-                    gate.call = _call_info(
-                        6,
-                        reply,
-                        [
-                            pq,
-                            *([state["work"]] if card_public else []),
-                            *(f"{pid[s['chunk_id']]}：{pseudo[s['chunk_id']]}" for s in kept),
-                        ],
-                        mapping,
-                        [
-                            {
-                                "label": "answerable・權限內的資料能回答",
-                                "value": f"{ans:.2f}",
-                                "alert": ans < th,
-                            },
-                            {
-                                "label": "compliant・回答合規",
-                                "value": f"{comp:.2f}",
-                                "alert": comp < th,
-                            },
-                        ],
+        # [laya測試] 一律問決策模型（原本只有全部是公開內容、而且叫得到 Jev 才問）
+        state = {
+            "context": g["gate_context"],
+            "question": gq,
+            "passages": [{"id": pid[s["chunk_id"]], "text": gtext[s["chunk_id"]]} for s in kept],
+        }
+        if card:
+            state["work"] = pseudo["__card__"] if gate_cloud else mask_pii(card["text"])[0]
+        questions = {
+            "answerable": {"type": "noul", "instructions": g["gate_answerable"]},
+            "compliant": {"type": "noul", "instructions": g["gate_compliant"]},
+        }
+        reply, gate.fallback_reason = await _ask(state, questions, gate_cloud)
+        if reply:
+            try:
+                ans, comp = reply.noul("answerable"), reply.noul("compliant")
+            except jev.JevUnavailable as e:
+                gate.fallback_reason = str(e)  # 不自動放行
+            else:
+                jev_done = True
+                gate.engine = "jev"
+                who = reply.who
+                if reply.engine == "laya" and gate_cloud:
+                    gate.add_reason(reply.note)
+                # Jev 只能增加阻擋：地端的合規檢查沒過，Jev 說合規也不放行
+                gate.passed = ans >= th and comp >= th and comp_ok
+                gate.checks += [
+                    Check(
+                        "answerable",
+                        "可答性",
+                        "Jev",
+                        ans >= th,
+                        f"{who}：只依{'作品資料與' if card else ''} {len(kept)} 段參考資料"
+                        f"{'能' if ans >= th else '不能'}回答（{ans:.2f}）",
+                    ),
+                    Check(
+                        "compliant",
+                        "合規",
+                        "Jev",
+                        comp >= th,
+                        f"{who}：{'不會' if comp >= th else '可能會'}洩漏個資、帳密或內部資料"
+                        f"（{comp:.2f}）",
+                    ),
+                ]
+                if not comp_ok:
+                    gate.checks.append(
+                        Check("compliant_local", "合規（地端）", "地端", False, comp_detail)
                     )
+                gate.call = _call_info(
+                    6,
+                    reply,
+                    [
+                        gq,
+                        *([state["work"]] if card else []),
+                        *(f"{pid[s['chunk_id']]}：{gtext[s['chunk_id']]}" for s in kept),
+                    ],
+                    mapping if gate_cloud else {},
+                    [
+                        {
+                            "label": "answerable・權限內的資料能回答",
+                            "value": f"{ans:.2f}",
+                            "alert": ans < th,
+                        },
+                        {
+                            "label": "compliant・回答合規",
+                            "value": f"{comp:.2f}",
+                            "alert": comp < th,
+                        },
+                    ],
+                )
         if not jev_done:
-            # 地端閘門（機密段落不送 Jev、或叫不到 Jev）：實際比對問題與留下的資料，
-            # 不因為有文件卡、圖面或任一段高相似度就放行
-            ans_ok, ans_detail = local_answerable(question, kept, card)
-            gate.passed = ans_ok and comp_ok
-            gate.checks += [
-                Check("answerable", "可答性", "地端", ans_ok, ans_detail),
-                Check("compliant", "合規", "地端", comp_ok, comp_detail),
-            ]
+            # [laya測試] 地端閘門註解：Jev、Laya 都叫不到就降級，不讓 LLM 臆測。
+            # 要恢復就把下面這段取消註解，並刪掉降級的那段
+            # # 地端閘門（機密段落不送 Jev、或叫不到 Jev）：實際比對問題與留下的資料，
+            # # 不因為有文件卡、圖面或任一段高相似度就放行
+            # ans_ok, ans_detail = local_answerable(question, kept, card)
+            # gate.passed = ans_ok and comp_ok
+            # gate.checks += [
+            #     Check("answerable", "可答性", "地端", ans_ok, ans_detail),
+            #     Check("compliant", "合規", "地端", comp_ok, comp_detail),
+            # ]
+            gate.passed = False
+            gate.checks.append(
+                Check(
+                    "answerable",
+                    "可答性",
+                    "地端",
+                    False,
+                    f"Jev 與 Laya 都叫不到（{gate.fallback_reason}），"
+                    "地端閘門已註解（laya測試）→ 降級",
+                )
+            )
     if not gate.passed:
         gate.message = g["degrade_message"]
     gate.ms = round((time.perf_counter() - t6) * 1000)
@@ -1317,8 +1425,9 @@ async def process_passages(
         flagged=flagged,
         flagged_by=flagged_by,
         dropped=[s for s in clean if s["chunk_id"] not in order],
-        cloud=len(cloud_ids),
-        local=n - len(cloud_ids),
+        # [laya測試] 「送 Jev」只算真的送到雲端的段落；Laya 判斷的算在地端
+        cloud=len(sent_cloud),
+        local=n - len(sent_cloud),
         rearrange=rearrange_info,
         ms=round((time.perf_counter() - t0) * 1000),
     )

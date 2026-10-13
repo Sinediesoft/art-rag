@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     jev_model: str = "jev-1.13.0"  # 文件建議固定版本，換版要重跑 make eval-route
     jev_api_key: str = ""
     jev_timeout_s: float = 1.5
+    # laya測試：叫不到 Jev（沒連網、沒金鑰、逾時、錯誤）時改問本機 Unsloth Studio 的 Laya
+    # （Decision API，和 Jev 同一個格式）。Laya 在本機，內部、機密段落也只送它；地端規則已註解
+    laya_enabled: bool = True
+    laya_base_url: str = "http://127.0.0.1:8888/v1"
+    laya_model: str = "laya"
+    laya_api_key: str = ""
+    # 第一次請求要載入模型（實測 3.9 秒），之後約 0.2 秒
+    laya_timeout_s: float = 5.0
 
     lora_enabled: bool = False
     lora_base_url: str = "http://localhost:11434/v1"

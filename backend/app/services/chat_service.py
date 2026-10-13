@@ -524,7 +524,7 @@ async def _chat_stream(
         g2 = await guard.guard_input(asked, masked.text, masked.mapping, "read", True)
         note = "交接票無效或不符，重新判斷；" if route_ticket else ""
         if not g2.passed:
-            judge = "雲端 Jev（只收代號化文字）" if g2.engine == "jev" else "地端規則"
+            judge = g2.judge
             guard.log_block(
                 2, g2.tag or "惡意輸入", account, f"/chat 問句雜湊 {fp}", request_id, judge
             )
