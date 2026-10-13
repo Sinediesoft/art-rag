@@ -10,7 +10,7 @@ gold set：eval/drawing_retrieval/gold.json
    （只在目前身分看得到的圖紙裡辨識）
 2. 文字：名稱、料號、圖號、描述各一句，送 search_parts_text
    （/search/parts，只檢索看得到的圖紙）
-每個身分各跑一次（預設生管＝看得到全部、業務＝看不到機密）。
+每個身分各跑一次（預設主管＝看得到全部、業務＝看不到機密）。
 看不到的圖紙，正確答案和「不存在」一樣是 null。
 
 停止條件（任一成立就以非 0 結束）：
@@ -20,7 +20,7 @@ gold set：eval/drawing_retrieval/gold.json
 - 文字查詢第一名不是答案（看得到時）
 低品質照片（例如模糊）辨識不到算「沒認出」，不算指錯；比例照實記錄。
 
-用法：python eval/run_drawing_retrieval_eval.py [--accounts planner,sales_a]
+用法：python eval/run_drawing_retrieval_eval.py [--accounts manager,sales]
 """
 
 import argparse

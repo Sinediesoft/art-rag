@@ -18,7 +18,7 @@ function chatTurn(over: { pipeline?: ReturnType<typeof stage>[]; docLevel?: stri
     dispatch: { module: "drawing_qa", artwork_id: null, part_id: "mfg-006", part_label: "立式軸承座", question: "這張圖紙的重點是什麼？" },
     auth: {
       ...factoryRoute().auth,
-      filter: { domain: "mfg", domain_label: "工廠圖紙", clearance: 2, depts: ["生管"], levels: ["公開", "內部", "機密"], doc_id: "mfg-006", doc_label: "立式軸承座", doc_level: over.docLevel === undefined ? "機密" : over.docLevel, text: "" },
+      filter: { domain: "mfg", domain_label: "工廠圖紙", clearance: 2, depts: ["倉管"], levels: ["公開", "內部", "機密"], doc_id: "mfg-006", doc_label: "立式軸承座", doc_level: over.docLevel === undefined ? "機密" : over.docLevel, text: "" },
     },
   });
   const degraded = over.degraded ?? true;

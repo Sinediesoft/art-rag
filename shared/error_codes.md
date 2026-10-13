@@ -41,14 +41,14 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得訪客憑證後重送 |
-| `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對或帳號不存在（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
+| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得一般員工的憑證後重送 |
+| `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
 | `TOKEN_EXPIRED` | 401 | 憑證過期（預設 8 小時，`JWT_TTL_MIN`）；前端自動重新取得 |
-| `TOKEN_STALE` | 401 | 憑證是舊的簽章金鑰簽發的（`JWT_SECRET` 留空時後端每次啟動換金鑰）；前端自動重新取得、不記錄 |
-| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原、照片建檔收錄（只有主管，ADR 013）也會回這個（ADR 011）；管理與診斷畫面（`/admin/diagnostics`、`/security/logs`、`/audit`）沒有 `access.yaml` 的 `views` 權限時也是這個（ADR 030） |
-| `DATA_SCOPE_DENIED` | 403／SSE `error` | 目前身分的資料範圍不含這份資料（ADR 014）：訪客不能使用工廠圖紙與工廠資料庫、業務看不到機密圖紙。所有讀取 API 都檢查（含影像比對 `/images/{image_id}/align`、`align.png` 指定 `part:` 時）；`/cad/reconstruct` 用照片辨識出看不到的圖紙時改在串流裡回 `error`。2026-10-06 起（ADR 030）看不看得到同時看機密等級與部門（`identity.can_view_part`），訊息不寫圖紙名稱；`/chat` 只有角色不能用工廠圖紙時回這個，指定了看不到或不存在的圖紙一律在串流裡降級「查無資料」（不透露文件存在） |
-| `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入 |
-| `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可 |
+| `TOKEN_STALE` | 401 | 憑證是舊的簽章金鑰簽發的（`JWT_SECRET` 留空時後端每次啟動換金鑰），或簽章相符但帳號已經從 `access.yaml` 拿掉（2026-10-13 起，ADR 036）；前端自動重新取得、不記錄 |
+| `PERMISSION_DENIED` | 403 | 目前身分沒有這個權限（角色、資料範圍、只能取消自己開的工單（主管例外，ADR 036）、不能核准自己的申請、確認卡不是目前身分建立的）；圖紙頁開立工單、取消工單、開始排程、展示還原、照片建檔收錄（只有主管，ADR 013）也會回這個（ADR 011）；管理與診斷畫面（`/admin/diagnostics`、`/security/logs`、`/audit`）沒有 `access.yaml` 的 `views` 權限時也是這個（ADR 030） |
+| `DATA_SCOPE_DENIED` | 403／SSE `error` | 目前身分的資料範圍不含這份資料（ADR 014）：一般員工不能使用工廠圖紙與工廠資料庫、業務看不到機密圖紙。所有讀取 API 都檢查（含影像比對 `/images/{image_id}/align`、`align.png` 指定 `part:` 時）；`/cad/reconstruct` 用照片辨識出看不到的圖紙時改在串流裡回 `error`。2026-10-06 起（ADR 030）看不看得到同時看機密等級與部門（`identity.can_view_part`），訊息不寫圖紙名稱；`/chat` 只有角色不能用工廠圖紙時回這個，指定了看不到或不存在的圖紙一律在串流裡降級「查無資料」（不透露文件存在） |
+| `APPROVAL_REQUIRED` | 409 | 超過額度（例如急件工單、報廢超過 10 件），要送主管核准，不能直接寫入；主管自己的不會回這個，直接生效（ADR 036） |
+| `APPROVAL_NOT_NEEDED` | 409 | 額度內的修改不需要送主管核准，直接確認即可；主管自己超過額度也回這個（主管身分直接生效，ADR 036） |
 | `APPROVAL_NOT_FOUND` | 404 | 待核准單號不存在 |
 | `APPROVAL_CLOSED` | 409 | 待核准單已經核准、退回或失效 |
 | `CHANGE_NOT_FOUND` | 404 | 確認卡已過期（15 分鐘）或已使用，請重新輸入 |

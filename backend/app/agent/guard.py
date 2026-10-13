@@ -311,7 +311,12 @@ def _who_can(
         for a in accounts().values()
         if a.can_read(domain) and (level is None or a.can_see(level)) and (op is None or a.can(op))
     ]
-    return sorted(ok, key=lambda a: not (wh & set(a.warehouses) or cust & set(a.customers)))
+    return sorted(
+        ok,
+        key=lambda a: (
+            not (any(a.has_warehouse(w) for w in wh) or any(a.has_customer(c) for c in cust))
+        ),
+    )
 
 
 def auth_check(
@@ -348,7 +353,7 @@ def auth_check(
     degraded = False
     dlabel = domain_label(domain)
     filt = MetaFilter.of(account, domain, doc) if domain in ("art", "mfg") else None
-    # 功能授權：角色能不能用這個資料領域（訪客不能用工廠圖紙、工廠資料庫）
+    # 功能授權：角色能不能用這個資料領域（一般員工不能用工廠圖紙、工廠資料庫）
     if not account.can_read(domain):
         checks.append(
             Check(
@@ -395,7 +400,7 @@ def auth_check(
                     "地端",
                     False,
                     f"〈{account.label}〉沒有修改資料的權限"
-                    + ("（訪客只能查詢）" if account.role == "guest" else ""),
+                    + ("（一般員工只能查詢）" if account.role == "guest" else ""),
                 )
             )
             tag = tag or "權限不足"
@@ -425,7 +430,7 @@ def auth_check(
                 "動作權限",
                 "地端",
                 False,
-                f"訪客只能查詢，不能{'執行排程' if intent == 'schedule' else '修改資料'}"
+                f"一般員工只能查詢，不能{'執行排程' if intent == 'schedule' else '修改資料'}"
                 if account.role == "guest"
                 else f"〈{account.label}〉沒有{what}的權限（{roles or '沒有任何身分'}才可以）",
             )

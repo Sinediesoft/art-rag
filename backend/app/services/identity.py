@@ -31,7 +31,9 @@ from app.core.errors import AppError
 COOKIE = "artrag_token"
 ISSUER = "art-rag"
 TW = timezone(timedelta(hours=8))
-# 不用憑證的端點：健康檢查（只回存活與就緒）、取得憑證（/auth/accounts 沒有有效憑證時發訪客憑證）。
+ALL = "*"  # access.yaml 的 warehouses／customers／artworks 寫 "*"＝全部（docs/adr/036）
+# 不用憑證的端點：健康檢查（只回存活與就緒）、取得憑證
+# （/auth/accounts 沒有有效憑證時發一般員工的憑證）。
 # 切換身分不在這裡：沒有憑證就在閘道 401（docs/adr/030）
 PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts"}
 
@@ -71,6 +73,15 @@ class Account:
 
     def can_see(self, level: str) -> bool:
         return level in self.levels
+
+    def has_warehouse(self, warehouse_id: str) -> bool:
+        return ALL in self.warehouses or warehouse_id in self.warehouses
+
+    def has_customer(self, customer: str) -> bool:
+        return ALL in self.customers or customer in self.customers
+
+    def has_artwork(self, artwork_id: str) -> bool:
+        return ALL in self.artworks or artwork_id in self.artworks
 
     def public(self) -> dict:
         return {
@@ -119,6 +130,11 @@ def accounts() -> dict[str, Account]:
             views=views,
         )
     return out
+
+
+def scope_text(scope: tuple[str, ...], everything: str) -> str:
+    """範圍的顯示文字：寫 "*" 的顯示 everything（例如「全部倉庫」）。"""
+    return everything if ALL in scope else "、".join(scope) or "沒有"
 
 
 def level_rank(level: str) -> int:
@@ -171,7 +187,7 @@ class Auth:
 
 @lru_cache
 def _secret() -> str:
-    # 留空＝每次啟動隨機產生：後端重啟後舊憑證全部失效（前端自動改回訪客）
+    # 留空＝每次啟動隨機產生：後端重啟後舊憑證全部失效（前端自動改回一般員工）
     return get_settings().jwt_secret or secrets.token_urlsafe(32)
 
 
@@ -210,7 +226,11 @@ def verify(request: Request) -> Auth:
     claims = jwt.decode(token, _secret(), ISSUER)
     acc = accounts().get(str(claims.get("sub")))
     if not acc:
-        raise jwt.TokenError("TOKEN_INVALID", f"憑證裡的帳號不存在：{claims.get('sub')}")
+        # 簽章相符（本系統簽發）但帳號已經從 access.yaml 拿掉（例如 docs/adr/036 刪掉的生管）：
+        # 不是竄改，讓前端重新取得憑證、不寫進拒絕並記錄
+        raise jwt.TokenError(
+            "TOKEN_STALE", f"憑證裡的帳號已經不存在：{claims.get('sub')}，請重新取得憑證"
+        )
     left = int(claims["exp"] - time.time())
     exp = datetime.fromtimestamp(claims["exp"], TW).strftime("%H:%M")
     checks = [
@@ -278,7 +298,7 @@ def _set_cookie(response: Response, token: str) -> None:
 
 
 def ensure(request: Request, response: Response) -> Auth:
-    """/auth/accounts：有有效憑證就用；沒有或失效就發一張預設帳號（訪客）的憑證。"""
+    """/auth/accounts：有有效憑證就用；沒有或失效就發一張預設帳號（一般員工）的憑證。"""
     auth = getattr(request.state, "auth", None)
     if auth is not None:
         return auth

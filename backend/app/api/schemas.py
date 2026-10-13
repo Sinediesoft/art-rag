@@ -1140,10 +1140,10 @@ class Account(BaseModel):
     role: str
     role_label: str
     ops: list[str]
-    warehouses: list[str]
-    customers: list[str]
+    warehouses: list[str] = Field(description='能改的倉庫；"*"＝全部（docs/adr/036）')
+    customers: list[str] = Field(description='負責的客戶；"*"＝全部（docs/adr/036）')
     artworks: list[str] = Field(
-        description="藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的"
+        description='可以圈區域、寫解說的畫（docs/adr/029）；"*"＝全部（主管，docs/adr/036）'
     )
     note: str
     domains: list[str] = Field(description="能讀的資料領域：art／mfg／factory（docs/adr/014）")
@@ -1446,7 +1446,10 @@ class ChangePreview(BaseModel):
     missing: list[str]
     checks: list[ChangeCheck]
     diff: list[ChangeDiff]
-    reasons: list[str] = Field(description="超過額度的原因（非空＝要送主管核准）")
+    reasons: list[str] = Field(
+        description="超過額度的原因：next=approval 時要送主管核准；"
+        "next=confirm 時是主管自己的異動，直接生效、寫入時記進稽核（docs/adr/036）"
+    )
     pending_id: str | None
     summary: str
     next: Literal["confirm", "approval", "rejected", "need_info"]

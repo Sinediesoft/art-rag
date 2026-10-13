@@ -158,7 +158,7 @@ export async function streamSSE(path: string, body: unknown, handlers: Handlers,
     });
   try {
     res = await send();
-    // 憑證沒有或過期：重新取得（預設訪客）再送一次（client.ts 的 renewIfExpired）
+    // 憑證沒有或過期：重新取得（預設一般員工）再送一次（client.ts 的 renewIfExpired）
     if (await renewIfExpired(res)) res = await send();
   } catch (err) {
     if ((err as Error).name === "AbortError") return;

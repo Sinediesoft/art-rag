@@ -115,25 +115,21 @@ def test_create_work_order_schedule_and_query_with_sql(client):
         60,
     ]
     assert plan["suggestion"]["qty"] >= 1 and plan["suggestion"]["due_on"] >= plan["plan_start"]
-    # 2. 開立工單：只有生管可以；急件超過額度要主管核准（和智慧助理同一套規則）
+    # 2. 開立工單：只有主管可以；主管開的急件超過額度也直接生效、記進稽核（docs/adr/036）
     body = {"part_id": "mfg-002", "qty": 80, "due_on": "2026-10-16", "priority": "急件"}
-    as_account(client, "guest")
-    r = client.post("/api/v1/production/work-orders", json=body)
-    assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED"
-    as_account(client, "planner")
-    r = client.post("/api/v1/production/work-orders", json=body)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "APPROVAL_REQUIRED"
-    change = {"op": "wo_create", "params": body}
-    preview = client.post("/api/v1/changes/preview", json=change).json()
-    assert preview["next"] == "approval" and preview["pending_id"]
-    ap = client.post(f"/api/v1/changes/{preview['pending_id']}/request-approval", json={}).json()
+    for who in ("guest", "warehouse"):
+        as_account(client, who)
+        r = client.post("/api/v1/production/work-orders", json=body)
+        assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED"
     as_account(client, "manager")
-    decided = client.post(f"/api/v1/approvals/{ap['ap_no']}/approve", json={}).json()
-    assert decided["status"] == "已核准"
-    # 單號避開知識庫（含 kb_staging 的 WO-2610-03）；開立人是申請的生管
-    wo = get_production_repo().get_work_order(decided["change_no"])
-    assert wo["wo_no"] == "WO-2610-04" and wo["created_by"] == "planner"
-    as_account(client, "planner")
+    r = client.post("/api/v1/production/work-orders", json=body)
+    assert r.status_code == 201, r.text
+    # 單號避開知識庫（含 kb_staging 的 WO-2610-03）
+    wo = get_production_repo().get_work_order(r.json()["wo_no"])
+    assert wo["wo_no"] == "WO-2610-04" and wo["created_by"] == "manager"
+    audit = client.get("/api/v1/audit").json()["items"]
+    row = next(a for a in audit if a["ref_no"] == "WO-2610-04")
+    assert row["detail"]["over_quota"] == ["急件工單（會插隊影響其他工單交期）"]
     # 工廠資料庫（Text-to-SQL 查的）立刻看得到，尚未排程
     repo = get_inventory_repo()
     row = repo.run_readonly(
@@ -182,7 +178,7 @@ def test_create_work_order_schedule_and_query_with_sql(client):
 
 
 def test_work_order_validation(client):
-    as_account(client, "planner")
+    as_account(client, "manager")
     bad_due = {"part_id": "mfg-001", "qty": 10, "due_on": "2026-09-01"}
     assert client.post("/api/v1/production/work-orders", json=bad_due).status_code == 422
     unknown = {"part_id": "nope-1", "qty": 10, "due_on": "2026-10-20"}
@@ -191,9 +187,24 @@ def test_work_order_validation(client):
     assert client.post("/api/v1/production/work-orders", json=too_many).status_code == 422
 
 
+def test_manager_can_cancel_work_orders_opened_by_others(client):
+    """改版前生管開的工單（帳號已刪，docs/adr/036）：主管照樣可以取消；倉管沒有取消工單的權限。"""
+    from app.services import schedule_service
+
+    row = schedule_service.create_work_order(
+        "mfg-001", 10, "2026-10-20", "一般", None, "測試", created_by="planner"
+    )
+    as_account(client, "warehouse")
+    r = client.delete(f"/api/v1/production/work-orders/{row['wo_no']}")
+    assert r.status_code == 403
+    as_account(client, "manager")
+    assert client.delete(f"/api/v1/production/work-orders/{row['wo_no']}").status_code == 200
+    assert get_production_repo().get_work_order(row["wo_no"])["status"] == "已取消"
+
+
 def test_diagnostics_report_scheduler_and_memory(client):
     """排程服務與記憶體在管理診斷（主管才看得到）；畫面用的 /status 也有記憶體。"""
-    as_account(client, "planner")
+    as_account(client, "warehouse")
     assert client.get("/api/v1/admin/diagnostics").status_code == 403
     as_account(client, "manager")
     h = client.get("/api/v1/admin/diagnostics").json()

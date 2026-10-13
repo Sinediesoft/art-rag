@@ -867,7 +867,9 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
                 ? `我試算好了「${pv.op_label}」，但超過額度，需要主管核准。進入工廠模組核對數字、補一句說明送主管核准。`
                 : pv.next === "need_info"
                   ? pv.message
-                  : `我試算好了「${pv.op_label}」，檢查都通過。進入工廠模組核對修改前後的數字，**確認後才會寫入**。`
+                  : pv.reasons.length > 0
+                    ? `我試算好了「${pv.op_label}」，超過額度，但主管身分直接生效（會記進稽核紀錄）。進入工廠模組核對修改前後的數字，**確認後才會寫入**。`
+                    : `我試算好了「${pv.op_label}」，檢查都通過。進入工廠模組核對修改前後的數字，**確認後才會寫入**。`
           }
         />
       </div>
@@ -940,7 +942,8 @@ function ChangeBody({ turn, part: p }: { turn: Turn; part: ChangePart }) {
         {pv.next === "need_info" && <p className="outcome is-warn">{pv.message}</p>}
         {pv.next === "confirm" && !finished && (
           <div className="taskcard__actions">
-            <span className="outcome is-ok">{pv.message}</span>
+            {/* 主管自己超過額度：直接生效，提醒會記進稽核（docs/adr/036） */}
+            <span className={`outcome ${pv.reasons.length > 0 ? "is-warn" : "is-ok"}`}>{pv.message}</span>
             <button type="button" className="btn btn--primary" disabled={p.status === "committing"} onClick={() => th.commitChange(turn.id, null)}>
               {p.status === "committing" ? "寫入中…" : "確認寫入"}
             </button>

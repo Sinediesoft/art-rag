@@ -75,9 +75,9 @@ export function liveSse() {
   };
 }
 
-export const account = (id = "planner", over: Partial<Account> = {}): Account => ({
+export const account = (id = "warehouse", over: Partial<Account> = {}): Account => ({
   id,
-  label: id === "guest" ? "訪客" : id === "planner" ? "生管" : id === "manager" ? "主管" : id,
+  label: id === "guest" ? "一般員工" : id === "warehouse" ? "倉管" : id === "manager" ? "主管" : id,
   role: id,
   role_label: id,
   ops: [],
@@ -88,16 +88,16 @@ export const account = (id = "planner", over: Partial<Account> = {}): Account =>
   domains: id === "guest" ? ["art"] : ["art", "mfg", "factory"],
   levels: ["公開", "內部", "機密"],
   scope_note: "",
-  dept: "生管",
-  depts: ["生管"],
+  dept: "倉管",
+  depts: ["倉管"],
   clearance: id === "guest" ? 0 : 2,
   views: [],
   ...over,
 });
 
-export const accounts = (current = "planner", demo = true): AccountsResponse => ({
+export const accounts = (current = "warehouse", demo = true): AccountsResponse => ({
   current: account(current),
-  accounts: [account("guest"), account("planner"), account("manager")],
+  accounts: [account("guest"), account("warehouse"), account("manager")],
   demo_controls: demo,
   pending_approvals: 0,
   pending_region_drafts: 0,
@@ -115,7 +115,7 @@ export const accounts = (current = "planner", demo = true): AccountsResponse => 
 export function route(over: Partial<RouteResponse> & { dispatch?: Record<string, unknown> } = {}): RouteResponse {
   const base: RouteResponse = {
     request_id: "req-route",
-    account: account("planner"),
+    account: account("warehouse"),
     question: "梵谷畫這幅畫的時候在哪裡？",
     pii: [],
     masked_text: "[作品A]畫的時候在哪裡？",
@@ -144,7 +144,7 @@ export function route(over: Partial<RouteResponse> & { dispatch?: Record<string,
       retry: null,
       filter: { domain: "art", domain_label: "畫作", clearance: 2, depts: [], levels: ["公開"], doc_id: "met-436535", doc_label: "有絲柏的麥田", doc_level: "公開", text: "level ∈ {公開}" },
       degraded: false,
-      token: { claims: { name: "生管", roles: ["生管"], clearance: 2 }, expires_at: "", via: "cookie", alg: "HS256", unsigned: "secret-unsigned", checks: [] } as unknown as RouteResponse["auth"]["token"],
+      token: { claims: { name: "倉管", roles: ["倉管"], clearance: 2 }, expires_at: "", via: "cookie", alg: "HS256", unsigned: "secret-unsigned", checks: [] } as unknown as RouteResponse["auth"]["token"],
     },
     guard: { passed: true, engine: "local", verdict: "query", checks: [], tag: null, reason: null, skipped: null, fallback_reason: null, call: null },
     outcome: "pass",
@@ -169,7 +169,7 @@ export const factoryRoute = (over: Partial<RouteResponse> = {}) =>
     ...over,
     auth: {
       ...route().auth,
-      filter: { domain: "mfg", domain_label: "工廠圖紙", clearance: 2, depts: ["生管"], levels: ["公開", "內部", "機密"], doc_id: "mfg-002", doc_label: "連接法蘭", doc_level: "機密", text: "level ∈ {公開,內部,機密}" },
+      filter: { domain: "mfg", domain_label: "工廠圖紙", clearance: 2, depts: ["倉管"], levels: ["公開", "內部", "機密"], doc_id: "mfg-002", doc_label: "連接法蘭", doc_level: "機密", text: "level ∈ {公開,內部,機密}" },
       ...(over.auth ?? {}),
     },
   });
@@ -225,7 +225,7 @@ export const done = (over: Record<string, unknown> = {}) => ({
 });
 
 /** 每個畫面都會打的背景請求（身分、狀態） */
-export function baseHandlers(t: Transport, current = "planner") {
+export function baseHandlers(t: Transport, current = "warehouse") {
   t.on("GET", "/auth/accounts", () => json(accounts(current)));
   t.on("GET", "/status", () =>
     json({ status: "ok", outage_simulated: false, demo_controls: true, demo_warning: null, eval_controls: false, strategies: {}, memory: null, system1: { jev_configured: false, detail: "沒有金鑰", model: "", timeout_s: 1.5 }, chat_defaults: { rearrange: true, conflict_check: true, send_image: true } }),

@@ -1,8 +1,8 @@
 """畫面區域的草稿與收錄（docs/adr/030 第 2 步）：
 藝術家在畫上圈一塊、寫解說 → 草稿 → 主管收錄進 kb/。
 
-- 送草稿要 kb_annotate（藝術家），而且只能標 access.yaml 分給自己的畫
-  （accounts.<id>.artworks）。
+- 送草稿要 kb_annotate（藝術家、主管），而且只能標 access.yaml 分給自己的畫
+  （accounts.<id>.artworks；"*"＝全部，主管是全部，docs/adr/036）。
 - 解說之後會原文進 prompt：送出、收錄前都過輸入防護的地端規則（docs/adr/014），
   像在對 AI 下指令、要內部資料就擋。
 - 收錄要 kb_intake（主管，和照片建檔同一個權限）：區域與段落寫進 kb/artworks/<id>.json、
@@ -30,7 +30,7 @@ from app.rag.kb import artwork_problems, region_problems
 from app.repositories.index_store import get_store
 from app.repositories.production_repo import get_production_repo
 from app.services import intake_service as intake
-from app.services.identity import Account, require
+from app.services.identity import Account, require, scope_text
 
 DRAFT_ID = re.compile(r"^region_[0-9a-f]{16}$")
 COMMITTABLE = {"pending", "failed"}  # 收錄失敗（已還原）可以再收錄
@@ -182,8 +182,8 @@ def _area(points: list[list[float]]) -> float:
 
 def _require_scope(account: Account, artwork_id: str) -> None:
     require(account, "kb_annotate", "在畫上圈區域、寫解說")
-    if artwork_id not in account.artworks:
-        mine = "、".join(account.artworks) or "沒有"
+    if not account.has_artwork(artwork_id):
+        mine = scope_text(account.artworks, "全部畫作")
         raise AppError(
             "PERMISSION_DENIED",
             f"「{account.label}」只能標分給自己的畫（{mine}），不能標 {artwork_id}。",

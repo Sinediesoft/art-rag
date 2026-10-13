@@ -38,5 +38,5 @@
     {"q": "D-24-0618", "expect": "mfg-006", "by": "圖號"},
     {"q": "支撐輸送滾筒軸、裝 6202 軸承的鑄鐵座", "expect": "mfg-006", "by": "描述"}
   ],
-  "accounts": ["planner", "sales_a"]
+  "accounts": ["manager", "sales"]
 }

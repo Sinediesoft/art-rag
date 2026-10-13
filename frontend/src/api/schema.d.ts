@@ -104,7 +104,7 @@ export interface paths {
          * Get Photo Alignment
          * @description 影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
          *     畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
-         *     圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。
+         *     圖紙照資料範圍：一般員工不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。
          */
         get: operations["get_photo_alignment_api_v1_images__image_id__align_get"];
         put?: never;
@@ -263,7 +263,7 @@ export interface paths {
         /**
          * Chat
          * @description 圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。
-         *     角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
+         *     角色不能用工廠圖紙（一般員工）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
          *     （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。
          *     inject 只在受信任的評估模式開放；send_image 與 conflict_check 不會略過安全關卡。
          */
@@ -284,7 +284,7 @@ export interface paths {
         /**
          * List Parts
          * @description 只列目前身分看得到的圖紙（機密等級＋部門）：業務看不到機密圖紙；
-         *     訪客不能使用工廠圖紙 → 403。
+         *     一般員工不能使用工廠圖紙 → 403。
          */
         get: operations["list_parts_api_v1_parts_get"];
         put?: never;
@@ -378,7 +378,7 @@ export interface paths {
         /**
          * Search Any
          * @description 不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
-         *     判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。
+         *     判成工廠圖紙時要看目前身分的資料範圍（一般員工不能使用工廠圖紙 → 403）。
          */
         post: operations["search_any_api_v1_search_any_post"];
         delete?: never;
@@ -459,7 +459,7 @@ export interface paths {
         /**
          * Compare Items
          * @description 兩幅畫或兩張圖紙並排比較：逐欄並排、標出不同、每格附出處；直接讀知識庫，不呼叫模型。
-         *     圖紙照資料範圍（訪客不能用工廠圖紙、業務看不到機密圖紙 → 403）。
+         *     圖紙照資料範圍（一般員工不能用工廠圖紙、業務看不到機密圖紙 → 403）。
          */
         get: operations["compare_items_api_v1_compare_items_get"];
         put?: never;
@@ -885,7 +885,7 @@ export interface paths {
          * Create Work Order
          * @description 從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
          *
-         *     權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
+         *     權限與額度和智慧助理同一套（只有主管可以，docs/adr/036；急件超過額度，主管身分直接開立、記進稽核）。
          */
         post: operations["create_work_order_api_v1_production_work_orders_post"];
         delete?: never;
@@ -906,7 +906,9 @@ export interface paths {
         post?: never;
         /**
          * Cancel Work Order
-         * @description 取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。
+         * @description 取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。
+         *
+         *     只能取消自己開的；主管可以取消任何人開的（docs/adr/036）。
          */
         delete: operations["cancel_work_order_api_v1_production_work_orders__wo_no__delete"];
         options?: never;
@@ -927,7 +929,7 @@ export interface paths {
          * Solve Schedule
          * @description 把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
          *
-         *     只有生管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
+         *     只有主管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
          */
         post: operations["solve_schedule_api_v1_schedule_solve_post"];
         delete?: never;
@@ -985,7 +987,7 @@ export interface paths {
         /**
          * Reset Production
          * @description 展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
-         *     與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/030）。
+         *     與攔截紀錄（只在展示模式、本機；主管才可以，docs/adr/030）。
          */
         post: operations["reset_production_api_v1_admin_production_reset_post"];
         delete?: never;
@@ -1220,7 +1222,7 @@ export interface paths {
         };
         /**
          * List Accounts
-         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
+         * @description 展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（一般員工，權限最低）的憑證，
          *     放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。
          */
         get: operations["list_accounts_api_v1_auth_accounts_get"];
@@ -1456,13 +1458,19 @@ export interface components {
             role_label: string;
             /** Ops */
             ops: string[];
-            /** Warehouses */
+            /**
+             * Warehouses
+             * @description 能改的倉庫；"*"＝全部（docs/adr/036）
+             */
             warehouses: string[];
-            /** Customers */
+            /**
+             * Customers
+             * @description 負責的客戶；"*"＝全部（docs/adr/036）
+             */
             customers: string[];
             /**
              * Artworks
-             * @description 藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的
+             * @description 可以圈區域、寫解說的畫（docs/adr/029）；"*"＝全部（主管，docs/adr/036）
              */
             artworks: string[];
             /** Note */
@@ -2042,7 +2050,7 @@ export interface components {
             diff: components["schemas"]["ChangeDiff"][];
             /**
              * Reasons
-             * @description 超過額度的原因（非空＝要送主管核准）
+             * @description 超過額度的原因：next=approval 時要送主管核准；next=confirm 時是主管自己的異動，直接生效、寫入時記進稽核（docs/adr/036）
              */
             reasons: string[];
             /** Pending Id */

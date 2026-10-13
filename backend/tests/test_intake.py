@@ -376,7 +376,7 @@ def test_human_edits_are_marked(client, reads):
 
 def test_only_manager_can_commit(client, reads, kb):
     draft = ready_draft(client, reads)
-    as_account(client, "planner")
+    as_account(client, "warehouse")
     r = client.post(f"/api/v1/intake/{draft['draft_id']}/commit")
     as_account(client, "guest")
     assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED"
@@ -415,7 +415,7 @@ def test_duplicate_check_only_looks_at_drawings_the_requester_can_see(client, mo
         return not_in_kb()
 
     monkeypatch.setattr(intake_service, "identify_any", fake)
-    as_account(client, "sales_a")
+    as_account(client, "sales")
     start(client, PHOTOS / "known" / "mfg-002__glare.jpg")
     as_account(client, "guest")
     assert seen == [{"mfg-004", "mfg-005"}]

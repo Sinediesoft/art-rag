@@ -112,7 +112,7 @@ def _align_scope(target: str, request: Request) -> None:
 def get_photo_alignment(image_id: str, request: Request, target: str = _TARGET):
     """影像對位與比對（docs/adr/012）：照片拍到參考圖的哪一塊，再找出不一樣的地方——
     畫作（artwork:、另一張照片 image:）比形狀與顏色，圖紙（part:）比三視圖的線條。
-    圖紙照資料範圍：訪客不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。"""
+    圖紙照資料範圍：一般員工不能用、業務看不到機密圖紙（403 DATA_SCOPE_DENIED）。"""
     _align_scope(target, request)
     return compare_service.align_photo(image_id, target)
 
@@ -191,7 +191,7 @@ def get_artwork_colormap(artwork_id: str):
 )
 async def chat(body: S.ChatRequest, request: Request):
     """圖文問答：七段權限控管每一段都由伺服器執行（docs/adr/015、019），請求欄位都不能略過關卡。
-    角色不能用工廠圖紙（訪客）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
+    角色不能用工廠圖紙（一般員工）→ 403；指定了看不到或不存在的圖紙 → 串流裡降級「查無資料」
     （兩者回應一樣，不透露有沒有這份文件），不讀圖檔、不呼叫任何模型。
     inject 只在受信任的評估模式開放；send_image 與 conflict_check 不會略過安全關卡。"""
     account = identity.current(request)
@@ -246,7 +246,7 @@ def _visible_part(part_id: str, request: Request) -> dict:
 @router.get("/parts", response_model=S.PartListResponse, tags=["parts"])
 def list_parts(request: Request):
     """只列目前身分看得到的圖紙（機密等級＋部門）：業務看不到機密圖紙；
-    訪客不能使用工廠圖紙 → 403。"""
+    一般員工不能使用工廠圖紙 → 403。"""
     account = identity.current(request)
     identity.require_domain(account, "mfg")
     store = get_store()
@@ -325,9 +325,9 @@ def search_drawing(body: S.DrawingSearchRequest, request: Request):
 @router.post("/search/any", response_model=S.AnySearchResponse, tags=["search"])
 def search_any(body: S.ImageSearchRequest, request: Request):
     """不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。
-    判成工廠圖紙時要看目前身分的資料範圍（訪客不能使用工廠圖紙 → 403）。"""
+    判成工廠圖紙時要看目前身分的資料範圍（一般員工不能使用工廠圖紙 → 403）。"""
     account = identity.current(request)
-    # 判成圖紙時只在看得到的圖紙裡辨識（訪客是空集合：不讀任何圖紙），之後照樣檢查領域
+    # 判成圖紙時只在看得到的圖紙裡辨識（一般員工是空集合：不讀任何圖紙），之後照樣檢查領域
     visible = identity.visible_part_ids(account, get_store().parts)
     result = search_service.identify_any(body.image_id, body.top_k, part_ids=visible)
     if result["drawing_result"] is not None:
@@ -422,7 +422,7 @@ def compare_items(
     b: str = Query(pattern=item_compare_service.REF_PATTERN, examples=["part:mfg-002"]),
 ):
     """兩幅畫或兩張圖紙並排比較：逐欄並排、標出不同、每格附出處；直接讀知識庫，不呼叫模型。
-    圖紙照資料範圍（訪客不能用工廠圖紙、業務看不到機密圖紙 → 403）。"""
+    圖紙照資料範圍（一般員工不能用工廠圖紙、業務看不到機密圖紙 → 403）。"""
     return item_compare_service.table(a, b, identity.current(request))
 
 
@@ -716,26 +716,31 @@ async def part_plan(part_id: str, request: Request):
 def create_work_order(body: S.WorkOrderCreate, request: Request):
     """從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。
 
-    權限與額度和智慧助理同一套（只有生管可以；急件要主管核准，回 409 APPROVAL_REQUIRED）。
+    權限與額度和智慧助理同一套（只有主管可以，docs/adr/036；急件超過額度，主管身分直接開立、記進稽核）。
     """
     account = identity.current(request)
     params = body.model_dump()
-    change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
+    ok = change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
     row = schedule_service.create_work_order(
         body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note,
         created_by=account.id,
     )  # fmt: skip
+    over = ok["over_quota"]  # 主管開的急件：超過額度直接生效，稽核寫明原因
     get_production_repo().add_audit(
         {"actor_id": account.id, "actor_label": account.label, "action": "寫入", "op": "wo_create",
          "ref_no": row["wo_no"], "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉"
-         f"{row['qty']} 件", "detail": None, "request_id": request.state.request_id}
+         f"{row['qty']} 件", "detail": {"over_quota": over} if over else None,
+         "request_id": request.state.request_id}
     )  # fmt: skip
     return row
 
 
 @router.delete("/production/work-orders/{wo_no}", response_model=S.OkResponse, tags=["production"])
 def cancel_work_order(wo_no: str, request: Request):
-    """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。"""
+    """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消）。
+
+    只能取消自己開的；主管可以取消任何人開的（docs/adr/036）。
+    """
     w = get_production_repo().get_work_order(wo_no)
     if not w or w["status"] != "已開立":
         schedule_service.cancel_work_order(wo_no)  # 回 404 WORK_ORDER_NOT_FOUND
@@ -764,7 +769,7 @@ def cancel_work_order(wo_no: str, request: Request):
 async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
     """把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。
 
-    只有生管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
+    只有主管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。
     """
     identity.require(identity.current(request), "schedule_run", "執行排程")
     stream = schedule_service.solve_stream(
@@ -792,7 +797,7 @@ def schedule_run(run_id: str, request: Request):
 @router.post("/admin/production/reset", response_model=S.OkResponse, tags=["production"])
 def reset_production(request: Request):
     """展示還原：清掉圖紙頁開立的工單、所有排程結果、智慧助理的異動、待核准單、稽核紀錄
-    與攔截紀錄（只在展示模式、本機；生管或主管才可以，docs/adr/030）。"""
+    與攔截紀錄（只在展示模式、本機；主管才可以，docs/adr/030）。"""
     identity.require_demo(request, "展示還原")
     identity.require(identity.current(request), "demo_reset", "展示還原")
     schedule_service.reset()
@@ -1093,7 +1098,7 @@ def _accounts(auth: identity.Auth, request: Request) -> dict:
 
 @router.get("/auth/accounts", response_model=S.AccountsResponse, tags=["agent"])
 def list_accounts(request: Request, response: Response):
-    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（訪客，權限最低）的憑證，
+    """展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（一般員工，權限最低）的憑證，
     放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。"""
     return _accounts(identity.ensure(request, response), request)
 

@@ -74,7 +74,7 @@ function factoryBackend() {
       density_g_cm3: 7.8,
       surface: "發黑",
       company: "",
-      owner: "生管",
+      owner: "倉管",
       confidentiality: "機密",
       geometry: {},
       descriptions: [],
@@ -161,9 +161,9 @@ describe("入口：對話紀錄欄與抽屜", () => {
 });
 
 describe("切換身分時還在跑的請求（舊 JWT）", () => {
-  it("串流中切成訪客：中止並收起，之後舊串流再送來的資料不會出現在畫面與存檔；切換後的新提問照常完成", async () => {
+  it("串流中切成一般員工：中止並收起，之後舊串流再送來的資料不會出現在畫面與存檔；切換後的新提問照常完成", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     t.on("POST", "/auth/switch", ({ body }) => {
       current = (body as { account_id: string }).account_id;
@@ -172,16 +172,16 @@ describe("切換身分時還在跑的請求（舊 JWT）", () => {
     const live = liveSse();
     t.on("POST", "/inventory/ask", ({ signal }) => live.respond(signal));
     renderApp();
-    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("倉管"));
     await ask("法蘭還剩幾件可以出貨？");
     await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
     live.push("sql", { attempt: 1, sql: "SELECT 1", ok: true, error: null });
     live.push("result", { columns: ["倉庫", "可用"], rows: [["SYNTH_WAREHOUSE", 99999]], row_count: 1, truncated: false, exec_ms: 2 });
     await waitFor(() => expect(document.querySelector(".msg--ai")?.textContent).toContain("1 筆"));
-    // 切成訪客
+    // 切成一般員工
     fireEvent.click(document.querySelector(".topbar__account")!);
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /一般員工/ }));
     });
     await waitFor(() => expect(document.querySelector(".thread")?.textContent).toContain("進行中的請求已中止"));
     // 舊串流晚到的事件
@@ -197,7 +197,7 @@ describe("切換身分時還在跑的請求（舊 JWT）", () => {
     expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped");
     await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toContain("切換身分，已中止這一輪"));
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain("99999");
-    // 切換之後才送出的提問用的是新身分的 JWT（後端回的帳號是訪客），不會被中止
+    // 切換之後才送出的提問用的是新身分的 JWT（後端回的帳號是一般員工），不會被中止
     t.on("POST", "/agent/route", ({ body }) => json(route({ question: (body as { question: string }).question, account: account(current) })));
     await ask("梵谷畫這幅畫的時候在哪裡？");
     await idle();
@@ -209,7 +209,7 @@ describe("切換身分時還在跑的請求（舊 JWT）", () => {
 describe("切換身分時路由還沒回來的請求（審查報告的延遲 switch＋延遲 route）", () => {
   it("切換開始就中止在飛的請求；切換中不接受新提問；舊身分的路由晚到也不寫回", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     let releaseSwitch!: () => void;
     t.on("POST", "/auth/switch", ({ body }) =>
@@ -223,7 +223,7 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
     let releaseRoute!: () => void;
     t.on("POST", "/agent/route", () =>
       new Promise<Response>((ok) => {
-        // 生管的 JWT 授權過的結果：確認卡上會有圖紙名稱與機密等級（合成值）
+        // 倉管的 JWT 授權過的結果：確認卡上會有圖紙名稱與機密等級（合成值）
         releaseRoute = () =>
           ok(
             json(
@@ -238,13 +238,13 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
       }),
     );
     renderApp();
-    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("倉管"));
     await ask("把附圖轉成 3D");
     await waitFor(() => expect(t.calls.filter((c) => c.path === "/agent/route")).toHaveLength(1));
-    // 開始切成訪客（切換回應還沒回來）
+    // 開始切成一般員工（切換回應還沒回來）
     fireEvent.click(document.querySelector(".topbar__account")!);
     act(() => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /一般員工/ }));
     });
     await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
     // 切換中：輸入框鎖住，送不出去
@@ -255,7 +255,7 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
     await act(async () => {
       releaseSwitch();
     });
-    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("訪客"));
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("一般員工"));
     await act(async () => {
       releaseRoute();
       await new Promise((r) => setTimeout(r, 30));
@@ -267,7 +267,7 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
     expect(localStorage.getItem(STORAGE_KEY)).not.toContain("SYNTH_PRIVATE_PART");
   });
 
-  it("憑證過期改發訪客：路由回來的帳號不是目前的身分，就不顯示、不分派", async () => {
+  it("憑證過期改發一般員工：路由回來的帳號不是目前的身分，就不顯示、不分派", async () => {
     const t = factoryBackend();
     t.on("POST", "/agent/route", () =>
       json(
@@ -281,7 +281,7 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
       ),
     );
     renderApp();
-    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("生管"));
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("倉管"));
     await ask("把附圖轉成 3D");
     await waitFor(() => expect(document.querySelector(".msg--ai")?.getAttribute("data-phase")).toBe("stopped"));
     expect(document.body.textContent).not.toContain("SYNTH_OTHER_IDENTITY");
@@ -289,11 +289,11 @@ describe("切換身分時路由還沒回來的請求（審查報告的延遲 swi
   });
 });
 
-describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未成功 → 生管串流 → 首次 accounts 回訪客 → 舊事件晚到）", () => {
+describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未成功 → 倉管串流 → 首次 accounts 回一般員工 → 舊事件晚到）", () => {
   it("剛打開頁面、/auth/accounts 還沒回來：輸入框鎖住、送不出任何提問；確認後才解鎖", async () => {
     const t = factoryBackend();
     let releaseAccounts!: () => void;
-    t.on("GET", "/auth/accounts", () => new Promise<Response>((ok) => (releaseAccounts = () => ok(json(accounts("planner"))))));
+    t.on("GET", "/auth/accounts", () => new Promise<Response>((ok) => (releaseAccounts = () => ok(json(accounts("warehouse"))))));
     renderApp();
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("正在確認身分"));
     await sendNow("法蘭還剩幾件可以出貨？");
@@ -307,9 +307,9 @@ describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未
     expect(document.querySelector(".thread")?.textContent).toContain("1889 年在聖雷米");
   });
 
-  it("串流中憑證更新、重新確認是訪客：舊身分的串流中止，晚到的事件不寫回畫面與存檔；確認前鎖住", async () => {
+  it("串流中憑證更新、重新確認是一般員工：舊身分的串流中止，晚到的事件不寫回畫面與存檔；確認前鎖住", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     let releaseAccounts: (() => void) | null = null;
     t.on("GET", "/auth/accounts", () =>
       releaseAccounts === null ? json(accounts(current)) : new Promise<Response>((ok) => (releaseAccounts = () => ok(json(accounts(current))))),
@@ -320,7 +320,7 @@ describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未
     await ask("法蘭還剩幾件可以出貨？");
     await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
     live.push("sql", { attempt: 1, sql: "SELECT 1", ok: true, error: null });
-    // 憑證過期：client.ts 重新取得憑證（後端改發訪客），重新確認身分的請求先扣住
+    // 憑證過期：client.ts 重新取得憑證（後端改發一般員工），重新確認身分的請求先扣住
     current = "guest";
     releaseAccounts = () => undefined;
     act(() => {
@@ -338,7 +338,7 @@ describe("身分還沒確認、憑證更新（審查報告：首次 accounts 未
     await act(async () => {
       releaseAccounts!();
     });
-    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("訪客"));
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("一般員工"));
     await ready();
     const text = document.body.textContent ?? "";
     expect(text).not.toContain("SYNTH_PRIVATE_INVENTORY_ROWS");
@@ -382,7 +382,7 @@ describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL
     const before = document.body.textContent ?? "";
     expect(before).toContain("±0.02");
     expect(before).toContain("111×222×33");
-    // 憑證過期：client.ts 已改拿訪客憑證；重新確認身分的 /auth/accounts 一直沒回來，後端對舊身分的資料改回 403
+    // 憑證過期：client.ts 已改拿一般員工憑證；重新確認身分的 /auth/accounts 一直沒回來，後端對舊身分的資料改回 403
     t.on("GET", "/auth/accounts", () => new Promise<Response>(() => undefined));
     const denied = () => json({ error: { code: "DATA_SCOPE_DENIED", message: "看不到", request_id: "r" } }, 403);
     t.on("GET", "/parts/mfg-002", denied);
@@ -667,9 +667,9 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
     });
   };
 
-  it("/inventory 已完成的 SQL：開始切成訪客的當下就撤下，切換完成後也不會回來", async () => {
+  it("/inventory 已完成的 SQL：開始切成一般員工的當下就撤下，切換完成後也不會回來", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     let releaseSwitch!: () => void;
     t.on("POST", "/auth/switch", ({ body }) =>
@@ -683,7 +683,7 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
     const live = liveSse();
     t.on("POST", "/inventory/ask", ({ signal }) => live.respond(signal));
     renderApp("/inventory");
-    await waitFor(() => expect(accountButton("生管")).toBeTruthy());
+    await waitFor(() => expect(accountButton("倉管")).toBeTruthy());
     await inventoryAsk("法蘭還剩幾件可以出貨？");
     await waitFor(() => expect(t.calls.some((c) => c.path === "/inventory/ask")).toBe(true));
     synthSql(live);
@@ -694,15 +694,15 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
     });
     await waitFor(() => expect(document.body.textContent).toContain("SYNTH_ANSWER"));
     expect(document.body.textContent).toContain("SYNTH_WAREHOUSE");
-    // 切成訪客：切換回應還沒回來
-    fireEvent.click(accountButton("生管"));
+    // 切成一般員工：切換回應還沒回來
+    fireEvent.click(accountButton("倉管"));
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /一般員工/ }));
     });
     await waitFor(() => expect(screen.getByText(/切換身分中/)).toBeTruthy());
     for (const s of ["SYNTH_ANSWER", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
     await act(async () => releaseSwitch());
-    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await waitFor(() => expect(accountButton("一般員工")).toBeTruthy());
     // 功能頁以新身分重建：輸入框回來了，舊結果沒有
     await screen.findByPlaceholderText(/連接法蘭還有幾件可以出貨/);
     for (const s of ["SYNTH_ANSWER", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
@@ -710,7 +710,7 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
 
   it("/inventory 串流中憑證更新：當下撤下、請求中止；傳輸層不理會中止、舊事件晚到也不能讓內容回來", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     const live = liveSse();
     let signal: AbortSignal | null | undefined;
@@ -720,12 +720,12 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
       return live.respond(null);
     });
     renderApp("/inventory");
-    await waitFor(() => expect(accountButton("生管")).toBeTruthy());
+    await waitFor(() => expect(accountButton("倉管")).toBeTruthy());
     await inventoryAsk("法蘭還剩幾件可以出貨？");
     await waitFor(() => expect(signal).toBeTruthy());
     synthSql(live);
     await waitFor(() => expect(document.body.textContent).toContain("SYNTH_WAREHOUSE"));
-    // 憑證過期：client.ts 改拿訪客憑證
+    // 憑證過期：client.ts 改拿一般員工憑證
     current = "guest";
     act(() => {
       window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
@@ -737,7 +737,7 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
       live.push("done", { request_id: "r" });
       live.close();
     });
-    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await waitFor(() => expect(accountButton("一般員工")).toBeTruthy());
     await screen.findByPlaceholderText(/連接法蘭還有幾件可以出貨/);
     await new Promise((r) => setTimeout(r, 50));
     for (const s of ["SYNTH_LATE", "SYNTH_WAREHOUSE", "SYNTH_SQL", "99999"]) expect(document.body.textContent).not.toContain(s);
@@ -745,7 +745,7 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
 
   it("其他功能頁一樣：圖紙問答串流中切換身分，串流中止、回答撤下", async () => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     t.on("POST", "/auth/switch", ({ body }) => {
       current = (body as { account_id: string }).account_id;
@@ -769,11 +769,11 @@ describe("功能頁的身分邊界（架構審查 F1：功能頁自己的 state 
       live.push("token", { text: "SYNTH_TOLERANCE ±0.02 mm" });
     });
     await waitFor(() => expect(document.body.textContent).toContain("SYNTH_TOLERANCE"));
-    fireEvent.click(accountButton("生管"));
+    fireEvent.click(accountButton("倉管"));
     await act(async () => {
-      fireEvent.click(screen.getByRole("menuitemradio", { name: /訪客/ }));
+      fireEvent.click(screen.getByRole("menuitemradio", { name: /一般員工/ }));
     });
-    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await waitFor(() => expect(accountButton("一般員工")).toBeTruthy());
     expect(signal!.aborted).toBe(true);
     act(() => {
       live.push("token", { text: "SYNTH_LATE" });
@@ -810,7 +810,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
   /** 進工廠模組、試算一筆修改，停在「確認寫入」 */
   const changeReady = async (over: Record<string, unknown> = {}) => {
     const t = factoryBackend();
-    let current = "planner";
+    let current = "warehouse";
     t.on("GET", "/auth/accounts", () => json(accounts(current)));
     t.on("POST", "/auth/switch", ({ body }) => {
       current = (body as { account_id: string }).account_id;
@@ -843,9 +843,9 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     fireEvent.click(screen.getByRole("button", { name: "確認寫入" }));
     await screen.findByRole("button", { name: "寫入中…" });
     // 身分選單：切換被擋下
-    fireEvent.click(accountButton("生管"));
+    fireEvent.click(accountButton("倉管"));
     expect(screen.getByText("有寫入還沒收到結果，等結果回來再切換身分")).toBeTruthy();
-    expect((screen.getByRole("menuitemradio", { name: /訪客/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("menuitemradio", { name: /一般員工/ }) as HTMLButtonElement).disabled).toBe(true);
     expect(t.calls.some((c) => c.path === "/auth/switch")).toBe(false);
     // 刪掉這段對話：不刪
     fireEvent.click(screen.getByLabelText("對話紀錄"));
@@ -853,7 +853,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     expect(window.alert).toHaveBeenCalledWith("有寫入還沒收到結果，等結果回來再刪除這段對話。");
     expect(where).toMatch(/^\/factory\//);
     fireEvent.keyDown(document, { key: "Escape" });
-    // 憑證過期、重新確認是訪客：擋不住的身分改變
+    // 憑證過期、重新確認是一般員工：擋不住的身分改變
     setCurrent("guest");
     act(() => {
       window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
@@ -1290,7 +1290,7 @@ describe("建檔頁卸載後的晚到回應（第 8 次 code review F3：共用�
     egress: {},
     ...over,
   });
-  /** 能收錄的身分（kb_intake）；憑證更新後改成訪客 */
+  /** 能收錄的身分（kb_intake）；憑證更新後改成一般員工 */
   const intakeBackend = () => {
     const t = factoryBackend();
     let current = "manager";
@@ -1339,7 +1339,7 @@ describe("建檔頁卸載後的晚到回應（第 8 次 code review F3：共用�
     renew();
     await waitFor(() => expect(document.querySelector(".banner[role=alert]")?.textContent).toContain("〈照片建檔入庫〉還在等伺服器回覆"));
     // 等身分重新確認、功能頁以新身分重建並重新讀過草稿（快取已重設），舊的收錄回應才到
-    await waitFor(() => expect(accountButton("訪客")).toBeTruthy());
+    await waitFor(() => expect(accountButton("一般員工")).toBeTruthy());
     await waitFor(() => expect(gets()).toBeGreaterThan(before));
     await screen.findByRole("button", { name: "收錄進知識庫（art-new-1）" });
     await act(async () => release());

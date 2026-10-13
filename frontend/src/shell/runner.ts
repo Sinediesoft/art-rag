@@ -50,7 +50,7 @@ export async function runTurn(turn: Turn, update: Update, { signal, token, accep
     if (signal.aborted) return update((t) => ({ ...t, phase: "stopped" }));
     return update((t) => ({ ...t, phase: "error", failure: failureOf(e) }));
   }
-  // 請求送出後身分換了（切換、憑證過期改發訪客）：這是另一個身分的授權結果，不顯示、不分派
+  // 請求送出後身分換了（切換、憑證過期改發一般員工）：這是另一個身分的授權結果，不顯示、不分派
   if (accept && !accept(route.account.id)) return onForeign?.(route);
   if (signal.aborted) return update((t) => ({ ...t, phase: "stopped", route }));
   const part = initialPart(route, turn.imageId);

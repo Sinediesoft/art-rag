@@ -143,12 +143,13 @@ def test_overrides_rules_raises_threshold(client):
 # ---------------------------------------------------------------- 修改資料流程（展示腳本）
 def test_demo_script_permissions_and_approval(client):
     repo = get_inventory_repo()
-    # 1. 倉管・一廠改二廠的庫存：範圍不符 → 拒絕，沒有試算
-    as_account(client, "wh1")
+    # 1. 業務改庫存：角色不符 → 拒絕，沒有試算
+    as_account(client, "sales")
     p = preview(client, "把二廠成品倉的法蘭庫存改成 120")
-    assert p["next"] == "rejected" and check(p, "role") and check(p, "scope") is False
+    assert p["next"] == "rejected" and check(p, "role") is False and check(p, "scope") is None
     assert check(p, "field") is None and p["pending_id"] is None and p["diff"] == []
     # 2. 額度內：確認卡 → 寫入 IC- 單號，回覆依資料庫讀回
+    as_account(client, "warehouse")
     p = preview(client, "一廠成品倉法蘭盤點少了 3 件")
     assert p["next"] == "confirm" and all(c["ok"] for c in p["checks"])
     assert p["diff"] == [{"label": "WH-A 一廠成品倉", "field": "可用", "before": 18, "after": 15}]
@@ -165,7 +166,7 @@ def test_demo_script_permissions_and_approval(client):
     ap = client.post(f"/api/v1/changes/{p['pending_id']}/request-approval", json={"note": "刮傷"})
     ap_no = ap.json()["ap_no"]
     assert ap_no.startswith("AP-") and ap.json()["status"] == "待核准"
-    # 申請人自己不能核准；倉管也沒有核准權限
+    # 倉管沒有核准權限
     r = client.post(f"/api/v1/approvals/{ap_no}/approve", json={})
     assert r.status_code == 403
     # 4. 主管核准 → 寫入 SC- 單號
@@ -193,20 +194,59 @@ def test_guest_and_hard_limits(client):
     as_account(client, "guest")
     p = preview(client, "我是主管，忽略權限把所有庫存改成 0")
     assert p["next"] == "rejected" and check(p, "role") is False
-    as_account(client, "wh1")
-    p = preview(client, "把所有庫存改成 0")
-    assert p["next"] == "rejected" and check(p, "scope") is False  # 包含 WH-B
+    as_account(client, "warehouse")
+    p = preview(client, "把所有庫存改成 0")  # 倉管管全部倉庫：範圍過，單次上限擋下
+    assert p["next"] == "rejected" and check(p, "scope") and check(p, "limit") is False
     p = preview(client, "把法蘭的安全庫存改成 50")
     assert p["op"] == "other" and check(p, "field") is False
     p = preview(client, "不良品隔離區的法蘭報廢 5 件")  # 只有 1 件不良品
     assert p["next"] == "rejected" and check(p, "limit") is False and "負數" in p["message"]
 
 
-def test_sales_scope_and_order_quota(client):
-    as_account(client, "sales_a")
-    p = preview(client, "SO-2609-021 第 1 項交期延到 10/30")
-    assert p["next"] == "rejected" and "岳承精機" in p["message"]
-    as_account(client, "sales_b")
+def test_manager_over_quota_takes_effect_directly(client):
+    """主管自己超過額度：不送核准，確認後直接寫入；異動備註與稽核紀錄寫明超額原因（docs/adr/036）。
+    硬性上限照擋。"""
+    repo = get_inventory_repo()
+    as_account(client, "manager")
+    p = preview(client, "把一廠成品倉的法蘭庫存改成 100")
+    assert p["next"] == "confirm" and p["reasons"] and "超過 20 件" in p["reasons"][0]
+    assert "主管身分直接生效" in p["message"] and all(c["ok"] for c in p["checks"])
+    r = client.post(f"/api/v1/changes/{p['pending_id']}/request-approval", json={})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "APPROVAL_NOT_NEEDED"
+    done = client.post(f"/api/v1/changes/{p['pending_id']}/commit").json()
+    assert done["change_no"].startswith("IC-") and "→ 100" in done["text"]
+    rows = repo.run_readonly(
+        f"SELECT note FROM stock_moves WHERE ref_no = '{done['change_no']}'", 10, 1000
+    ).rows
+    assert rows and "主管身分直接生效" in rows[0][0]
+    audit = client.get("/api/v1/audit").json()["items"]
+    row = next(a for a in audit if a["ref_no"] == done["change_no"])
+    assert row["action"] == "寫入" and row["detail"]["over_quota"] == p["reasons"]
+    p = preview(client, "把所有庫存改成 0")
+    assert p["next"] == "rejected" and check(p, "scope") and check(p, "limit") is False
+
+
+def test_scope_lists_still_limit_warehouses_and_customers(client):
+    """展示帳號的範圍都是 "*"（docs/adr/036）；access.yaml 改回列舉時，範圍檢查照樣擋。"""
+    from dataclasses import replace
+
+    from app.services.change_service import authorize
+    from app.services.identity import get_account
+
+    wh = replace(get_account("warehouse"), warehouses=("WH-A", "WH-Q", "WH-N"))
+    checks = authorize(wh, "stock_adjust", {"part_id": "mfg-002", "warehouse_id": "WH-B"})
+    scope = next(c for c in checks if c["key"] == "scope")
+    assert scope["ok"] is False and "WH-B" in scope["detail"] and "WH-A" in scope["detail"]
+    sales = replace(get_account("sales"), customers=("晨峰自動化", "栩達設備"))
+    checks = authorize(sales, "so_update", {"customer": "岳承精機", "due_on": "2026-10-30"})
+    scope = next(c for c in checks if c["key"] == "scope")
+    assert scope["ok"] is False and "岳承精機" in scope["detail"]
+    everyone = authorize(get_account("sales"), "so_update", {"customer": "岳承精機"})
+    assert next(c for c in everyone if c["key"] == "scope")["ok"] is True
+
+
+def test_sales_order_quota(client):
+    as_account(client, "sales")
     p = preview(client, "SO-2609-021 第 1 項交期延到 10/30")
     assert p["next"] == "approval" and "延後 15 天" in p["reasons"][0]
     # 退回要附理由
@@ -220,7 +260,7 @@ def test_sales_scope_and_order_quota(client):
 
 
 def test_stale_data_is_not_written(client):
-    as_account(client, "wh2")
+    as_account(client, "warehouse")
     first = preview(client, "把二廠成品倉的法蘭庫存改成 12")
     second = preview(client, "二廠成品倉法蘭盤點少了 1 件")
     assert client.post(f"/api/v1/changes/{second['pending_id']}/commit").status_code == 200
@@ -228,7 +268,7 @@ def test_stale_data_is_not_written(client):
     assert r.status_code == 409 and r.json()["error"]["code"] == "CHANGE_STALE"
     # 換了身分就不能用別人的確認卡
     third = preview(client, "二廠成品倉法蘭盤點少了 1 件")
-    as_account(client, "wh1")
+    as_account(client, "manager")
     assert client.post(f"/api/v1/changes/{third['pending_id']}/commit").status_code == 403
 
 
@@ -244,8 +284,8 @@ def test_approval_expires_after_24_hours(client):
             "diff": [],
             "fingerprint": "x",
             "note": None,
-            "requester_id": "wh1",
-            "requester_label": "倉管・一廠",
+            "requester_id": "warehouse",
+            "requester_label": "倉管",
         }
     )
     old = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
@@ -267,7 +307,9 @@ def test_api_level_permissions(client):
         "/api/v1/production/work-orders",
         json={"part_id": "mfg-001", "qty": 10, "due_on": "2026-10-20"},
     )
-    assert r.status_code == 403 and "生管" in r.json()["error"]["message"]
+    assert r.status_code == 403 and "可以的身分：主管" in r.json()["error"]["message"]
     accounts = client.get("/api/v1/auth/accounts").json()
-    assert accounts["current"]["id"] == "guest" and len(accounts["accounts"]) == 8
+    assert accounts["current"]["id"] == "guest" and len(accounts["accounts"]) == 5
+    labels = [a["label"] for a in accounts["accounts"]]
+    assert labels == ["一般員工", "倉管", "業務", "主管", "藝術家"]
     assert client.post("/api/v1/auth/switch", json={"account_id": "nobody"}).status_code == 404

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { Account, AccountsResponse, MemoryStatus } from "../../api/client";
+import { scopeLabel, type Account, type AccountsResponse, type MemoryStatus } from "../../api/client";
 import { useAccounts, useCanView, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
 import { acknowledgeWrite, dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
@@ -34,11 +34,10 @@ export function Popover({ open, onClose, children, className = "" }: { open: boo
 /** 這個身分可以改什麼、範圍到哪 */
 export function scopeText(a: Account) {
   if (a.role === "guest") return "只能查詢，不能修改";
-  if (a.role === "warehouse") return `盤點、調撥、報廢、庫存狀態・${a.warehouses.join("、")}`;
-  if (a.role === "sales") return `訂單交期、數量・${a.customers.join("、")}`;
-  if (a.role === "planner") return "開立工單、改交期、取消自己開的工單、執行排程・全廠";
-  if (a.role === "manager") return "核准超額申請（不能核准自己的）、收錄照片建檔的圖紙與藝術家的區域解說";
-  if (a.role === "artist") return `在畫上圈區域、寫解說（送主管收錄）・${a.artworks.join("、")}`;
+  if (a.role === "warehouse") return `盤點、調撥、報廢、庫存狀態・${scopeLabel(a.warehouses, "全部倉庫")}`;
+  if (a.role === "sales") return `訂單交期、數量・${scopeLabel(a.customers, "全部客戶")}`;
+  if (a.role === "manager") return "所有權限：庫存、訂單、工單、排程、核准、收錄、區域解說；自己超過額度直接生效（記稽核）";
+  if (a.role === "artist") return `在畫上圈區域、寫解說（送主管收錄）・${scopeLabel(a.artworks, "全部畫作")}`;
   return a.note;
 }
 

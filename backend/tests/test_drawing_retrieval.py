@@ -136,7 +136,7 @@ def leaked(text: str, part=MFG_006) -> list[str]:
 
 # ---------------------------------------------------------------- 回報的截圖：有權限
 def test_reported_screenshot_is_identified_as_mfg_006(client, drawing_photo):
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, REPORTED)
     for path in ("/api/v1/search/drawing", "/api/v1/search/any"):
         body = c.post(path, json={"image_id": image_id}).json()
@@ -152,7 +152,7 @@ def test_reported_screenshot_photo_only_answers_instead_of_degrading(
     client, drawing_photo, realistic_retrieval
 ):
     """修正前：照片辨識對了，/chat 第 6 段把預設問句判成不可答 → 「查無資料」。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, REPORTED)
     r = c.post("/api/v1/agent/route", json={"question": "", "image_id": image_id}).json()
     assert r["photo"] == {
@@ -187,7 +187,7 @@ def test_reported_screenshot_photo_only_answers_instead_of_degrading(
 def test_photo_with_the_same_name_goes_straight_to_the_drawing(client, drawing_photo):
     """「立式軸承座」＋同一張圖紙的照片：文字沒有多說要做什麼，和只附照片一樣直接交給問答。
     修正前落在澄清按鈕（圖紙查找／問答／庫存三選一）。只有文字的名稱照舊要澄清（route_qa r44）。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, REPORTED)
     r = c.post("/api/v1/agent/route", json={"question": "立式軸承座", "image_id": image_id}).json()
     assert (r["intent"], r["gate"], r["outcome"]) == ("drawing_qa", "direct", "pass")
@@ -390,7 +390,7 @@ def test_found_drawing_answer_does_not_end_with_no_data(
     第 7 段註明拿掉了；整段都答不出來時照舊回拒答句。"""
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
-    c = client_as("planner")
+    c = client_as("manager")
     res = c.post("/api/v1/chat", json={"question": question, "part_id": "mfg-006"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
@@ -419,7 +419,7 @@ def test_partly_answerable_question_keeps_the_no_data_part(
     """codex-review 9bb6b32 F2：材料答得出來、包裝方式沒有資料——說明缺哪一部分的句子要原樣送出。"""
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
-    c = client_as("planner")
+    c = client_as("manager")
     res = c.post(
         "/api/v1/chat", json={"question": "立式軸承座的材料和包裝方式？", "part_id": "mfg-006"}
     )
@@ -441,7 +441,7 @@ def test_question_on_several_lines_keeps_the_no_data_part(
     包裝方式沒資料的說明要原樣送出。"""
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
-    c = client_as("planner")
+    c = client_as("manager")
     res = c.post("/api/v1/chat", json={"question": question, "part_id": "mfg-006"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
@@ -455,11 +455,11 @@ def test_spliced_hidden_part_number_is_never_sent(client, realistic_retrieval, m
     """codex-review 9bb6b32 F1：業務看不到 mfg-006；
     句中的拒答句不拿掉，PBK- 和 6006 不會被接起來。"""
     reply = "材料為鋁合金 [1]。PBK-知識庫中沒有這方面的資料。6006"
-    hidden = guard.hidden_terms(identity.get_account("sales_a"), get_store().parts)
+    hidden = guard.hidden_terms(identity.get_account("sales"), get_store().parts)
     assert guard.check_output(reply, [{"text": "x"}], hidden, []) == []
     monkeypatch.setattr(chat_service, "get_provider", lambda strategy: _Reply(reply))
     monkeypatch.setattr(config.get_settings(), "llm_mode", "real")
-    c = client_as("sales_a")
+    c = client_as("sales")
     res = c.post("/api/v1/chat", json={"question": "步進馬達安裝板的材料？", "part_id": "mfg-004"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
@@ -479,7 +479,7 @@ def test_answer_changed_after_the_output_check_is_checked_again(
     monkeypatch.setattr(
         chat_service, "drop_stray_no_data", lambda answer, question, bare=(): "PBK-6006 [1]。"
     )
-    c = client_as("sales_a")
+    c = client_as("sales")
     res = c.post("/api/v1/chat", json={"question": "步進馬達安裝板的材料？", "part_id": "mfg-004"})
     events = parse_sse(res.text)
     text = "".join(x["text"] for e, x in events if e == "token")
@@ -495,7 +495,7 @@ def test_found_drawing_but_unanswerable_question_keeps_the_drawing(
 ):
     """圖紙找到了、問題答不出來：第 1 段通過（文件看得到），第 6 段降級；
     sources 帶著這張圖紙，前端據此保留「找到圖紙」，不當成圖紙不存在。"""
-    c = client_as("planner")
+    c = client_as("manager")
     q = "這張圖紙的包裝方式與出貨箱規格？"  # 不是要內部資料（第 2 段放行），但段落裡沒有
     res = c.post("/api/v1/chat", json={"question": q, "part_id": "mfg-006"})
     events = parse_sse(res.text)
@@ -513,7 +513,7 @@ def test_found_drawing_but_unanswerable_question_keeps_the_drawing(
 
 
 # ---------------------------------------------------------------- 回報的截圖：沒有權限
-@pytest.mark.parametrize("account", ["sales_a", "guest"])
+@pytest.mark.parametrize("account", ["sales", "guest"])
 def test_reported_screenshot_without_clearance_looks_like_an_unknown_drawing(
     client, drawing_photo, account
 ):
@@ -543,7 +543,7 @@ def test_reported_screenshot_without_clearance_looks_like_an_unknown_drawing(
     if events:
         assert events[0] == ("error", {**events[0][1], "code": "NOT_IN_KB"})
     assert leaked(chat.text) == []
-    if account == "sales_a":
+    if account == "sales":
         r = c.post("/api/v1/search/drawing", json={"image_id": hidden})
         assert r.status_code == 200 and r.json()["matched"] is False and leaked(r.text) == []
 
@@ -552,7 +552,7 @@ def test_reported_screenshot_without_clearance_looks_like_an_unknown_drawing(
 def test_thin_view_crop_is_recognised(client, drawing_photo):
     """只截一個扁長的視圖：法蘭的前視圖，正確的對應點垂直分布只有約 60 px。
     修正前分布條件要兩個方向都 ≥ 80 px，正確的對應被當成「擠在一小塊」擋掉。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, img=view_crop(ROOT / "kb/drawings/mfg-002.png", VIEW_FRONT))
     r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
     assert r["matched"] and r["best_part_id"] == "mfg-002", r["results"][:2]
@@ -561,7 +561,7 @@ def test_thin_view_crop_is_recognised(client, drawing_photo):
 def test_partial_crop_of_an_unknown_drawing_is_not_matched(client, drawing_photo):
     """未收錄零件（U 型槽鋼座）的上視圖局部：和 mfg-001 的線條重合約 0.55，
     修正前剛好過 0.55 被指成〈L 型固定支架〉；局部照片要 ≥ partial_min_overlap。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, img=view_crop(UNKNOWN, VIEW_TOP))
     r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
     assert r["matched"] is False and r["best_part_id"] is None, r["results"][:2]
@@ -596,7 +596,7 @@ REVIEW_CROPS = [
 def test_square_partial_crops_are_recognised(client, drawing_photo, pid, box, factor):
     """經 /images（JPEG）上傳，整條 /search/drawing：
     幾何驗證、局部照片門檻都要過，第一名是那張圖紙。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, img=view_crop(ROOT / f"kb/drawings/{pid}.png", box, factor))
     r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
     assert r["matched"] and r["best_part_id"] == pid, r["results"][:2]
@@ -610,7 +610,7 @@ def test_square_partial_crops_of_unknown_drawings_are_not_matched(
     client, drawing_photo, box, factor
 ):
     """反例：未收錄零件（U 型槽鋼座）每個視圖中央的方形局部，不能被指成任何一張知識庫圖紙。"""
-    c = client_as("planner")
+    c = client_as("manager")
     image_id = upload(c, img=view_crop(UNKNOWN, box, factor))
     r = c.post("/api/v1/search/drawing", json={"image_id": image_id}).json()
     assert r["matched"] is False and r["best_part_id"] is None, r["results"][:2]
@@ -708,7 +708,7 @@ HIDDEN_TEXTS = [
 ]
 
 
-@pytest.mark.parametrize("account", ["sales_a", "guest"])
+@pytest.mark.parametrize("account", ["sales", "guest"])
 @pytest.mark.parametrize("text", HIDDEN_TEXTS)
 def test_hidden_drawing_text_looks_like_a_missing_one(client, monkeypatch, account, text):
     """看不到的圖紙和知識庫裡沒有的圖紙，/agent/route 的回應逐欄相同（任務驗收條件 7）。
@@ -735,7 +735,7 @@ def test_hidden_drawing_text_looks_like_a_missing_one(client, monkeypatch, accou
 
 def test_visible_drawing_text_is_still_resolved(client):
     """對照組：看得到的身分照樣認得料號、圖號，分派到那張圖紙。"""
-    c = client_as("planner")
+    c = client_as("manager")
     for text, pid in (("PBK-6006 的公差", "mfg-006"), ("把連接法蘭轉成 3D", "mfg-002")):
         r = c.post("/api/v1/agent/route", json={"question": text}).json()
         assert r["dispatch"]["part_id"] == pid and r["auth"]["filter"]["doc_level"] == "機密"
@@ -753,7 +753,7 @@ PARTS = {
 }
 
 
-@pytest.mark.parametrize("account", ["planner", "sales_a"])
+@pytest.mark.parametrize("account", ["manager", "sales"])
 def test_text_search_puts_the_named_drawing_first(client, account):
     """問句寫了名稱、料號或圖號：那張圖紙排第一名（看得到時）；看不到的和不存在一樣，不出現在結果。
     修正前只有 bge-m3：真模型下 D-24-0117、D-24-0311、D-24-0502 第一名都是別張。"""
@@ -823,7 +823,7 @@ def test_exact_name_inside_a_longer_matched_name_counts_once():
 
 def test_longer_code_is_ranked_by_meaning_not_forced_first(client):
     """不存在的較長編號：沒有任何一張是 exact，名次照語意分數，不會把 mfg-001 強制排第一。"""
-    c = client_as("planner")
+    c = client_as("manager")
     for q in ("BRK-10010", "D-24-01170"):
         res = c.get("/api/v1/search/parts", params={"q": q}).json()
         assert not any(x["exact"] for x in res["results"]), q

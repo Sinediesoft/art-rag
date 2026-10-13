@@ -94,13 +94,13 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
         </ShellProvider>
       </QueryClientProvider>,
     );
-    act(() => shell.setAccount("planner", "生管"));
+    act(() => shell.setAccount("warehouse", "倉管"));
     expect(await screen.findByTestId("model-viewer")).toBeTruthy();
     expect(document.body.textContent).toContain("100×100×22");
-    // 切成訪客：後端改回 403
+    // 切成一般員工：後端改回 403
     allowed = false;
     await act(async () => {
-      shell.setAccount("guest", "訪客");
+      shell.setAccount("guest", "一般員工");
     });
     expect(await screen.findByText(/目前身分看不到這份資料/)).toBeTruthy();
     expect(screen.queryByTestId("model-viewer")).toBeNull();
