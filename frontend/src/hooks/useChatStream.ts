@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatRequest } from "../api/client";
 import { streamChat, type DoneEvent, type ErrorEvent, type SourcesEvent } from "../api/sse";
+import { withChatSettings, type Applied } from "../shell/settings";
 
 export type ChatStatus = "idle" | "retrieving" | "streaming" | "done" | "error";
 
@@ -10,9 +11,11 @@ export interface ChatState {
   text: string;
   done: DoneEvent | null;
   error: ErrorEvent | null;
+  /** 這一題套用的設定面板開關（shell/settings.ts）；請求已指定的欄位不套用 */
+  applied: Applied;
 }
 
-const initial: ChatState = { status: "idle", sources: null, text: "", done: null, error: null };
+const initial: ChatState = { status: "idle", sources: null, text: "", done: null, error: null, applied: {} };
 
 export function useChatStream() {
   const [state, setState] = useState<ChatState>(initial);
@@ -22,9 +25,10 @@ export function useChatStream() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setState({ ...initial, status: "retrieving" });
+    const { body: sent, applied } = withChatSettings(body);
+    setState({ ...initial, status: "retrieving", applied });
     void streamChat(
-      body,
+      sent,
       {
         onSources: (sources) => setState((s) => ({ ...s, sources, status: "streaming" })),
         onToken: (t) => setState((s) => ({ ...s, text: s.text + t, status: "streaming" })),

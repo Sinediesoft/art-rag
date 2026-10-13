@@ -4,7 +4,8 @@
 2. 權限判定（預設不允許，依序檢查，任一項不符就拒絕並記錄）：
    角色能不能做這種操作 → 資料在不在他的範圍 → 欄位開不開放 → 硬性上限（主管也不能核准）
 3. 試算：工廠資料庫複製到記憶體，在交易內套用、讀出修改前後差異，再回滾
-4. 額度判斷：超過就送主管核准（待核准單 AP-）；額度內出確認卡
+4. 額度判斷：超過就送主管核准（待核准單 AP-）；額度內出確認卡。
+   主管自己超過額度直接出確認卡（只有一個主管，又不能核准自己的申請），寫入時記進稽核（docs/adr/036）
 5. 確認寫入：寫入前再驗一次權限與資料指紋（期間被別人改過、權限被收回都拒絕）→ 異動單＋稽核紀錄
    → 工廠資料庫依版本計數自動重建（Text-to-SQL 立刻查得到）
 6. 回覆從資料庫讀回、套固定模板，不讓模型自由描述（不會再出現「已全部設為 0」這種假裝改好的回答）
@@ -29,7 +30,7 @@ from app.repositories import data_changes as dc
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.production_repo import get_production_repo
 from app.services import schedule_service
-from app.services.identity import Account, accounts, get_account
+from app.services.identity import Account, accounts, scope_text
 
 CHECK_LABELS = {"role": "角色", "scope": "資料範圍", "field": "欄位", "limit": "上限"}
 STOCK_OPS = ("stock_adjust", "stock_transfer", "stock_scrap", "stock_status")
@@ -193,6 +194,18 @@ def _wo_owner(wo_no: str) -> tuple[bool, str | None]:
     return (w is not None, w.get("created_by") if w else None)
 
 
+def _label_of(account_id: str) -> str:
+    """開立人的名稱；帳號已經從 access.yaml 拿掉（例如 docs/adr/036 刪掉的生管）就顯示代號。"""
+    acc = accounts().get(account_id)
+    return acc.label if acc else account_id
+
+
+def direct_effect(account: Account, reasons: list[str]) -> bool:
+    """超過額度但不用送核准：能核准的人（主管）自己的異動直接生效、記進稽核（docs/adr/036）。
+    只有一個主管又不能核准自己的申請，送出去會沒有人能核。"""
+    return bool(reasons) and account.can("approve")
+
+
 def authorize(account: Account, op: str, p: dict, scope_all: bool = False) -> list[dict]:
     """依序檢查角色 → 資料範圍 → 欄位；第一項不符之後的標為「未檢查」。上限在試算後才判斷。"""
     checks: list[dict] = []
@@ -225,9 +238,9 @@ def authorize(account: Account, op: str, p: dict, scope_all: bool = False) -> li
                     "SELECT DISTINCT warehouse_id FROM stock ORDER BY warehouse_id"
                 )
             ]
-        outside = [w for w in whs if w not in account.warehouses]
+        outside = [w for w in whs if not account.has_warehouse(w)]
         ok = not outside
-        mine = "、".join(account.warehouses)
+        mine = scope_text(account.warehouses, "全部倉庫")
         detail = (
             f"{'、'.join(whs)} 都在範圍內（{mine}）"
             if ok
@@ -235,24 +248,26 @@ def authorize(account: Account, op: str, p: dict, scope_all: bool = False) -> li
         )
     elif op == "so_update":
         customer = p.get("customer", "")
-        ok = customer in account.customers
+        ok = account.has_customer(customer)
         detail = (
             f"客戶「{customer}」由{account.label}負責"
             if ok
             else f"客戶「{customer}」不是「{account.label}」負責的客戶"
-            f"（{'、'.join(account.customers)}）"
+            f"（{scope_text(account.customers, '全部客戶')}）"
         )
     elif op == "wo_cancel":
         mine, owner = _wo_owner(p["wo_no"])
         if not mine:
             ok, detail = False, f"{p['wo_no']} 是 ERP 匯入的既有工單，不能用對話取消"
-        elif owner not in (None, account.id):
+        elif owner in (None, account.id):
+            detail = f"{p['wo_no']} 是自己開立的工單"
+        elif account.can("approve"):  # 主管可以取消任何人開的工單（docs/adr/036）
+            detail = f"{p['wo_no']} 是「{_label_of(owner)}」開的；主管可以取消"
+        else:
             ok, detail = (
                 False,
-                f"{p['wo_no']} 是「{get_account(owner).label}」開的，只能取消自己開的工單",
+                f"{p['wo_no']} 是「{_label_of(owner)}」開的，只能取消自己開的工單",
             )
-        else:
-            detail = f"{p['wo_no']} 是自己開立的工單"
     else:
         detail = "全廠"
     add("scope", ok, detail)
@@ -491,12 +506,21 @@ async def preview(
     )
     _purge_pending()
     _pending[pending.id] = pending
-    out.update(pending_id=pending.id, reasons=reasons, next="approval" if reasons else "confirm")
-    out["message"] = (
-        "超過額度，需要主管核准：" + "；".join(reasons)
-        if reasons
-        else "額度內：請核對修改前後差異後按確認"
+    direct_ = direct_effect(account, reasons)
+    out.update(
+        pending_id=pending.id,
+        reasons=reasons,
+        next="approval" if reasons and not direct_ else "confirm",
     )
+    if direct_:
+        out["message"] = (
+            f"超過額度（{'；'.join(reasons)}），主管身分直接生效："
+            "請核對修改前後差異後按確認，寫入後記進稽核紀錄"
+        )
+    elif reasons:
+        out["message"] = "超過額度，需要主管核准：" + "；".join(reasons)
+    else:
+        out["message"] = "額度內：請核對修改前後差異後按確認"
     out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
     return out
 
@@ -630,10 +654,11 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
         )
         raise AppError(
             "PERMISSION_DENIED",
-            f"這張確認卡是「{get_account(pend.account_id).label}」建立的，目前身分是「{account.label}」，請重新操作",
+            f"這張確認卡是「{_label_of(pend.account_id)}」建立的，目前身分是「{account.label}」，請重新操作",
             403,
         )
-    if pend.reasons:
+    over = direct_effect(account, pend.reasons)
+    if pend.reasons and not over:
         raise AppError(
             "APPROVAL_REQUIRED", "超過額度，需要送主管核准：" + "；".join(pend.reasons), 409
         )
@@ -673,9 +698,17 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
                 "從試算到按確認之間，這幾筆資料已被修改，沒有寫入。請重新操作一次。",
                 409,
             )
-        change_no = _write(pend.op, pend.params, account)
+        params = pend.params
+        if over and pend.op in dc.REPLAYED:
+            # 異動紀錄的備註寫明是主管超額直接生效（Text-to-SQL 查得到來龍去脈）
+            why = f"主管身分直接生效（超過額度：{'；'.join(pend.reasons)}）"
+            params = {**params, "note": why}
+        change_no = _write(pend.op, params, account)
         _pending.pop(pending_id, None)
     result = read_back(pend.op, pend.params, change_no, pend.diff)
+    detail = {"params": pend.params}
+    if over:
+        detail["over_quota"] = pend.reasons
     _audit(
         account.id,
         account.label,
@@ -683,7 +716,7 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
         pend.op,
         pend.summary,
         change_no,
-        detail={"params": pend.params},
+        detail=detail,
         request_id=request_id,
     )
     log.info(
@@ -707,13 +740,15 @@ def direct(op: str, params: dict, account: Account, request_id: str, source: str
             request_id=request_id,
         )
         raise AppError("PERMISSION_DENIED", f"{reason}。請在頁首切換身分。", 403)
-    if op == "wo_create" and (reasons := quota(op, params, [])):
+    reasons = quota(op, params, []) if op == "wo_create" else []
+    if reasons and not direct_effect(account, reasons):
         raise AppError(
             "APPROVAL_REQUIRED",
             f"{'；'.join(reasons)}：超過額度，需要主管核准。請按「送主管核准」，或改成一般工單。",
             409,
         )
-    return {"checks": checks}
+    # over_quota：主管超過額度直接生效，呼叫端寫進稽核紀錄的 detail（docs/adr/036）
+    return {"checks": checks, "over_quota": reasons}
 
 
 # ---------------------------------------------------------------- 主管核准
@@ -726,6 +761,10 @@ def request_approval(pending_id: str, account: Account, note: str | None, reques
         raise AppError("PERMISSION_DENIED", "這張確認卡不是目前身分建立的，請重新操作", 403)
     if not pend.reasons:
         raise AppError("APPROVAL_NOT_NEEDED", "額度內，不需要主管核准，直接按確認即可", 409)
+    if direct_effect(account, pend.reasons):
+        raise AppError(
+            "APPROVAL_NOT_NEEDED", "主管身分超過額度也直接生效，不需要送核准，直接按確認即可", 409
+        )
     ap_no = _next_no("AP")
     row = get_production_repo().add_approval(
         {
@@ -817,12 +856,16 @@ def _open_approval(ap_no: str, account: Account, action: str, request_id: str) -
 def approve(ap_no: str, account: Account, note: str | None, request_id: str) -> dict:
     ap = _open_approval(ap_no, account, "核准", request_id)
     prod = get_production_repo()
-    requester = get_account(ap["requester_id"])
+    requester = accounts().get(ap["requester_id"])
     with _write_lock:
         get_inventory_repo().ensure_built(force=True)
-        # 申請人的權限可能在申請後被收回：核准前再驗一次申請人的權限
-        checks = authorize(requester, ap["op"], ap["params"])
-        problem = next((c["detail"] for c in checks if c["ok"] is False), None)
+        # 申請人的權限可能在申請後被收回：核准前再驗一次申請人的權限；
+        # 申請人的帳號已經從 access.yaml 拿掉（docs/adr/036 刪掉的帳號）也一樣失效
+        if requester is None:
+            problem = f"申請人的帳號（{ap['requester_id']}）已經不存在"
+        else:
+            checks = authorize(requester, ap["op"], ap["params"])
+            problem = next((c["detail"] for c in checks if c["ok"] is False), None)
         if not problem:
             try:
                 t = trial(ap["op"], _fresh(ap["op"], ap["params"]))

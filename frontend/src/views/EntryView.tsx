@@ -6,6 +6,7 @@ import { Composer } from "../components/shell/Composer";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
+import { SettingsMenu } from "../components/shell/SettingsMenu";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
 import { COPY, type Domain } from "../shell/design";
@@ -138,15 +139,21 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
                 <AccountMenu onClose={close} />
               </Popover>
             </div>
-            <button
-              type="button"
-              className="topbar__btn topbar__icon"
-              onClick={() => shell.setTheme(shell.theme === "dark" ? "light" : "dark")}
-              title={shell.theme === "dark" ? "淺色" : "深色"}
-              aria-label={shell.theme === "dark" ? "切換成淺色" : "切換成深色"}
-            >
-              <Icon name={shell.theme === "dark" ? "sun" : "moon"} />
-            </button>
+            <div className="topbar__slot">
+              <button
+                type="button"
+                className={`topbar__btn topbar__icon${menu === "settings" ? " is-open" : ""}`}
+                onClick={() => setMenu(menu === "settings" ? null : "settings")}
+                aria-expanded={menu === "settings"}
+                title="設定"
+                aria-label="設定"
+              >
+                <Icon name="settings" />
+              </button>
+              <Popover open={menu === "settings"} onClose={close} className="menu--right menu--settings">
+                <SettingsMenu />
+              </Popover>
+            </div>
             {!desktop && (
               <button type="button" className="topbar__btn topbar__icon" onClick={() => navigate("/")} disabled={empty} title="新對話" aria-label="新對話">
                 <Icon name="newChat" />

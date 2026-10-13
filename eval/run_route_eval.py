@@ -38,8 +38,8 @@ def account_for(it: dict) -> str:
     """做得了這件事的展示身分：讓第 1 段角色授權不擋，第 2 段每題都會執行。"""
     op = it.get("op", "")
     if it["intent"] == "modify":
-        return {"stock": "wh1", "so": "sales_a", "wo": "planner"}.get(op.split("_")[0], "manager")
-    return "planner" if it["intent"] == "schedule" else "manager"
+        return {"stock": "warehouse", "so": "sales"}.get(op.split("_")[0], "manager")
+    return "manager"
 
 
 def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:

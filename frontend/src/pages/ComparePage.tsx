@@ -27,6 +27,9 @@ const COLUMNS: { key: string; label: string; note: string; body: Partial<ChatReq
   { key: "lora", label: "B. 本地 LoRA", note: "選做：插槽已保留", body: { strategy: "lora" } },
 ];
 
+// 策略比較只換生成端：段落篩選、矛盾檢查、附圖一律照伺服器預設，不套用頁首的設定（shell/settings.ts）
+const SERVER_DEFAULTS = { rearrange: null, conflict_check: null, send_image: null };
+
 const QUESTIONS = ["畫家的簽名藏在哪裡？是誰發現的？", "這幅畫用了什麼技法？", "畫面上有哪些人物？", "這幅畫是在哪裡畫的？"];
 
 export function ComparePage() {
@@ -50,7 +53,7 @@ export function ComparePage() {
         <p className="mt-2 text-sm text-ink-80">
           同一個問題並排送給不同生成端。所有欄位共用同一個檢索層與 prompt 模板，只換最後的生成端，
           所以差異只反映生成端本身；每欄標示資料是否送出本機。雲端欄位只是對照組（需後端
-          ALLOW_CLOUD=true），這頁只能選知識庫畫作、不開放上傳照片；比較模式不啟用備援。
+          ALLOW_CLOUD=true），這頁只能選知識庫畫作、不開放上傳照片；比較模式不啟用備援，段落篩選等開關照伺服器預設、不套用頁首的設定。
         </p>
       </header>
 
@@ -105,6 +108,7 @@ export function ComparePage() {
                   question: run.question,
                   artwork_id: run.artworkId,
                   allow_fallback: false,
+                  ...SERVER_DEFAULTS,
                   ...c.body,
                 }}
               />

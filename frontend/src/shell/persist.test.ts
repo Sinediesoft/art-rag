@@ -34,7 +34,7 @@ const base = (over: Partial<Turn>): Turn => ({
   forced: null,
   at: "entry",
   ts: 1,
-  account: { id: "planner", label: "生管" },
+  account: { id: "warehouse", label: "倉管" },
   phase: "done",
   route: null,
   failure: null,
@@ -200,7 +200,7 @@ describe("瀏覽器儲存：只存公開資料，不存憑證與內部資料", (
     expect(fac.route).toBeNull();
     expect(fac.archived?.redacted).toBe(true);
     expect(redactForeign(artTurn(), "guest").part).not.toBeNull();
-    expect(redactForeign(factoryTurn(), "planner").part).not.toBeNull();
+    expect(redactForeign(factoryTurn(), "warehouse").part).not.toBeNull();
   });
 
   it("憑證更新、身分未確認：不管哪個身分，非公開內容都收起（已完成、已停止、出錯的也一樣），公開內容留著", () => {

@@ -53,6 +53,9 @@ export type MemoryEvent = Schemas["MemoryEvent"];
 // 智慧助理（System 1 路由、修改資料、主管核准）
 export type Account = Schemas["Account"];
 export type AccountsResponse = Schemas["AccountsResponse"];
+/** 帳號的範圍（倉庫、客戶、畫作）寫 "*"＝全部（shared/access.yaml，docs/adr/036） */
+export const inScope = (scope: string[], id: string) => scope.includes("*") || scope.includes(id);
+export const scopeLabel = (scope: string[], all: string) => (scope.includes("*") ? all : scope.join("、"));
 export type TokenInfo = Schemas["TokenInfo"];
 export type RouteRequest = Pick<Schemas["RouteRequest"], "question"> & Partial<Omit<Schemas["RouteRequest"], "question">>;
 export type RouteResponse = Schemas["RouteResponse"];
@@ -99,7 +102,7 @@ export class ApiError extends Error {
 
 /**
  * 七段權限控管第 1 段（docs/adr/015）：所有 /api/v1 請求都要 JWT（HttpOnly cookie，瀏覽器自動帶）。
- * 沒有憑證、過期或舊金鑰簽發（後端重啟）時閘道回 401：向 /auth/accounts 重新取得憑證（預設是訪客）
+ * 沒有憑證、過期或舊金鑰簽發（後端重啟）時閘道回 401：向 /auth/accounts 重新取得憑證（預設是一般員工）
  * 再重送一次，並通知頁首「憑證已更新」。簽章不符（TOKEN_INVALID）不重送：那是被竄改的憑證。
  */
 const RENEWABLE = new Set(["UNAUTHENTICATED", "TOKEN_EXPIRED", "TOKEN_STALE"]);

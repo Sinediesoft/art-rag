@@ -1,4 +1,4 @@
-# ADR 033：刁難題評估——生成閘門採信本地模型的逐段判斷、公開畫作附圖時放行看圖題、段落篩選保留能更正前提的段落（rearrange_v4）
+# ADR 037：刁難題評估——生成閘門採信本地模型的逐段判斷、公開畫作附圖時放行看圖題、段落篩選保留能更正前提的段落（rearrange_v4）
 
 - 日期：2026-10-11（2026-10-12 補第 3 項決定與 Jev 模式結果）
 - 狀態：採用（`backend/app/agent/guard.py` 的 `local_answerable` 與第 6 段看圖放行；`models.yaml` 的 `rearrange.prompt_version` 改為 `rearrange_v4`）

@@ -4,6 +4,7 @@ import { api, ApiError, assetUrl, type ArtworkSummary, type PlannedWorkOrder } f
 import { useArtwork, useArtworkColors, useArtworks, usePart, useProductionOverview, useTextSearch } from "../../api/hooks";
 import type { CadDoneEvent, CadResultEvent } from "../../api/sse";
 import { formatTaipei, seconds } from "../../lib/format";
+import { holeStatus } from "../../lib/holes";
 import type { Output } from "../../shell/outputs";
 import { ModelViewer } from "../LazyModelViewer";
 import { GanttChart, GanttLegend, type GanttOrder } from "../schedule/GanttChart";
@@ -246,7 +247,7 @@ export function ModelView({ o }: { o: Output }) {
           {(
             [
               ["外框尺寸 mm", res.dims ? `${Math.round(res.dims.width)}×${Math.round(res.dims.depth)}×${Math.round(res.dims.height)}` : "—"],
-              ["面數", res.faces ?? "—"],
+              ["孔位校正", <HoleStatus key="holes" holes={res.holes} />],
               ["與標準模型 IoU", res.iou != null ? res.iou.toFixed(2) : "未收錄"],
               ["總耗時", done ? seconds(done.latency_ms.total) : "—"],
             ] as [string, ReactNode][]
@@ -260,6 +261,12 @@ export function ModelView({ o }: { o: Output }) {
       </div>
     </div>
   );
+}
+
+/** 孔位校正（docs/adr/035）：校正了顯示孔數，沒校正把原因放在 title */
+function HoleStatus({ holes }: { holes?: CadResultEvent["holes"] }) {
+  const s = holeStatus(holes);
+  return s ? <span title={s.title}>{s.label}</span> : <>—</>;
 }
 
 // ================================================================ 工廠：排程（甘特圖）

@@ -1,6 +1,8 @@
 """以圖搜圖、以文搜圖的流程編排（畫作與工廠圖紙）。"""
 
+import re
 import time
+import unicodedata
 
 import numpy as np
 from PIL import Image
@@ -179,24 +181,30 @@ def identify_drawing(
     hits = mfg.search_images(qvec, max(k, int(cfg["verify_top_n"])), owners=part_ids)
     threshold, min_inliers = float(cfg["image_threshold"]), int(cfg["verify_min_inliers"])
     min_overlap = float(cfg["verify_min_overlap"])
+    # 只拍到一部分（例如截一個視圖）：涵蓋比例低於 partial_cover 時，
+    # 線條重合要到 partial_min_overlap
+    partial_cover, partial_min = float(cfg["partial_cover"]), float(cfg["partial_min_overlap"])
     query = verify.features(img)
     results = []
     for rank, h in enumerate(hits):
-        inliers, overlap = None, None
+        inliers, overlap, coverage, need = None, None, None, min_overlap
         if rank < int(cfg["verify_top_n"]) and h.score >= threshold:
             path = _drawing_path(h.item)
             inliers, hom = verify.match(
                 query, verify.kb_features(path, path.stat().st_mtime, drawing=True), strict=True
             )
             if hom is not None and inliers >= min_inliers:
-                overlap = round(verify.ink_overlap(img, hom, path), 3)
+                ov, cov = verify.ink_match(img, hom, path)
+                overlap, coverage = round(ov, 3), round(cov, 3)
+                need = partial_min if cov < partial_cover else min_overlap
         results.append(
             {
                 "part": part_summary(h.item),
                 "score": round(h.score, 4),
                 "inliers": inliers,
                 "overlap": overlap,
-                "verified": overlap is not None and overlap >= min_overlap,
+                "coverage": coverage,
+                "verified": overlap is not None and overlap >= need,
             }
         )
     results.sort(key=lambda r: (not r["verified"], -(r["inliers"] or 0), -r["score"]))
@@ -206,6 +214,8 @@ def identify_drawing(
         "threshold": threshold,
         "min_inliers": min_inliers,
         "min_overlap": min_overlap,
+        "partial_cover": partial_cover,
+        "partial_min_overlap": partial_min,
         "matched": matched,
         "best_part_id": results[0]["part"]["id"] if matched else None,
         "latency_ms": round((time.perf_counter() - t0) * 1000),
@@ -252,6 +262,36 @@ def rectify_to_part(img: Image.Image, part: dict) -> Image.Image | None:
     return Image.fromarray(warped)
 
 
+def _norm(text: str) -> str:
+    """全形轉半形、小寫（「ＰＢＫ－６００６」＝「pbk-6006」）。"""
+    return unicodedata.normalize("NFKC", text).lower()
+
+
+def _compact(text: str) -> str:
+    """比對名稱用：再去掉空白（「L型固定支架」＝「L 型固定支架」）。"""
+    return re.sub(r"\s+", "", _norm(text))
+
+
+def _code_in(code: str, text: str) -> bool:
+    """完整的料號或圖號：前後不能再接英數字，也不能是「-英數字」的延伸
+    （BRK-10010、D-24-01170、D-24-0117-1、X-BRK-1001 都不是 BRK-1001／D-24-0117）。"""
+    c = re.escape(_norm(code))
+    return bool(re.search(rf"(?<![a-z0-9])(?<![a-z0-9][-_]){c}(?![a-z0-9]|[-_][a-z0-9])", text))
+
+
+def exact_parts(q: str, parts: list[dict]) -> set[str]:
+    """問句裡完整寫出名稱、料號或圖號的圖紙（parts 只給看得到的）。
+    bge-m3 對「D-24-0117」這類編號分不清（只差幾個數字的段落分數很接近），編號要照字面比對。
+    編號要整個對上（_code_in）；名稱照字面包含，同時對上兩個名稱而其中一個包含另一個時只算長的
+    （「連接法蘭」不算到名叫「法蘭」的圖紙）。只在看得到的圖紙之間比，結果不受看不到的圖紙影響。"""
+    nq, cq = _norm(q), _compact(q)
+    by_code = {p["id"] for p in parts if any(_code_in(p[k], nq) for k in ("part_no", "drawing_no"))}
+    names = {p["id"]: _compact(p["name"]["zh"]) for p in parts}
+    hit = {pid: n for pid, n in names.items() if n and n in cq}
+    by_name = {pid for pid, n in hit.items() if not any(n != m and n in m for m in hit.values())}
+    return by_code | by_name
+
+
 @guarded("search_text", {"bge"})
 def search_parts_text(
     q: str,
@@ -259,14 +299,16 @@ def search_parts_text(
     part_ids: set[str] | None = None,
     filter_text: str | None = None,
 ) -> dict:
-    """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數。
+    """以文字找圖紙：bge-m3（文字→零件知識段落），每個零件取最相關段落的分數；
+    問句裡寫了名稱、料號或圖號的圖紙排最前面（exact_parts）。
 
     part_ids：目前身分看得到的圖紙（identity.visible_part_ids：領域＋機密等級＋部門，docs/adr/030），
-    看不到的圖紙在檢索時就濾掉；None＝不限。filter_text：回給畫面看的過濾條件。"""
+    看不到的圖紙在檢索時就濾掉（字面比對也只比看得到的）；None＝不限。filter_text：回給畫面看的過濾條件。"""
     mfg = get_store().mfg
     k = top_k or int(get_models_config().drawing_retrieval["top_k_search"])
     t0 = time.perf_counter()
     visible = {p["id"] for p in mfg.items if part_ids is None or p["id"] in part_ids}
+    exact = exact_parts(q, [p for p in mfg.items if p["id"] in visible])
     best: dict[str, tuple[float, dict]] = {}
     if mfg.chunks:
         sims = mfg.chunk_vecs @ embed_text([q])[0]
@@ -275,7 +317,7 @@ def search_parts_text(
                 continue
             if c["part_id"] not in best or s > best[c["part_id"]][0]:
                 best[c["part_id"]] = (float(s), c)
-    order = sorted(best, key=lambda pid: -best[pid][0])[:k]
+    order = sorted(best, key=lambda pid: (pid not in exact, -best[pid][0]))[:k]
     return {
         "query": q,
         "hidden": len(mfg.items) - len(visible),
@@ -287,6 +329,7 @@ def search_parts_text(
                 "score": round(best[pid][0], 4),
                 "topic": best[pid][1]["topic"],
                 "snippet": best[pid][1]["text"][:90],
+                "exact": pid in exact,
             }
             for pid in order
         ],

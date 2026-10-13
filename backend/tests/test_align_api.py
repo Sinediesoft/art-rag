@@ -152,7 +152,7 @@ def test_photo_pair_unknown_photo_is_404(client, painting_dim):
 
 
 def test_drawing_alignment_follows_data_scope(client, drawing_photo):
-    """和圖紙比對也是讀圖紙（docs/adr/014 的資料範圍）：訪客不能用工廠圖紙、業務看不到機密圖紙，
+    """和圖紙比對也是讀圖紙（docs/adr/014 的資料範圍）：一般員工不能用工廠圖紙、業務看不到機密圖紙，
     疊圖 PNG 一樣；看得到的圖紙照常比對。"""
     try:
         as_account(client, "guest")
@@ -162,7 +162,7 @@ def test_drawing_alignment_follows_data_scope(client, drawing_photo):
             )
             assert r.status_code == 403 and r.json()["error"]["code"] == "DATA_SCOPE_DENIED", path
 
-        as_account(client, "sales_a")  # mfg-002 是機密、mfg-004 是內部
+        as_account(client, "sales")  # mfg-002 是機密、mfg-004 是內部
         for path in ("align", "align.png"):
             r = client.get(
                 f"/api/v1/images/{drawing_photo}/{path}", params={"target": "part:mfg-002"}

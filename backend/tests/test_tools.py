@@ -107,7 +107,7 @@ def test_batch_rows_blurry_matched_and_not_in_kb(client, monkeypatch):
 
 
 def test_batch_hides_drawings_outside_scope(client, monkeypatch):
-    """業務看不到機密圖紙：那一列標「目前身分看不到」，不透露是哪一張；訪客不能用工廠圖紙。
+    """業務看不到機密圖紙：那一列標「目前身分看不到」，不透露是哪一張；一般員工不能用工廠圖紙。
     辨識本身只在看得到的圖紙裡找（docs/adr/030）；
     這裡的假辨識故意忽略 part_ids，測事後的第二道過濾。"""
     img = upload(client, DRAWINGS / "mfg-001__glare.jpg")
@@ -116,11 +116,11 @@ def test_batch_hides_drawings_outside_scope(client, monkeypatch):
         "identify_any",
         lambda i, k=None, part_ids=None: drawing_found("mfg-001", "機密"),
     )
-    as_account(client, "sales_a")
+    as_account(client, "sales")
     rows, _ = run_batch(client, [img])
     assert rows[0]["status"] == "hidden" and rows[0]["item"] is None
     assert "mfg-001" not in json.dumps(rows[0], ensure_ascii=False)
-    as_account(client, "planner")
+    as_account(client, "manager")
     rows, _ = run_batch(client, [img])
     assert rows[0]["status"] == "matched" and rows[0]["item"]["level"] == "機密"
     as_account(client, "guest")
@@ -159,7 +159,7 @@ def test_compare_two_drawings_and_scope(client):
     assert d["level"] == "機密"  # 兩件裡最高的機密等級，匯出時印在頁首
     assert rows["weight"]["source_a"]["label"].startswith("執行標準模型")
     assert rows["company"]["same"]
-    as_account(client, "sales_a")  # 業務看不到機密圖紙
+    as_account(client, "sales")  # 業務看不到機密圖紙
     r = compare(client, "part:mfg-004", "part:mfg-001")
     assert r.status_code == 403 and r.json()["error"]["code"] == "DATA_SCOPE_DENIED"
     assert compare(client, "part:mfg-004", "part:mfg-005").status_code == 200
@@ -189,7 +189,7 @@ def test_compare_summary_streams_with_citations(client):
 
 
 def test_compare_summary_checks_scope_before_streaming(client):
-    as_account(client, "sales_a")
+    as_account(client, "sales")
     r = client.post("/api/v1/compare/summary", json={"a": "part:mfg-004", "b": "part:mfg-001"})
     assert r.status_code == 403  # 不是 200 的串流裡夾一個 error
 
@@ -211,7 +211,7 @@ def test_export_is_audited_and_scoped(client):
     last = get_production_repo().audit(1)[0]
     assert last["action"] == "匯出" and last["op"] == "export_compare"
     assert "mfg-001" in last["ref_no"]
-    as_account(client, "sales_a")
+    as_account(client, "sales")
     r = client.post("/api/v1/exports", json={"kind": "batch_csv", "refs": ["mfg-001"], "rows": 1})
     assert r.status_code == 403
 
@@ -236,10 +236,18 @@ def test_route_compare_two_items(client):
 
 
 def test_route_compare_hides_confidential_drawing(client):
-    """業務比較一張看得到、一張機密的圖紙：第 1 段降級「查無資料」，不透露機密圖紙存在。"""
-    as_account(client, "sales_a")
+    """業務比較一張看得到、一張機密的圖紙：機密的那張不認得（和不存在一樣，docs/adr/033 F），
+    不會出現在比較對象、實體或任何欄位，也不透露它存在。和知識庫沒有那張時的回應逐欄相同，
+    見 test_drawing_retrieval.py 的 test_hidden_drawing_text_looks_like_a_missing_one。"""
+    import json
+
+    as_account(client, "sales")
     r = route(client, "比較連接法蘭和步進馬達安裝板")
-    assert r["blocked"] and r["blocked"]["degraded"]
+    text = json.dumps(r, ensure_ascii=False)
+    assert "mfg-002" not in text and "FLG-2002" not in text and "D-24-0203" not in text
+    cmp = r["dispatch"].get("compare") or {"refs": []}
+    assert all(ref != "part:mfg-002" for ref in cmp["refs"])
+    assert {e["id"] for e in r["entities"] if e["kind"] == "part"} <= {"mfg-004"}
 
 
 def test_route_batch_identify(client):
