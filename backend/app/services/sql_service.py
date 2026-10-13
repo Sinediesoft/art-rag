@@ -9,7 +9,7 @@ import asyncio
 import time
 from collections.abc import AsyncIterator, Callable
 
-from app.core.config import get_models_config, get_settings
+from app.core.config import get_access_config, get_models_config, get_settings
 from app.core.logging import log
 from app.rag import text2sql
 from app.rag.providers import CLOUD_STRATEGIES, ProviderUnavailable, get_provider
@@ -18,6 +18,7 @@ from app.repositories.inventory_repo import SqlError, get_inventory_repo, prompt
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
 from app.services.chat_service import FALLBACK_CHAIN, NO_EGRESS, sse
+from app.services.identity import Account
 
 EMPTY_ANSWER = "查無符合條件的資料。"
 
@@ -82,16 +83,29 @@ def _error(code: str, message: str, request_id: str) -> str:
 
 
 async def ask_stream(
-    question: str, request_id: str, strategy: str = "hybrid", allow_fallback: bool = True
+    question: str,
+    request_id: str,
+    strategy: str = "hybrid",
+    allow_fallback: bool = True,
+    account: Account | None = None,
 ) -> AsyncIterator[str]:
-    """Text-to-SQL 只用本地 Qwen3-VL；記憶體吃緊時先釋放其他模型。"""
-    events = _ask_stream(question, request_id, strategy, allow_fallback)
+    """Text-to-SQL 只用本地 Qwen3-VL；記憶體吃緊時先釋放其他模型。
+    account：查詢只看得到這個身分機密等級內的零件；None＝不限（評估、程式內部呼叫）。"""
+    levels = None
+    all_levels = get_access_config().get("levels", ["公開", "內部", "機密"])
+    if account is not None and not set(all_levels) <= set(account.levels):
+        levels = account.levels
+    events = _ask_stream(question, request_id, strategy, allow_fallback, levels)
     async for e in memory_guard.stream("sql", {"qwen"}, events):
         yield e
 
 
 async def _ask_stream(
-    question: str, request_id: str, strategy: str = "hybrid", allow_fallback: bool = True
+    question: str,
+    request_id: str,
+    strategy: str = "hybrid",
+    allow_fallback: bool = True,
+    levels: tuple[str, ...] | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     cfg = get_models_config().text2sql
@@ -161,7 +175,7 @@ async def _ask_stream(
         try:
             sql = text2sql.check_sql(sql)
             result = repo.run_readonly(
-                sql, int(cfg.get("max_rows", 200)), int(cfg.get("exec_timeout_ms", 2000))
+                sql, int(cfg.get("max_rows", 200)), int(cfg.get("exec_timeout_ms", 2000)), levels
             )
             error = None
         except (text2sql.SqlRejected, SqlError) as e:

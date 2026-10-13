@@ -9,6 +9,8 @@
 1. 唯讀開檔（mode=ro）＋ PRAGMA query_only
 2. authorizer 白名單：只准 SELECT、只准讀下列資料表與檢視表、只准呼叫白名單函式
 3. 執行時間上限（progress handler）與回傳列數上限
+另外依身分的機密等級過濾：看不到某些等級的身分，查的是刪掉那些零件（與相關庫存、異動、工單、訂單、排程）
+的記憶體複本，和圖紙頁的權限一致（之前業務用 SQL 就查得到機密零件）。
 """
 
 import hashlib
@@ -550,9 +552,24 @@ class InventoryRepo:
             src.close()
         return mem
 
-    def run_readonly(self, sql: str, max_rows: int, timeout_ms: int) -> QueryResult:
-        """執行模型產生的 SQL（呼叫前已通過 text2sql.check_sql 的靜態檢查）。"""
-        conn = self._connect_ro()
+    def _scoped_copy(self, levels: tuple[str, ...]) -> sqlite3.Connection:
+        """只剩這些機密等級零件的記憶體複本（authorizer 只能整張表擋，擋不了特定幾列）。"""
+        mem = self.copy_to_memory()
+        marks = ",".join("?" * len(levels))
+        mem.execute(f"DELETE FROM parts WHERE confidentiality NOT IN ({marks})", levels)
+        for table in ("stock", "stock_moves", "work_orders", "sales_orders"):
+            mem.execute(f"DELETE FROM {table} WHERE part_id NOT IN (SELECT part_id FROM parts)")
+        mem.execute("DELETE FROM schedule_ops WHERE wo_no NOT IN (SELECT wo_no FROM work_orders)")
+        mem.commit()
+        mem.execute("PRAGMA query_only = ON")
+        return mem
+
+    def run_readonly(
+        self, sql: str, max_rows: int, timeout_ms: int, levels: tuple[str, ...] | None = None
+    ) -> QueryResult:
+        """執行模型產生的 SQL（呼叫前已通過 text2sql.check_sql 的靜態檢查）。
+        levels：這個身分看得到的機密等級；None＝不限（看得到全部等級、或程式內部呼叫）。"""
+        conn = self._connect_ro() if levels is None else self._scoped_copy(levels)
         conn.set_authorizer(_authorizer)
         deadline = time.perf_counter() + timeout_ms / 1000
         conn.set_progress_handler(lambda: 1 if time.perf_counter() > deadline else 0, 2000)

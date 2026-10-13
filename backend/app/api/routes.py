@@ -689,6 +689,7 @@ async def inventory_ask(body: S.InventoryAskRequest, request: Request):
         request_id=request.state.request_id,
         strategy=body.strategy,
         allow_fallback=body.allow_fallback,
+        account=identity.current(request),
     )
     return StreamingResponse(
         stream,
