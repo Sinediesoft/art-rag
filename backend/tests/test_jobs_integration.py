@@ -434,3 +434,15 @@ def test_health_status_lists_live_workers_and_dependencies(env, client):
     env.wait_until(
         lambda: not client.get("/api/v1/status").json()["jobs"]["workers"], 40, "worker 消失"
     )
+
+
+def test_publish_recovers_after_the_broker_restarts_without_losing_the_first_message(env, client):
+    """Redis 重啟後，這個行程裡 Celery 的舊連線已經失效：第一則投遞要自己重建連線，不能白白失敗。"""
+    import redis
+
+    broker.publish("cad_0000000000000001", "gpu")  # 建立連線池
+    env.redis.stop()
+    env.redis.start()
+    broker.publish("cad_0000000000000002", "gpu")  # 沒有例外
+    r = redis.Redis(port=env.redis.port, decode_responses=True)
+    assert r.llen("gpu") == 1  # 重啟後佇列是空的，這一則進去了

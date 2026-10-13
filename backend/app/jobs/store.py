@@ -530,7 +530,7 @@ def dispatch_pending(publish: Callable[[str, str], None], limit: int = 20) -> tu
             try:
                 publish(r["job_id"], r["queue"])
             except Exception as e:  # noqa: BLE001 — broker 的各種連線錯誤都延後重試
-                backoff = min(60, 2 ** min(r["dispatch_attempts"], 5))
+                backoff = min(10, 2 ** min(r["dispatch_attempts"], 5))  # 最久等 10 秒就再試
                 conn.execute(
                     "UPDATE job_outbox SET dispatch_attempts = dispatch_attempts + 1,"
                     " available_at = now() + make_interval(secs => %s), last_error = %s"

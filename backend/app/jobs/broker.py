@@ -5,6 +5,7 @@ import threading
 from contextlib import suppress
 
 import redis
+from kombu import pools
 
 from app.core.config import get_settings
 from app.core.logging import log
@@ -31,9 +32,26 @@ def _sync_broker() -> None:
         _url["broker"] = url
 
 
+def _reset_pool() -> None:
+    """丟掉 Celery／kombu 的投遞連線池與 producer 池。Redis 重啟之後池裡的舊連線已經失效，
+    不丟掉的話這個行程的每一次投遞都會失敗（直到行程重啟）。"""
+    with suppress(Exception):
+        pools.reset()  # kombu 全域的連線／producer 池
+    # app 自己快取的兩個池物件也要清掉，下一次投遞才會重新建立
+    for holder, attr in ((celery, "_pool"), (celery.amqp, "_producer_pool")):
+        with suppress(Exception):
+            setattr(holder, attr, None)
+
+
 def publish(job_id: str, queue: str) -> None:
+    """投遞一則訊息（只帶 job_id）。第一次失敗就重建連線池再試一次：
+    broker 重啟後第一則不會白白失敗；第二次還失敗才丟例外（留在 outbox，稍後重試）。"""
     _sync_broker()
-    celery.send_task(RUN_TASK, args=[job_id], queue=queue)
+    try:
+        celery.send_task(RUN_TASK, args=[job_id], queue=queue)
+    except Exception:  # noqa: BLE001 — kombu 的各種連線錯誤
+        _reset_pool()
+        celery.send_task(RUN_TASK, args=[job_id], queue=queue)
 
 
 def broker_ok() -> bool:

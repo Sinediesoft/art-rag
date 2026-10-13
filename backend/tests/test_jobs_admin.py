@@ -51,6 +51,7 @@ def test_recover_command_requeues_expired_jobs(jobs, capsys):
 
 def test_adopt_uploads_gives_legacy_uploads_to_one_account(jobs, client, capsys):
     repo = get_logs_repo()
+    get_settings().uploads_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy(REPO_ROOT / "kb/drawings/mfg-001.png", get_settings().uploads_dir / "adopt1.png")
     repo._exec(
         "INSERT INTO uploads (image_id, path, created_at, owner_id, acl)"
@@ -84,6 +85,7 @@ def test_adopt_cad_adds_access_records_to_legacy_photo_folders(jobs, client, cap
     as_account(client, "manager")
     assert client.get("/api/v1/cad/jobs/cad_a0000000000000ad/input.png").status_code == 404
     code, out = run(capsys, "adopt-cad", "--owner", "manager")
-    assert code == 0 and "1" in out and (d / cad_access.ACCESS_FILE).is_file()
+    # 其他測試留下的舊資料夾（有摘要、沒有存取紀錄）也會一起補，所以只確認至少補了這一個
+    assert code == 0 and "已補上" in out and (d / cad_access.ACCESS_FILE).is_file()
     record = json.loads((d / cad_access.ACCESS_FILE).read_text())
     assert record["owner_id"] == "manager" and record["image_id"] == "img_old0000000000001"
