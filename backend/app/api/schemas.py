@@ -1747,7 +1747,7 @@ class JobsBrief(BaseModel):
     broker_ok: bool
     pending_dispatch: int
     counts: dict[str, int]
-    workers: list[JobWorker] = Field(default_factory=list, description="存活的 worker 行程")
+    workers: list[JobWorker] = Field(description="存活的 worker 行程（每個行程自己定期登記）")
 
 
 HealthResponse.model_rebuild()

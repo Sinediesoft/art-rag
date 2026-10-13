@@ -49,8 +49,23 @@ def execute(job_id: str, worker_id: str | None = None) -> str:
         return "skipped"
     job = claim.job
     control = JobControl(job_id, job["attempt"], worker_id).start()
+    log.info(
+        "job_started",
+        extra={"fields": {"job_id": job_id, "kind": job["kind"], "attempt": job["attempt"]}},
+    )
     try:
         _run(job, control, worker_id)
+        final = store.get(job_id) or {}
+        log.info(
+            "job_finished",
+            extra={
+                "fields": {
+                    "job_id": job_id,
+                    "attempt": job["attempt"],
+                    "status": final.get("status"),
+                }
+            },
+        )
         return "done"
     except store.LeaseLost:
         log.warning(

@@ -74,7 +74,7 @@ _ADDED_COLUMNS = {
 class LogsRepo:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn = sqlite3.connect(path, check_same_thread=False, timeout=30)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         for table, cols in _ADDED_COLUMNS.items():

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.jobs import broker, db, store
+from app.jobs import audit, broker, db, store
 from app.jobs import enabled as jobs_enabled
 from app.services import cad_access, security
 from app.services.identity import Account
@@ -125,6 +125,8 @@ def create_cad(ctx: security.SecurityContext, body: dict, key: str | None, reque
         request_id=request_id,
         idempotency_key=check_key(key),
     )
+    if new:
+        audit.record(ctx.account, "建立", "cad_job", job["id"], "建立 3D 重建工作", request_id)
     return created(job, new, _dispatch(new))
 
 
@@ -154,6 +156,8 @@ def create_schedule(ctx: security.SecurityContext, body: dict, key: str | None, 
         input_versions=versions,
         idempotency_key=check_key(key),
     )
+    if new:
+        audit.record(ctx.account, "建立", "schedule_job", job["id"], "建立排程工作", request_id)
     return created(job, new, _dispatch(new))
 
 
@@ -184,6 +188,20 @@ def list_jobs(account: Account, kind: str | None, active: bool, limit: int) -> l
     return [public(j) for j in rows if security.job_can_read(account, j)][:limit]
 
 
+def event_batch(account_id: str, job_id: str, after: int) -> tuple[str | None, list[dict]]:
+    """事件串流的一輪輪詢：回 (工作狀態, 新事件)。每一輪都依「目前的」權限重驗；
+    工作不存在、沒有權限、帳號已被撤銷一律回 (None, [])——呼叫端送 PERMISSION_REVOKED 並結束。
+    先讀工作狀態再讀事件：看到終態時，該工作的事件都已經寫入並在回傳的事件裡。"""
+    try:
+        account = security.resolve_account(account_id)
+    except AppError:
+        return None, []
+    job = _guard(store.get, job_id)
+    if job is None or not security.job_can_read(account, job):
+        return None, []
+    return job["status"], _guard(store.events_after, job_id, after)
+
+
 # ----------------------------------------------------------------------------- 取消與提前停止
 def cancel(account: Account, job_id: str) -> tuple[str, dict]:
     require_enabled()
@@ -191,6 +209,8 @@ def cancel(account: Account, job_id: str) -> tuple[str, dict]:
     if not security.job_can_cancel(account, job):
         raise AppError("PERMISSION_DENIED", "目前身分沒有取消這個工作的權限", 403)
     result, row = _guard(store.cancel, job_id)
+    if result in ("cancelled", "cancelling"):
+        audit.record(account, "取消", f"{job['kind']}_job", job_id, "取消背景工作")
     if result == "too_late":
         raise AppError("JOB_COMMITTING", "工作已進入寫回階段，無法取消（會完成並寫入結果）", 409)
     if result == "finished":
@@ -213,6 +233,8 @@ def stop_schedule(account: Account, job_id: str | None) -> tuple[str, dict | Non
         if job is None:
             return "none", None
     result, row = _guard(store.request_stop, job["id"])
+    if result == "stopping":
+        audit.record(account, "提前結束", "schedule_job", job["id"], "提前結束排程，採用目前最佳解")
     return result, public(row)
 
 

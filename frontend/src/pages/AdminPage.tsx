@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { api, type DiagnosticsResponse } from "../api/client";
+import { api, type DiagnosticsResponse, type StatusResponse } from "../api/client";
 import {
   useCadEvalRuns,
   useCanView,
@@ -167,6 +167,7 @@ export function AdminPage() {
       <MemoryCard h={h} demo={demo} />
 
       <SchedulerCard h={h} demo={demo} />
+      <JobsCard jobs={st?.jobs} />
 
       <Card title="評估結果">
         {evals.data?.runs.length ? (
@@ -659,6 +660,51 @@ function SchedulerCard({ h, demo }: { h: DiagnosticsResponse; demo: boolean }) {
           )}
         </div>
       </div>
+    </Card>
+  );
+}
+
+/** 背景工作（docs/adr/036）：PostgreSQL（工作資料庫）、Redis（broker）、worker 行程是否在線，以及各狀態的工作數 */
+function JobsCard({ jobs }: { jobs: NonNullable<StatusResponse["jobs"]> | null | undefined }) {
+  if (!jobs) return null;
+  const counts = jobs.counts as Record<string, number>;
+  return (
+    <Card title="背景工作（3D 重建、排程）">
+      {!jobs.enabled ? (
+        <p className="text-sm text-ink-80">
+          沒有啟用（.env 的 <code className="font-mono">REDIS_URL</code> 與工作資料庫都要設定）。建立工作會回 503，
+          舊的 SSE 入口照舊在 API 行程內執行。
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center gap-2">
+              <Dot ok={jobs.database_ok} /> 工作資料庫
+            </span>
+            <span className="flex items-center gap-2">
+              <Dot ok={jobs.broker_ok} /> Redis
+            </span>
+            <span className="flex items-center gap-2">
+              <Dot ok={jobs.workers.length > 0} /> worker {jobs.workers.length} 個在線
+            </span>
+          </p>
+          {jobs.workers.length > 0 ? (
+            <ul className="text-xs text-ink-80">
+              {jobs.workers.map((w) => (
+                <li key={w.name} className="font-mono">
+                  {w.name} · {w.queues.join("、") || "—"} · pid {w.pid}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-warning">沒有在線的 worker：工作會一直排隊。請啟動 make worker-gpu、make worker-schedule。</p>
+          )}
+          <p className="text-xs text-ink-48">
+            待投遞 {jobs.pending_dispatch} · 排隊 {counts.queued ?? 0} · 執行中 {counts.running ?? 0} · 成功 {counts.succeeded ?? 0} · 失敗{" "}
+            {counts.failed ?? 0} · 已取消 {counts.cancelled ?? 0}
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

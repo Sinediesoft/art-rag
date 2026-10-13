@@ -8159,6 +8159,38 @@
         ],
         "title": "JobListResponse"
       },
+      "JobWorker": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "queues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Queues"
+          },
+          "pid": {
+            "type": "integer",
+            "title": "Pid"
+          },
+          "age_s": {
+            "type": "number",
+            "title": "Age S",
+            "description": "距離上次登記幾秒；超過 15 秒沒更新就會從清單消失"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "queues",
+          "pid",
+          "age_s"
+        ],
+        "title": "JobWorker"
+      },
       "JobsBrief": {
         "properties": {
           "enabled": {
@@ -8183,6 +8215,14 @@
             },
             "type": "object",
             "title": "Counts"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/JobWorker"
+            },
+            "type": "array",
+            "title": "Workers",
+            "description": "存活的 worker 行程（每個行程自己定期登記）"
           }
         },
         "type": "object",
@@ -8191,7 +8231,8 @@
           "database_ok",
           "broker_ok",
           "pending_dispatch",
-          "counts"
+          "counts",
+          "workers"
         ],
         "title": "JobsBrief"
       },

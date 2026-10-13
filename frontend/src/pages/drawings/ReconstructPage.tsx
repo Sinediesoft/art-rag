@@ -136,6 +136,7 @@ export function ReconstructPage() {
       {state.status === "queued" && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-card p-3 text-sm text-ink-80">
           <Spinner /> 排隊中：等背景 worker 領取（3D 重建一次只跑一個，載入模型需要 GPU）。離開這一頁不會取消，回來會接回進度。
+          {health?.jobs?.enabled && health.jobs.workers.length === 0 && <b className="text-warning">目前沒有在線的 worker，請啟動 make worker-gpu。</b>}
           <button type="button" className="btn-ghost" onClick={() => void cancel()}>
             取消
           </button>

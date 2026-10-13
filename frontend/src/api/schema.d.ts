@@ -3461,6 +3461,20 @@ export interface components {
             /** Items */
             items: components["schemas"]["Job"][];
         };
+        /** JobWorker */
+        JobWorker: {
+            /** Name */
+            name: string;
+            /** Queues */
+            queues: string[];
+            /** Pid */
+            pid: number;
+            /**
+             * Age S
+             * @description 距離上次登記幾秒；超過 15 秒沒更新就會從清單消失
+             */
+            age_s: number;
+        };
         /** JobsBrief */
         JobsBrief: {
             /** Enabled */
@@ -3475,6 +3489,11 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+            /**
+             * Workers
+             * @description 存活的 worker 行程（每個行程自己定期登記）
+             */
+            workers: components["schemas"]["JobWorker"][];
         };
         /** LightnessStats */
         LightnessStats: {

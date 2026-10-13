@@ -14,7 +14,7 @@ import asyncio
 import time
 
 from app.core.errors import AppError
-from app.jobs import store
+from app.jobs import audit, store
 from app.jobs.control import JobCancelled, JobControl
 from app.services import memory_guard, schedule_service, security
 
@@ -118,3 +118,13 @@ def _commit(job: dict, control: JobControl, o) -> None:
             "egress": {"images": 0, "chunks": 0, "bytes": 0},
         }
         store.finish(jid, attempt, wid, "succeeded", result=result)
+        audit.record(
+            None,
+            "寫入",
+            "schedule_run",
+            run_id,
+            f"排程結果寫回（{o.used}，{o.status}，{o.score}）",
+            job["request_id"],
+            detail={"job_id": jid, "attempt": attempt},
+            actor_id=job["owner_id"],
+        )

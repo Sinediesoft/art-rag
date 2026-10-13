@@ -105,6 +105,13 @@
 - **回復**：`python -m app.jobs.admin rollback --steps 1` 只刪背景工作系統自己的資料表（先 `pg_dump -t jobs -t job_events -t job_outbox -t job_artifacts -t resource_leases`）；關掉背景工作只要清空 `REDIS_URL`（舊入口自動重新開啟），不會碰上傳、紀錄、知識庫、庫存與生產資料庫。程式回復到 `71d707f` 時，`uploads` 多出的 `owner_id`／`acl` 欄位無害（舊程式不讀）。
 - **資料遷移**：舊上傳（沒有擁有者）→ `adopt-uploads`；舊 3D 重建資料夾 → `adopt-cad`。兩者都是管理者手動、可重複執行，預設不做。
 
+### 多行程部署的注意事項
+- API 與 worker 要看到**同一個 `DATA_DIR`**（同一台主機，或共用磁碟）：3D 重建產物由 worker 發布、API 提供下載；生產 SQLite、庫存 SQLite、上傳照片也在那裡。這次沒有做跨主機的物件儲存。
+- 開多個 API 行程（`uvicorn --workers N`）時 `JWT_SECRET` 要填同一組（否則各行程的憑證互相不認，這是原本就有的限制）；每個 API 與 worker 行程都內建維護執行緒（outbox 投遞、租約恢復、補投遞），用 `SKIP LOCKED` 互相避讓，不需要另外的排程器。
+- SQLite 連線逾時調成 30 秒（API 與 worker 兩個行程寫同一個檔案時互相等候）；庫存資料庫重建的暫存檔每次獨立，兩個行程同時重建不會互相覆蓋。
+- `GET /status` 的 `jobs` 與管理頁的「背景工作」卡片：PostgreSQL、Redis、在線 worker（行程自己定期登記的短效 key）、待投遞數、各狀態工作數。沒有在線的 worker 時前端排隊畫面會提示。
+- 稽核：建立、取消、提前結束與排程結果寫回都記一筆 `audit_log`（誰、哪個工作或結果、request_id；不記參數與模型輸出）。
+
 ## 隱私與外送
 原圖、工廠內部／機密段落、SQL schema、結果與 CAD 輸入全部留地端。Jev 維持既有的代號化／公開內容邊界與外送量紀錄（啟用 Jev 時**不是**零外送）；背景工作系統不增加任何外送：worker 不連 Jev、不連雲端，進度與錯誤事件不含未檢查的 prompt、模型程式碼、帳密或敏感原文。
 

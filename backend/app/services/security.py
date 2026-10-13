@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from fastapi import Request
 
@@ -24,6 +25,28 @@ from app.services.identity import Account
 
 CAD_JOB_NOT_FOUND = ("CAD_JOB_NOT_FOUND", "找不到這個 3D 重建結果，可能已超過保存期限", 404)
 JOB_NOT_FOUND = ("JOB_NOT_FOUND", "找不到這個工作，可能已超過保存期限", 404)
+
+
+class AccountSource(Protocol):
+    """權限來源的介面：給帳號 id，回傳「目前的」帳號與權限（找不到丟 AppError）。
+
+    現在的實作是 services/identity（shared/access.yaml 的展示帳號與 JWT）。之後接公司 SSO／IdP 時
+    換一個符合這個介面的實作（`set_account_source`），worker、工作授權與事件串流的撤權重驗都不用改。
+    這次沒有接任何 IdP，也不宣稱展示登入就是正式 SSO（docs/adr/036）。"""
+
+    def get_account(self, account_id: str) -> Account: ...
+
+
+_source: AccountSource = identity  # type: ignore[assignment]  # 模組有 get_account(account_id)
+
+
+def set_account_source(source: AccountSource | None) -> None:
+    global _source
+    _source = source or identity  # type: ignore[assignment]
+
+
+def resolve_account(account_id: str) -> Account:
+    return _source.get_account(account_id)
 
 
 @dataclass(frozen=True)
@@ -63,7 +86,7 @@ class SecurityContext:
     ) -> SecurityContext:
         """背景 worker 用：依 account_id 對回目前的 access.yaml（撤權、刪帳號立刻生效）。"""
         try:
-            account = identity.get_account(account_id)
+            account = resolve_account(account_id)
         except AppError as e:
             raise AppError("PERMISSION_REVOKED", "提交工作的帳號已不存在或已被撤銷", 403) from e
         ctx = cls(account, operation, domain, request_id)

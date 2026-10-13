@@ -118,6 +118,12 @@ def test_schedule_job_greedy_runs_validates_and_writes_back(clean):
     n.close()
     # 租約與名額都釋放了
     assert clean.sql("SELECT count(*) AS n FROM resource_leases")[0]["n"] == 0
+    # 稽核：誰（工作的擁有者）寫回了哪個排程結果；只有識別碼與結果，沒有參數或模型輸出
+    rows = [a for a in get_production_repo().audit(50) if a["op"] == "schedule_run"]
+    assert (
+        len(rows) == 1 and rows[0]["ref_no"] == res["run_id"] and rows[0]["actor_id"] == "planner"
+    )
+    assert rows[0]["action"] == "寫入" and rows[0]["request_id"] == job["request_id"]
 
 
 def test_schedule_job_with_solver_persists_progress(clean):
@@ -550,3 +556,24 @@ def test_workers_never_call_jev_or_the_cloud(clean, monkeypatch):
     jid = schedule_job()
     assert runner.execute(jid, "w1") == "done" and store.get(jid)["status"] == "succeeded"
     assert calls == []
+
+
+def test_worker_authorization_follows_the_pluggable_account_source(clean):
+    """權限來源是可替換的介面（之後接 SSO／IdP）：worker 重驗權限問的是它。"""
+    real = identity.get_account("planner")
+
+    class NoScheduling:
+        def get_account(self, account_id):
+            from dataclasses import replace
+
+            return replace(real, ops=tuple(o for o in real.ops if o != "schedule_run"))
+
+    jid = schedule_job(engine="greedy")
+    security.set_account_source(NoScheduling())
+    try:
+        assert runner.execute(jid, "w1") == "done"
+    finally:
+        security.set_account_source(None)
+    job = store.get(jid)
+    assert job["status"] == "failed" and job["error"]["code"] == "PERMISSION_DENIED"
+    assert runs() == []

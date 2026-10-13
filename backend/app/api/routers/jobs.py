@@ -114,12 +114,11 @@ async def job_events(
             if await request.is_disconnected():
                 return
             try:
-                job = await run_in_threadpool(store.get, jid)
-                if job is None or not security.job_can_read(identity.get_account(account.id), job):
+                status, rows = await run_in_threadpool(service.event_batch, account.id, jid, last)
+                if status is None:
                     err = {"code": "PERMISSION_REVOKED", "message": "您已沒有這個工作的讀取權限"}
                     yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n"
                     return
-                rows = await run_in_threadpool(store.events_after, jid, last)
             except Exception:  # noqa: BLE001 — 資料庫暫時不可用：通知前端稍後用 Last-Event-ID 重連
                 err = {
                     "code": "JOBS_UNAVAILABLE",
@@ -134,7 +133,7 @@ async def job_events(
                 last = r["seq"]
                 idle = 0.0
             # 先讀工作狀態再讀事件：看到終態時，該工作的事件都已經寫入並在 rows 裡
-            if job["status"] in store.TERMINAL and not rows:
+            if status in store.TERMINAL and not rows:
                 return
             if not rows:
                 idle += poll

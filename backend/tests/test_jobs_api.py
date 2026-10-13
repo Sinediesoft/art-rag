@@ -360,6 +360,25 @@ def test_cancel_queued_job_by_owner(api, client, published):
     assert store.claim(job_id, "w1").state == "not_queued"  # 已取消的不會被領走
 
 
+def test_job_lifecycle_is_audited(api, client, published):
+    """建立、取消、提前結束都記一筆稽核（主管在 /audit 看得到）：只有識別碼與結果。"""
+    as_account(client, "planner")
+    sched = client.post("/api/v1/schedule/jobs", json={"seconds": 7}).json()["job_id"]
+    store.claim(sched, "w1")
+    client.post("/api/v1/schedule/stop")
+    client.post(f"/api/v1/jobs/{sched}/cancel")
+    cad = client.post("/api/v1/cad/jobs", json={"part_id": "mfg-002"}).json()["job_id"]
+    as_account(client, "manager")
+    items = client.get("/api/v1/audit").json()["items"]
+    seen = {(i["op"], i["action"], i["ref_no"]) for i in items}
+    assert ("schedule_job", "建立", sched) in seen
+    assert ("schedule_job", "提前結束", sched) in seen
+    assert ("schedule_job", "取消", sched) in seen
+    assert ("cad_job", "建立", cad) in seen
+    assert all(i["actor_id"] == "planner" for i in items if i["ref_no"] in (sched, cad))
+    assert "seconds" not in str(items) and "mfg-002" not in str(items)  # 不記參數內容
+
+
 def test_cancel_policy(api, client, published):
     as_account(client, "manager")
     cad = client.post("/api/v1/cad/jobs", json={"part_id": "mfg-002"}).json()["job_id"]

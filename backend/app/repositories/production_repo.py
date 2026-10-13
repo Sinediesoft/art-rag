@@ -85,7 +85,8 @@ class ProductionRepo:
     # 每次操作開一條連線：make demo-reset 刪掉檔案後會自動重建
     def _conn(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.path)
+        # timeout：API 與 worker 兩個行程共用這個檔案，寫入互相等候而不是立刻 database is locked
+        conn = sqlite3.connect(self.path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.executescript(_SCHEMA)
         # 舊版資料庫缺少的欄位（正式版改用 Alembic migration）
