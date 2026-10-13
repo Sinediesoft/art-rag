@@ -445,7 +445,10 @@ def finish_with_artifacts(api, job_id, files=("input.png", "code.py", "model.stl
         rows.append(
             {"name": name, "content_type": "text/plain", "size_bytes": 5, "sha256": "0" * 64}
         )
-    store.finish(job_id, 1, "w1", "succeeded", result={"ok": True}, artifact_rows=rows)
+    store.finish(
+        job_id, 1, "w1", "succeeded", result={"ok": True, "published_attempt": 1},
+        artifact_rows=rows,
+    )  # fmt: skip
 
 
 def test_artifacts_are_protected_and_whitelisted(api, client, published):

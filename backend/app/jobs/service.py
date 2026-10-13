@@ -245,9 +245,10 @@ def artifact(account: Account, job_id: str, name: str) -> tuple[Path, str]:
         raise AppError("JOB_ARTIFACT_NOT_FOUND", "找不到這個產物", 404)
     if job["status"] not in ("succeeded", "failed"):
         raise AppError("JOB_NOT_FINISHED", "工作還沒完成，產物尚未發布", 409)
+    # 和舊網址同一個判斷：只讀 fenced finish 記錄的那一次嘗試（恢復迴圈判定的失敗沒有產物）
+    n = cad_access.published_attempt(job)
     row = next((a for a in _guard(store.artifacts, job_id) if a["name"] == name), None)
-    # 只讀已結束那一次嘗試自己的資料夾（和 job_artifacts 是同一次嘗試寫的）
-    path = cad_access.attempt_dir(job_id, job["attempt"]) / name
-    if row is None or not path.is_file():
+    path = cad_access.attempt_dir(job_id, n) / name if n is not None else None
+    if row is None or path is None or not path.is_file():
         raise AppError("JOB_ARTIFACT_NOT_FOUND", "找不到這個產物", 404)
     return path, row["content_type"]

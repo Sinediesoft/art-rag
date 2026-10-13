@@ -498,8 +498,10 @@ def test_cad_job_exec_failure_is_failed_with_safe_message_and_inspectable_artifa
     }
     assert "secret" not in str(job["result"]) and "File" not in str(job["error"])
     assert {a["name"] for a in store.artifacts(jid)} == {"code.py", "input.png"}
+    assert job["result"]["published_attempt"] == 1  # 正常結束的執行失敗有發布紀錄
     as_account(client, "planner")
     assert client.get(f"/api/v1/jobs/{jid}/artifacts/code.py").status_code == 200
+    assert client.get(f"/api/v1/cad/jobs/{jid}/code.py").status_code == 200  # 舊網址一致
     as_account(client, "guest")
     assert client.get(f"/api/v1/jobs/{jid}/artifacts/code.py").status_code == 404
 
@@ -729,6 +731,54 @@ def test_old_cad_attempt_cannot_overwrite_a_newer_attempt_after_the_lock_connect
     as_account(client, "planner")
     assert client.get(f"/api/v1/jobs/{jid}/artifacts/code.py").content == new
     assert client.get(f"/api/v1/cad/jobs/{jid}/code.py").content == new
+
+
+def test_late_attempt_after_retries_ran_out_is_never_readable(clean, client, monkeypatch, tmp_path):
+    """審查 F1（d4632b0）：重試上限 1，attempt 1 最後一次 fence 後持鎖連線被中斷，恢復迴圈把工作判定
+    失敗（LEASE_EXPIRED），舊嘗試之後才把資料夾發布到磁碟上——沒有 fenced finish 的發布紀錄，
+    新舊入口（產物、摘要、檔案）一律 404，對「產物是否已發布」的答案一致。"""
+    from app.jobs import cad_job as cad_module
+    from app.jobs.control import JobControl
+    from app.services import cad_access
+
+    jid = cad_job(part="mfg-001")
+    clean.sql("UPDATE jobs SET max_attempts = 1 WHERE id = %s", (jid,))
+    claimed = store.claim(jid, "w1")
+    monkeypatch.setattr(cad_module, "_authorize", lambda _job: None)
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "code.py").write_bytes(b"print('late old worker')\n")
+    (staging / "summary.json").write_text('{"meta": {}, "result": {"ok": true}, "done": {}}')
+    original_fence = store.CommitSection.fence
+    fences = []
+
+    def fence(section):
+        original_fence(section)
+        fences.append(section.attempt)
+        if len(fences) == 2:  # 發布之前的最後一次
+            clean.sql(
+                "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+                (jid,),
+            )
+            killed = clean.sql(
+                "SELECT pg_terminate_backend(%s) AS killed", (section._conn.info.backend_pid,)
+            )
+            assert killed[0]["killed"]
+            assert store.recover_expired() == [(jid, "failed")]
+
+    monkeypatch.setattr(store.CommitSection, "fence", fence)
+    with pytest.raises(store.LeaseLost):
+        cad_module._commit(claimed.job, JobControl(jid, 1, "w1"), staging, {}, {"ok": True}, {})
+    job = clean.job(jid)
+    assert job["status"] == "failed" and job["error"]["code"] == "LEASE_EXPIRED"
+    assert job["result"] is None  # 沒有發布紀錄
+    assert (cad_access.attempt_dir(jid, 1) / "code.py").is_file()  # 晚到的檔案確實在磁碟上
+    wait_for_jobs_db()
+    assert cad_access.published_dir(jid) is None
+    as_account(client, "planner")
+    assert client.get(f"/api/v1/cad/jobs/{jid}/code.py").status_code == 404
+    assert client.get(f"/api/v1/cad/jobs/{jid}").status_code == 404
+    assert client.get(f"/api/v1/jobs/{jid}/artifacts/code.py").status_code == 404
 
 
 def test_cad_lost_lease_publishes_nothing(clean, monkeypatch):

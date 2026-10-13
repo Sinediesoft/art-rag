@@ -189,7 +189,13 @@ def _commit(job: dict, control: JobControl, staging: Path, meta, result, done) -
             attempt,
             wid,
             "succeeded" if ok else "failed",
-            result={"meta": meta, "result": result, "done": done},
+            # 發布紀錄：讀取端只認這裡（fenced）寫下的那一次嘗試
+            result={
+                "meta": meta,
+                "result": result,
+                "done": done,
+                cad_access.PUBLISHED_KEY: attempt,
+            },
             error=error,
             artifact_rows=_artifact_rows(final),
         )

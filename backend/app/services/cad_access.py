@@ -41,15 +41,32 @@ def attempt_dir(job_id: str, attempt: int) -> Path:
     return job_dir(job_id) / f"a{int(attempt)}"
 
 
+# 背景工作結束時（fenced 的 store.finish）寫進結果的發布紀錄：哪一次嘗試的資料夾是正式產物
+PUBLISHED_KEY = "published_attempt"
+
+
+def published_attempt(row: dict) -> int | None:
+    """背景工作哪一次嘗試的產物可讀。只認 fenced 的 store.finish() 寫進結果的發布紀錄，
+    而不是只看狀態：恢復迴圈判定的失敗（LEASE_EXPIRED，從沒通過 finish）、取消、還在執行的工作
+    都沒有這個紀錄——租約失效後晚到的舊嘗試就算把資料夾發布到磁碟上，也不會被任何入口讀到。
+    正常結束的成功與執行失敗（CAD_EXEC_FAILED，有可檢視的產物）都有。"""
+    if row.get("status") not in ("succeeded", "failed"):
+        return None
+    result = row.get("result")
+    n = result.get(PUBLISHED_KEY) if isinstance(result, dict) else None
+    if isinstance(n, int) and not isinstance(n, bool) and n == row.get("attempt"):
+        return n
+    return None
+
+
 def published_dir(job_id: str) -> Path | None:
-    """目前可讀的產物資料夾。背景工作（工作資料庫有這一列）：只認資料庫記錄的、已結束（成功或
-    執行失敗）那一次嘗試的資料夾——結束（finish）是 fenced 的，只有現行嘗試能寫入，所以資料庫的
-    attempt、產物清單（job_artifacts）與實際檔案一定是同一次嘗試；還沒結束回 None。
+    """目前可讀的產物資料夾。背景工作（工作資料庫有這一列）：發布紀錄指定的那一次嘗試的資料夾
+    （見 published_attempt）；沒有發布紀錄回 None。新舊入口（/jobs/{id}/artifacts、/cad/jobs/…、
+    重建紀錄）都經過這裡，對「產物是否已發布」的答案一致。
     舊 SSE 入口的工作（資料庫沒有這一列）：工作資料夾本身。"""
     if _job_lookup is not None and (row := _job_lookup(job_id)) is not None:
-        if row["status"] in ("succeeded", "failed"):
-            return attempt_dir(job_id, row["attempt"])
-        return None
+        n = published_attempt(row)
+        return attempt_dir(job_id, n) if n is not None else None
     return job_dir(job_id)
 
 
