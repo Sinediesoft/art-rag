@@ -264,6 +264,13 @@ def _native_env(job_dir: Path) -> dict[str, str]:
     }
     if sys.platform == "win32":
         # Windows 的 Python 用 USERPROFILE 找家目錄（不看 HOME），少了會報
-        # 「Could not determine home directory」；暫存檔比照 TMPDIR 留在工作目錄
-        env |= {"USERPROFILE": work, "TEMP": work, "TMP": work}
+        # 「Could not determine home directory」；暫存檔比照 TMPDIR 留在工作目錄。
+        # SYSTEMROOT：runner 會 import asyncio（經 sandbox.check_code），Winsock 初始化要它，
+        # 少了報 WinError 10106「無法載入或初始化所要求的服務提供者」
+        env |= {
+            "USERPROFILE": work,
+            "TEMP": work,
+            "TMP": work,
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", r"C:\Windows"),
+        }
     return env
