@@ -27,7 +27,8 @@ from pathlib import Path
 import httpx
 
 EVAL = Path(__file__).resolve().parent
-REFUSAL = "沒有這方面"
+# 「查無資料」是第 6 段生成閘門的降級回應（docs/adr/030），也算拒答
+REFUSALS = ("沒有這方面", "查無資料")
 
 
 def ask(client: httpx.Client, q: dict, send_image: bool) -> dict:
@@ -47,7 +48,7 @@ def ask(client: httpx.Client, q: dict, send_image: bool) -> dict:
                 elif event == "done":
                     done = d
     ans = "".join(text).replace("\n", " ")
-    refused = REFUSAL in ans
+    refused = any(r in ans for r in REFUSALS)
     ok = not refused and all(any(k in ans for k in g) for g in q["keywords"])
     image_cited = "[畫面]" in ans
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", ans)} - {0}

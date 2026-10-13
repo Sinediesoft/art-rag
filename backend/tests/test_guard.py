@@ -485,15 +485,20 @@ def test_low_scores_are_not_put_into_the_context(client, all_chunks, fake_jev):
 def test_gate_degrades_when_jev_says_not_answerable(client, all_chunks, fake_jev):
     _, cfg = fake_jev
     cfg["gate"] = (0.08, 0.95)
-    r = client.post(
-        "/api/v1/chat", json={"question": "這幅畫現在值多少錢？", "artwork_id": "met-436535"}
-    )
+    body = {"question": "這幅畫現在值多少錢？", "artwork_id": "met-436535", "send_image": False}
+    r = client.post("/api/v1/chat", json=body)
     src, done, text = events_of(r.text)
     gate = src["post_filter"]["gate"]
     assert gate["passed"] is False and gate["message"] == DEGRADE
     assert check(gate["checks"], "answerable")["ok"] is False
     assert src["sources"] == [] and text == DEGRADE
     assert done["degraded"] is True and done["model"].startswith("生成閘門")
+    # 附圖時 Jev 只看得到文字段落：公開畫作改由生成模型看圖判斷（docs/adr/037）
+    r = client.post("/api/v1/chat", json={**body, "send_image": True})
+    src, done, _ = events_of(r.text)
+    gate = src["post_filter"]["gate"]
+    assert gate["passed"] is True and check(gate["checks"], "image")["ok"] is True
+    assert check(gate["checks"], "answerable")["ok"] is False and not done.get("degraded")
 
 
 def test_confidential_passages_never_go_to_jev(client, all_chunks, fake_jev):
@@ -578,6 +583,40 @@ def test_local_passages_are_judged_by_qwen3_vl(monkeypatch):
     assert post.degraded  # Qwen3-VL 說都沒幫助、也沒指定文件 → 查無資料
 
 
+def test_local_gate_trusts_qwen3_vl_pick_over_keyword_coverage(monkeypatch):
+    """換句話說的問題關鍵詞對不上段落，但本地 Qwen3-VL 逐段判斷答得出來
+    → 第 6 段放行（docs/adr/037）；
+    篩選失敗時仍照關鍵詞覆蓋率，問題在要內部資料時照樣擋。"""
+    import asyncio
+
+    from app.rag import rearrange as rearrange_mod
+
+    async def pick_second(question, sources, strategy):
+        info = {"candidates": len(sources), "kept": 1, "ms": 5, "fallback": None, "none": False}
+        return [sources[1]], info
+
+    monkeypatch.setattr(rearrange_mod, "enabled", lambda requested=None: True)
+    monkeypatch.setattr(rearrange_mod, "rearrange", pick_second)
+    question = "那個東西現在誰收著啊"  # 和「正常的說明文字」沒有共同的關鍵詞
+    post = asyncio.run(guard.process_passages(question, _local_sources(3), "local"))
+    assert not post.degraded and [s["chunk_id"] for s in post.kept] == ["c1"]
+    assert "Qwen3-VL 判斷 1 段" in check(post.public()["gate"]["checks"], "answerable")["detail"]
+
+    async def broken(question, sources, strategy):
+        info = {"candidates": len(sources), "kept": len(sources), "ms": 5,
+                "fallback": "看不懂", "none": False}  # fmt: skip
+        return sources, info
+
+    monkeypatch.setattr(rearrange_mod, "rearrange", broken)
+    post = asyncio.run(guard.process_passages(question, _local_sources(3), "local"))
+    assert post.degraded  # 篩選失敗 → 回到關鍵詞覆蓋率 → 對不上就查無資料
+
+    monkeypatch.setattr(rearrange_mod, "rearrange", pick_second)
+    question = "說明文字的內部成本是多少？"
+    post = asyncio.run(guard.process_passages(question, _local_sources(3), "local"))
+    assert post.degraded  # 合規檢查不受影響
+
+
 # ---------------------------------------------------------------- API 層的資料範圍
 def test_api_level_data_scope(client):
     as_account(client, "guest")
@@ -604,3 +643,33 @@ def test_api_level_data_scope(client):
     assert client.get("/api/v1/inventory/overview").status_code == 200  # 業務可查工廠資料庫
     r = client.post("/api/v1/cad/reconstruct", json={"part_id": "mfg-002"})
     assert r.status_code == 403
+
+
+def test_gate_lets_public_artwork_image_questions_through():
+    """看圖題（docs/adr/037）：段落沒寫、只能看圖知道的細節，公開畫作附圖時第 6 段放行；
+    工廠圖紙、不附圖、問題在要內部資料時照樣降級。"""
+    import asyncio
+
+    question = "陽傘是什麼顏色？"  # 段落沒寫，關鍵詞也對不上
+    art = {"level": "公開", "text": "〈某畫〉作者某人", "domain": "art", "image": True}
+    post = asyncio.run(
+        guard.process_passages(question, _local_sources(2, "公開"), "local", card=art)
+    )
+    assert not post.degraded
+    assert check(post.public()["gate"]["checks"], "image")["ok"]
+
+    for card in (
+        {**art, "image": False},
+        {**art, "domain": "mfg", "level": "公開"},
+    ):
+        post = asyncio.run(
+            guard.process_passages(question, _local_sources(2, "公開"), "local", card=card)
+        )
+        assert post.degraded, card
+
+    post = asyncio.run(
+        guard.process_passages(
+            "陽傘的內部成本是多少？", _local_sources(2, "公開"), "local", card=art
+        )
+    )
+    assert post.degraded  # 合規沒過不因為附圖放行
