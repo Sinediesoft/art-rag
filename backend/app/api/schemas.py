@@ -1202,6 +1202,10 @@ class AccountsResponse(BaseModel):
         description="待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）"
     )
     token: TokenInfo
+    kb_version: str | None = Field(
+        default=None,
+        description="知識庫版本：前端把它和身分一起放進查詢快取鍵，身分或資料版本變了就是另一組快取",
+    )
 
 
 class SwitchAccountRequest(BaseModel):

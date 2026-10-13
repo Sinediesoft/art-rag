@@ -1711,6 +1711,11 @@ export interface components {
              */
             pending_region_drafts: number;
             token: components["schemas"]["TokenInfo"];
+            /**
+             * Kb Version
+             * @description 知識庫版本：前端把它和身分一起放進查詢快取鍵，身分或資料版本變了就是另一組快取
+             */
+            kb_version?: string | null;
         };
         /** AlignDiff */
         AlignDiff: {

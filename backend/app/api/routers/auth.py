@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Request, Response
 
 from app.api import schemas as S
+from app.core.config import kb_version
 from app.repositories.production_repo import get_production_repo
 from app.services import (
     identity,
@@ -21,6 +22,7 @@ def _accounts(auth: identity.Auth, request: Request) -> dict:
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
         "pending_region_drafts": region_service.pending_count(),
         "token": auth.public(),
+        "kb_version": kb_version(),
     }
 
 

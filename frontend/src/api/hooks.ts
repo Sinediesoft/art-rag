@@ -3,12 +3,13 @@ import { api, ApiError, type DrawingSearchResponse, type ImageSearchResponse } f
 import { writesInFlight } from "./writes";
 
 /**
- * 目前身分的 id：進入每個身分相關查詢的快取鍵。身分換了就是另一組快取——舊身分晚到的回應只會寫進
- * 舊身分的鍵，不會出現在新身分的畫面（切換時 resetQueries 仍會把舊資料清掉）。
+ * 目前身分的 id 與知識庫版本：進入每個身分相關查詢的快取鍵。身分換了就是另一組快取——舊身分晚到的回應
+ * 只會寫進舊身分的鍵，不會出現在新身分的畫面（切換時 resetQueries 仍會把舊資料清掉）。
  */
 function useScope(): string {
   const { data } = useQuery({ queryKey: ["accounts"], queryFn: api.accounts, refetchInterval: 10_000 });
-  return data?.current?.id ?? "pending";
+  // 身分＋知識庫版本：身分換了、知識庫重建索引了，都是另一組快取
+  return data?.current ? `${data.current.id}${data.kb_version ? `@${data.kb_version}` : ""}` : "pending";
 }
 
 /** useQuery 加上身分範圍：鍵的第一個元素（名稱）不變，invalidateQueries({ queryKey: [名稱] }) 照樣用前綴比對 */

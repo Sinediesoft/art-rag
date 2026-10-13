@@ -3806,6 +3806,18 @@
           },
           "token": {
             "$ref": "#/components/schemas/TokenInfo"
+          },
+          "kb_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kb Version",
+            "description": "知識庫版本：前端把它和身分一起放進查詢快取鍵，身分或資料版本變了就是另一組快取"
           }
         },
         "type": "object",

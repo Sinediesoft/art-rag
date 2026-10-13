@@ -55,6 +55,8 @@ export interface Shell {
    * 各頁自己的 state（SQL 結果、串流、表單）不會留到下一個身分
    */
   identityEpoch: number;
+  /** 已確認的帳號 id（確認前為 null）：附加的照片只有擁有者能用，帳號換了輸入框要放掉它 */
+  accountId: string | null;
   /**
    * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
    * 收起其他身分的非公開內容
@@ -124,6 +126,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   /** 身分確認了沒有（剛打開頁面、憑證更新之後都要等 /auth/accounts 回來）：確認前不接受提問與任務 */
   const [identityReady, setIdentityReady] = useState(false);
   const [identityEpoch, setIdentityEpoch] = useState(0);
+  const [accountId, setAccountId] = useState<string | null>(null);
   /** 身分世代加一：舊的 callback 失效、功能頁重建、還沒收到結果的寫入改成「身分改變時送出中」 */
   const bumpEpoch = () => {
     identity.current.epoch++;
@@ -366,6 +369,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (prev === accountId) return;
       identity.current.accountId = accountId;
       identity.current.label = label;
+      setAccountId(accountId);
       // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發訪客都一樣處理——
       // 這之前就在跑的一律中止（世代加一，之後舊的 callback 都不寫回）、和身分有關的快取清掉重抓
       // （看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起。不能假定確認前沒有任何請求
@@ -576,6 +580,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     switching,
     identityReady,
     identityEpoch,
+    accountId,
     setAccount,
     setCurrentConv: (id) => void (currentConv.current = id),
     startReconstruct,

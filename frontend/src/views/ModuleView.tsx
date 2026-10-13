@@ -233,7 +233,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
                   <Icon name="arrowDown" strokeWidth={2} />
                 </button>
               )}
-              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.identityEpoch} />
+              <Composer busy={busy} copy={COPY[domain]} onSend={(t, img) => ask(t, img)} onStop={() => shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} />
               <p className="dock__status">LOCAL INFERENCE · EGRESS {egress ? `${(egress / 1024).toFixed(1)} KB → JEV` : "0 B"}</p>
             </div>
           </div>

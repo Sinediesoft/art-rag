@@ -69,7 +69,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
     if (c.id === conv?.id) navigate("/");
   };
 
-  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.identityEpoch} key={heroComposer ? "hero" : "dock"} />;
+  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} key={heroComposer ? "hero" : "dock"} />;
   const sidebar = (variant: "rail" | "drawer") => (
     <Sidebar
       convs={shell.convs}

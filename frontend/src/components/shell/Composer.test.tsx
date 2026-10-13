@@ -92,14 +92,16 @@ describe("Composer：送出、換行、IME、附件、停止", () => {
     t.on("POST", "/images", () => json({ image_id: "img-9" }));
     const onSend = vi.fn();
     const props = { busy: false, onSend, onStop: vi.fn(), copy: COPY.entry };
-    const view = render(<Composer {...props} resetKey={1} />);
+    const view = render(<Composer {...props} resetKey="planner" />);
     await act(async () => {
       fireEvent.change(screen.getByTestId("composer-file"), { target: { files: [new File(["x"], "p.jpg", { type: "image/jpeg" })] } });
     });
     await screen.findByAltText("附加的照片");
-    view.rerender(<Composer {...props} resetKey={1} />);
+    view.rerender(<Composer {...props} resetKey="planner" />);
     expect(screen.queryByAltText("附加的照片")).not.toBeNull(); // 同一個身分：還在
-    view.rerender(<Composer {...props} resetKey={2} />);
+    view.rerender(<Composer {...props} resetKey={null} />);
+    expect(screen.queryByAltText("附加的照片")).not.toBeNull(); // 身分重新確認中（null）：先不動
+    view.rerender(<Composer {...props} resetKey="guest" />);
     await waitFor(() => expect(screen.queryByAltText("附加的照片")).toBeNull());
   });
 });
