@@ -635,7 +635,12 @@ def validate_outcome(o: SolveOutcome) -> None:
 
 
 def write_back(
-    o: SolveOutcome, request_id: str, *, job_id: str | None = None, retries: int = 2
+    o: SolveOutcome,
+    request_id: str,
+    *,
+    job_id: str | None = None,
+    retries: int = 2,
+    fence: Callable[[], None] | None = None,
 ) -> str:
     """把排程結果寫回生產資料庫（單一交易）並讓工廠資料庫跟上。
 
@@ -643,6 +648,7 @@ def write_back(
       才用新的 revision 重試，內容變了丟 SCHEDULE_INPUT_CHANGED，舊解不會覆蓋新工單
     - 冪等：背景工作的 run_id 由 job_id 決定，重送、重試、舊 worker 延遲寫回都是同一列
     - 工廠資料庫是生產資料庫的衍生檢視，寫回後重建；中途中斷下次讀取也會依 revision 重建
+    - fence：背景工作傳入，在寫入交易裡、真正寫入之前呼叫；資源租約已被接手就丟例外、不寫入
     """
     repo = get_production_repo()
     run_id = "plan_" + hashlib.sha256(job_id.encode()).hexdigest()[:12] if job_id else None
@@ -651,7 +657,7 @@ def write_back(
         try:
             saved = repo.save_run(
                 o.run_row(request_id), o.decorated["operations"], run_id=run_id,
-                expected_revision=expected,
+                expected_revision=expected, fence=fence,
             )  # fmt: skip
             break
         except RevisionConflict as e:

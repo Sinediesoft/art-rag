@@ -165,10 +165,10 @@ def _commit(job: dict, control: JobControl, staging: Path, meta, result, done) -
     if not store.reserve_commit(jid, attempt, wid):
         store.heartbeat(jid, attempt, wid)  # 租約或資源已被接手 → LeaseLost；否則就是被取消
         raise JobCancelled("commit")
-    with store.commit_lock(jid):
-        store.verify_commit(jid, attempt, wid)  # 鎖內再確認仍是現行嘗試、仍持有資源租約
+    with store.commit_section(jid, attempt, wid) as section:  # 取得寫回鎖並 fence
         _authorize(job)  # 寫回前（持有寫回鎖之後）最後一次驗證
         final = get_settings().cad_jobs_dir / jid
+        section.fence()  # 不可回滾的發布（含刪掉舊資料夾）之前，在持有寫回鎖的連線上再確認一次
         if final.exists():  # 前一次嘗試發布後、來不及標記成功就中斷
             shutil.rmtree(final)
         os.replace(staging, final)  # 原子發布：整個資料夾一次出現

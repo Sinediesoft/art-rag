@@ -99,10 +99,12 @@ def _commit(job: dict, control: JobControl, o) -> None:
     if not store.reserve_commit(jid, attempt, wid):
         store.heartbeat(jid, attempt, wid)  # 租約或資源已被接手 → LeaseLost；否則就是被取消
         raise JobCancelled("commit")
-    with store.commit_lock(jid):
-        store.verify_commit(jid, attempt, wid)  # 鎖內再確認仍是現行嘗試、仍持有資源租約
+    with store.commit_section(jid, attempt, wid) as section:  # 取得寫回鎖並 fence
         _authorize(job)  # 持有寫回鎖之後、寫入之前最後一次
-        run_id = schedule_service.write_back(o, job["request_id"] or "", job_id=jid)
+        # fence 在寫入交易裡、真正寫入之前呼叫（見 production_repo.save_run）
+        run_id = schedule_service.write_back(
+            o, job["request_id"] or "", job_id=jid, fence=section.fence
+        )
         total_ms = round((time.perf_counter() - o.t0) * 1000)
         result = {
             "run_id": run_id,

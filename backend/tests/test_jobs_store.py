@@ -289,8 +289,8 @@ def test_old_worker_cannot_keep_working_after_its_gpu_slot_was_taken(jobs, setti
         store.heartbeat(a["id"], 1, "w1")
     assert not lease(jobs, a["id"])  # 沒有替它延長工作租約（連同資源更新一起回滾）
     assert store.reserve_commit(a["id"], 1, "w1") is False
-    with pytest.raises(store.LeaseLost):
-        store.verify_commit(a["id"], 1, "w1")
+    with pytest.raises(store.LeaseLost), store.commit_section(a["id"], 1, "w1"):
+        pytest.fail("失去資源的 worker 不該進得了寫回區段")
     with pytest.raises(store.LeaseLost):
         store.add_event(a["id"], 1, "w1", "progress", {"x": 1}, {"x": 1})
     with pytest.raises(store.LeaseLost):
@@ -303,8 +303,8 @@ def test_old_worker_cannot_keep_working_after_its_gpu_slot_was_taken(jobs, setti
     assert [h["holder"] for h in holder] == [b["id"]]
     assert store.heartbeat(b["id"], 1, "w2")["cancel_requested"] is False
     assert store.reserve_commit(b["id"], 1, "w2") is True
-    store.verify_commit(b["id"], 1, "w2")
-    store.finish(b["id"], 1, "w2", "succeeded", result={"ok": True})
+    with store.commit_section(b["id"], 1, "w2"):
+        store.finish(b["id"], 1, "w2", "succeeded", result={"ok": True})
     assert store.get(b["id"])["status"] == "succeeded"
     assert store.claim(a["id"], "w3").state == "claimed"  # 名額空出來，A 再被領取
 
@@ -320,7 +320,8 @@ def test_expired_lease_nobody_took_over_can_still_be_renewed(jobs, settings):
     assert lease(jobs, a["id"])
     assert store.claim(b["id"], "w2").state == "blocked"
     assert store.reserve_commit(a["id"], 1, "w1") is True
-    store.verify_commit(a["id"], 1, "w1")
+    with store.commit_section(a["id"], 1, "w1"):
+        pass
 
 
 def test_schedule_scope_taken_by_someone_else_fences_the_worker(jobs):
@@ -334,15 +335,89 @@ def test_schedule_scope_taken_by_someone_else_fences_the_worker(jobs):
         store.finish(job["id"], 1, "w1", "failed", error={"code": "X", "message": "x"})
 
 
-def test_requeued_between_reserve_and_write_back_is_caught_inside_the_lock(jobs):
-    """取得寫回資格之後、拿到寫回鎖之前被收回重排：鎖內的確認擋下，不會寫入。"""
+def test_requeued_between_reserve_and_write_back_is_caught_at_the_section(jobs):
+    """取得寫回資格之後、拿到寫回鎖之前被收回重排：進入寫回區段時的 fence 擋下，不會寫入。"""
     job, _ = cad()
     store.claim(job["id"], "w1")
     assert store.reserve_commit(job["id"], 1, "w1")
     expire(jobs, job["id"])
     assert store.recover_expired() == [(job["id"], "requeued")]
-    with store.commit_lock(job["id"]), pytest.raises(store.LeaseLost):
-        store.verify_commit(job["id"], 1, "w1")
+    with pytest.raises(store.LeaseLost), store.commit_section(job["id"], 1, "w1"):
+        pytest.fail("已被收回重排的 worker 不該進得了寫回區段")
+
+
+def pinned(jobs, resource):
+    rows = jobs.sql(
+        "SELECT holder, expires_at = 'infinity' AS pinned FROM resource_leases WHERE resource = %s",
+        (resource,),
+    )
+    return rows[0] if rows else None
+
+
+def test_nobody_can_take_over_the_resource_during_the_write_back(jobs, settings):
+    """審查 F1（ad32d74）：取得寫回資格後，即使工作租約過期，別的工作（GPU 名額）與舊同步入口
+    （排程範圍）也接手不了資源；互斥涵蓋整段外部寫回，到工作結束為止。"""
+    settings(jobs_gpu_slots=1)
+    a, _ = cad(part="mfg-001")
+    b, _ = cad(part="mfg-002")
+    store.claim(a["id"], "w1")
+    assert store.reserve_commit(a["id"], 1, "w1") is True
+    assert pinned(jobs, "gpu:0") == {"holder": a["id"], "pinned": True}
+    jobs.sql(
+        "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s", (a["id"],)
+    )
+    assert store.claim(b["id"], "w2").state == "blocked"  # 租約「過期」也領不到
+    store.heartbeat(a["id"], 1, "w1")  # 續約不會把它改回有期限的
+    assert pinned(jobs, "gpu:0")["pinned"] is True
+    with store.commit_section(a["id"], 1, "w1") as section:
+        section.fence()
+        assert store.claim(b["id"], "w2").state == "blocked"
+    store.finish(a["id"], 1, "w1", "succeeded", result={"ok": True})
+    assert store.claim(b["id"], "w2").state == "claimed"  # 結束後名額才釋放
+
+    sched, _ = schedule()
+    store.claim(sched["id"], "w3")
+    assert store.reserve_commit(sched["id"], 1, "w3") is True
+    assert store.acquire_lease("schedule:plant", "legacy:review", 30) is False
+    jobs.sql(
+        "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+        (sched["id"],),
+    )
+    assert store.acquire_lease("schedule:plant", "legacy:review", 30) is False
+
+
+def test_fence_stops_a_writer_whose_resource_was_forcibly_taken(jobs, settings):
+    """連『永不過期』的標記都被強制改掉、資源被接手（例如人為清除）：進入寫回區段與寫入前的 fence
+    都丟 LeaseLost——即使已經在區段裡。"""
+    settings(jobs_gpu_slots=1)
+    a, _ = cad(part="mfg-001")
+    b, _ = cad(part="mfg-002")
+    store.claim(a["id"], "w1")
+    assert store.reserve_commit(a["id"], 1, "w1") is True
+    with store.commit_section(a["id"], 1, "w1") as section:
+        section.fence()
+        jobs.sql("UPDATE resource_leases SET expires_at = now() - interval '1 second'")  # 強制
+        assert store.claim(b["id"], "w2").state == "claimed"
+        with pytest.raises(store.LeaseLost):
+            section.fence()
+    with pytest.raises(store.LeaseLost), store.commit_section(a["id"], 1, "w1"):
+        pytest.fail("資源已被接手，不該進得了寫回區段")
+
+
+def test_a_writer_that_died_does_not_pin_the_resource_forever(jobs, settings):
+    """寫回途中 worker 死了（沒有寫回鎖、工作租約過期）：恢復迴圈收回工作和『永不過期』的租約。"""
+    settings(jobs_gpu_slots=1)
+    a, _ = cad(part="mfg-001")
+    b, _ = cad(part="mfg-002")
+    store.claim(a["id"], "w1")
+    assert store.reserve_commit(a["id"], 1, "w1") is True
+    jobs.sql(
+        "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s", (a["id"],)
+    )
+    assert store.claim(b["id"], "w2").state == "blocked"
+    assert store.recover_expired() == [(a["id"], "requeued")]
+    assert pinned(jobs, "gpu:0") is None
+    assert store.claim(b["id"], "w2").state == "claimed"
 
 
 def test_jobs_failing_too_many_times_stop_retrying(jobs, settings):

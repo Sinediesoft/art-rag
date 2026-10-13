@@ -299,9 +299,11 @@ def heartbeat(job_id: str, attempt: int, worker_id: str) -> dict:
         ).fetchone()
         if row is None:
             raise LeaseLost(job_id)
+        # 寫回區段中的資源租約是 'infinity'（見 reserve_commit），續約不能把它改回有期限的
         held = conn.execute(
-            "UPDATE resource_leases SET expires_at = now() + make_interval(secs => %s),"
-            " updated_at = now() WHERE holder = %s AND attempt = %s RETURNING resource",
+            "UPDATE resource_leases SET expires_at = CASE WHEN expires_at = 'infinity'"
+            " THEN expires_at ELSE now() + make_interval(secs => %s) END, updated_at = now()"
+            " WHERE holder = %s AND attempt = %s RETURNING resource",
             (lease, job_id, attempt),
         ).fetchone()
         if held is None:  # 資源已被別的工作接手（或租約被收回）
@@ -339,7 +341,12 @@ def add_event(
 def reserve_commit(job_id: str, attempt: int, worker_id: str) -> bool:
     """進入寫回：沒被要求取消、而且仍是現行嘗試並持有資源租約才成功。
     成功後取消請求回 409（已經不可取消），一定寫回。回 False＝被要求取消，或已不是現行嘗試／
-    資源已被接手（呼叫端再用 heartbeat 分辨：租約遺失會丟 LeaseLost）。"""
+    資源已被接手（呼叫端再用 heartbeat 分辨：租約遺失會丟 LeaseLost）。
+
+    成功的同時把這個工作的資源租約標成 'infinity'（永不過期）：從取得寫回資格到工作結束（或
+    被恢復迴圈收回）為止，沒有別的工作（GPU 名額）或舊同步入口（排程範圍）能因為租約過期而
+    接手——互斥涵蓋「整段」外部寫回，不是只在寫回前檢查一次。worker 若在這段期間死掉，工作租約
+    會過期、寫回鎖隨連線釋放，恢復迴圈收回工作時一併刪掉資源租約。"""
     with db.connection() as conn:
         row = conn.execute(
             "UPDATE jobs SET committing_attempt = attempt WHERE id = %s AND status = 'running'"
@@ -347,23 +354,60 @@ def reserve_commit(job_id: str, attempt: int, worker_id: str) -> bool:
             f" AND {_HOLDS_RESOURCE} RETURNING id",
             (job_id, attempt, worker_id),
         ).fetchone()
-        if row:
-            _event(conn, job_id, "committing", {"attempt": attempt})
-        return row is not None
+        if row is None:
+            return False
+        pinned = conn.execute(
+            "UPDATE resource_leases SET expires_at = 'infinity', updated_at = now()"
+            " WHERE holder = %s AND attempt = %s RETURNING resource",
+            (job_id, attempt),
+        ).fetchone()
+        if pinned is None:  # 兩個語句之間資源被別的工作接手了：整個放棄（工作列的更新也回滾）
+            conn.rollback()
+            return False
+        _event(conn, job_id, "committing", {"attempt": attempt})
+        return True
 
 
-def verify_commit(job_id: str, attempt: int, worker_id: str) -> None:
-    """持有寫回鎖之後、寫入之前最後一次確認：仍是現行嘗試、仍持有資源租約、已取得寫回資格，
-    並把租約延長（寫回期間不會被別的工作接手資源）。任何一項不成立丟 LeaseLost。"""
-    flags = heartbeat(job_id, attempt, worker_id)
-    if flags["committing_attempt"] != attempt:
-        raise LeaseLost(job_id)
+class CommitSection:
+    """寫回區段：持有寫回鎖（advisory lock，連線斷了自動釋放）的那條連線。
+
+    fence() 要在每一個不可回滾的外部寫入（發布 CAD 產物、寫入排程結果）**之前**呼叫，
+    而且是在這條持有寫回鎖的連線上查：連線還活著，寫回鎖就還在，恢復迴圈不會把工作收回；
+    資源租約仍是 'infinity' 且 holder 還是自己，就沒有人接手過。連線斷了或被接手，丟例外、
+    不寫入。"""
+
+    def __init__(self, conn, job_id: str, attempt: int, worker_id: str):
+        self._conn, self.job_id, self.attempt, self.worker_id = conn, job_id, attempt, worker_id
+
+    def fence(self) -> None:
+        row = self._conn.execute(
+            "SELECT 1 FROM jobs j WHERE j.id = %s AND j.status = 'running' AND j.attempt = %s"
+            " AND j.lease_owner = %s AND j.committing_attempt = j.attempt AND EXISTS ("
+            "SELECT 1 FROM resource_leases r WHERE r.holder = j.id AND r.attempt = j.attempt"
+            " AND r.expires_at = 'infinity')",
+            (self.job_id, self.attempt, self.worker_id),
+        ).fetchone()
+        if row is None:
+            raise LeaseLost(self.job_id)
+
+
+@contextmanager
+def commit_section(job_id: str, attempt: int, worker_id: str) -> Iterator[CommitSection]:
+    """取得寫回鎖並確認（fence）仍是現行嘗試、已取得寫回資格、資源租約沒被接手。
+    寫回鎖讓恢復迴圈遇到就跳過，租約剛好過期的舊 worker 不會和接手的新 worker 同時寫回。"""
+    with db.connection() as conn:
+        conn.execute("SELECT pg_advisory_lock(hashtextextended(%s, 0))", (_lock_key(job_id),))
+        try:
+            section = CommitSection(conn, job_id, attempt, worker_id)
+            section.fence()
+            yield section
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (_lock_key(job_id),))
 
 
 @contextmanager
 def commit_lock(job_id: str) -> Iterator[None]:
-    """寫回期間持有工作專用的 advisory lock（連線斷了自動釋放）：recover_expired 遇到就跳過，
-    租約過期的舊 worker 不會和接手的新 worker 同時寫回。"""
+    """只有寫回鎖、沒有 fencing 的版本（測試與診斷用）；工作寫回一律用 commit_section。"""
     with db.connection() as conn:
         conn.execute("SELECT pg_advisory_lock(hashtextextended(%s, 0))", (_lock_key(job_id),))
         try:

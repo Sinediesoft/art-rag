@@ -16,7 +16,7 @@ import re
 import sqlite3
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -242,13 +242,16 @@ class ProductionRepo:
         ops: list[dict],
         run_id: str | None = None,
         expected_revision: str | None = None,
+        fence: Callable[[], None] | None = None,
     ) -> str:
         """寫入一次排程結果（單一交易，BEGIN IMMEDIATE）。
 
         expected_revision：求解開始時的資料版本；交易內發現版本變了（有人開／取消工單、改交期…）
         就丟 RevisionConflict、什麼都不寫——舊解不會覆蓋新資料。
         run_id 由呼叫端指定（背景工作用 job_id 推出來的固定值）時是冪等的：同一個 run_id
-        已經存在就直接回傳，不重複寫入、不覆蓋（重送、重試、租約過期的舊 worker 延遲寫回）。"""
+        已經存在就直接回傳，不重複寫入、不覆蓋（重送、重試、租約過期的舊 worker 延遲寫回）。
+        fence：背景工作的資源 fencing，在持有寫入鎖、比對完版本之後、INSERT 之前呼叫；
+        丟例外就整個交易回滾（資源租約已被接手的舊 worker 不寫入）。"""
         run_id = run_id or run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
         row = {
             **run,
@@ -275,6 +278,8 @@ class ProductionRepo:
                     ).fetchone():
                         conn.execute("ROLLBACK")
                         return run_id
+                    if fence is not None:
+                        fence()
                     cols = ", ".join(row)
                     marks = ", ".join("?" for _ in row)
                     conn.execute(

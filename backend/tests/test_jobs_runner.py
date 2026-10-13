@@ -18,6 +18,7 @@ from app.cad.sandbox import RunResult
 from app.core import config
 from app.core.config import get_settings
 from app.jobs import runner, store
+from app.jobs import schedule_job as schedule_job_module
 from app.repositories.production_repo import get_production_repo
 from app.services import cad_service, identity, schedule_service, security
 
@@ -317,6 +318,54 @@ def test_resource_taken_over_right_before_write_back_writes_nothing(clean, monke
     assert runs() == [] and job["result"] is None
 
 
+def in_section(jid):
+    """目前是否已取得寫回資格（reserve_commit 之後）：用來只在寫回區段內的授權檢查動手腳。"""
+    row = store.get(jid)
+    return row is not None and row["committing_attempt"] is not None
+
+
+def test_schedule_resource_takeover_after_the_final_check_never_writes(clean, monkeypatch):
+    """審查 F1（ad32d74）：驗證通過之後、寫入之前停頓，租約過期且舊同步入口接手了排程範圍，
+    舊 worker 恢復——寫入交易裡的 fence 擋下，生產資料庫沒有排程結果。"""
+    jid = schedule_job(engine="greedy")
+    real = schedule_job_module._authorize
+
+    def pause_then_lose_the_scope(job):
+        out = real(job)
+        if in_section(jid):  # 寫回區段內的最後一次授權檢查：模擬停頓超過租約，別人接手
+            clean.sql("UPDATE resource_leases SET expires_at = now() - interval '1 second'")
+            assert store.acquire_lease("schedule:plant", "legacy:review", 30) is True
+        return out
+
+    monkeypatch.setattr(schedule_job_module, "_authorize", pause_then_lose_the_scope)
+    assert runner.execute(jid, "w1") == "lost"
+    assert runs() == [] and store.get(jid)["status"] == "running"
+    assert clean.sql("SELECT holder FROM resource_leases")[0]["holder"] == "legacy:review"
+
+
+def test_schedule_lease_expiry_during_the_write_back_cannot_be_taken_over(clean, monkeypatch):
+    """同樣的停頓，但是用真正的接手路徑：工作租約過期，舊同步入口想接手排程範圍——被拒絕，
+    寫回照常完成（互斥涵蓋整段寫回）。"""
+    jid = schedule_job(engine="greedy")
+    real = schedule_job_module._authorize
+    seen = []
+
+    def pause(job):
+        out = real(job)
+        if in_section(jid):
+            clean.sql(
+                "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+                (jid,),
+            )
+            seen.append(store.acquire_lease("schedule:plant", "legacy:review", 30))
+        return out
+
+    monkeypatch.setattr(schedule_job_module, "_authorize", pause)
+    assert runner.execute(jid, "w1") == "done"
+    assert seen == [False]
+    assert store.get(jid)["status"] == "succeeded" and len(runs()) == 1
+
+
 def test_blocked_job_waits_for_the_scope(clean):
     store.acquire_lease("schedule:plant", "legacy:req", 30)  # 舊入口（或別的 worker）占著
     jid = schedule_job(engine="greedy")
@@ -506,6 +555,57 @@ def test_cad_resource_taken_over_right_before_publish_publishes_nothing(clean, m
     assert runner.execute(jid, "w1") == "lost"
     assert store.get(jid)["status"] == "running"
     assert not (get_settings().cad_jobs_dir / jid).exists()
+
+
+@needs_limits
+def test_cad_resource_takeover_after_the_final_check_publishes_nothing(clean, client, monkeypatch):
+    """審查 F1（ad32d74）：CAD 驗證通過後停頓，GPU 名額被另一個 3D 重建接手，舊 worker 恢復——
+    不發布產物，相容 API 也讀不到它的 code.py。"""
+    from app.jobs import cad_job as cad_module
+
+    jid = cad_job(part="mfg-002")
+    other = cad_job(part="mfg-001")
+    real = cad_module._authorize
+
+    def pause_then_lose_the_slot(job):
+        out = real(job)
+        if in_section(jid):
+            clean.sql("UPDATE resource_leases SET expires_at = now() - interval '1 second'")
+            assert store.claim(other, "w2").state == "claimed"  # 另一個 3D 重建領到唯一的名額
+        return out
+
+    monkeypatch.setattr(cad_module, "_authorize", pause_then_lose_the_slot)
+    assert runner.execute(jid, "w1") == "lost"
+    assert store.get(jid)["status"] == "running"
+    assert not (get_settings().cad_jobs_dir / jid).exists()
+    as_account(client, "planner")
+    assert client.get(f"/api/v1/cad/jobs/{jid}/code.py").status_code != 200
+    assert store.get(other)["status"] == "running"  # 接手的工作不受影響
+
+
+@needs_limits
+def test_cad_lease_expiry_during_the_write_back_cannot_be_taken_over(clean, monkeypatch):
+    from app.jobs import cad_job as cad_module
+
+    jid = cad_job(part="mfg-002")
+    other = cad_job(part="mfg-001")
+    real = cad_module._authorize
+    seen = []
+
+    def pause(job):
+        out = real(job)
+        if in_section(jid):
+            clean.sql(
+                "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s",
+                (jid,),
+            )
+            seen.append(store.claim(other, "w2").state)
+        return out
+
+    monkeypatch.setattr(cad_module, "_authorize", pause)
+    assert runner.execute(jid, "w1") == "done"
+    assert seen == ["blocked"] and store.get(jid)["status"] == "succeeded"
+    assert (get_settings().cad_jobs_dir / jid / "code.py").is_file()
 
 
 def test_cad_lost_lease_publishes_nothing(clean, monkeypatch):
