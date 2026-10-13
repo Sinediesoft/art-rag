@@ -1,0 +1,55 @@
+import cadquery as cq
+# Generating a workplane for sketch 0
+wp_sketch0 = cq.Workplane(cq.Plane(cq.Vector(-0.453125, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop0=wp_sketch0.moveTo(0.45394736842105265, 0.0).circle(0.45394736842105265)
+loop1=wp_sketch0.moveTo(0.45394736842105265, 0.0).circle(0.3026315789473684)
+solid0=wp_sketch0.add(loop0).add(loop1).extrude(0.453125)
+solid=solid0
+# Generating a workplane for sketch 1
+wp_sketch1 = cq.Workplane(cq.Plane(cq.Vector(-0.296875, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop2=wp_sketch1.moveTo(0.30394736842105263, 0.0).circle(0.30394736842105263)
+loop3=wp_sketch1.moveTo(0.30394736842105263, 0.0).circle(0.15197368421052632)
+solid1=wp_sketch1.add(loop2).add(loop3).extrude(0.453125)
+solid=solid.union(solid1)
+# Generating a workplane for sketch 2
+wp_sketch2 = cq.Workplane(cq.Plane(cq.Vector(-0.375, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop4=wp_sketch2.moveTo(0.37894736842105264, 0.0).circle(0.37894736842105264)
+loop5=wp_sketch2.moveTo(0.37894736842105264, 0.0).circle(0.3078947368421053)
+solid2=wp_sketch2.add(loop4).add(loop5).extrude(0.453125)
+solid=solid.union(solid2)
+# Generating a workplane for sketch 3
+wp_sketch3 = cq.Workplane(cq.Plane(cq.Vector(-0.453125, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop6=wp_sketch3.moveTo(0.45394736842105265, 0.0).circle(0.45394736842105265)
+loop7=wp_sketch3.moveTo(0.45394736842105265, 0.0).circle(0.3026315789473684)
+solid3=wp_sketch3.add(loop6).add(loop7).extrude(0.4453125)
+solid=solid.cut(solid3)
+# Generating a workplane for sketch 4
+wp_sketch4 = cq.Workplane(cq.Plane(cq.Vector(0.3515625, -0.1484375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop8=wp_sketch4.moveTo(0.039473684210526314, 0.0).circle(0.03865131578947368)
+solid4=wp_sketch4.add(loop8).extrude(-0.7890625)
+solid=solid.cut(solid4)
+# Generating a workplane for sketch 5
+wp_sketch5 = cq.Workplane(cq.Plane(cq.Vector(0.1484375, -0.2734375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop9=wp_sketch5.moveTo(0.039473684210526314, 0.0).circle(0.039473684210526314)
+solid5=wp_sketch5.add(loop9).extrude(-0.7890625)
+solid=solid.cut(solid5)
+# Generating a workplane for sketch 6
+wp_sketch6 = cq.Workplane(cq.Plane(cq.Vector(0.1484375, 0.2734375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop10=wp_sketch6.moveTo(0.039473684210526314, 0.0).circle(0.039473684210526314)
+solid6=wp_sketch6.add(loop10).extrude(-0.7890625)
+solid=solid.cut(solid6)
+# Generating a workplane for sketch 7
+wp_sketch7 = cq.Workplane(cq.Plane(cq.Vector(-0.2265625, 0.2734375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop11=wp_sketch7.moveTo(0.039473684210526314, 0.0).circle(0.039473684210526314)
+solid7=wp_sketch7.add(loop11).extrude(-0.7890625)
+solid=solid.cut(solid7)
+# Generating a workplane for sketch 8
+wp_sketch8 = cq.Workplane(cq.Plane(cq.Vector(-0.2265625, -0.2734375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop12=wp_sketch8.moveTo(0.039473684210526314, 0.0).circle(0.039473684210526314)
+solid8=wp_sketch8.add(loop12).extrude(-0.7890625)
+solid=solid.cut(solid8)
+# Generating a workplane for sketch 9
+wp_sketch9 = cq.Workplane(cq.Plane(cq.Vector(-0.3515625, -0.1484375, 0.453125), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop13=wp_sketch9.moveTo(0.039473684210526314, 0.0).circle(0.03865131578947368)
+solid9=wp_sketch9.add(loop13).extrude(-0.7890625)
+solid=solid.cut(solid9)

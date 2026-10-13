@@ -94,13 +94,13 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
         </ShellProvider>
       </QueryClientProvider>,
     );
-    act(() => shell.setAccount("planner", "生管"));
+    act(() => shell.setAccount("warehouse", "倉管"));
     expect(await screen.findByTestId("model-viewer")).toBeTruthy();
     expect(document.body.textContent).toContain("100×100×22");
-    // 切成訪客：後端改回 403
+    // 切成一般員工：後端改回 403
     allowed = false;
     await act(async () => {
-      shell.setAccount("guest", "訪客");
+      shell.setAccount("guest", "一般員工");
     });
     expect(await screen.findByText(/目前身分看不到這份資料/)).toBeTruthy();
     expect(screen.queryByTestId("model-viewer")).toBeNull();
@@ -129,6 +129,40 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
     expect(qc.getQueryData(["cad-job", "job-1"])).toBeTruthy(); // React Query 保留舊資料
     expect(await screen.findByText(/目前身分看不到這份資料/)).toBeTruthy();
     expect(screen.queryByTestId("model-viewer")).toBeNull();
+  });
+
+  it("孔位校正（docs/adr/035）：校正了就顯示孔數；沒校正顯示原因；舊紀錄沒有這欄顯示 —", async () => {
+    const cases: [unknown, string, string | null][] = [
+      [{ status: "applied", reason: null, detected: 3, removed: 3, applied: 3 }, "已校正 3 孔", null],
+      [
+        { status: "skipped", reason: "未收錄的圖紙版面不固定，孔位維持模型輸出", detected: 0 },
+        "未校正",
+        "未收錄的圖紙版面不固定，孔位維持模型輸出",
+      ],
+      [undefined, "—", null],
+    ];
+    for (const [holes, label, title] of cases) {
+      const t = mockTransport();
+      t.on("GET", "/cad/jobs/job-1", () =>
+        json({
+          job_id: "job-1",
+          meta: {},
+          result: { ok: true, files: { "model.stl": "/x.stl" }, dims: null, faces: 1, iou: null, holes },
+          done: null,
+        }),
+      );
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { unmount } = render(
+        <QueryClientProvider client={qc}>
+          <ModelView o={restored} />
+        </QueryClientProvider>,
+      );
+      const name = await screen.findByText("孔位校正");
+      const value = name.closest(".specs__item")!.querySelector(".specs__value")!;
+      expect(value.textContent).toBe(label);
+      expect(value.querySelector("[title]")?.getAttribute("title") ?? null).toBe(title);
+      unmount();
+    }
   });
 
   it("看不到這份 3D（403）：顯示權限錯誤，不建立檢視器", async () => {

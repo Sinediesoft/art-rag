@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, assetUrl, type ChatRequest } from "../api/client";
 import type { DoneEvent, ErrorEvent, PostFilterInfo, SourcesEvent } from "../api/sse";
 import { useChatStream } from "../hooks/useChatStream";
+import { appliedText } from "../shell/settings";
 import { seconds, STRATEGY_LABEL, twd } from "../lib/format";
 import { AnswerText } from "./common/CitationTag";
 import { ConflictNote, conflictCheckedLabel } from "./common/ConflictNote";
@@ -118,6 +119,7 @@ export function ChatAnswer({
           <span>總計 {seconds(done.latency_ms.total)}</span>
           <span>{twd(done.cost_twd)}</span>
           {!compact && <span>prompt {done.prompt_version}</span>}
+          {appliedText(state.applied) && <span>{appliedText(state.applied)}</span>}
           {!compact && <FeedbackButtons requestId={done.request_id} />}
           {!compact && (
             <QaExport

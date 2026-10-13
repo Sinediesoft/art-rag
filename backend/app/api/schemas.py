@@ -477,6 +477,16 @@ class System1Brief(BaseModel):
     model: str
 
 
+class ChatDefaultsBrief(BaseModel):
+    """問答開關的伺服器預設（.env 覆寫 models.yaml 之後的結果）：
+    設定面板「依伺服器預設」旁邊顯示目前開或關。請求的 rearrange／conflict_check／send_image
+    留 null 時就照這個；三個都不影響第 1～7 段安全關卡。"""
+
+    rearrange: bool
+    conflict_check: bool
+    send_image: bool
+
+
 class StatusResponse(BaseModel):
     """登入後畫面用的系統狀態（要有效 JWT，docs/adr/030）：服務能不能用、記憶體、展示模式。
     不含問句、回覆、SQL、路由紀錄、模型端點與內部設定。"""
@@ -489,6 +499,7 @@ class StatusResponse(BaseModel):
     strategies: dict[str, StrategyBrief]
     memory: "MemoryStatus | None" = None
     system1: System1Brief
+    chat_defaults: ChatDefaultsBrief
 
 
 class DiagnosticsResponse(BaseModel):
@@ -621,6 +632,11 @@ class DrawingSearchHit(BaseModel):
     score: float = Field(description="Chinese-CLIP 餘弦相似度")
     inliers: int | None = Field(description="ORB 幾何驗證的 inlier 數；未驗證為 null")
     overlap: float | None = Field(description="拉正後的線條重合度（0–1）；未驗證為 null")
+    coverage: float | None = Field(
+        default=None,
+        description="照片涵蓋圖紙三視圖幾何區的比例（0–1）；低於 partial_cover 時門檻改用 "
+        "partial_min_overlap。未驗證為 null",
+    )
     verified: bool
 
 
@@ -629,6 +645,8 @@ class DrawingSearchResponse(BaseModel):
     threshold: float
     min_inliers: int
     min_overlap: float
+    partial_cover: float = Field(description="照片涵蓋比例低於此值視為只拍到一部分")
+    partial_min_overlap: float = Field(description="只拍到一部分時線條重合要到的門檻")
     matched: bool
     best_part_id: str | None
     latency_ms: int
@@ -656,9 +674,13 @@ class AnySearchResponse(BaseModel):
 
 class PartTextSearchHit(BaseModel):
     part: PartSummary
-    score: float
+    score: float = Field(description="bge-m3 與這張圖紙最相關段落的相似度")
     topic: str
     snippet: str
+    exact: bool = Field(
+        default=False,
+        description="問句裡完整寫了這張圖紙的名稱、料號或圖號：排在語意相似的結果前面",
+    )
 
 
 class PartTextSearchResponse(BaseModel):
@@ -1118,10 +1140,10 @@ class Account(BaseModel):
     role: str
     role_label: str
     ops: list[str]
-    warehouses: list[str]
-    customers: list[str]
+    warehouses: list[str] = Field(description='能改的倉庫；"*"＝全部（docs/adr/036）')
+    customers: list[str] = Field(description='負責的客戶；"*"＝全部（docs/adr/036）')
     artworks: list[str] = Field(
-        description="藝術家可以圈區域、寫解說的畫（docs/adr/029）；其他角色是空的"
+        description='可以圈區域、寫解說的畫（docs/adr/029）；"*"＝全部（主管，docs/adr/036）'
     )
     note: str
     domains: list[str] = Field(description="能讀的資料領域：art／mfg／factory（docs/adr/014）")
@@ -1424,7 +1446,10 @@ class ChangePreview(BaseModel):
     missing: list[str]
     checks: list[ChangeCheck]
     diff: list[ChangeDiff]
-    reasons: list[str] = Field(description="超過額度的原因（非空＝要送主管核准）")
+    reasons: list[str] = Field(
+        description="超過額度的原因：next=approval 時要送主管核准；"
+        "next=confirm 時是主管自己的異動，直接生效、寫入時記進稽核（docs/adr/036）"
+    )
     pending_id: str | None
     summary: str
     next: Literal["confirm", "approval", "rejected", "need_info"]

@@ -62,6 +62,12 @@ drawing_retrieval:
   verify_top_n: 8             # 圖紙數量少，前 8 名都驗
   verify_min_inliers: 25
   verify_min_overlap: 0.55
+  # 照片只拍到圖紙一部分（例如截一個視圖）：照片涵蓋三視圖幾何區的比例 < partial_cover 時，
+  # 線條重合要 ≥ partial_min_overlap。實測（eval/drawing_retrieval，TASK-20261010-001）涵蓋 < 0.6 的局部照片
+  # 同一張圖紙 ≥ 0.82（最低是方形小局部）、不同圖紙 ≤ 0.553（未收錄零件的上視圖），取兩者中間；
+  # 涵蓋 ≥ 0.6 照舊用 0.55
+  partial_cover: 0.6
+  partial_min_overlap: 0.7
   top_k_search: 5
 
 # 領域路由（MMed-RAG 的領域辨識，見 docs/adr/007）：只給照片、沒指定領域時，先判斷是畫作還是工廠圖紙，

@@ -717,7 +717,7 @@ function CommitBox({
       )}
       {!canCommit && (
         <div className="rounded-xl bg-warning-soft p-3 text-sm text-warning">
-          目前身分「{meLabel ?? "訪客"}」不能收錄，請在頁首切換成「主管」。草稿會保留，切換後回到這頁即可。
+          目前身分「{meLabel ?? "一般員工"}」不能收錄，請在頁首切換成「主管」。草稿會保留，切換後回到這頁即可。
         </div>
       )}
       <div className="flex flex-wrap gap-2">

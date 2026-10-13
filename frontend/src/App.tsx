@@ -49,7 +49,7 @@ export default function App() {
   // 入口用 01 Quiet、模組用 10 Night、藝術模組再疊暖色：畫面一換就只掛該用的樣式
   useLayoutEffect(() => applyStyles(view, shell.theme), [view, shell.theme]);
 
-  // 目前的身分交給 store：和之前不同（主動切換在 store 裡已經處理；這裡多了憑證過期改發訪客、別的分頁切換）時，
+  // 目前的身分交給 store：和之前不同（主動切換在 store 裡已經處理；這裡多了憑證過期改發一般員工、別的分頁切換）時，
   // 中止舊身分的請求、清掉舊身分的快取、收起其他身分的非公開內容
   const { data: accounts } = useAccounts();
   useEffect(() => {

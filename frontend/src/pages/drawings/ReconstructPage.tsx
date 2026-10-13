@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, assetUrl, type CadStrategy } from "../../api/client";
 import { usePart, useStatus } from "../../api/hooks";
-import type { Dims } from "../../api/sse";
+import type { CadHoles, Dims } from "../../api/sse";
 import { ErrorMessage } from "../../components/common/Feedback";
 import { ImageUploader } from "../../components/common/ImageUploader";
 import { EgressBadge } from "../../components/common/StatusNotices";
@@ -10,6 +10,7 @@ import { ModelViewer, type ModelLayer } from "../../components/LazyModelViewer";
 import { ConfidentialityBadge, ScoreMeter } from "../../components/parts/PartBadges";
 import { useReconstruct, type CadStatus } from "../../hooks/useReconstruct";
 import { seconds } from "../../lib/format";
+import { holeStatus } from "../../lib/holes";
 
 const MODELS: { value: CadStrategy; label: string; hint: string }[] = [
   { value: "ortho2cad", label: "Ortho2CAD", hint: "Qwen3-VL-8B 以三視圖→CadQuery 微調（主模型）" },
@@ -357,6 +358,7 @@ function ResultCard({
     volume: number | null;
     iou: number | null;
     iou_bbox: number | null;
+    holes?: CadHoles | null;
     files: Record<string, string>;
   };
   target: Dims | null;
@@ -371,6 +373,7 @@ function ResultCard({
       </div>
     );
   const d = result.dims!;
+  const holes = holeStatus(result.holes);
   const axes: [keyof Dims, string][] = [
     ["width", "寬 X"],
     ["depth", "深 Y"],
@@ -401,6 +404,16 @@ function ResultCard({
           >
             {result.valid ? "✓ 實體有效" : result.repaired ? "實體有瑕疵 → 已自動修復" : "實體有瑕疵"}
           </span>
+          {holes && (
+            <span
+              title={holes.title ?? "OpenCV 從圖紙俯視圖找到圓孔，取代模型自己畫的垂直孔（位置、直徑、深度依圖紙）"}
+              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                result.holes?.status === "applied" ? "bg-success-soft text-success" : "bg-parchment-deep text-ink-48"
+              }`}
+            >
+              孔位{holes.label}
+            </span>
+          )}
         </p>
         {result.iou != null && (
           <div className="flex flex-col gap-1.5">

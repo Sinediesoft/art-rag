@@ -1,0 +1,17 @@
+import cadquery as cq
+# Generating a workplane for sketch 0
+wp_sketch0 = cq.Workplane(cq.Plane(cq.Vector(-0.25, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop0=wp_sketch0.moveTo(0.25263157894736843, 0.0).circle(0.25263157894736843)
+loop1=wp_sketch0.moveTo(0.25263157894736843, 0.0).circle(0.13157894736842105)
+solid0=wp_sketch0.add(loop0).add(loop1).extrude(0.25)
+solid=solid0
+# Generating a workplane for sketch 1
+wp_sketch1 = cq.Workplane(cq.Plane(cq.Vector(-0.4921875, 0.0, 0.0), cq.Vector(1.0, 0.0, 0.0), cq.Vector(0.0, 0.0, 1.0)))
+loop2=wp_sketch1.moveTo(0.5013157894736842, 0.0).circle(0.5013157894736842)
+loop3=wp_sketch1.moveTo(0.1564967105263158, 0.0).circle(0.03799342105263158)
+loop4=wp_sketch1.moveTo(0.5013157894736842, 0.0).circle(0.24786184210526316)
+loop5=wp_sketch1.moveTo(0.5013157894736842, -0.3448190789473684).circle(0.03799342105263158)
+loop6=wp_sketch1.moveTo(0.5013157894736842, 0.3448190789473684).circle(0.03799342105263158)
+loop7=wp_sketch1.moveTo(0.8398026315789474, 0.0).circle(0.03799342105263158)
+solid1=wp_sketch1.add(loop2).add(loop3).add(loop4).add(loop5).add(loop6).add(loop7).extrude(0.125)
+solid=solid.union(solid1)

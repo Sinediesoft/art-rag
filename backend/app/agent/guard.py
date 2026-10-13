@@ -121,6 +121,7 @@ def _rules() -> dict:
         "credential": re.compile(out["credential"], re.I),
         "sensitive_number": re.compile(out["sensitive_number"], re.I),
         "overview": re.compile(lg["overview"], re.I),
+        "doc_nouns": [normalize(w) for w in lg["doc_nouns"]],
         # 長的先換掉：「有哪些」要比「有」先處理
         "stopwords": sorted(lg["stopwords"], key=len, reverse=True),
     }
@@ -310,7 +311,12 @@ def _who_can(
         for a in accounts().values()
         if a.can_read(domain) and (level is None or a.can_see(level)) and (op is None or a.can(op))
     ]
-    return sorted(ok, key=lambda a: not (wh & set(a.warehouses) or cust & set(a.customers)))
+    return sorted(
+        ok,
+        key=lambda a: (
+            not (any(a.has_warehouse(w) for w in wh) or any(a.has_customer(c) for c in cust))
+        ),
+    )
 
 
 def auth_check(
@@ -347,7 +353,7 @@ def auth_check(
     degraded = False
     dlabel = domain_label(domain)
     filt = MetaFilter.of(account, domain, doc) if domain in ("art", "mfg") else None
-    # 功能授權：角色能不能用這個資料領域（訪客不能用工廠圖紙、工廠資料庫）
+    # 功能授權：角色能不能用這個資料領域（一般員工不能用工廠圖紙、工廠資料庫）
     if not account.can_read(domain):
         checks.append(
             Check(
@@ -394,7 +400,7 @@ def auth_check(
                     "地端",
                     False,
                     f"〈{account.label}〉沒有修改資料的權限"
-                    + ("（訪客只能查詢）" if account.role == "guest" else ""),
+                    + ("（一般員工只能查詢）" if account.role == "guest" else ""),
                 )
             )
             tag = tag or "權限不足"
@@ -424,7 +430,7 @@ def auth_check(
                 "動作權限",
                 "地端",
                 False,
-                f"訪客只能查詢，不能{'執行排程' if intent == 'schedule' else '修改資料'}"
+                f"一般員工只能查詢，不能{'執行排程' if intent == 'schedule' else '修改資料'}"
                 if account.role == "guest"
                 else f"〈{account.label}〉沒有{what}的權限（{roles or '沒有任何身分'}才可以）",
             )
@@ -882,11 +888,26 @@ async def _ask(state: dict, questions: dict) -> tuple[jev.JevReply | None, str |
         return None, str(e)
 
 
+def overview_terms(question: str) -> set[str]:
+    """概覽問題去掉概覽字眼（重點、介紹…）與文件類別（圖紙、作品…）後剩下的關鍵詞。
+    「這張圖紙的重點是什麼？」（只附照片時的預設問句）剩空集合；
+    「這張圖紙的成本重點」剩「成本」，照樣要比對覆蓋率（docs/adr/030、TASK-20261010-001）。"""
+    r = _rules()
+    t = r["overview"].sub(" ", normalize(question))
+    for w in r["doc_nouns"]:
+        t = t.replace(w, " ")
+    return terms(t)
+
+
 def local_answerable(question: str, kept: list[dict], card: dict | None) -> tuple[bool, str]:
     """第 6 段地端的 answerable：問題的關鍵詞有沒有出現在留下的段落與作品資料裡。
-    不因為有文件卡、圖面或任一段高相似度就放行（docs/adr/030）。"""
+    不因為有文件卡、圖面或任一段高相似度就放行（docs/adr/030）。
+    已指定文件的概覽問題：概覽字眼與文件類別不算關鍵詞，其餘的照樣比對；
+    什麼都不剩時要至少 1 段通過第 4、5 段。"""
     lg = _cfg()["local_gate"]
     q = terms(question)
+    if card and _find(_rules()["overview"], question):
+        q = overview_terms(question)
     if not q:
         if _find(_rules()["overview"], question) and card and kept:
             return True, f"概覽問題：已指定文件，{len(kept)} 段通過第 4、5 段"

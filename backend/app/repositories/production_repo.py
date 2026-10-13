@@ -80,7 +80,7 @@ class ProductionRepo:
         if "score_check" not in have:
             conn.execute("ALTER TABLE schedule_runs ADD COLUMN score_check INTEGER")
         have = {r["name"] for r in conn.execute("PRAGMA table_info(work_orders)")}
-        if "created_by" not in have:  # 開立人：生管只能取消自己開的工單
+        if "created_by" not in have:  # 開立人：只能取消自己開的工單（主管例外，docs/adr/036）
             conn.execute("ALTER TABLE work_orders ADD COLUMN created_by TEXT")
         return conn
 

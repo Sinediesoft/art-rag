@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAccounts } from "../api/hooks";
 import { AccountMenu, pendingCount, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Icon } from "../components/shell/Icons";
+import { SettingsMenu } from "../components/shell/SettingsMenu";
 import { domainOfPath, MODULE } from "../shell/design";
 import { useShell } from "../shell/store";
 
@@ -82,6 +83,14 @@ export function FeatureView({ backTo }: { backTo: string | null }) {
             </button>
             <Popover open={menu === "account"} onClose={close} className="menu--right">
               <AccountMenu onClose={close} />
+            </Popover>
+          </div>
+          <div className="topbar__slot">
+            <button type="button" className={`mtop__btn${menu === "settings" ? " is-open" : ""}`} onClick={() => setMenu(menu === "settings" ? null : "settings")} aria-expanded={menu === "settings"} title="設定" aria-label="設定">
+              <Icon name="settings" strokeWidth={1.5} />
+            </button>
+            <Popover open={menu === "settings"} onClose={close} className="menu--right menu--settings">
+              <SettingsMenu />
             </Popover>
           </div>
         </div>

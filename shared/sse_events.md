@@ -54,9 +54,10 @@
 - 第 7 段：生成後的輸出檢查沒過（含帳密／金鑰、個資、看不到的文件名稱或編號、內部資料數字、被剔除段落的內容、引用沒提供的編號），
   原輸出不送出，訊息為 `guard.output_blocked_message`，`model` 註明「第 7 段輸出檢查擋下」
 其他情況 `done.degraded=false`。生成的回覆先在伺服器收齊、通過輸出檢查才送出 `token`，所以第一個 `token` 會在生成完成後才到。
+回覆已引用資料（`[1]` 起或 `[畫面]`）、問題整句就是指名這份文件（名稱、料號、圖號）或只附照片時的預設概覽問句，最後又補一句獨立的「知識庫中沒有這方面的資料。」時，那句不送出，第 7 段 `detail` 加註；拿掉後送出的版本會再過一次輸出檢查，沒過就照第 7 段擋下（ADR 033 G）。
 
 請求另可帶 `route_ticket`（`/agent/route` 回的交接票）：有效（同帳號、同一句話、同一個對象、10 分鐘內）才沿用第 2 段的判斷；
-沒帶、過期或不符時 `/chat` 自己重跑第 2 段。角色不能用工廠圖紙（訪客帶 `part_id`）在串流開始前回 403 `DATA_SCOPE_DENIED`。
+沒帶、過期或不符時 `/chat` 自己重跑第 2 段。角色不能用工廠圖紙（一般員工帶 `part_id`）在串流開始前回 403 `DATA_SCOPE_DENIED`。
 
 `part_id`（工廠圖紙問答）走同一組事件：`sources` 的每段改帶 `part_id`、`title`、`source_label`
 （內部文件名稱），`source_url` 為 `null`；`done.prompt_version` 為 `drawing_v1`。圖紙屬機密，
@@ -80,7 +81,7 @@
 | `meta` | `{"request_id", "job_id", "strategy", "model", "image_id", "part", "identified", "layout", "input_url", "input_size", "scale_to", "scale_source"}` | 前處理完成：`layout` 為 `kb`（知識庫圖紙）／`rectified`（照片已拉正）／`upload`（未收錄）；`scale_to` 是等比縮放依據的外形尺寸（mm），未收錄圖紙由本地 Qwen3-VL 讀圖上標註，讀不到為 `null` |
 | `token` | `{"text"}` | CadQuery 程式碼片段（不做 OpenCC 轉換） |
 | `executing` | `{"generation_ms", "code_chars"}` | 程式碼產生完畢，開始沙箱執行 |
-| `result` | `{"ok", "error", "code", "valid", "raw_dims", "dims", "scale", "volume", "faces", "iou", "iou_bbox", "files"}` | 執行結果；`iou`（論文評估法）與 `iou_bbox`（外框對齊）只有知識庫圖紙才有；`files` 為 STL／STEP／回投影三視圖／程式碼的網址 |
+| `result` | `{"ok", "error", "code", "valid", "raw_dims", "dims", "scale", "volume", "faces", "iou", "iou_bbox", "holes", "files"}` | 執行結果；`iou`（論文評估法）與 `iou_bbox`（外框對齊）只有知識庫圖紙才有；`holes` 是孔位校正（ADR 035）：`{"status": "applied"\|"skipped", "reason", "detected", "removed", "applied"}`，`skipped` 時 `reason` 說明為什麼維持模型輸出；`files` 為 STL／STEP／回投影三視圖／程式碼的網址 |
 | `done` | `{"request_id", "job_id", "strategy", "model", "latency_ms": {"first_token", "generation", "exec", "total"}, "tokens", "egress"}` | 完成；`egress` 恆為 0（只連本機推論伺服器） |
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 

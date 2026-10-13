@@ -23,6 +23,7 @@ import type {
   SqlResultEvent,
 } from "../api/sse";
 import type { Domain, View } from "./design";
+import type { Applied } from "./settings";
 
 /**
  * 一輪問答的狀態：問句先送 /agent/route（第 1、2 段），再依分派呼叫真實 API／SSE（第 3～7 段與各模組）。
@@ -47,6 +48,8 @@ export type ChatPart = {
   text: string;
   done: DoneEvent | null;
   error: ErrorEvent | null;
+  /** 這一題套用的設定面板開關（shell/settings.ts）；沒有套用的不列 */
+  applied?: Applied;
 };
 
 export type SqlPart = {

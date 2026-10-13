@@ -107,7 +107,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   const runs = useRef(new Map<string, number>());
   const generation = useRef(0);
   /**
-   * 身分世代：開始切換身分、身分改變（含憑證過期改發訪客）時加一。
+   * 身分世代：開始切換身分、身分改變（含憑證過期改發一般員工）時加一。
    * 每次執行記下開始時的世代，世代變了就不再寫回；/agent/route 回來的帳號和目前身分不同也不寫回
    */
   const identity = useRef<{ accountId: string | null; label: string | null; epoch: number; stale: unknown }>({ accountId: null, label: null, epoch: 0, stale: undefined });
@@ -356,7 +356,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (prev === accountId) return;
       identity.current.accountId = accountId;
       identity.current.label = label;
-      // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發訪客都一樣處理——
+      // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發一般員工都一樣處理——
       // 這之前就在跑的一律中止（世代加一，之後舊的 callback 都不寫回）、和身分有關的快取清掉重抓
       // （看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起。不能假定確認前沒有任何請求
       bumpEpoch();
@@ -383,7 +383,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * 憑證更新（client.ts 的 renewToken：沒有、過期、後端重啟）：這時候身分可能已經變了（例如過期改發訪客），
+   * 憑證更新（client.ts 的 renewToken：沒有、過期、後端重啟）：這時候身分可能已經變了（例如過期改發一般員工），
    * 在 /auth/accounts 重新確認之前視為「身分未確認」：中止在飛的請求、清掉快取、鎖住提問；確認後由 setAccount 解鎖
    */
   const identityLost = useCallback(() => {

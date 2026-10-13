@@ -376,7 +376,7 @@ def test_human_edits_are_marked(client, reads):
 
 def test_only_manager_can_commit(client, reads, kb):
     draft = ready_draft(client, reads)
-    as_account(client, "planner")
+    as_account(client, "warehouse")
     r = client.post(f"/api/v1/intake/{draft['draft_id']}/commit")
     as_account(client, "guest")
     assert r.status_code == 403 and r.json()["error"]["code"] == "PERMISSION_DENIED"
@@ -415,7 +415,7 @@ def test_duplicate_check_only_looks_at_drawings_the_requester_can_see(client, mo
         return not_in_kb()
 
     monkeypatch.setattr(intake_service, "identify_any", fake)
-    as_account(client, "sales_a")
+    as_account(client, "sales")
     start(client, PHOTOS / "known" / "mfg-002__glare.jpg")
     as_account(client, "guest")
     assert seen == [{"mfg-004", "mfg-005"}]
@@ -496,10 +496,10 @@ def test_draft_not_found_and_discard(client, reads):
 def test_draft_is_only_visible_to_its_creator_and_managers(client, reads):
     """建檔草稿只有建立者本人與能收錄的主管碰得到；其他人讀、改、刪、拿照片都當作找不到
     （之前任何人知道草稿 ID 就能在主管收錄前改欄位）。"""
-    as_account(client, "planner")
+    as_account(client, "warehouse")
     did = ready_draft(client, reads)["draft_id"]
     try:
-        as_account(client, "wh1")
+        as_account(client, "sales")
         for r in (
             client.get(f"/api/v1/intake/{did}"),
             client.put(f"/api/v1/intake/{did}", json={"values": {"owner": "公開"}}),
@@ -507,7 +507,7 @@ def test_draft_is_only_visible_to_its_creator_and_managers(client, reads):
             client.delete(f"/api/v1/intake/{did}"),
         ):
             assert r.status_code == 404 and r.json()["error"]["code"] == "INTAKE_DRAFT_NOT_FOUND"
-        as_account(client, "planner")
+        as_account(client, "warehouse")
         assert fields(client.get(f"/api/v1/intake/{did}").json())["owner"]["value"] == "生產技術課"
         assert client.get(f"/api/v1/intake/{did}/photo.jpg").status_code == 200
         as_account(client, "manager")

@@ -26,8 +26,8 @@ def test_preview_does_not_leak_stock_to_roles_that_cannot_change_it(client):
 
 def test_approvals_only_show_own_requests(client, monkeypatch):
     rows = [
-        {"ap_no": "AP-1", "requester_id": "planner", "status": "待核准"},
-        {"ap_no": "AP-2", "requester_id": "wh1", "status": "已核准"},
+        {"ap_no": "AP-1", "requester_id": "sales", "status": "待核准"},
+        {"ap_no": "AP-2", "requester_id": "warehouse", "status": "已核准"},
     ]
     monkeypatch.setattr(
         change_service,
@@ -39,7 +39,7 @@ def test_approvals_only_show_own_requests(client, monkeypatch):
             "recent": rows,
         },
     )
-    out = change_service.list_approvals_for(change_service_account("wh1"))
+    out = change_service.list_approvals_for(change_service_account("warehouse"))
     assert [a["ap_no"] for a in out["recent"]] == ["AP-2"] and out["pending"] == []
     out = change_service.list_approvals_for(change_service_account("manager"))
     assert len(out["recent"]) == 2 and len(out["pending"]) == 1
@@ -52,7 +52,7 @@ def change_service_account(account_id: str):
 
 
 def test_audit_is_manager_only(client):
-    as_account(client, "wh2")  # 二廠倉管改一廠庫存 → 範圍外，記一筆「拒絕」
+    as_account(client, "sales")  # 業務改庫存 → 角色不符，記一筆「拒絕」
     client.post("/api/v1/changes/preview", json={"question": "把一廠成品倉法蘭庫存改成 120"})
     as_account(client, "guest")
     client.post("/api/v1/changes/preview", json={"question": "把一廠成品倉法蘭庫存改成 120"})
@@ -61,7 +61,7 @@ def test_audit_is_manager_only(client):
     assert denied.json()["error"]["code"] == "PERMISSION_DENIED"
     as_account(client, "manager")
     actors = {i["actor_id"] for i in client.get("/api/v1/audit").json()["items"]}
-    assert {"guest", "wh2"} <= actors
+    assert {"guest", "sales"} <= actors
 
 
 def test_security_logs_are_manager_only(client, monkeypatch):
@@ -72,9 +72,9 @@ def test_security_logs_are_manager_only(client, monkeypatch):
     base = {"created_at": "2026-10-08T00:00:00+00:00", "request_id": "req_x", "stage": 2,
             "rule": "越權嘗試", "judge": "地端規則"}  # fmt: skip
     rows = [
-        {**base, "no": "SEC-0002", "account_id": "planner", "account_label": "生管",
+        {**base, "no": "SEC-0002", "account_id": "sales", "account_label": "業務",
          "text": "question_sha256:9b2df38d"},
-        {**base, "no": "SEC-0001", "account_id": "guest", "account_label": "訪客",
+        {**base, "no": "SEC-0001", "account_id": "guest", "account_label": "一般員工",
          "text": "question_sha256:e3b0c442"},
     ]  # fmt: skip
     fake = SimpleNamespace(recent_security=lambda limit: rows, count_security=lambda since: {})
@@ -102,17 +102,18 @@ def test_eval_results_are_manager_only(client):
 
 
 def test_stopping_a_schedule_needs_schedule_run(client):
-    for account in ("guest", "wh1", "manager"):
+    for account in ("guest", "warehouse", "sales"):
         as_account(client, account)
         assert client.post("/api/v1/schedule/stop").status_code == 403, account
-    as_account(client, "planner")
+    as_account(client, "manager")
     assert client.post("/api/v1/schedule/stop").status_code == 200
 
 
 def test_demo_admin_actions_need_demo_reset(client):
-    """模擬斷線、手動釋放模型：信任主機之外還要是生管或主管，訪客不能讓服務停擺。"""
-    as_account(client, "guest")
-    assert client.post("/api/v1/admin/outage", json={"enabled": True}).status_code == 403
-    assert client.post("/api/v1/admin/memory/release").status_code == 403
-    as_account(client, "planner")
+    """模擬斷線、手動釋放模型：信任主機之外還要有 demo_reset，一般員工不能讓服務停擺。"""
+    for account in ("guest", "warehouse"):
+        as_account(client, account)
+        assert client.post("/api/v1/admin/outage", json={"enabled": True}).status_code == 403
+        assert client.post("/api/v1/admin/memory/release").status_code == 403
+    as_account(client, "manager")
     assert client.post("/api/v1/admin/outage", json={"enabled": False}).status_code == 200

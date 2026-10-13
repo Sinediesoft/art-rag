@@ -150,7 +150,7 @@ const switchTo = async (label) => {
     `(() => { const b = document.querySelector('.topbar__account') ?? [...document.querySelectorAll('.mtop__btn')].find((x) => x.getAttribute('aria-expanded') !== null && !x.textContent.includes('功能頁')); b?.click(); return true; })()`,
   );
   await sleep(300);
-  await click(label, ".menu__item");
+  await click(label, ".menu__item[role=menuitemradio]"); // 只找帳號：「核准紀錄」的說明也有「主管」兩個字
   await waitFor(`(document.querySelector('.topbar__account, .mtop__actions')?.textContent ?? '').includes(${JSON.stringify(label)})`, 8000);
   await sleep(300);
 };
@@ -164,7 +164,7 @@ try {
   await check("入口：沒有 Jev／地端守門的手動切換", "!/僅本機|雲端 Jev\\s*只收|第 2、4 道檢查由誰判斷/.test(document.body.innerText) && !document.querySelector('.segmented[role=radiogroup] [aria-checked]')");
   await check("入口：預設深色主題", "document.documentElement.dataset.theme === 'dark' && document.documentElement.dataset.view === 'entry'");
   await shot("entry-home");
-  await switchTo("生管");
+  await switchTo("主管");
 
   // ------------------------------------------------------------ 工廠
   await ask("連接法蘭有哪些公差要求？", "圖紙");
@@ -341,12 +341,12 @@ try {
   await waitFor(idle, 10000);
   await check("停止：這一輪停在「已停止」或已經完成", `['stopped','done'].includes(${lastAi}.dataset.phase)`);
 
-  await switchTo("訪客");
+  await switchTo("一般員工");
   await goto("/");
   await ask("法蘭還剩幾件可以出貨？");
-  await check("權限拒絕：訪客查工廠資料庫 → 第 1 段擋下、沒有跳轉按鈕", `!!${lastAi}.querySelector('.alertcard') && !!${lastAi}.querySelector('.trace__stage.is-block') && !${lastAi}.querySelector('.jump')`);
+  await check("權限拒絕：一般員工查工廠資料庫 → 第 1 段擋下、沒有跳轉按鈕", `!!${lastAi}.querySelector('.alertcard') && !!${lastAi}.querySelector('.trace__stage.is-block') && !${lastAi}.querySelector('.jump')`);
   await shot("blocked");
-  await switchTo("業務・甲");
+  await switchTo("業務");
   await goto("/");
   await ask("連接法蘭有哪些公差要求？", "圖紙");
   await check("降級：業務問機密圖紙 → 查無資料，不給圖紙按鈕或縮圖", `/查無資料/.test(${lastAi}.textContent) && !${lastAi}.querySelector('.jump') && !${lastAi}.querySelector('.subject--drawing')`);

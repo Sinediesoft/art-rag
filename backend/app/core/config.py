@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     eval_injection: bool = False
 
     # 身分憑證（JWT，HS256，docs/adr/015 第 1 段）：留空＝每次啟動隨機產生
-    # （後端重啟後舊憑證全部失效，前端自動改回訪客）；多台後端共用時要填同一組
+    # （後端重啟後舊憑證全部失效，前端自動改回一般員工）；多台後端共用時要填同一組
     jwt_secret: str = ""
     jwt_ttl_min: int = 480
 

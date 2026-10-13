@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { assetUrl, type ApiError } from "../api/client";
+import { assetUrl, inScope, type ApiError } from "../api/client";
 import { useAccounts, useArtwork } from "../api/hooks";
 import { ArtworkColors } from "../components/color/ColorAnalysisCard";
 import { ErrorMessage, LicenseLabel, Loading } from "../components/common/Feedback";
@@ -37,7 +37,7 @@ export function ArtworkPage() {
   ];
 
   const regions = a.regions?.items ?? [];
-  const canAnnotate = !!me && me.ops.includes("kb_annotate") && me.artworks.includes(a.id);
+  const canAnnotate = !!me && me.ops.includes("kb_annotate") && inScope(me.artworks, a.id);
   // 同一塊區域有好幾段時，捲到第一段
   const firstPassage = new Map<string, number>();
   a.descriptions.forEach((d, i) => {

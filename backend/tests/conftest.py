@@ -54,7 +54,8 @@ def client(mock_env):
         yield c
 
 
-# 預設用主管測試：資料範圍是全部（docs/adr/014：訪客只能讀公開畫作），但沒有修改資料的權限。
+# 預設用主管測試：資料範圍是全部（docs/adr/014：一般員工只能讀公開畫作），
+# 也有所有操作（docs/adr/036）。
 # 測權限的測試自己切換身分
 DEFAULT_ACCOUNT = "manager"
 
@@ -85,7 +86,7 @@ def all_chunks(monkeypatch):
 
 def as_account(client, account_id: str) -> dict:
     """切換展示身分（憑證 cookie 由 TestClient 保留）。切換要先有有效憑證（docs/adr/030），
-    所以先取一次（沒有或失效時發訪客憑證）。"""
+    所以先取一次（沒有或失效時發一般員工的憑證）。"""
     client.get("/api/v1/auth/accounts").raise_for_status()
     r = client.post("/api/v1/auth/switch", json={"account_id": account_id})
     assert r.status_code == 200, r.text

@@ -48,6 +48,8 @@ def test_only_artists_can_submit_and_only_their_own_paintings(client, kb):
     assert me["artworks"] == ["npm-000001", "met-436535"]
     r = submit(client, "aic-27992")
     assert r.status_code == 403 and "aic-27992" in r.json()["error"]["message"]
+    me = as_account(client, "manager")  # 主管有所有權限：每一幅畫都能標（docs/adr/036）
+    assert me["artworks"] == ["*"] and submit(client, "aic-27992").status_code == 200
 
 
 def test_artist_submits_and_manager_sees_pending(client, kb):
@@ -99,10 +101,10 @@ def test_manager_commits_into_kb_json(client, kb):
     assert new == {"id": "r1", "label": "山頂灌木", "points": BOX}
     desc = a["descriptions"][-1]
     assert desc["region"] == "r1" and desc["text"] == STORY
-    assert desc["topic"] == "山頂灌木（藝術家・甲的解說）"  # 第一人稱的解說要看得出是誰說的
-    assert desc["speaker"] == "藝術家・甲"
+    assert desc["topic"] == "山頂灌木（藝術家的解說）"  # 第一人稱的解說要看得出是誰說的
+    assert desc["speaker"] == "藝術家"
     assert desc["license"] == "CC BY 4.0" and desc["attribution"] == "甲"
-    assert desc["source"].startswith("藝術家・甲親自標註") and "主管收錄" in desc["source"]
+    assert desc["source"].startswith("藝術家親自標註") and "主管收錄" in desc["source"]
     assert '"points": [[0.1, 0.1], [0.4, 0.1]' in raw  # 座標寫成一行，不是一個數字一行
     assert (kb / "VERSION").read_text(encoding="utf-8").strip() != "2026.10.2"
     as_account(client, "artist")

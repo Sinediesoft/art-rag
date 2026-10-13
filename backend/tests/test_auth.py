@@ -20,9 +20,9 @@ def _b64(d: dict) -> str:
 
 def test_jwt_roundtrip_and_rejections():
     secret = "s3cret"
-    claims = {"iss": "art-rag", "sub": "planner", "exp": time.time() + 60}
+    claims = {"iss": "art-rag", "sub": "manager", "exp": time.time() + 60}
     token = jwt.encode(claims, secret)
-    assert jwt.decode(token, secret, "art-rag")["sub"] == "planner"
+    assert jwt.decode(token, secret, "art-rag")["sub"] == "manager"
     for bad, code in [
         (token[:-2] + ("AA" if not token.endswith("AA") else "BB"), "TOKEN_INVALID"),
         (jwt.encode(claims, "other"), "TOKEN_STALE"),  # 換了金鑰（後端重啟）
@@ -60,13 +60,13 @@ def test_accounts_endpoint_issues_a_guest_token_when_missing():
     assert r.status_code == 200 and r.json()["current"]["id"] == "guest"
     assert identity.COOKIE in fresh.cookies
     token = r.json()["token"]
-    assert token["claims"]["clearance"] == 0 and token["claims"]["roles"] == ["訪客"]
+    assert token["claims"]["clearance"] == 0 and token["claims"]["roles"] == ["一般員工"]
     assert token["unsigned"].count(".") == 1  # 簽章不回傳到畫面
     assert fresh.get("/api/v1/artworks").status_code == 200
 
 
 def test_tampered_token_is_refused_and_logged(client):
-    me = as_account(client, "sales_a")
+    me = as_account(client, "sales")
     assert me["clearance"] == 1
     unsigned = client.get("/api/v1/auth/accounts").json()["token"]["unsigned"]
     head, body = unsigned.split(".")
@@ -84,7 +84,7 @@ def test_tampered_token_is_refused_and_logged(client):
 
 
 def test_token_from_a_previous_key_is_stale_and_not_logged(client, monkeypatch):
-    acc = identity.get_account("planner")
+    acc = identity.get_account("manager")
     monkeypatch.setattr(identity, "_secret", lambda: "old-key-before-restart")
     old = identity.issue(acc)
     monkeypatch.undo()
@@ -94,8 +94,20 @@ def test_token_from_a_previous_key_is_stale_and_not_logged(client, monkeypatch):
     assert len(get_logs_repo().recent_security(200)) == before  # 後端重啟不是攻擊，不記錄
 
 
+def test_token_for_a_removed_account_is_stale_and_not_logged(client):
+    """簽章相符、但帳號已經從 access.yaml 拿掉（docs/adr/036 刪掉的生管）：
+    不是竄改，回 TOKEN_STALE 讓前端重新取得，不寫進拒絕並記錄。"""
+    now = int(time.time())
+    claims = {"iss": identity.ISSUER, "sub": "planner", "iat": now, "exp": now + 600}
+    token = jwt.encode(claims, identity._secret())
+    before = len(get_logs_repo().recent_security(200))
+    r = client.get("/api/v1/approvals", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401 and r.json()["error"]["code"] == "TOKEN_STALE"
+    assert len(get_logs_repo().recent_security(200)) == before
+
+
 def test_expired_token_is_refused(client):
-    acc = identity.get_account("planner")
+    acc = identity.get_account("manager")
     old = identity.issue(acc, now=time.time() - 10 * 3600)  # 預設效期 8 小時
     r = client.get("/api/v1/approvals", headers={"Authorization": f"Bearer {old}"})
     assert r.status_code == 401 and r.json()["error"]["code"] == "TOKEN_EXPIRED"
@@ -103,7 +115,7 @@ def test_expired_token_is_refused(client):
 
 def test_bearer_header_works_without_cookie():
     fresh = TestClient(app)
-    token = identity.issue(identity.get_account("wh1"))
+    token = identity.issue(identity.get_account("warehouse"))
     r = fresh.get("/api/v1/parts", headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200 and r.json()["hidden"] == 0
 
@@ -111,7 +123,7 @@ def test_bearer_header_works_without_cookie():
 def test_accounts_endpoint_replaces_a_stale_token_and_says_why(monkeypatch):
     fresh = TestClient(app)
     monkeypatch.setattr(identity, "_secret", lambda: "old-key-before-restart")
-    old = identity.issue(identity.get_account("planner"))
+    old = identity.issue(identity.get_account("manager"))
     monkeypatch.undo()
     r = fresh.get("/api/v1/auth/accounts", headers={"Authorization": f"Bearer {old}"})
     body = r.json()

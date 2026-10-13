@@ -69,8 +69,8 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
         route({
           outcome: "blocked_auth",
           intent: "data_query",
-          blocked: { stage: 1, rule: "權限不足", log_no: "SEC-0001", judge: "地端", reason: "訪客不能查工廠資料庫", degraded: false },
-          auth: { ...route().auth, passed: false, reason: "訪客不能查工廠資料庫" },
+          blocked: { stage: 1, rule: "權限不足", log_no: "SEC-0001", judge: "地端", reason: "一般員工不能查工廠資料庫", degraded: false },
+          auth: { ...route().auth, passed: false, reason: "一般員工不能查工廠資料庫" },
           guard: null,
         }),
       ),
