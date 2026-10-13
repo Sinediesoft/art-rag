@@ -122,6 +122,10 @@ class Settings(BaseSettings):
 
     data_dir: Path = REPO_ROOT / "data"
 
+    # 測試用：把 shared/（access.yaml 等設定）換成另一份副本，讓 API 與 worker 行程一起看到「撤權」
+    # 這類設定變更而不必改動版控中的檔案。正式環境留空
+    artrag_shared_dir: str = ""
+
     # PostgreSQL + pgvector（Docker，見 deploy/docker-compose.yml 與 docs/adr/009）：
     # 畫作、段落、向量、manifest 與使用紀錄都存這裡。
     # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
@@ -158,7 +162,7 @@ class Settings(BaseSettings):
 
     @property
     def shared_dir(self) -> Path:
-        return REPO_ROOT / "shared"
+        return Path(self.artrag_shared_dir) if self.artrag_shared_dir else REPO_ROOT / "shared"
 
     @property
     def index_dir(self) -> Path:

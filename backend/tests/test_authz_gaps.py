@@ -309,7 +309,7 @@ def test_reconstruct_stream_records_access_before_any_other_file(client):
     assert cad_status(client, "sales_a", job_id) == 404
 
 
-# ------------------------------------------------------------------ 照片建檔草稿（上傳照片的衍生資料）
+# ---------------------------------------------------------------- 照片建檔草稿（照片的衍生資料）
 def test_intake_draft_belongs_to_its_creator_and_the_manager(client, monkeypatch):
     """草稿裡有上傳照片的副本：建檔的人和能收錄的身分（主管）看得到，其他帳號 404。"""
     from app.services import intake_service

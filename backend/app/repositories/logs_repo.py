@@ -155,9 +155,15 @@ class LogsRepo:
         return [dict(r) for r in rows]
 
     def add_cad_log(self, row: dict) -> None:
+        """同一個 request_id 再寫一次就覆蓋：背景工作重試（租約過期後重跑）時不會因唯一鍵失敗。"""
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)
-        self._exec(f"INSERT INTO cad_logs ({cols}) VALUES ({marks})", tuple(row.values()))
+        updates = ", ".join(f"{c} = excluded.{c}" for c in row if c != "request_id")
+        self._exec(
+            f"INSERT INTO cad_logs ({cols}) VALUES ({marks})"
+            f" ON CONFLICT (request_id) DO UPDATE SET {updates}",
+            tuple(row.values()),
+        )
 
     def recent_cad(self, limit: int = 10) -> list[dict]:
         rows = self._exec("SELECT * FROM cad_logs ORDER BY created_at DESC LIMIT ?", (limit,))

@@ -142,20 +142,19 @@ def create_job(
     s = get_settings()
     rhash = request_hash(kind, {**params, "resource": resource})
     job_id = new_job_id(kind)
-    with db.connection() as conn:
+    # 外層 transaction()：jobs 列、created 事件、outbox 一起提交或一起回滾
+    # （沒有先執行過任何語句時 transaction() 是最外層交易，不能只包住 INSERT）
+    with db.connection() as conn, conn.transaction():
         if idempotency_key:
-            existing = conn.execute(
-                "SELECT * FROM jobs WHERE owner_id = %s AND kind = %s AND idempotency_key = %s",
-                (owner_id, kind, idempotency_key),
-            ).fetchone()
+            existing = _by_key(conn, owner_id, kind, idempotency_key)
             if existing:
                 return _replay(existing, rhash), False
         try:
-            with conn.transaction():
+            with conn.transaction():  # savepoint：唯一約束衝突時只回滾這個 INSERT
                 conn.execute(
                     "INSERT INTO jobs (id, kind, queue, owner_id, scope, params, resource,"
                     " input_version, input_versions, idempotency_key, request_hash, request_id,"
-                    " max_attempts) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                    " max_attempts) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (
                         job_id,
                         kind,
@@ -171,14 +170,11 @@ def create_job(
                         request_id,
                         s.jobs_max_attempts,
                     ),
-                ).fetchone()
+                )
         except psycopg.errors.UniqueViolation as e:
             name = e.diag.constraint_name or ""
             if "idempotency" in name and idempotency_key:  # 同時送兩次：另一個交易先寫入
-                existing = conn.execute(
-                    "SELECT * FROM jobs WHERE owner_id = %s AND kind = %s AND idempotency_key = %s",
-                    (owner_id, kind, idempotency_key),
-                ).fetchone()
+                existing = _by_key(conn, owner_id, kind, idempotency_key)
                 if existing:
                     return _replay(existing, rhash), False
             active = conn.execute(
@@ -195,6 +191,13 @@ def create_job(
             (job_id, QUEUE_OF[kind]),
         )
         return conn.execute("SELECT * FROM jobs WHERE id = %s", (job_id,)).fetchone(), True
+
+
+def _by_key(conn, owner_id: str, kind: str, key: str) -> dict | None:
+    return conn.execute(
+        "SELECT * FROM jobs WHERE owner_id = %s AND kind = %s AND idempotency_key = %s",
+        (owner_id, kind, key),
+    ).fetchone()
 
 
 def _replay(existing: dict, rhash: str) -> dict:

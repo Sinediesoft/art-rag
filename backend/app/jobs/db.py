@@ -1,6 +1,7 @@
 """工作資料庫連線池（PostgreSQL，不需要 pgvector）。連不上丟 JobsUnavailable，路由轉成 503。"""
 
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -29,14 +30,18 @@ def describe(url: str) -> str:
 _pool: ConnectionPool | None = None
 _lock = threading.Lock()
 _url: str | None = None
+_down_until = 0.0  # 剛失敗過：這個時間之前直接回 JobsUnavailable，不讓每個請求都等逾時
+FAIL_FAST_S = 1.0
 
 
 def get_pool() -> ConnectionPool:
-    global _pool, _url
+    global _pool, _url, _down_until
     url = get_settings().jobs_db_url
     if not url:
         raise JobsUnavailable("沒有設定工作資料庫（JOBS_DATABASE_URL 或 DATABASE_URL）")
     with _lock:
+        if _pool is None and time.monotonic() < _down_until:
+            raise JobsUnavailable(f"連不上工作資料庫 {describe(url)}")
         if _pool is not None and _url != url:  # 測試或設定切換：換成新的資料庫
             _pool.close()
             _pool = None
@@ -57,6 +62,7 @@ def get_pool() -> ConnectionPool:
                 if _pool is not None:
                     _pool.close()
                 _pool = None
+                _down_until = time.monotonic() + FAIL_FAST_S
                 raise JobsUnavailable(f"連不上工作資料庫 {describe(url)}") from e
         return _pool
 
@@ -69,15 +75,34 @@ def connection() -> Iterator[psycopg.Connection]:
         with pool.connection() as conn:
             yield conn
     except (psycopg.OperationalError, PoolTimeout) as e:
+        if _connection_level(e):
+            _discard(pool)  # 資料庫重啟後舊連線池會一直重試退讓，丟掉它，下一次呼叫建新的
         raise JobsUnavailable(f"工作資料庫暫時無法使用：{type(e).__name__}") from e
 
 
+def _connection_level(e: Exception) -> bool:
+    """連線層的失敗（連不上、連線中斷、伺服器關閉）才重建連線池；死結、逾時這類語句層錯誤不用。"""
+    if isinstance(e, PoolTimeout):
+        return True
+    state = getattr(e, "sqlstate", None)
+    return state is None or state.startswith(("08", "57"))
+
+
+def _discard(pool: ConnectionPool) -> None:
+    global _pool, _down_until
+    with _lock:
+        if _pool is pool:
+            _pool = None
+            _down_until = time.monotonic() + FAIL_FAST_S
+    pool.close(timeout=1)
+
+
 def close() -> None:
-    global _pool, _url
+    global _pool, _url, _down_until
     with _lock:
         if _pool is not None:
             _pool.close()
-        _pool, _url = None, None
+        _pool, _url, _down_until = None, None, 0.0
 
 
 def ping() -> bool:

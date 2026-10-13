@@ -8,6 +8,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# 背景工作的隔離環境（PostgreSQL＋Redis＋假 Timefold＋Celery worker）：fixture 在 jobs_support.py
+pytest_plugins = ["jobs_support"]
+
 
 @pytest.fixture(scope="session", autouse=True)
 def mock_env(tmp_path_factory):
