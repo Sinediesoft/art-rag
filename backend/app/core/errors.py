@@ -25,6 +25,12 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(error_body(exc.code, exc.message, _rid(request)), status_code=exc.status)
 
 
+async def jobs_unavailable_handler(request: Request, exc) -> JSONResponse:
+    """工作資料庫連不上（任何路徑冒出來的）：503 JOBS_UNAVAILABLE，可恢復，不改在 API 行程執行。"""
+    msg = "背景工作系統目前無法使用（工作資料庫）；請稍後再試，工作不會在 API 行程執行"
+    return JSONResponse(error_body("JOBS_UNAVAILABLE", msg, _rid(request)), status_code=503)
+
+
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     msg = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
     return JSONResponse(error_body("VALIDATION_ERROR", msg, _rid(request)), status_code=422)

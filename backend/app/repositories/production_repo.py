@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS schedule_ops (
 WO_NO = re.compile(r"^WO-(\d{4})-(\d{2,3})$")
 
 
+class RevisionConflict(Exception):
+    """寫回時資料版本和求解開始時不同：求解期間有人改了工單等資料。"""
+
+    def __init__(self, revision: str):
+        super().__init__(f"production revision 已是 {revision}")
+        self.revision = revision
+
+
 class ProductionRepo:
     def __init__(self, path: Path):
         self.path = path
@@ -163,8 +171,20 @@ class ProductionRepo:
         return self._read(f"SELECT * FROM work_orders {where} ORDER BY created_at")
 
     # ------------------------------------------------------------ 排程結果
-    def save_run(self, run: dict, ops: list[dict]) -> str:
-        run_id = run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
+    def save_run(
+        self,
+        run: dict,
+        ops: list[dict],
+        run_id: str | None = None,
+        expected_revision: str | None = None,
+    ) -> str:
+        """寫入一次排程結果（單一交易，BEGIN IMMEDIATE）。
+
+        expected_revision：求解開始時的資料版本；交易內發現版本變了（有人開／取消工單、改交期…）
+        就丟 RevisionConflict、什麼都不寫——舊解不會覆蓋新資料。
+        run_id 由呼叫端指定（背景工作用 job_id 推出來的固定值）時是冪等的：同一個 run_id
+        已經存在就直接回傳，不重複寫入、不覆蓋（重送、重試、租約過期的舊 worker 延遲寫回）。"""
+        run_id = run_id or run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
         row = {
             **run,
             "run_id": run_id,
@@ -175,30 +195,52 @@ class ProductionRepo:
         }
         with self._lock:
             conn = self._conn()
+            conn.isolation_level = None  # 自己管交易：BEGIN IMMEDIATE 先取得寫入鎖再比對版本
             try:
-                cols = ", ".join(row)
-                marks = ", ".join("?" for _ in row)
-                conn.execute(
-                    f"INSERT INTO schedule_runs ({cols}) VALUES ({marks})", tuple(row.values())
-                )
-                conn.executemany(
-                    "INSERT INTO schedule_ops (run_id, op_id, wo_no, part_id, op_seq, op_name,"
-                    " kind,"
-                    " machine_id, start_min, end_min, setup_min, run_min, start_at, end_at, pinned)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    [
-                        (run_id, o["op_id"], o["wo_no"], o["part_id"], o["op_seq"], o["op_name"],
-                         o["kind"], o.get("machine_id"), o["start_min"], o["end_min"],
-                         o.get("setup_min", 0), o.get("run_min", 0), o["start_at"], o["end_at"],
-                         int(bool(o.get("pinned"))))
-                        for o in ops
-                    ],
-                )  # fmt: skip
-                self._bump(conn)
-                conn.commit()
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    if expected_revision is not None:
+                        have = conn.execute("SELECT value FROM meta WHERE key = 'revision'")
+                        have = have.fetchone()
+                        current = have["value"] if have else "0"
+                        if current != expected_revision:
+                            raise RevisionConflict(current)
+                    if conn.execute(
+                        "SELECT 1 FROM schedule_runs WHERE run_id = ?", (run_id,)
+                    ).fetchone():
+                        conn.execute("ROLLBACK")
+                        return run_id
+                    cols = ", ".join(row)
+                    marks = ", ".join("?" for _ in row)
+                    conn.execute(
+                        f"INSERT INTO schedule_runs ({cols}) VALUES ({marks})", tuple(row.values())
+                    )
+                    conn.executemany(
+                        "INSERT INTO schedule_ops (run_id, op_id, wo_no, part_id, op_seq, op_name,"
+                        " kind,"
+                        " machine_id, start_min, end_min, setup_min, run_min, start_at, end_at,"
+                        " pinned) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        [
+                            (run_id, o["op_id"], o["wo_no"], o["part_id"], o["op_seq"],
+                             o["op_name"], o["kind"], o.get("machine_id"), o["start_min"],
+                             o["end_min"], o.get("setup_min", 0), o.get("run_min", 0),
+                             o["start_at"], o["end_at"], int(bool(o.get("pinned"))))
+                            for o in ops
+                        ],
+                    )  # fmt: skip
+                    self._bump(conn)
+                    conn.execute("COMMIT")
+                except BaseException:
+                    if conn.in_transaction:
+                        conn.execute("ROLLBACK")
+                    raise
             finally:
                 conn.close()
         return run_id
+
+    def find_run(self, run_id: str) -> dict | None:
+        rows = self._read("SELECT run_id, status FROM schedule_runs WHERE run_id = ?", (run_id,))
+        return rows[0] if rows else None
 
     @staticmethod
     def _decode(run: dict) -> dict:

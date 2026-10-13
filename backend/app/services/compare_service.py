@@ -16,7 +16,9 @@ from app.core.errors import AppError
 from app.rag import verify
 from app.rag.preprocess import load_image
 from app.repositories.index_store import get_store
-from app.services.search_service import load_upload, part_summary
+from app.services import uploads
+from app.services.identity import Account
+from app.services.search_service import part_summary
 
 # target 的格式：artwork:<畫作 id>、part:<圖紙 id>，或 image:<另一張上傳照片>（兩張照片互比，畫作）
 TARGET_PATTERN = r"^(artwork|part|image):[A-Za-z0-9_.-]+$"
@@ -49,7 +51,7 @@ def _target(target: str) -> tuple[str, str, Image.Image, object, str]:
     """回傳 (領域, id, 參考圖, 參考圖的特徵點, 參考圖網址)；找不到就 404。"""
     kind, _, tid = target.partition(":")
     if kind == "image":
-        ref = load_image(load_upload(tid))
+        ref = load_image(uploads.load_unchecked(tid))
         return "pair", tid, ref, verify.features(ref), f"/api/v1/images/{tid}"
     store = get_store()
     if kind == "artwork":
@@ -70,7 +72,7 @@ def _target(target: str) -> tuple[str, str, Image.Image, object, str]:
 def _compute(image_id: str, target: str) -> tuple[dict, bytes]:
     """找不到照片或對不上時丟 AppError（例外不會被快取）。"""
     domain, tid, ref, ref_feats, ref_url = _target(target)
-    img = load_image(load_upload(image_id))
+    img = load_image(uploads.load_unchecked(image_id))
     t0 = time.perf_counter()
     cfg = get_models_config()
     spec = getattr(cfg.image_compare, domain)
@@ -125,9 +127,20 @@ def _compute(image_id: str, target: str) -> tuple[dict, bytes]:
     return result, png
 
 
-def align_photo(image_id: str, target: str) -> dict:
+def _authorize(image_id: str, target: str, viewer: Account) -> None:
+    """照片和對象（另一張上傳照片 image:<id> 時）都要是 viewer 可以用的；
+    結果以（照片, 對象）快取，所以授權在快取之外、每次呼叫都驗。"""
+    uploads.authorize(image_id, viewer)
+    kind, _, tid = target.partition(":")
+    if kind == "image":
+        uploads.authorize(tid, viewer)
+
+
+def align_photo(image_id: str, target: str, viewer: Account) -> dict:
+    _authorize(image_id, target, viewer)
     return _compute(image_id, target)[0]
 
 
-def align_overlay(image_id: str, target: str) -> bytes:
+def align_overlay(image_id: str, target: str, viewer: Account) -> bytes:
+    _authorize(image_id, target, viewer)
     return _compute(image_id, target)[1]

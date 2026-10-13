@@ -127,6 +127,31 @@ class Settings(BaseSettings):
     # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
     database_url: str = ""
 
+    # ---- 背景工作（TASK-20261013-001，docs/adr/036）：Redis＋Celery 投遞、PostgreSQL 保存狀態 ----
+    # 工作系統要 REDIS_URL 與工作資料庫（JOBS_DATABASE_URL；留空沿用 DATABASE_URL）都有值才啟用。
+    # 沒有啟用時 POST /cad/jobs、/schedule/jobs 回 503 JOBS_UNAVAILABLE（不會偷偷改在 API 行程執行）
+    redis_url: str = ""
+    jobs_database_url: str = ""
+    jobs_lease_s: float = 30.0  # worker 租約；超過沒心跳就當 worker 掛了，工作回到佇列重試
+    jobs_heartbeat_s: float = 5.0
+    jobs_max_attempts: int = 3
+    jobs_gpu_slots: int = 1  # GPU 重工作（3D 重建）同時最多幾個，跨所有 worker 行程
+    jobs_poll_s: float = 0.5  # 事件串流輪詢資料庫的間隔
+    jobs_event_retention_days: int = 7
+    jobs_dispatch_interval_s: float = 2.0  # outbox 投遞迴圈
+    # 舊的 SSE 入口（POST /cad/reconstruct、/schedule/solve）在 API 行程內執行：
+    # auto＝沒有啟用工作系統才開（單機開發）、on＝一律開、off＝一律關（回 409 USE_JOBS_API）
+    legacy_sync_jobs: Literal["auto", "on", "off"] = "auto"
+    jobs_models_ttl_s: float = 120.0  # worker 登記「使用中模型」的存活時間（心跳續約）
+
+    @property
+    def jobs_db_url(self) -> str:
+        return self.jobs_database_url or self.database_url
+
+    @property
+    def jobs_enabled(self) -> bool:
+        return bool(self.redis_url and self.jobs_db_url)
+
     @property
     def kb_dir(self) -> Path:
         return REPO_ROOT / "kb"
@@ -385,11 +410,25 @@ def get_agent_config() -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-@lru_cache
+_access: dict = {"mtime": None, "path": None, "data": None}
+
+
 def get_access_config() -> dict:
-    """展示帳號、角色權限、硬性上限與核准額度（shared/access.yaml）。"""
+    """展示帳號、角色權限、硬性上限與核准額度（shared/access.yaml）。
+
+    檔案修改時間變了就重讀：API 與背景 worker 是不同行程，撤權（改 access.yaml）要讓
+    排隊中、執行中的工作在下一次檢查時看到最新的權限，不能等重啟（TASK-20261013-001）。
+    """
     path = get_settings().shared_dir / "access.yaml"
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+    mtime = path.stat().st_mtime_ns
+    if _access["data"] is None or _access["mtime"] != mtime or _access["path"] != path:
+        _access.update(
+            mtime=mtime, path=path, data=yaml.safe_load(path.read_text(encoding="utf-8"))
+        )
+    return _access["data"]
+
+
+get_access_config.cache_clear = lambda: _access.update(mtime=None, path=None, data=None)  # type: ignore[attr-defined]
 
 
 def kb_version() -> str:

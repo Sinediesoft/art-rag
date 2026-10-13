@@ -19,8 +19,9 @@ import re
 import shutil
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from PIL import Image
 
@@ -34,14 +35,14 @@ from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import memory_guard
+from app.services import cad_access, memory_guard
+from app.services.cad_access import JOB_FILES
 from app.services.chat_service import NO_EGRESS, sse
 from app.services.identity import Account, require_part, visible_part_ids
 from app.services.search_service import identify_drawing, load_upload, part_summary, rectify_to_part
+from app.services.security import CadAccess
 
 CAD_STRATEGIES = {"ortho2cad", "hybrid"}
-JOB_FILES = {"model.stl", "model.step", "reproj.png", "code.py", "input.png"}
-JOB_ID = re.compile(r"^cad_[0-9a-f]{16}$")
 
 DIMS_PROMPT = (
     "這是一張機械零件的三視圖（第一角法）。圖上只有三個外形尺寸標註：\n"
@@ -129,7 +130,8 @@ def purge_jobs(ttl_days: int) -> int:
     cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).timestamp()
     n = 0
     for d in root.iterdir():
-        if d.is_dir() and d.stat().st_mtime < cutoff:
+        # .staging 是背景工作寫到一半的暫存資料夾（成功才改名發布），由工作系統自己清
+        if d.is_dir() and not d.name.startswith(".") and d.stat().st_mtime < cutoff:
             shutil.rmtree(d, ignore_errors=True)
             n += 1
     return n
@@ -153,14 +155,33 @@ async def reconstruct_stream(
         yield e
 
 
+def public_error(text: str | None, limit: int = 200) -> str | None:
+    """進度、事件與工作結果裡的錯誤只留第一行、限長：沙箱的錯誤訊息可能夾帶模型產生的程式碼或路徑
+    （授權人員要看程式碼，走受保護的 code.py 下載端點）。"""
+    if not text:
+        return text
+    first = text.strip().splitlines()[0] if text.strip() else ""
+    return first[:limit]
+
+
 async def _reconstruct_stream(
     request_id: str,
     part_id: str | None = None,
     image_id: str | None = None,
     strategy: str = "ortho2cad",
     account: Account | None = None,
+    *,
+    job_id: str | None = None,
+    out_dir: Path | None = None,
+    file_url: Callable[[str, str], str] | None = None,
+    include_code: bool = True,
+    checkpoint: Callable[[str], None] | None = None,
 ) -> AsyncIterator[str]:
+    """job_id／out_dir／file_url／include_code／checkpoint 是背景工作用的（services/cad_job.py）：
+    工作編號與暫存資料夾由工作系統給、檔案網址指向受保護的產物端點、事件不帶程式碼、
+    階段之間檢查有沒有被取消或撤權。既有的 SSE 入口不傳這些，行為不變。"""
     t0 = time.perf_counter()
+    check = checkpoint or (lambda _stage: None)
     s, cfg, store = get_settings(), get_models_config().cad, get_store()
 
     def err(code: str, message: str) -> str:
@@ -171,6 +192,7 @@ async def _reconstruct_stream(
         return
 
     # 1. 取得圖紙與版面
+    check("identify")
     part, identified, photo = None, None, None
     if part_id:
         part = store.get_part(part_id)
@@ -178,7 +200,7 @@ async def _reconstruct_stream(
             yield err("PART_NOT_FOUND", f"找不到圖紙 {part_id}")
             return
     if image_id:
-        photo = load_image(load_upload(image_id))
+        photo = load_image(load_upload(image_id, account))
         if not part:
             # 只在看得到的圖紙裡辨識（docs/adr/030）：看不到的圖紙不讀，認不出就當未收錄的照片
             visible = visible_part_ids(account, store.parts) if account is not None else None
@@ -204,11 +226,26 @@ async def _reconstruct_stream(
     max_pixels = int(cfg["max_pixels"]) if strategy == "ortho2cad" else 800 * 800
     model_img = await asyncio.to_thread(model_input, drawing, layout, max_pixels)
 
-    job_id = "cad_" + uuid.uuid4().hex[:16]
-    job_dir = s.cad_jobs_dir / job_id
+    job_id = job_id or "cad_" + uuid.uuid4().hex[:16]
+    job_dir = out_dir or s.cad_jobs_dir / job_id
+    if out_dir is None:
+        # 既有的 SSE 入口：資料夾建好後第一個寫入的檔案就是存取紀錄，之後不管跑到哪一步
+        # （未完成、失敗、完成），下載端點都靠它授權，不看 summary.json 在不在
+        cad_access.write_access(
+            job_id,
+            CadAccess(
+                job_id,
+                account.id if account else None,
+                part_id,
+                image_id,
+                identified["best_part_id"] if identified and identified["matched"] else None,
+            ),
+            job_dir,
+        )
     job_dir.mkdir(parents=True, exist_ok=True)
     model_img.save(job_dir / "input.png")
-    files = {name: f"/api/v1/cad/jobs/{job_id}/{name}" for name in sorted(JOB_FILES)}
+    url_of = file_url or (lambda jid, name: f"/api/v1/cad/jobs/{jid}/{name}")
+    files = {name: url_of(job_id, name) for name in sorted(JOB_FILES)}
 
     # 2. 尺寸依據
     if part:
@@ -243,6 +280,7 @@ async def _reconstruct_stream(
     yield sse("meta", meta)
 
     # 3. 生成 CadQuery 程式碼（逐字串流）
+    check("generate")
     prompt = str(cfg["prompt"]) + (str(cfg["baseline_suffix"]) if strategy != "ortho2cad" else "")
     messages = [
         {
@@ -262,6 +300,7 @@ async def _reconstruct_stream(
     answer, first_token_ms = "", None
     try:
         async for piece in pieces:
+            check("generate")
             if first_token_ms is None:
                 first_token_ms = round((time.perf_counter() - t0) * 1000)
             answer += piece
@@ -277,7 +316,9 @@ async def _reconstruct_stream(
     generation_ms = round((time.perf_counter() - t_gen) * 1000)
 
     # 4. 沙箱執行
+    check("execute")
     code = extract_code(answer)
+    (job_dir / "code.py").write_text(code, encoding="utf-8")  # 失敗（含安全檢查沒過）也留得住
     yield sse("executing", {"generation_ms": generation_ms, "code_chars": len(code)})
     gt_step = store.parts_dir / "gt" / f"{part['id']}.step" if part else None
     holes, hole_reason = await asyncio.to_thread(hole_plan_for, part, scale_to, layout)
@@ -291,10 +332,11 @@ async def _reconstruct_stream(
         wsl=wsl_target(),
     )
     d = run.data
+    check("write")
     result = {
         "ok": run.ok,
-        "error": run.error,
-        "code": code,
+        "error": run.error if include_code else public_error(run.error),
+        **({"code": code} if include_code else {}),
         "valid": d.get("valid"),
         "repaired": d.get("repaired"),
         "raw_dims": d.get("raw_dims"),

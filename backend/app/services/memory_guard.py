@@ -46,6 +46,7 @@ import psutil
 
 from app.core.config import get_models_config, get_settings
 from app.core.logging import log
+from app.jobs import coordination
 
 FLOWS: dict[str, str] = {
     "search_image": "以圖搜圖／圖紙辨識",
@@ -343,6 +344,7 @@ class MemoryGuard:
             elif self.active and flow == self.current_flow:
                 self.current_models |= set(models)
             self.active.append(flow)
+        self.publish()
 
     def exit(self, flow: str, models: set[str]) -> None:
         with self._lock:
@@ -350,10 +352,22 @@ class MemoryGuard:
                 self.in_use[k] = max(0, self.in_use.get(k, 0) - 1)
             if flow in self.active:
                 self.active.remove(flow)
+        self.publish()
 
-    def busy(self) -> set[str]:
+    def local_busy(self) -> set[str]:
         with self._lock:
             return {k for k, n in self.in_use.items() if n > 0}
+
+    def busy(self) -> set[str]:
+        """使用中的模型：本行程的引用，加上其他行程（API、各 worker）在 Redis 登記的——
+        不卸載別的行程正在用的模型（docs/adr/036）。"""
+        return self.local_busy() | coordination.others_in_use()
+
+    def publish(self) -> None:
+        """把本行程使用中的模型登記到 Redis（沒有 REDIS_URL 時什麼都不做）。"""
+        with self._lock:
+            snapshot = dict(self.in_use)
+        coordination.publish_usage(snapshot)
 
     def projected_percent(
         self, before: float, keep: set[str], pool: str = "ram", total_mb: int | None = None

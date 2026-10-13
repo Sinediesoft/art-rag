@@ -4,6 +4,7 @@
 庫存資料（Text-to-SQL 查詢的對象）在另一個檔案，見 inventory_repo.py。
 """
 
+import json
 import sqlite3
 import threading
 from datetime import UTC, datetime, timedelta
@@ -13,7 +14,8 @@ from app.core.config import get_settings
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
-  image_id TEXT PRIMARY KEY, path TEXT NOT NULL, created_at TEXT NOT NULL
+  image_id TEXT PRIMARY KEY, path TEXT NOT NULL, created_at TEXT NOT NULL,
+  owner_id TEXT, acl TEXT
 );
 CREATE TABLE IF NOT EXISTS chat_logs (
   request_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, artwork_id TEXT, question TEXT,
@@ -55,6 +57,9 @@ CREATE TABLE IF NOT EXISTS security_logs (
 
 # 舊版資料庫缺少的欄位：啟動時補上（正式版改用 Alembic migration）
 _ADDED_COLUMNS = {
+    # 上傳照片的擁有者與明確授權名單（JSON 陣列的帳號 id）；舊資料兩欄為空＝沒有人能用（安全拒絕），
+    # 要用得由管理者遷移（python -m app.jobs.admin adopt-uploads）
+    "uploads": {"owner_id": "TEXT", "acl": "TEXT"},
     "chat_logs": {
         "egress_images": "INTEGER DEFAULT 0",
         "egress_chunks": "INTEGER DEFAULT 0",
@@ -90,12 +95,43 @@ class LogsRepo:
     def now() -> str:
         return datetime.now(UTC).isoformat()
 
-    def add_upload(self, image_id: str, path: str) -> None:
-        self._exec("INSERT INTO uploads VALUES (?, ?, ?)", (image_id, path, self.now()))
+    def add_upload(self, image_id: str, path: str, owner_id: str | None = None) -> None:
+        """owner_id＝上傳的帳號（資料範圍之外的第二道：知道 image_id 不能讀別人的照片）。"""
+        self._exec(
+            "INSERT INTO uploads (image_id, path, created_at, owner_id, acl)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (image_id, path, self.now(), owner_id, "[]"),
+        )
 
     def get_upload(self, image_id: str) -> str | None:
         rows = self._exec("SELECT path FROM uploads WHERE image_id = ?", (image_id,))
         return rows[0]["path"] if rows else None
+
+    def get_upload_record(self, image_id: str) -> dict | None:
+        """{path, owner_id, acl}；舊資料沒有擁有者時 owner_id 為 None。"""
+        rows = self._exec(
+            "SELECT image_id, path, owner_id, acl FROM uploads WHERE image_id = ?", (image_id,)
+        )
+        if not rows:
+            return None
+        r = dict(rows[0])
+        r["acl"] = json.loads(r["acl"]) if r.get("acl") else []
+        return r
+
+    def set_upload_acl(self, image_id: str, acl: list[str]) -> bool:
+        rows = self._exec(
+            "UPDATE uploads SET acl = ? WHERE image_id = ? RETURNING image_id",
+            (json.dumps(sorted(set(acl)), ensure_ascii=False), image_id),
+        )
+        return bool(rows)
+
+    def adopt_uploads(self, owner_id: str) -> int:
+        """管理者遷移：把還沒有擁有者的舊上傳指派給 owner_id，回傳筆數（保存期限內才有東西）。"""
+        rows = self._exec(
+            "UPDATE uploads SET owner_id = ?, acl = '[]' WHERE owner_id IS NULL RETURNING image_id",
+            (owner_id,),
+        )
+        return len(rows)
 
     def purge_uploads(self, ttl_days: int) -> list[str]:
         cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat()

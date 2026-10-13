@@ -7,13 +7,20 @@
 - /chat 驗：票號存在、沒過期、帳號相同、問句雜湊相同、對象（圖紙／畫作）相同；任一不符就當沒帶，
   /chat 自己重跑第 2 段——偽造或過期的票只會讓檢查變多，不會變少
 - 有效的票也只省掉第 2 段；第 1 段的文件層授權、第 3～7 段 /chat 一律重跑
-- 只存在這個後端行程的記憶體（展示版單機）：後端重啟後舊票失效，/chat 會重跑第 2 段
+- 單機（沒設 REDIS_URL）：只存在這個後端行程的記憶體，後端重啟後舊票失效，/chat 會重跑第 2 段
+- 多個 API 行程（有 REDIS_URL）：票存在 Redis（短效 key，TTL 同票的效期），任一行程簽發、
+  任一行程核銷；Redis 不通或查不到＝當作沒有票，/chat 重跑第 2 段——多行程不會讓檢查變少
 """
 
+import json
 import secrets
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+
+import redis
+
+from app.jobs import coordination
 
 TTL_S = 600  # 10 分鐘：一次問答從路由到串流完成綽綽有餘
 MAX_TICKETS = 5000
@@ -60,6 +67,8 @@ def issue(
         request_id,
         now + TTL_S,
     )
+    if _put_redis(token, t):
+        return token
     with _lock:
         for k in [k for k, v in _tickets.items() if v.expires <= now]:
             del _tickets[k]
@@ -67,6 +76,31 @@ def issue(
             del _tickets[next(iter(_tickets))]  # 最舊的先丟
         _tickets[token] = t
     return token
+
+
+KEY = "artrag:ticket:"
+
+
+def _put_redis(token: str, t: Ticket) -> bool:
+    r = coordination.client()
+    if r is None:
+        return False
+    try:
+        r.set(KEY + token, json.dumps(asdict(t)), ex=TTL_S)
+        return True
+    except redis.RedisError:
+        return False  # Redis 不通：退回行程內（同一個 API 行程仍可核銷；其他行程會重跑第 2 段）
+
+
+def _get_redis(token: str) -> Ticket | None:
+    r = coordination.client()
+    if r is None:
+        return None
+    try:
+        raw = r.get(KEY + token)
+        return Ticket(**json.loads(raw)) if raw else None
+    except (redis.RedisError, ValueError, TypeError):
+        return None
 
 
 def redeem(
@@ -83,6 +117,8 @@ def redeem(
     now = now or time.time()
     with _lock:
         t = _tickets.get(token)
+    if t is None:
+        t = _get_redis(token)
     if t is None or t.expires <= now:
         return None
     if (t.account_id, t.question, t.part_id, t.artwork_id) != (
@@ -98,3 +134,10 @@ def redeem(
 def clear() -> None:
     with _lock:
         _tickets.clear()
+    r = coordination.client()
+    if r is not None:
+        try:
+            for key in r.scan_iter(match=KEY + "*"):
+                r.delete(key)
+        except redis.RedisError:
+            pass

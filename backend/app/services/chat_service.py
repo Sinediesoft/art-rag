@@ -449,7 +449,7 @@ async def _chat_stream(
     route_info = None
     if not artwork_id and not part_id and image_id:
         visible = visible_part_ids(account, store.parts) if account is not None else None
-        found = identify_any(image_id, part_ids=visible)
+        found = identify_any(image_id, part_ids=visible, viewer=account)
         route_info = found["route"]
         domain = route_info["domain"]
         identified = found["drawing_result"] if domain == "mfg" else found["artwork_result"]
@@ -665,7 +665,7 @@ async def _chat_stream(
     if not attach_image:
         image_jpeg = None
     elif image_id:
-        image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
+        image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id, account)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
     elif artwork:

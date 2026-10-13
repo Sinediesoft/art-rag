@@ -500,6 +500,10 @@ class StatusResponse(BaseModel):
     memory: "MemoryStatus | None" = None
     system1: System1Brief
     chat_defaults: ChatDefaultsBrief
+    jobs: "JobsBrief | None" = Field(
+        default=None,
+        description="背景工作系統（Redis＋工作資料庫＋worker）；沒啟用時 enabled=false",
+    )
 
 
 class DiagnosticsResponse(BaseModel):
@@ -1124,6 +1128,13 @@ class ProductionOverview(BaseModel):
     runs: list[ScheduleRunRow]
     solving: bool
     settings: dict
+    input_version: str | None = Field(
+        default=None,
+        description="目前的排程輸入版本（工單、途程、機台、行事曆）；建立排程工作時帶回",
+    )
+    active_job: "Job | None" = Field(
+        default=None, description="排程範圍裡排隊或執行中的背景工作（重新整理後找回進度用）"
+    )
 
 
 class ScheduleSolveRequest(BaseModel):
@@ -1619,9 +1630,110 @@ class IntakeUpdate(BaseModel):
     )
 
 
+# ---------------------------------------------------------------- 背景工作（TASK-20261013-001）
+class ImageAclUpdate(BaseModel):
+    accounts: list[str] = Field(
+        default_factory=list, max_length=20, description="可以使用這張照片的其他帳號 id（整份取代）"
+    )
+
+
+class ImageAcl(BaseModel):
+    image_id: str
+    owner_id: str
+    accounts: list[str]
+
+
+class CadJobCreate(BaseModel):
+    part_id: str | None = Field(default=None, description="知識庫圖紙")
+    image_id: str | None = Field(
+        default=None, description="上傳的圖紙照片（要是自己的或擁有者授權的）"
+    )
+    strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
+
+
+class ScheduleJobCreate(BaseModel):
+    seconds: int | None = Field(default=None, ge=3, le=60, description="求解秒數；預設 20")
+    engine: Literal["timefold", "greedy"] = "timefold"
+    input_version: str | None = Field(
+        default=None,
+        description="您畫面上的輸入版本（GET /production/overview 的 input_version）；"
+        "和伺服器現在的不同回 409 SCHEDULE_INPUT_CHANGED，不會用過期的資料排程",
+    )
+
+
+class JobCreated(BaseModel):
+    job_id: str
+    kind: Literal["cad", "schedule"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    status_url: str
+    events_url: str
+    idempotent_replay: bool = Field(
+        description="true＝相同帳號／操作／Idempotency-Key 的相同請求，回傳的是先前建立的工作"
+    )
+    delayed_dispatch: bool = Field(
+        description="true＝工作已建立但 broker 暫時不通，留在 outbox 等恢復後投遞（維持 queued）"
+    )
+
+
+class JobError(BaseModel):
+    code: str
+    message: str
+
+
+class JobArtifact(BaseModel):
+    name: str
+    url: str
+    content_type: str
+    size_bytes: int
+
+
+class Job(BaseModel):
+    id: str
+    kind: Literal["cad", "schedule"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    owner_id: str
+    attempt: int
+    max_attempts: int
+    cancel_requested: bool
+    stop_requested: bool
+    progress: dict | None = None
+    result: dict | None = None
+    error: JobError | None = None
+    input_version: str | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    last_event_id: int
+    status_url: str
+    events_url: str
+    artifacts: list[JobArtifact] = []
+
+
+class JobListResponse(BaseModel):
+    items: list[Job]
+
+
+class JobCancelResponse(BaseModel):
+    result: Literal["cancelled", "cancelling", "already_cancelled"]
+    job: Job
+
+
+class ScheduleStopRequest(BaseModel):
+    job_id: str | None = Field(default=None, description="要提前結束的排程工作；沒給＝目前執行中的")
+
+
+class JobsBrief(BaseModel):
+    enabled: bool
+    database_ok: bool
+    broker_ok: bool
+    pending_dispatch: int
+    counts: dict[str, int]
+
+
 HealthResponse.model_rebuild()
 StatusResponse.model_rebuild()
 DiagnosticsResponse.model_rebuild()
+ProductionOverview.model_rebuild()
 
 
 # ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）

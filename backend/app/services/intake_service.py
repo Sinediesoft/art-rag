@@ -251,9 +251,18 @@ def _save(d: dict) -> None:
     tmp.replace(path)
 
 
-def draft_file(draft_id: str, name: str) -> Path:
+def _authorized(d: dict, account: Account) -> dict:
+    """草稿裡有上傳照片的副本與讀出的欄位：只有建檔的人和能收錄的身分（kb_intake，主管）看得到。
+    舊草稿沒有建檔人，只有能收錄的身分讀得到；看不到的回和不存在同一個 404。"""
+    if d.get("created_by") == account.id or account.can("kb_intake"):
+        return d
+    raise AppError("INTAKE_DRAFT_NOT_FOUND", "找不到這份建檔草稿，可能已超過保存期限", 404)
+
+
+def draft_file(draft_id: str, name: str, account: Account) -> Path:
     if name not in FILES:
         raise AppError("VALIDATION_ERROR", "只提供 " + "、".join(sorted(FILES)), 422)
+    _authorized(_load(draft_id), account)
     path = _dir(draft_id) / name
     if not path.is_file():
         raise AppError("INTAKE_DRAFT_NOT_FOUND", "找不到這份建檔草稿，可能已超過保存期限", 404)
@@ -505,13 +514,17 @@ async def intake_stream(
     """
     models = {"clip"} if domain == "art" else {"clip", "qwen"}
     visible = visible_part_ids(account, get_store().parts) if account is not None else None
-    events = _intake_stream(image_id, request_id, domain, visible)
+    events = _intake_stream(image_id, request_id, domain, visible, account)
     async for e in memory_guard.stream("intake", models, events):
         yield e
 
 
 async def _intake_stream(
-    image_id: str, request_id: str, hint: str | None, visible: set[str] | None = None
+    image_id: str,
+    request_id: str,
+    hint: str | None,
+    visible: set[str] | None = None,
+    account: Account | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     s, cfg = get_settings(), get_models_config().intake
@@ -525,7 +538,7 @@ async def _intake_stream(
     try:
         if hint is not None:
             _spec(hint)
-        photo = load_image(load_upload(image_id))
+        photo = load_image(load_upload(image_id, account))
     except AppError as e:
         yield err(e.code, e.message)
         return
@@ -552,7 +565,7 @@ async def _intake_stream(
 
     # 2. 領域路由＋辨識：已收錄就不建檔
     yield stage("identify")
-    found = await asyncio.to_thread(identify_any, image_id, None, visible)
+    found = await asyncio.to_thread(identify_any, image_id, None, visible, viewer=account)
     route = found["route"]
     domain = hint or route["domain"]
     if hint and route["domain"] != hint and not route["uncertain"]:
@@ -588,7 +601,7 @@ async def _intake_stream(
         )
     else:
         result = found["drawing_result"] or await asyncio.to_thread(
-            identify_drawing, image_id, None, None, None, visible
+            identify_drawing, image_id, None, None, None, visible, viewer=account
         )
         if result["matched"]:
             part = get_store().get_part(result["best_part_id"])
@@ -642,6 +655,7 @@ async def _intake_stream(
         "domain": domain,
         "status": "draft",
         "created_at": _now(),
+        "created_by": account.id if account else None,
         "image_id": image_id,
         "proposed_id": _next_id(spec.id_prefix, "mfg") if domain == "mfg" else None,
         "item_id": None,
@@ -756,14 +770,14 @@ def _read_check(extraction: dict, values: dict) -> dict:
 
 
 # ---------------------------------------------------------------- 人修改、捨棄
-def get_draft(draft_id: str) -> dict:
-    return _view(_load(draft_id))
+def get_draft(draft_id: str, account: Account) -> dict:
+    return _view(_authorized(_load(draft_id), account))
 
 
-def update_draft(draft_id: str, values: dict) -> dict:
+def update_draft(draft_id: str, values: dict, account: Account) -> dict:
     """人改過的欄位來源標成「人」，再重新套規則（人填過的欄位規則不動）。"""
     with _lock:
-        d = _load(draft_id)
+        d = _authorized(_load(draft_id), account)
         spec = _spec(d["domain"])
         if d["status"] not in EDITABLE:
             raise AppError("INTAKE_CLOSED", "這份草稿已經收錄或正在收錄，不能再修改", 409)
@@ -780,9 +794,9 @@ def update_draft(draft_id: str, values: dict) -> dict:
     return _view(d)
 
 
-def discard_draft(draft_id: str) -> None:
+def discard_draft(draft_id: str, account: Account) -> None:
     with _lock:
-        d = _load(draft_id)
+        d = _authorized(_load(draft_id), account)
         if d["status"] == "indexing":
             raise AppError("INTAKE_CLOSED", "這份草稿正在收錄、重建索引，不能捨棄", 409)
         shutil.rmtree(_dir(draft_id), ignore_errors=True)

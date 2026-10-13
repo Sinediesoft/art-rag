@@ -67,7 +67,7 @@ def test_audit_is_manager_only(client):
 def test_security_logs_are_manager_only(client, monkeypatch):
     from types import SimpleNamespace
 
-    from app.api import routes
+    from app.api.routers import system as routes
 
     base = {"created_at": "2026-10-08T00:00:00+00:00", "request_id": "req_x", "stage": 2,
             "rule": "越權嘗試", "judge": "地端規則"}  # fmt: skip
