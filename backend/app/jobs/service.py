@@ -8,7 +8,6 @@
 import re
 from pathlib import Path
 
-from app.core.config import get_settings
 from app.core.errors import AppError
 from app.jobs import audit, broker, db, store
 from app.jobs import enabled as jobs_enabled
@@ -247,7 +246,8 @@ def artifact(account: Account, job_id: str, name: str) -> tuple[Path, str]:
     if job["status"] not in ("succeeded", "failed"):
         raise AppError("JOB_NOT_FINISHED", "工作還沒完成，產物尚未發布", 409)
     row = next((a for a in _guard(store.artifacts, job_id) if a["name"] == name), None)
-    path = get_settings().cad_jobs_dir / job_id / name
+    # 只讀已結束那一次嘗試自己的資料夾（和 job_artifacts 是同一次嘗試寫的）
+    path = cad_access.attempt_dir(job_id, job["attempt"]) / name
     if row is None or not path.is_file():
         raise AppError("JOB_ARTIFACT_NOT_FOUND", "找不到這個產物", 404)
     return path, row["content_type"]

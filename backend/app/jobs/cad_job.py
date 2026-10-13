@@ -3,7 +3,9 @@
 流程重用 `cad_service._reconstruct_stream`（和舊的 SSE 入口同一條管線：辨識 → 讀尺寸 →
 Ortho2CAD → AST 檢查 → 平台沙箱 → 孔位校正的整體回退），差別只在外面這一層：
 - 事件：階段與進度（生成中只給字元數，不給模型輸出）；程式碼只放在受保護的 code.py 產物
-- 產物：先寫到暫存資料夾，成功寫回時整個資料夾一次改名發布（原子），讀取端不會看到半成品
+- 產物：先寫到暫存資料夾，成功寫回時整個資料夾一次改名發布（原子），讀取端不會看到半成品。
+  每次嘗試發布到自己的資料夾（<job>/a<attempt>，不刪、不覆蓋任何既有資料夾）；讀取端只認工作
+  資料庫記錄的那一次嘗試——租約已失效的舊嘗試晚到發布，也不會蓋掉新嘗試的產物
 - 權限：執行前、寫回前（取得寫回資格後、發布前）各依「目前的」access.yaml 重驗一次
 """
 
@@ -19,7 +21,7 @@ from app.core.errors import AppError
 from app.jobs import store
 from app.jobs.control import JobCancelled, JobControl
 from app.jobs.sse_util import parse
-from app.services import cad_service, memory_guard, security
+from app.services import cad_access, cad_service, memory_guard, security
 from app.services.cad_access import JOB_FILES
 
 CONTENT_TYPES = {
@@ -167,11 +169,14 @@ def _commit(job: dict, control: JobControl, staging: Path, meta, result, done) -
         raise JobCancelled("commit")
     with store.commit_section(jid, attempt, wid) as section:  # 取得寫回鎖並 fence
         _authorize(job)  # 寫回前（持有寫回鎖之後）最後一次驗證
-        final = get_settings().cad_jobs_dir / jid
-        section.fence()  # 不可回滾的發布（含刪掉舊資料夾）之前，在持有寫回鎖的連線上再確認一次
-        if final.exists():  # 前一次嘗試發布後、來不及標記成功就中斷
-            shutil.rmtree(final)
-        os.replace(staging, final)  # 原子發布：整個資料夾一次出現
+        final = cad_access.attempt_dir(jid, attempt)  # 這一次嘗試自己的資料夾
+        section.fence()  # 不可回滾的發布之前，在持有寫回鎖的連線上再確認一次
+        final.parent.mkdir(parents=True, exist_ok=True)
+        if final.exists():  # 同一次嘗試不會發布兩次；有就是異常，不刪不蓋
+            raise AppError("CAD_PUBLISH_CONFLICT", "這次嘗試的產物資料夾已經存在，沒有覆蓋")
+        # 原子發布：整個資料夾一次出現。就算這之前寫回鎖的連線斷了、工作被收回由新嘗試完成，
+        # 這裡也只會多出一個沒人讀的舊嘗試資料夾，新嘗試的產物不受影響
+        os.replace(staging, final)
         ok = bool(result.get("ok"))
         error = None
         if not ok:

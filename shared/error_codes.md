@@ -56,6 +56,7 @@
 | `SCHEDULE_SCORE_MISMATCH` | 422／工作 `error.code` | Timefold 回的分數和後端用同一套規則重算的不一致，沒有寫回 |
 | `CAD_EXEC_FAILED` | 工作 `error.code` | 3D 重建的沙箱執行失敗（`message` 只留第一行；程式碼、輸入圖在受保護的產物端點給授權的人看） |
 | `CAD_NO_RESULT` | 工作 `error.code` | 3D 重建沒有產出結果事件 |
+| `CAD_PUBLISH_CONFLICT` | 工作 `error.code` | 這一次嘗試的產物資料夾（`<job>/a<attempt>`）已經存在：不刪、不覆蓋，工作失敗（正常流程不會發生） |
 | `LEASE_EXPIRED` | 工作 `error.code` | worker 連續多次中斷（租約過期），已停止重試 |
 | `PERMISSION_REVOKED` | 403／工作 `error.code` | 提交工作的帳號已不存在或被撤銷；其他撤權（操作、領域、圖紙、照片）依原因回 `PERMISSION_DENIED`／`DATA_SCOPE_DENIED`／`IMAGE_NOT_FOUND`，工作在領取後、執行前、寫回前各驗一次，失敗就不讀圖、不呼叫模型、不寫入 |
 | `INPUT_BLOCKED` | 403 | 工具入口（`POST /inventory/ask`）的共用輸入防護：命中第 2 段的地端 hard-block 規則，不呼叫模型、不查資料，記一筆拒絕並記錄（ADR 036） |

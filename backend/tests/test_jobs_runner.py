@@ -366,6 +366,74 @@ def test_schedule_lease_expiry_during_the_write_back_cannot_be_taken_over(clean,
     assert store.get(jid)["status"] == "succeeded" and len(runs()) == 1
 
 
+def kill_commit_connection(clean, section, jid):
+    """模擬「最後一次 fence 通過之後，持有寫回鎖的連線被中斷」：鎖隨連線釋放、工作租約過期，
+    恢復迴圈把工作收回重排（審查 F1，509bf1d）。"""
+    clean.sql(
+        "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s", (jid,)
+    )
+    killed = clean.sql(
+        "SELECT pg_terminate_backend(%s) AS killed", (section._conn.info.backend_pid,)
+    )
+    assert killed[0]["killed"]
+    assert store.recover_expired() == [(jid, "requeued")]
+
+
+def wait_for_jobs_db():
+    """中斷連線後工作資料庫的連線池會短暫 fail-fast（db.FAIL_FAST_S）。"""
+    from app.jobs import db
+
+    for _ in range(50):
+        if db.ping():
+            return
+        time.sleep(0.1)
+    raise AssertionError("工作資料庫一直連不上")
+
+
+def test_schedule_old_attempt_committing_first_is_what_the_job_reports(clean, monkeypatch):
+    """排程寫回的同一個故障邊界：attempt 1 在寫入交易裡的 fence 通過後，持有寫回鎖的連線中斷、
+    工作被收回；attempt 1 仍提交了它的解。之後的 attempt 2 不覆蓋（run_id 由 job_id 決定，先提交
+    的為準），工作結果、排程詳情、目前排程都是同一列——不會出現「工作結果是 B、排程是 A」。"""
+    jid = schedule_job(engine="greedy")
+    real_write_back = schedule_service.write_back
+    original_fence = store.CommitSection.fence
+    fences, writes = [], []
+
+    def write_back(o, *a, **kw):
+        writes.append(1)
+        if (
+            len(writes) == 1
+        ):  # attempt 1：讓兩次嘗試的解分得出來（實務上 Timefold 每次的解可能不同）
+            o.score = "0hard/0medium/-424242soft"
+        return real_write_back(o, *a, **kw)
+
+    def fence(section):
+        original_fence(section)
+        fences.append(section.attempt)
+        if section.attempt == 1 and fences.count(1) == 2:  # 第二次＝寫入交易裡、INSERT 之前
+            kill_commit_connection(clean, section, jid)
+
+    monkeypatch.setattr(schedule_service, "write_back", write_back)
+    monkeypatch.setattr(store.CommitSection, "fence", fence)
+    assert runner.execute(jid, "w1") == "lost"  # 寫入了，但結束被擋（工作已被收回）
+    assert clean.job(jid)["status"] == "queued"
+    wait_for_jobs_db()
+    out = None
+    for _ in range(20):
+        out = runner.execute(jid, "w2")
+        if out != "retry":
+            break
+        time.sleep(0.2)
+    assert out == "done"
+    job = clean.job(jid)
+    assert job["status"] == "succeeded" and job["attempt"] == 2
+    stored = get_production_repo().get_run(job["result"]["run_id"])
+    assert len(runs()) == 1  # attempt 2 沒有再寫一列，也沒有覆蓋
+    assert stored["score"] == "0hard/0medium/-424242soft" and len(writes) == 2
+    assert job["result"]["score"] == stored["score"]  # 工作結果就是存下的那一列
+    assert get_production_repo().latest_run()["run_id"] == stored["run_id"]
+
+
 def test_blocked_job_waits_for_the_scope(clean):
     store.acquire_lease("schedule:plant", "legacy:req", 30)  # 舊入口（或別的 worker）占著
     jid = schedule_job(engine="greedy")
@@ -391,7 +459,8 @@ def test_cad_job_publishes_artifacts_atomically_and_keeps_code_out_of_events(cle
     result = job["result"]["result"]
     assert result["ok"] and result["iou"] > 0.95 and "code" not in result  # 程式碼不在結果裡
     assert result["files"]["code.py"] == f"/api/v1/jobs/{jid}/artifacts/code.py"
-    final = get_settings().cad_jobs_dir / jid
+    assert {p.name for p in (get_settings().cad_jobs_dir / jid).iterdir()} == {"a1"}
+    final = get_settings().cad_jobs_dir / jid / "a1"  # 每次嘗試發布到自己的資料夾
     assert {p.name for p in final.iterdir()} >= {"model.stl", "model.step", "code.py", "input.png"}
     assert not (get_settings().cad_jobs_dir / ".staging" / f"{jid}-a1").exists()
     assert "import cadquery" in (final / "code.py").read_text(encoding="utf-8")
@@ -605,7 +674,61 @@ def test_cad_lease_expiry_during_the_write_back_cannot_be_taken_over(clean, monk
     monkeypatch.setattr(cad_module, "_authorize", pause)
     assert runner.execute(jid, "w1") == "done"
     assert seen == ["blocked"] and store.get(jid)["status"] == "succeeded"
-    assert (get_settings().cad_jobs_dir / jid / "code.py").is_file()
+    assert (get_settings().cad_jobs_dir / jid / "a1" / "code.py").is_file()
+
+
+def test_old_cad_attempt_cannot_overwrite_a_newer_attempt_after_the_lock_connection_dies(
+    clean, client, monkeypatch, tmp_path
+):
+    """審查 F1（509bf1d）：attempt 1 最後一次 fence 通過後，持有寫回鎖的連線被中斷，工作被收回並由
+    attempt 2 成功發布；attempt 1 恢復後的發布只會落在它自己的資料夾（a1），讀取端只認資料庫記錄
+    的 attempt 2——資料庫、產物清單的雜湊、新舊下載網址拿到的檔案全都是 attempt 2 的內容。"""
+    import hashlib
+
+    from app.jobs import cad_job as cad_module
+    from app.jobs.control import JobControl
+    from app.services import cad_access
+
+    jid = cad_job(part="mfg-001")
+    claimed = store.claim(jid, "w1")
+    assert claimed.state == "claimed"
+    monkeypatch.setattr(cad_module, "_authorize", lambda _job: None)
+    old, new = b"print('old worker')\n", b"print('new worker')\n"
+    first = tmp_path / "staging1"
+    first.mkdir()
+    (first / "code.py").write_bytes(old)
+    original_fence = store.CommitSection.fence
+    fences = []
+
+    def fence(section):
+        original_fence(section)
+        fences.append(section.attempt)
+        if section.attempt == 1 and fences.count(1) == 2:  # 第二次＝發布之前的最後一次
+            kill_commit_connection(clean, section, jid)
+            retry = store.claim(jid, "w2")
+            assert retry.state == "claimed" and retry.job["attempt"] == 2
+            second = tmp_path / "staging2"
+            second.mkdir()
+            (second / "code.py").write_bytes(new)
+            cad_module._commit(retry.job, JobControl(jid, 2, "w2"), second, {}, {"ok": True}, {})
+
+    monkeypatch.setattr(store.CommitSection, "fence", fence)
+    with pytest.raises(store.LeaseLost):  # attempt 1：發布到自己的資料夾，結束被擋
+        cad_module._commit(claimed.job, JobControl(jid, 1, "w1"), first, {}, {"ok": True}, {})
+
+    job = clean.job(jid)
+    assert job["status"] == "succeeded" and job["attempt"] == 2
+    assert (cad_access.attempt_dir(jid, 2) / "code.py").read_bytes() == new  # 沒被刪、沒被換
+    assert (cad_access.attempt_dir(jid, 1) / "code.py").read_bytes() == old  # 舊的只在自己那裡
+    sha = clean.sql(
+        "SELECT sha256 FROM job_artifacts WHERE job_id = %s AND name = 'code.py'", (jid,)
+    )
+    assert [r["sha256"] for r in sha] == [hashlib.sha256(new).hexdigest()]
+    wait_for_jobs_db()
+    assert cad_access.published_dir(jid) == cad_access.attempt_dir(jid, 2)
+    as_account(client, "planner")
+    assert client.get(f"/api/v1/jobs/{jid}/artifacts/code.py").content == new
+    assert client.get(f"/api/v1/cad/jobs/{jid}/code.py").content == new
 
 
 def test_cad_lost_lease_publishes_nothing(clean, monkeypatch):

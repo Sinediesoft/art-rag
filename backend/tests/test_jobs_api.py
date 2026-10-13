@@ -436,8 +436,8 @@ def test_schedule_stop_is_separate_from_cancel(api, client, published):
 def finish_with_artifacts(api, job_id, files=("input.png", "code.py", "model.stl")):
     store.claim(job_id, "w1")
     store.reserve_commit(job_id, 1, "w1")
-    d = get_settings().cad_jobs_dir / job_id
-    shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(get_settings().cad_jobs_dir / job_id, ignore_errors=True)
+    d = get_settings().cad_jobs_dir / job_id / "a1"  # 第 1 次嘗試自己的資料夾
     d.mkdir(parents=True)
     rows = []
     for name in files:

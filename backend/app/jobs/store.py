@@ -18,7 +18,7 @@ import hashlib
 import json
 import secrets
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -368,6 +368,24 @@ def reserve_commit(job_id: str, attempt: int, worker_id: str) -> bool:
         return True
 
 
+def _unlock(conn, job_id: str) -> None:
+    """釋放寫回鎖，而且不讓釋放的錯誤蓋掉原本的例外（例如 LeaseLost）。
+    連線已經斷了：session 層級的 advisory lock 本來就隨連線釋放。交易已中止：回滾後再解。
+    都不行就關掉這條連線——鎖一定跟著釋放，不會留在連線池裡讓恢復迴圈永遠跳過這個工作。"""
+    sql = "SELECT pg_advisory_unlock(hashtextextended(%s, 0))"
+    try:
+        conn.execute(sql, (_lock_key(job_id),))
+        return
+    except psycopg.Error:
+        pass
+    try:
+        conn.rollback()
+        conn.execute(sql, (_lock_key(job_id),))
+    except psycopg.Error:
+        with suppress(Exception):
+            conn.close()
+
+
 class CommitSection:
     """寫回區段：持有寫回鎖（advisory lock，連線斷了自動釋放）的那條連線。
 
@@ -402,7 +420,7 @@ def commit_section(job_id: str, attempt: int, worker_id: str) -> Iterator[Commit
             section.fence()
             yield section
         finally:
-            conn.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (_lock_key(job_id),))
+            _unlock(conn, job_id)
 
 
 @contextmanager
@@ -413,7 +431,7 @@ def commit_lock(job_id: str) -> Iterator[None]:
         try:
             yield
         finally:
-            conn.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (_lock_key(job_id),))
+            _unlock(conn, job_id)
 
 
 def finish(

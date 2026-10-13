@@ -13,7 +13,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api import schemas as S
 from app.api.deps import visible_part
-from app.core.config import get_settings
 from app.core.errors import AppError
 from app.repositories.logs_repo import get_logs_repo
 from app.services import cad_access, cad_service, identity, security
@@ -68,20 +67,20 @@ def get_cad_job(job_id: str, request: Request):
     """已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。
     還在執行或沒有摘要的工作用 `GET /jobs/{id}` 查狀態。"""
     _authorized_job(job_id, request)
-    path = get_settings().cad_jobs_dir / job_id / "summary.json"
-    if not path.is_file():
+    d = cad_access.published_dir(job_id)
+    if d is None or not (d / "summary.json").is_file():
         raise AppError(*security.CAD_JOB_NOT_FOUND)
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads((d / "summary.json").read_text(encoding="utf-8"))
 
 
 @router.get("/parts/{part_id}/reconstructions", response_model=S.CadJobListResponse, tags=["cad"])
 def list_part_reconstructions(part_id: str, request: Request):
     visible_part(part_id, request)
-    root = get_settings().cad_jobs_dir
     rows = [
         r
         for r in get_logs_repo().recent_cad_for_part(part_id, 10)
-        if (root / r["job_id"] / "summary.json").is_file()
+        if (d := cad_access.published_dir(r["job_id"])) is not None
+        and (d / "summary.json").is_file()
     ]
     return {"items": rows}
 
@@ -92,8 +91,9 @@ def get_cad_file(job_id: str, name: str, request: Request):
     if name not in cad_access.JOB_FILES:
         raise AppError(*security.CAD_JOB_NOT_FOUND)
     _authorized_job(job_id, request)
-    path = get_settings().cad_jobs_dir / job_id / name
-    if not path.is_file():
+    d = cad_access.published_dir(job_id)  # 背景工作：只讀資料庫記錄的那一次嘗試
+    path = d / name if d is not None else None
+    if path is None or not path.is_file():
         raise AppError(*security.CAD_JOB_NOT_FOUND)
     media = {
         "stl": "model/stl",

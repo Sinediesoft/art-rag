@@ -7,7 +7,9 @@
 - 停止與取消是兩件事：`stop_requested`＝提前結束、採用目前最佳的合法解並照常驗證寫回；
   `cancel_requested`＝放棄，不採用任何解、不寫回
 - 寫回前驗證（硬限制、後端重算分數與 Timefold 一致）、重驗權限，取得寫回資格（reserve_commit）後
-  才寫生產資料庫；run_id 由 job_id 決定，重送與舊 worker 延遲寫回都是同一列
+  才寫生產資料庫；run_id 由 job_id 決定，重送與舊 worker 延遲寫回都是同一列（先提交的那一次
+  為準，之後的嘗試不覆蓋）。工作結果一律依資料庫裡實際存下的那一列排程填寫，所以就算舊嘗試在
+  寫回鎖連線中斷後搶先提交，工作結果、排程詳情與工廠資料庫也一致
 """
 
 import asyncio
@@ -16,6 +18,7 @@ import time
 from app.core.errors import AppError
 from app.jobs import audit, store
 from app.jobs.control import JobCancelled, JobControl
+from app.repositories.production_repo import get_production_repo
 from app.services import memory_guard, schedule_service, security
 
 
@@ -92,6 +95,10 @@ async def _run(job: dict, control: JobControl) -> None:
     await asyncio.to_thread(_commit, job, control, outcome)
 
 
+def _as_bool(v) -> bool | None:
+    return None if v is None else bool(v)  # SQLite 存成 0／1
+
+
 def _commit(job: dict, control: JobControl, o) -> None:
     jid, attempt, wid = job["id"], job["attempt"], control.worker_id
     schedule_service.validate_outcome(o)  # 後端重算的硬限制與分數；不通過 → 失敗、不寫回
@@ -106,17 +113,20 @@ def _commit(job: dict, control: JobControl, o) -> None:
             o, job["request_id"] or "", job_id=jid, fence=section.fence
         )
         total_ms = round((time.perf_counter() - o.t0) * 1000)
+        # 以實際存下的那一列為準：同一個 run_id 已由先提交的嘗試寫入時，這次不覆蓋，
+        # 結果也照存下的內容回報（不會出現「工作結果是 B 的分數、排程是 A 的解」）
+        stored = get_production_repo().get_run(run_id) or {}
         result = {
             "run_id": run_id,
-            "engine": o.used,
-            "run_status": o.status,  # done／stopped（提前結束）
-            "score": o.score,
-            "hard": o.ev["hard"],
-            "medium": o.ev["medium"],
-            "soft": o.ev["soft"],
-            "initial_score": o.initial_score,
-            "improvements": o.improvements,
-            "score_check": o.score_check,
+            "engine": stored.get("engine", o.used),
+            "run_status": stored.get("status", o.status),  # done／stopped（提前結束）
+            "score": stored.get("score", o.score),
+            "hard": stored.get("hard", o.ev["hard"]),
+            "medium": stored.get("medium", o.ev["medium"]),
+            "soft": stored.get("soft", o.ev["soft"]),
+            "initial_score": stored.get("initial_score", o.initial_score),
+            "improvements": stored.get("improvements", o.improvements),
+            "score_check": (o.score_check if not stored else _as_bool(stored.get("score_check"))),
             "input_version": o.versions["version"],
             "latency_ms": {"build": o.build_ms, "solve": o.solve_ms, "total": total_ms},
             "egress": {"images": 0, "chunks": 0, "bytes": 0},
@@ -127,7 +137,7 @@ def _commit(job: dict, control: JobControl, o) -> None:
             "寫入",
             "schedule_run",
             run_id,
-            f"排程結果寫回（{o.used}，{o.status}，{o.score}）",
+            f"排程結果寫回（{result['engine']}，{result['run_status']}，{result['score']}）",
             job["request_id"],
             detail={"job_id": jid, "attempt": attempt},
             actor_id=job["owner_id"],

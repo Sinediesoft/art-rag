@@ -35,6 +35,24 @@ def job_dir(job_id: str) -> Path:
     return get_settings().cad_jobs_dir / job_id
 
 
+def attempt_dir(job_id: str, attempt: int) -> Path:
+    """背景工作某一次嘗試自己的產物資料夾（job_dir/a<attempt>）。每次嘗試只發布到自己的資料夾，
+    不刪、不換別的嘗試的檔案；租約已失效的舊嘗試就算晚到發布，也碰不到新嘗試的產物。"""
+    return job_dir(job_id) / f"a{int(attempt)}"
+
+
+def published_dir(job_id: str) -> Path | None:
+    """目前可讀的產物資料夾。背景工作（工作資料庫有這一列）：只認資料庫記錄的、已結束（成功或
+    執行失敗）那一次嘗試的資料夾——結束（finish）是 fenced 的，只有現行嘗試能寫入，所以資料庫的
+    attempt、產物清單（job_artifacts）與實際檔案一定是同一次嘗試；還沒結束回 None。
+    舊 SSE 入口的工作（資料庫沒有這一列）：工作資料夾本身。"""
+    if _job_lookup is not None and (row := _job_lookup(job_id)) is not None:
+        if row["status"] in ("succeeded", "failed"):
+            return attempt_dir(job_id, row["attempt"])
+        return None
+    return job_dir(job_id)
+
+
 def write_access(job_id: str, access: CadAccess, directory: Path | None = None) -> None:
     d = directory or job_dir(job_id)
     d.mkdir(parents=True, exist_ok=True)
