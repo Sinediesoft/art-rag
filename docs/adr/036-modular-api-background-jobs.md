@@ -56,9 +56,10 @@
 - **建立**：先授權（失敗不留工作），再 `jobs` 列＋`created` 事件＋outbox 同一個交易。`Idempotency-Key`：相同帳號／操作／key 的相同請求拿到同一個工作（`idempotent_replay: true`），參數不同 409 `IDEMPOTENCY_KEY_REUSED`；排程範圍唯一的部分索引讓同一時間只有一個排隊或執行中的排程工作（409 `SCHEDULE_BUSY`）。
 - **投遞**：dispatcher 以 `FOR UPDATE SKIP LOCKED` 取 outbox 送 Celery，失敗指數退讓、留在 outbox；排隊中卻很久沒被領走的工作（broker 重啟、訊息遺失）會補投遞。至少一次投遞，重複由 `claim` 擋掉。Redis 單獨不通：工作仍建立（202，`delayed_dispatch: true`，維持 `queued`），恢復後投遞；工作資料庫不通：503 `JOBS_UNAVAILABLE`。**不會**退回 API 行程執行。
 - **領取與互斥**：`claim` 在一個交易裡鎖列、取得資源租約（排程範圍 `schedule:plant`，或 GPU 名額 `gpu:0…`，`JOBS_GPU_SLOTS` 預設 1）才轉成 `running`。租約有期限、過期的直接接手並遞增 fencing。舊的 SSE 排程入口（`LEGACY_SYNC_JOBS=on`）也拿同一個範圍租約，所以和背景工作互斥。
-- **狀態機**：`queued → running → succeeded／failed／cancelled`，記錄時間與 `attempt`。每個寫入都是帶條件的單一 UPDATE（`attempt`＋`lease_owner`＋`status='running'`），租約被接手後的舊 worker 一律 `LeaseLost`，什麼都寫不進去。
+- **狀態機**：`queued → running → succeeded／failed／cancelled`，記錄時間與 `attempt`。每個寫入都是帶條件的單一 UPDATE（`attempt`＋`lease_owner`＋`status='running'`，而且工作**仍持有自己的資源租約**——`resource_leases` 的 holder 還是這個工作、attempt 一致），租約被接手後的舊 worker 一律 `LeaseLost`，什麼都寫不進去。
 - **心跳與恢復**：worker 每 `JOBS_HEARTBEAT_S` 續約並讀回取消／停止旗標；超過 `JOBS_LEASE_S` 沒續約，恢復迴圈把工作放回佇列（用完 `JOBS_MAX_ATTEMPTS` 就失敗為 `LEASE_EXPIRED`，要求取消的直接 `cancelled`）。**這是整個重新執行，不是從 LLM token 中段續跑**，文件與事件都不宣稱續跑。
 - **寫回與競態**：進入寫回前先 `reserve_commit`（資料庫列上的原子條件：沒被要求取消才成功）。取消在前 → worker 看到旗標，不寫回、標 `cancelled`；寫回在前 → 取消回 409 `JOB_COMMITTING`，工作會完成。寫回期間持有工作專用的 advisory lock，恢復迴圈遇到就跳過，所以租約剛好過期的舊 worker 不會和接手的新 worker 同時寫回。
+  - **資源租約的 fencing**：GPU 名額或排程範圍的租約過期後可能被別的工作接手，而原工作的 `jobs` 列在恢復迴圈收回之前仍是 `running`。所以續約（`heartbeat`）要同時更新工作列與資源租約，資源租約的 holder 已經不是自己就丟 `LeaseLost` 並回滾（不替它延長工作租約）；`reserve_commit` 與所有帶 fencing 的寫入（事件、結束）同樣要求仍持有資源；拿到寫回鎖之後、寫入之前再用 `verify_commit` 確認一次（仍是現行嘗試、已取得寫回資格、仍持有資源，並延長租約）。過期但沒有被接手的租約仍可續約。測試：`test_jobs_store`（`test_old_worker_cannot_keep_working_after_its_gpu_slot_was_taken` 等）、`test_jobs_runner`（寫回前資源被接手就放棄、不寫入、不發布）。
 - **取消與提前停止是兩件事**：`POST /jobs/{id}/cancel` 放棄、不寫回；`POST /schedule/stop`（可帶 `{job_id}`）請 Timefold 提前結束，採用目前最佳的合法解，照常驗證、寫回，`result.run_status` 為 `stopped`。兩者都驗授權（排程要 `schedule_run`；3D 重建取消只有建立的人）。
 - **事件**：`GET /jobs/{id}/events` 輪詢資料庫送出持久化事件，每一輪重驗目前權限（被撤權就送 `error: PERMISSION_REVOKED` 並結束），終態後結束；輪詢備援 `GET /jobs/{id}`。進度事件**不含模型輸出**：3D 重建的生成進度只有字元數，程式碼放在受保護的 `code.py` 產物；失敗訊息只留第一行。
 - **產物**：worker 寫到暫存資料夾，成功寫回時整個資料夾一次改名發布（原子），讀取端不會看到半成品。`GET /jobs/{id}/artifacts/{name}` 白名單（`input.png`、`code.py`、`model.stl`、`model.step`、`reproj.png`），工作完成前 409，每次請求重驗目前授權，`no-store`＋`nosniff`。舊網址 `GET /cad/jobs/{id}/{name}` 走同一套授權。
@@ -70,6 +71,7 @@
 - 寫回前驗證：硬限制（後端用同一套規則重算）與分數和 Timefold 一致；不通過＝`SCHEDULE_INVALID_SOLUTION`／`SCHEDULE_SCORE_MISMATCH`，不寫回。舊的 SSE 入口也套用這道驗證。
 - 工廠資料庫（Text-to-SQL 查的衍生檢視）在寫回後重建；中途中斷時下一次讀取依 revision 自動重建（`ensure_built`），不需要跨資料庫交易。生產資料（工單、排程結果、異動、核准、稽核）仍是 SQLite——**全面搬到 PostgreSQL 留待之後獨立執行**，這次只提供 repository 邊界與同步策略，沒有改寫或重置任何正式資料。
 - 異動與核准（`change_service`）語意不變：角色 → 範圍 → 欄位 → 硬上限 → 試算 → 額度 → 確認／核准 → 寫前重驗 → 交易 → 讀回／稽核；確認卡 15 分鐘、核准 24 小時、禁止自核、資料指紋衝突、硬上限不能被核准放寬。新增 `Idempotency-Key`（開／取消工單、確認異動、送核准、核准；記錄存在生產資料庫，跨行程共用），並且在寫入鎖內再確認確認卡／待核准單還在，同一張單同時送兩次只會寫一次。
+- **行程中斷也不重複寫入**：業務寫入（開／取消工單、寫入異動、送核准、核准）都在生產資料庫的**單一 SQLite 交易**裡完成，並且在同一個交易把 `idempotency` 記錄從 `running` 標成 `applied`（記下單號，以及重送時重建回應要用的資料；核准開立／取消工單時，待核准單的狀態更新也在這個交易內）。所以「寫入已提交、冪等回應還沒記錄」這個窗口只會留下 `applied`，不會留下「沒有標記的已寫入」。同一個 key 重送時：`done` 回原本的回應；`running`（業務寫入還沒提交）逾時 120 秒後才重新執行；`applied` 絕不再執行寫入，改呼叫各端點的 `resume` 補做**可重做的收尾**（重建工廠資料庫、讀回、補稽核——稽核用「動作＋操作＋單號」去重）並回覆原本的結果，標頭 `Idempotent-Replayed: true`。收尾出錯（不是行程當掉）時 key 立刻標成可接手，不必等 120 秒；還在 120 秒內的 `applied` 回 409 `IDEMPOTENCY_IN_PROGRESS`。遲到的第一個執行者（key 已被接手）的寫入點會因標記不是 `running` 而整個回滾（`IdempotencyLost` → 409）。確認卡本身仍在 API 行程記憶體：行程重啟後卡片沒了，但帶同一個 key 重送仍會從標記拿到原本的結果。測試：`test_idempotency.py` 的行程中斷組（五個端點各一個）。
 
 ### 6. 多行程資源協調
 | 資源 | 策略 |

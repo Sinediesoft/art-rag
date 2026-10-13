@@ -163,8 +163,10 @@ def _commit(job: dict, control: JobControl, staging: Path, meta, result, done) -
     jid, attempt, wid = job["id"], job["attempt"], control.worker_id
     _authorize(job)  # 取得寫回資格之前再驗一次；撤權就失敗，不發布
     if not store.reserve_commit(jid, attempt, wid):
+        store.heartbeat(jid, attempt, wid)  # 租約或資源已被接手 → LeaseLost；否則就是被取消
         raise JobCancelled("commit")
     with store.commit_lock(jid):
+        store.verify_commit(jid, attempt, wid)  # 鎖內再確認仍是現行嘗試、仍持有資源租約
         _authorize(job)  # 寫回前（持有寫回鎖之後）最後一次驗證
         final = get_settings().cad_jobs_dir / jid
         if final.exists():  # 前一次嘗試發布後、來不及標記成功就中斷

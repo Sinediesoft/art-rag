@@ -9,6 +9,7 @@ from app.api import schemas as S
 from app.api.deps import ID_PATTERN, IDEMPOTENCY
 from app.core.errors import AppError
 from app.jobs import legacy, service
+from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.production_repo import get_production_repo
 from app.services import (
     change_service,
@@ -56,21 +57,34 @@ def create_work_order(
     account = identity.current(request)
     params = body.model_dump()
 
+    def audit_created(row: dict) -> None:
+        get_production_repo().add_audit(
+            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
+             "op": "wo_create", "ref_no": row["wo_no"],
+             "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉{row['qty']} 件",
+             "detail": None, "request_id": request.state.request_id},
+            once=True,
+        )  # fmt: skip
+
     def create() -> dict:
         change_service.direct("wo_create", params, account, request.state.request_id, "圖紙頁")
         row = schedule_service.create_work_order(
             body.part_id, body.qty, body.due_on, body.priority, body.release_on, body.note,
             created_by=account.id,
         )  # fmt: skip
-        get_production_repo().add_audit(
-            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
-             "op": "wo_create", "ref_no": row["wo_no"],
-             "summary": f"圖紙頁開立 {row['wo_no']}〈{row['part_name']}〉{row['qty']} 件",
-             "detail": None, "request_id": request.state.request_id}
-        )  # fmt: skip
+        audit_created(row)
         return row
 
-    row, replay = idempotency.run(account.id, "wo_create", idempotency_key, params, create)
+    def resume(marker: dict) -> dict:
+        """開單已提交、回應還沒記錄就中斷：不再開一張，補做工廠資料庫重建與稽核，回覆同一張。"""
+        row = schedule_service.work_order_view(marker["ref"])
+        get_inventory_repo().ensure_built(force=True)
+        audit_created(row)
+        return row
+
+    row, replay = idempotency.run(
+        account.id, "wo_create", idempotency_key, params, create, resume=resume
+    )
     if replay:
         response.headers["Idempotent-Replayed"] = "true"
     return row
@@ -86,6 +100,14 @@ def cancel_work_order(
     """取消圖紙頁開立的工單（kb/inventory 的既有工單不能取消；生管只能取消自己開的）。"""
     account = identity.current(request)
 
+    def audit_cancelled() -> None:
+        get_production_repo().add_audit(
+            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
+             "op": "wo_cancel", "ref_no": wo_no, "summary": f"取消工單 {wo_no}", "detail": None,
+             "request_id": request.state.request_id},
+            once=True,
+        )  # fmt: skip
+
     def cancel() -> dict:
         w = get_production_repo().get_work_order(wo_no)
         if not w or w["status"] != "已開立":
@@ -94,15 +116,16 @@ def cancel_work_order(
             "wo_cancel", {"wo_no": wo_no}, account, request.state.request_id, "API"
         )
         schedule_service.cancel_work_order(wo_no)
-        get_production_repo().add_audit(
-            {"actor_id": account.id, "actor_label": account.label, "action": "寫入",
-             "op": "wo_cancel", "ref_no": wo_no, "summary": f"取消工單 {wo_no}", "detail": None,
-             "request_id": request.state.request_id}
-        )  # fmt: skip
+        audit_cancelled()
+        return {"ok": True}
+
+    def resume(marker: dict) -> dict:
+        get_inventory_repo().ensure_built(force=True)
+        audit_cancelled()
         return {"ok": True}
 
     out, replay = idempotency.run(
-        account.id, "wo_cancel", idempotency_key, {"wo_no": wo_no}, cancel
+        account.id, "wo_cancel", idempotency_key, {"wo_no": wo_no}, cancel, resume=resume
     )
     if replay:
         response.headers["Idempotent-Replayed"] = "true"

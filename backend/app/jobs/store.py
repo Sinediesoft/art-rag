@@ -278,8 +278,17 @@ def claim(job_id: str, worker_id: str) -> Claim:
         return Claim("claimed", row, res)
 
 
+# 工作目前持有自己的資源租約（GPU 名額或排程範圍）：holder 是工作 id、attempt 是這次嘗試。
+# 租約過期後被別的工作接手，holder 就變了——舊 worker 在 recover_expired 把它收回之前醒來，
+# 靠這個條件認出自己已經失去資源（AC-14：GPU 重工作同時最多一個）。
+_HOLDS_RESOURCE = (
+    "EXISTS (SELECT 1 FROM resource_leases r WHERE r.holder = jobs.id AND r.attempt = jobs.attempt)"
+)
+
+
 def heartbeat(job_id: str, attempt: int, worker_id: str) -> dict:
-    """續約並回報旗標。0 列＝租約已不是自己的（LeaseLost）。"""
+    """續約並回報旗標。工作租約與資源租約都還是自己的才成功；否則丟 LeaseLost，
+    連同工作列的更新一起回滾（不替已經失去資源的 worker 延長租約）。"""
     lease = get_settings().jobs_lease_s
     with db.connection() as conn:
         row = conn.execute(
@@ -290,18 +299,20 @@ def heartbeat(job_id: str, attempt: int, worker_id: str) -> dict:
         ).fetchone()
         if row is None:
             raise LeaseLost(job_id)
-        conn.execute(
+        held = conn.execute(
             "UPDATE resource_leases SET expires_at = now() + make_interval(secs => %s),"
-            " updated_at = now() WHERE holder = %s AND attempt = %s",
+            " updated_at = now() WHERE holder = %s AND attempt = %s RETURNING resource",
             (lease, job_id, attempt),
-        )
+        ).fetchone()
+        if held is None:  # 資源已被別的工作接手（或租約被收回）
+            raise LeaseLost(job_id)
         return row
 
 
 def _fenced(conn, job_id: str, attempt: int, worker_id: str) -> dict:
     row = conn.execute(
         "SELECT id FROM jobs WHERE id = %s AND status = 'running' AND attempt = %s"
-        " AND lease_owner = %s FOR UPDATE",
+        f" AND lease_owner = %s AND {_HOLDS_RESOURCE} FOR UPDATE",
         (job_id, attempt, worker_id),
     ).fetchone()
     if row is None:
@@ -326,16 +337,27 @@ def add_event(
 
 
 def reserve_commit(job_id: str, attempt: int, worker_id: str) -> bool:
-    """進入寫回：沒被要求取消才成功。成功後取消請求回 409（已經不可取消），一定寫回。"""
+    """進入寫回：沒被要求取消、而且仍是現行嘗試並持有資源租約才成功。
+    成功後取消請求回 409（已經不可取消），一定寫回。回 False＝被要求取消，或已不是現行嘗試／
+    資源已被接手（呼叫端再用 heartbeat 分辨：租約遺失會丟 LeaseLost）。"""
     with db.connection() as conn:
         row = conn.execute(
             "UPDATE jobs SET committing_attempt = attempt WHERE id = %s AND status = 'running'"
-            " AND attempt = %s AND lease_owner = %s AND NOT cancel_requested RETURNING id",
+            " AND attempt = %s AND lease_owner = %s AND NOT cancel_requested"
+            f" AND {_HOLDS_RESOURCE} RETURNING id",
             (job_id, attempt, worker_id),
         ).fetchone()
         if row:
             _event(conn, job_id, "committing", {"attempt": attempt})
         return row is not None
+
+
+def verify_commit(job_id: str, attempt: int, worker_id: str) -> None:
+    """持有寫回鎖之後、寫入之前最後一次確認：仍是現行嘗試、仍持有資源租約、已取得寫回資格，
+    並把租約延長（寫回期間不會被別的工作接手資源）。任何一項不成立丟 LeaseLost。"""
+    flags = heartbeat(job_id, attempt, worker_id)
+    if flags["committing_attempt"] != attempt:
+        raise LeaseLost(job_id)
 
 
 @contextmanager

@@ -97,8 +97,10 @@ def _commit(job: dict, control: JobControl, o) -> None:
     schedule_service.validate_outcome(o)  # 後端重算的硬限制與分數；不通過 → 失敗、不寫回
     _authorize(job)  # 取得寫回資格前重驗權限
     if not store.reserve_commit(jid, attempt, wid):
+        store.heartbeat(jid, attempt, wid)  # 租約或資源已被接手 → LeaseLost；否則就是被取消
         raise JobCancelled("commit")
     with store.commit_lock(jid):
+        store.verify_commit(jid, attempt, wid)  # 鎖內再確認仍是現行嘗試、仍持有資源租約
         _authorize(job)  # 持有寫回鎖之後、寫入之前最後一次
         run_id = schedule_service.write_back(o, job["request_id"] or "", job_id=jid)
         total_ms = round((time.perf_counter() - o.t0) * 1000)

@@ -46,6 +46,9 @@ def change_commit(
         idempotency_key,
         {"pending_id": pending_id},
         lambda: change_service.commit(pending_id, account, request.state.request_id),
+        resume=lambda marker: change_service.resume_commit(
+            marker, pending_id, account, request.state.request_id
+        ),
     )
     _mark(response, replay)
     return out
@@ -68,6 +71,9 @@ def change_request_approval(
         {"pending_id": pending_id, "note": body.note},
         lambda: change_service.request_approval(
             pending_id, account, body.note, request.state.request_id
+        ),
+        resume=lambda marker: change_service.resume_request_approval(
+            marker, pending_id, account, request.state.request_id
         ),
     )
     _mark(response, replay)
@@ -98,6 +104,9 @@ def approve(
         idempotency_key,
         {"ap_no": ap_no, "note": body.note},
         lambda: change_service.approve(ap_no, account, body.note, request.state.request_id),
+        resume=lambda marker: change_service.resume_approve(
+            marker, ap_no, account, request.state.request_id
+        ),
     )
     _mark(response, replay)
     return out

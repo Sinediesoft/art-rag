@@ -301,6 +301,22 @@ def test_lost_lease_abandons_without_writing(clean):
     assert clean.fake.stopped == clean.fake.submitted  # 求解被放棄
 
 
+def test_resource_taken_over_right_before_write_back_writes_nothing(clean, monkeypatch):
+    """寫回前資源租約已被別的工作接手（審查 F2）：拿不到寫回資格，放棄、什麼都不寫。"""
+    jid = schedule_job(engine="greedy")
+    real = schedule_service.validate_outcome
+
+    def validate_then_lose_the_scope(o):
+        real(o)
+        clean.sql("UPDATE resource_leases SET holder = 'job_other' WHERE holder = %s", (jid,))
+
+    monkeypatch.setattr(schedule_service, "validate_outcome", validate_then_lose_the_scope)
+    assert runner.execute(jid, "w1") == "lost"
+    job = store.get(jid)
+    assert job["status"] == "running" and job["committing_attempt"] is None
+    assert runs() == [] and job["result"] is None
+
+
 def test_blocked_job_waits_for_the_scope(clean):
     store.acquire_lease("schedule:plant", "legacy:req", 30)  # 舊入口（或別的 worker）占著
     jid = schedule_job(engine="greedy")
@@ -473,6 +489,23 @@ def test_cad_revoked_before_publish_publishes_nothing(clean, monkeypatch):
     assert job["status"] == "failed" and job["error"]["code"] == "DATA_SCOPE_DENIED"
     assert not (get_settings().cad_jobs_dir / jid).exists() and store.artifacts(jid) == []
     assert "committing" not in event_types(jid)
+
+
+@needs_limits
+def test_cad_resource_taken_over_right_before_publish_publishes_nothing(clean, monkeypatch):
+    from app.jobs import cad_job as cad_module
+
+    jid = cad_job(part="mfg-002")
+    real = cad_module._authorize
+
+    def authorize_then_lose_the_slot(job):
+        real(job)
+        clean.sql("UPDATE resource_leases SET holder = 'job_other' WHERE holder = %s", (jid,))
+
+    monkeypatch.setattr(cad_module, "_authorize", authorize_then_lose_the_slot)
+    assert runner.execute(jid, "w1") == "lost"
+    assert store.get(jid)["status"] == "running"
+    assert not (get_settings().cad_jobs_dir / jid).exists()
 
 
 def test_cad_lost_lease_publishes_nothing(clean, monkeypatch):

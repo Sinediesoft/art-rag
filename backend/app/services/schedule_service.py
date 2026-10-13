@@ -65,7 +65,9 @@ def create_work_order(
     release_on: str | None = None,
     note: str | None = None,
     created_by: str | None = None,
+    approval: dict | None = None,
 ) -> dict:
+    """開一張工單。approval（主管核准後開立）有值時，待核准單的狀態更新和開單同一個交易。"""
     site, routings, parts, _, cal = load_setup()
     if part_id not in parts:
         raise AppError("PART_NOT_FOUND", f"找不到圖紙 {part_id}", 404)
@@ -93,7 +95,8 @@ def create_work_order(
             "due_on": due_on,
             "note": note,
             "created_by": created_by,
-        }
+        },
+        approval=approval,
     )
     get_inventory_repo().ensure_built(force=True)
     log.info(
@@ -110,8 +113,17 @@ def next_wo_no() -> tuple[str, str]:
     )
 
 
-def cancel_work_order(wo_no: str) -> None:
-    if not get_production_repo().cancel_work_order(wo_no):
+def work_order_view(wo_no: str) -> dict:
+    """已開立工單的完整回應（帶 Idempotency-Key 的開單在提交後中斷，重送時從資料庫重建）。"""
+    w = get_production_repo().get_work_order(wo_no)
+    if w is None:
+        raise AppError("WORK_ORDER_NOT_FOUND", f"找不到工單 {wo_no}", 404)
+    parts = load_setup()[2]
+    return {**w, "part_name": parts[w["part_id"]]["name"]["zh"], "source": "系統開立"}
+
+
+def cancel_work_order(wo_no: str, approval: dict | None = None) -> None:
+    if not get_production_repo().cancel_work_order(wo_no, approval=approval):
         raise AppError(
             "WORK_ORDER_NOT_FOUND",
             f"找不到可取消的工單 {wo_no}（只能取消圖紙頁開立、尚未取消的工單）",

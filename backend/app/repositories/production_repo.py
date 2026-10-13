@@ -16,6 +16,9 @@ import re
 import sqlite3
 import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -77,6 +80,32 @@ class RevisionConflict(Exception):
         self.revision = revision
 
 
+# 帶 Idempotency-Key 的寫入（services/idempotency.py）執行期間的身分。寫入點（開／取消工單、
+# 寫入異動、送核准）在「自己的那個交易裡」把冪等記錄標成 applied——業務寫入與冪等標記要嘛一起
+# 提交、要嘛一起不存在，行程在兩者之間中斷也不會讓同一個 key 再寫第二次。
+_IDEM: ContextVar[dict | None] = ContextVar("artrag_idempotency", default=None)
+
+
+class IdempotencyLost(Exception):
+    """這個 key 的所有權已經不是自己的（久到被別的請求接手，或記錄已被清掉）：業務寫入不提交。"""
+
+
+@contextmanager
+def idem_scope(account_id: str, operation: str, key: str) -> Iterator[None]:
+    token = _IDEM.set({"account_id": account_id, "operation": operation, "key": key, "extra": {}})
+    try:
+        yield
+    finally:
+        _IDEM.reset(token)
+
+
+def idem_note(**extra) -> None:
+    """替之後的寫入點補充「重送時重建回應」需要的資料（會跟著標記一起存進資料庫）。"""
+    ctx = _IDEM.get()
+    if ctx is not None:
+        ctx["extra"].update(extra)
+
+
 class ProductionRepo:
     def __init__(self, path: Path):
         self.path = path
@@ -112,6 +141,21 @@ class ProductionRepo:
             " SET value = CAST(value AS INTEGER) + 1"
         )
 
+    def _mark_applied(self, conn: sqlite3.Connection, ref: str) -> None:
+        """在業務寫入的同一個交易裡，把帶 key 的冪等記錄標成 applied（記下單號與重建回應的資料）。
+        記錄不是「執行中」（被別人接手、或已被清掉）就丟 IdempotencyLost——呼叫端不提交。"""
+        ctx = _IDEM.get()
+        if ctx is None:
+            return
+        marker = json.dumps({**ctx["extra"], "ref": ref}, ensure_ascii=False, default=str)
+        cur = conn.execute(
+            "UPDATE idempotency SET state = 'applied', response = ? WHERE account_id = ?"
+            " AND operation = ? AND idem_key = ? AND state = 'running'",
+            (marker, ctx["account_id"], ctx["operation"], ctx["key"]),
+        )
+        if cur.rowcount != 1:
+            raise IdempotencyLost(ref)
+
     @staticmethod
     def now() -> str:
         return datetime.now(UTC).isoformat()
@@ -136,7 +180,8 @@ class ProductionRepo:
         )
         return f"WO-{yymm}-{n + 1:02d}"
 
-    def create_work_order(self, row: dict) -> dict:
+    def create_work_order(self, row: dict, approval: dict | None = None) -> dict:
+        """開一張工單。approval（核准開立）有值時，待核准單的狀態更新、冪等標記都在同一個交易裡。"""
         row = {**row, "status": "已開立", "created_at": self.now()}
         with self._lock:
             conn = self._conn()
@@ -146,13 +191,24 @@ class ProductionRepo:
                 conn.execute(
                     f"INSERT INTO work_orders ({cols}) VALUES ({marks})", tuple(row.values())
                 )
+                if approval:
+                    self._approve_in(conn, approval, row["wo_no"])
+                self._mark_applied(conn, row["wo_no"])
                 self._bump(conn)
                 conn.commit()
             finally:
                 conn.close()
         return row
 
-    def cancel_work_order(self, wo_no: str) -> bool:
+    def _approve_in(self, conn: sqlite3.Connection, approval: dict, change_no: str) -> None:
+        conn.execute(
+            "UPDATE approvals SET status = '已核准', decided_by = ?, decided_label = ?,"
+            " decided_at = ?, decision_note = ?, change_no = ? WHERE ap_no = ?",
+            (approval["decided_by"], approval["decided_label"], self.now(),
+             approval.get("decision_note"), change_no, approval["ap_no"]),
+        )  # fmt: skip
+
+    def cancel_work_order(self, wo_no: str, approval: dict | None = None) -> bool:
         with self._lock:
             conn = self._conn()
             try:
@@ -162,6 +218,9 @@ class ProductionRepo:
                     (wo_no,),
                 )
                 if cur.rowcount:
+                    if approval:
+                        self._approve_in(conn, approval, wo_no)
+                    self._mark_applied(conn, wo_no)
                     self._bump(conn)
                 conn.commit()
                 return cur.rowcount > 0
@@ -322,12 +381,8 @@ class ProductionRepo:
                     f"INSERT INTO data_changes ({cols}) VALUES ({marks})", tuple(row.values())
                 )
                 if approval:
-                    conn.execute(
-                        "UPDATE approvals SET status = '已核准', decided_by = ?, decided_label = ?,"
-                        " decided_at = ?, decision_note = ?, change_no = ? WHERE ap_no = ?",
-                        (approval["decided_by"], approval["decided_label"], self.now(),
-                         approval.get("decision_note"), row["change_no"], approval["ap_no"]),
-                    )  # fmt: skip
+                    self._approve_in(conn, approval, row["change_no"])
+                self._mark_applied(conn, row["change_no"])
                 self._bump(conn)
                 conn.commit()
             finally:
@@ -349,6 +404,7 @@ class ProductionRepo:
                 conn.execute(
                     f"INSERT INTO approvals ({cols}) VALUES ({marks})", tuple(row.values())
                 )
+                self._mark_applied(conn, row["ap_no"])
                 conn.commit()
             finally:
                 conn.close()
@@ -407,7 +463,9 @@ class ProductionRepo:
             self.decide_approval(r["ap_no"], "已失效", "system", "系統", "超過 24 小時沒人處理")
         return [r["ap_no"] for r in rows]
 
-    def add_audit(self, row: dict) -> None:
+    def add_audit(self, row: dict, once: bool = False) -> None:
+        """once：同一個（動作、操作、單號）已經有紀錄就不再寫——冪等重送、中斷後補做收尾時
+        不會重複記稽核（這些單號每個只會被寫入一次）。"""
         row = {**row, "at": self.now()}
         if isinstance(row.get("detail"), (dict, list)):
             row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
@@ -416,9 +474,16 @@ class ProductionRepo:
             try:
                 cols = ", ".join(row)
                 marks = ", ".join("?" for _ in row)
-                conn.execute(
-                    f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values())
-                )
+                if once:
+                    conn.execute(
+                        f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
+                        " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",
+                        (*row.values(), row.get("action"), row.get("op"), row.get("ref_no")),
+                    )
+                else:
+                    conn.execute(
+                        f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values())
+                    )
                 conn.commit()
             finally:
                 conn.close()
@@ -449,8 +514,10 @@ class ProductionRepo:
     def idem_begin(self, account_id: str, operation: str, key: str, request_hash: str,
                    stale_s: float = 120) -> tuple[str, dict | None]:  # fmt: skip
         """開始一次帶 key 的寫入。回傳 ("new", None)＝輪到你執行；("replay", 先前的回應)；
-        ("conflict", None)＝同一個 key 用在參數不同的請求；("busy", None)＝同一個請求還在執行。
-        整段是 BEGIN IMMEDIATE：跨行程也只有一個人拿到 "new"。"""
+        ("conflict", None)＝同一個 key 用在參數不同的請求；("busy", None)＝同一個請求還在執行；
+        ("resume", 標記)＝前一個執行者已經提交了業務寫入、卻沒來得及收尾（中斷或收尾出錯）：
+        不能再寫一次，由呼叫端依標記補做收尾。
+        整段是 BEGIN IMMEDIATE：跨行程也只有一個人拿到 "new"／"resume"。"""
         with self._lock:
             conn = self._conn()
             conn.isolation_level = None
@@ -476,7 +543,11 @@ class ProductionRepo:
                             " AND operation = ? AND idem_key = ?",
                             (now.isoformat(), account_id, operation, key),
                         )
-                        out = ("new", None)
+                        # running＝業務寫入還沒提交，重新執行；applied＝已提交，只補收尾
+                        if row["state"] == "applied":
+                            out = ("resume", json.loads(row["response"]))
+                        else:
+                            out = ("new", None)
                 else:
                     conn.execute(
                         "INSERT INTO idempotency VALUES (?, ?, ?, ?, 'running', NULL, ?)",
@@ -506,13 +577,21 @@ class ProductionRepo:
                 conn.close()
 
     def idem_abort(self, account_id: str, operation: str, key: str) -> None:
-        """執行失敗（沒有寫入）：放掉 key，讓使用者修正後可以用同一個 key 再送。"""
+        """執行失敗：業務寫入還沒提交（running）就放掉 key，讓使用者修正後可以用同一個 key 再送；
+        已經提交（applied）的不能放掉——只是把它標成「現在沒有人在處理」，下一次重送立刻從標記
+        補做收尾，不用等逾時。"""
         with self._lock:
             conn = self._conn()
             try:
                 conn.execute(
                     "DELETE FROM idempotency WHERE account_id = ? AND operation = ?"
                     " AND idem_key = ? AND state = 'running'",
+                    (account_id, operation, key),
+                )
+                conn.execute(
+                    "UPDATE idempotency SET created_at = '1970-01-01T00:00:00+00:00'"
+                    " WHERE account_id = ? AND operation = ? AND idem_key = ?"
+                    " AND state = 'applied'",
                     (account_id, operation, key),
                 )
                 conn.commit()

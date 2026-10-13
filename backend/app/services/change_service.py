@@ -27,7 +27,7 @@ from app.core.errors import AppError
 from app.core.logging import log
 from app.repositories import data_changes as dc
 from app.repositories.inventory_repo import get_inventory_repo
-from app.repositories.production_repo import get_production_repo
+from app.repositories.production_repo import get_production_repo, idem_note
 from app.services import schedule_service
 from app.services.identity import Account, accounts, get_account
 
@@ -345,7 +345,9 @@ def _audit(
     ref_no: str | None = None,
     detail=None,
     request_id: str | None = None,
+    once: bool = False,
 ) -> None:
+    """once：成功寫入的稽核（每個單號只會寫入一次）——冪等重送補做收尾時不會記兩次。"""
     get_production_repo().add_audit(
         {
             "actor_id": account_id,
@@ -356,7 +358,8 @@ def _audit(
             "summary": summary_,
             "detail": detail,
             "request_id": request_id,
-        }
+        },
+        once=once,
     )
 
 
@@ -551,29 +554,12 @@ def _write(op: str, p: dict, actor: Account, approval: dict | None = None) -> st
             p.get("release_on"),
             note,
             created_by=actor.id,
+            approval=approval,  # 核准單的狀態更新和開單同一個交易
         )
         change_no = row["wo_no"]
-        if approval:
-            prod.decide_approval(
-                approval["ap_no"],
-                "已核准",
-                approval["decided_by"],
-                approval["decided_label"],
-                approval.get("decision_note"),
-                change_no,
-            )
     elif op == "wo_cancel":
-        schedule_service.cancel_work_order(p["wo_no"])
+        schedule_service.cancel_work_order(p["wo_no"], approval=approval)
         change_no = p["wo_no"]
-        if approval:
-            prod.decide_approval(
-                approval["ap_no"],
-                "已核准",
-                approval["decided_by"],
-                approval["decided_label"],
-                approval.get("decision_note"),
-                change_no,
-            )
     else:
         raise AppError("VALIDATION_ERROR", f"不在白名單的操作：{op}", 422)
     get_inventory_repo().ensure_built(force=True)
@@ -676,6 +662,8 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
                 "從試算到按確認之間，這幾筆資料已被修改，沒有寫入。請重新操作一次。",
                 409,
             )
+        # 重送續做收尾要用的資料（寫入點會把它和冪等標記一起提交）
+        idem_note(op=pend.op, summary=pend.summary, params=pend.params, diff=pend.diff)
         change_no = _write(pend.op, pend.params, account)
         _pending.pop(pending_id, None)
     result = read_back(pend.op, pend.params, change_no, pend.diff)
@@ -688,6 +676,7 @@ def commit(pending_id: str, account: Account, request_id: str) -> dict:
         change_no,
         detail={"params": pend.params},
         request_id=request_id,
+        once=True,
     )
     log.info(
         "data_change", extra={"fields": {"change_no": change_no, "op": pend.op, "by": account.id}}
@@ -754,6 +743,7 @@ def request_approval(pending_id: str, account: Account, note: str | None, reques
         ap_no,
         detail={"reasons": pend.reasons},
         request_id=request_id,
+        once=True,
     )
     return _approval_view(row)
 
@@ -874,6 +864,72 @@ def approve(ap_no: str, account: Account, note: str | None, request_id: str) -> 
         change_no,
         detail={"ap_no": ap_no, "requester": requester.label},
         request_id=request_id,
+        once=True,
+    )
+    return {"ap_no": ap_no, "status": "已核准", **result}
+
+
+# ---------------------------------------------------------------- 冪等重送：補做收尾
+# 帶 Idempotency-Key 的寫入，業務寫入（單一 SQLite 交易，連同冪等標記）已經提交，但回應還沒記錄就
+# 中斷或出錯。重送時不能再寫一次：這幾個函式只做可重做的收尾——重建工廠資料庫、讀回、補稽核
+# （once：已有就不再記）——然後回覆和第一次相同的結果。
+def resume_commit(marker: dict, pending_id: str, account: Account, request_id: str) -> dict:
+    _pending.pop(pending_id, None)
+    change_no, op = marker["ref"], marker["op"]
+    get_inventory_repo().ensure_built(force=True)
+    result = read_back(op, marker["params"], change_no, marker["diff"])
+    _audit(
+        account.id,
+        account.label,
+        "寫入",
+        op,
+        marker["summary"],
+        change_no,
+        detail={"params": marker["params"]},
+        request_id=request_id,
+        once=True,
+    )
+    return {**result, "op": op, "summary": marker["summary"], "account": account.public()}
+
+
+def resume_request_approval(
+    marker: dict, pending_id: str, account: Account, request_id: str
+) -> dict:
+    _pending.pop(pending_id, None)
+    row = get_production_repo().get_approval(marker["ref"])
+    if row is None:
+        raise AppError("APPROVAL_NOT_FOUND", f"找不到待核准單 {marker['ref']}", 404)
+    _audit(
+        account.id,
+        account.label,
+        "送核准",
+        row["op"],
+        row["summary"],
+        row["ap_no"],
+        detail={"reasons": row["reasons"]},
+        request_id=request_id,
+        once=True,
+    )
+    return _approval_view(row)
+
+
+def resume_approve(marker: dict, ap_no: str, account: Account, request_id: str) -> dict:
+    ap = get_production_repo().get_approval(ap_no)
+    if ap is None:
+        raise AppError("APPROVAL_NOT_FOUND", f"找不到待核准單 {ap_no}", 404)
+    change_no = marker["ref"]
+    get_inventory_repo().ensure_built(force=True)
+    result = read_back(ap["op"], ap["params"], change_no, ap["diff"])
+    _audit(
+        account.id,
+        account.label,
+        "核准寫入",
+        ap["op"],
+        ap["summary"],
+        change_no,
+        detail={"ap_no": ap_no, "requester": get_account(ap["requester_id"]).label},
+        request_id=request_id,
+        once=True,
     )
     return {"ap_no": ap_no, "status": "已核准", **result}
 
