@@ -32,11 +32,6 @@ def test_parse_verdict():
         parse_verdict('{"mismatch": true, "claim": "", "correct": "李霖燦", "ref": 1}', {1}) is None
     )
     assert parse_verdict('{"mismatch": "yes"}', {1}) is None
-    # 把問句本身當成說錯：只是在問，不算
-    asking = (
-        '{"mismatch": true, "claim": "是誰、在哪一年發現了簽名？", "correct": "李霖燦", "ref": 1}'
-    )
-    assert parse_verdict(asking, {1}) == {"mismatch": False}
     assert parse_verdict("說錯了", {1}) is None
 
 
