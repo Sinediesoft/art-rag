@@ -41,8 +41,9 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
   const switchAccount = useSwitchAccount();
   const renewal = useTokenRenewal();
   const close = () => setMenu(null);
-  // 入口的分類（docs/adr/040）：null＝自動判斷；選了就只在那個領域裡分流
-  const [domain, setDomain] = useState<EntryDomain | null>(null);
+  // 入口的分類（docs/adr/040）：null＝自動判斷；選了就只在那個領域裡分流。
+  // 第一句送出後網址從 / 換到 /c/:id、這個畫面會重建：從這段對話最後一句帶回來，不要跳回自動判斷
+  const [domain, setDomain] = useState<EntryDomain | null>(() => conv?.turns.at(-1)?.domain ?? null);
 
   const ask = (text: string, imageId: string | null = null, forced: string | null = null, token?: string) => {
     const id = shell.ask(conv?.id ?? null, "entry", { text, imageId, forced, token, domain });
