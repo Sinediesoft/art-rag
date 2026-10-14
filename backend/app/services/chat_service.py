@@ -632,8 +632,10 @@ async def _chat_stream(
             conflict_info = await conflict_mod.check(asked, sources, strategy)
             if conflict_info and conflict_info["conflict"]:
                 context_note = conflict_mod.note(conflict_info["refs"])
-        # 前提檢查：問題把人、年份說錯時，回答模型常只回「沒有資料」；先指出錯在哪，讓它更正後再答
-        if not post.degraded and premise_mod.enabled(premise_check):
+        # 前提檢查：問題把人、年份說錯時，回答模型常只回「沒有資料」；先指出錯在哪，讓它更正後再答。
+        # 參考資料已經互相矛盾時不做：不能拿其中一段去「更正」問題，更正提醒還會蓋過矛盾提醒
+        conflicted = bool(conflict_info and conflict_info["conflict"])
+        if not post.degraded and not conflicted and premise_mod.enabled(premise_check):
             premise_info = await premise_mod.check(
                 asked, sources, card["text"] if card else "", strategy
             )

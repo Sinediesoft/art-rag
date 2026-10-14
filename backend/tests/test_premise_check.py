@@ -77,7 +77,7 @@ def test_timeout_falls_back(monkeypatch):
 
 def test_chat_adds_note_when_premise_wrong(monkeypatch, all_chunks):
     """請求開 premise_check：sources 事件帶檢查結果，送給模型的參考資料後面多一句更正提醒；
-    和矛盾檢查同時成立時兩句都留。"""
+    參考資料已經互相矛盾時不做前提檢查，只留矛盾提醒。"""
 
     async def judge(question, sources, card):
         assert "谿山行旅圖" in card  # 作品資料一起送去比對
@@ -124,7 +124,8 @@ def test_chat_adds_note_when_premise_wrong(monkeypatch, all_chunks):
 
     both = asyncio.run(run(True, conflict_flag=True))
     assert len(both["sources"]) >= 2, both["sources"]
-    assert "說法不一致" in seen["note"] and "問題裡「董其昌」" in seen["note"]
+    assert both["premise_check"] is None
+    assert "說法不一致" in seen["note"] and "問題裡" not in seen["note"]
 
     sources = asyncio.run(run(False))
     assert sources["premise_check"] is None and seen["note"] is None
