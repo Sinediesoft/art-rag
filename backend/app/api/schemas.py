@@ -903,7 +903,7 @@ class MemoryCoordination(BaseModel):
         description="local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型"
     )
     state: Literal["ok", "unavailable", "warming"] = Field(
-        description="ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通；"
+        description="ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通或登記格式錯誤；"
         "warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
     )
     detail: str | None = None

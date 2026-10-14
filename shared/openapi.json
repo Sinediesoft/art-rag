@@ -8342,7 +8342,7 @@
               "warming"
             ],
             "title": "State",
-            "description": "ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通；warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
+            "description": "ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通或登記格式錯誤；warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
           },
           "detail": {
             "anyOf": [

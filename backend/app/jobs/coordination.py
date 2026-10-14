@@ -5,8 +5,12 @@
 不會因為 API 行程判斷記憶體吃緊，就把 worker 正在用的 Ortho2CAD 卸載（反之亦然），
 也不會各行程自己判斷而重複載入。
 
-查詢結果分「確認」與「未知」：Redis 不通、回傳壞資料，或 Redis 剛重啟（其他行程的登記隨重啟
-消失、還沒全部續約回來）時回 None＝未知，memory_guard 保守地不卸載共用模型並回報降級狀態。
+每筆登記的內容是模型名稱的 JSON 陣列（`publish_usage` 寫的，例如 `["ortho2cad"]`）。
+
+查詢結果分「確認」與「未知」：Redis 不通、任何一筆登記格式不符（空白、不是陣列、含非字串或
+空字串、無法解析、key 型別不對），或 Redis 剛重啟（其他行程的登記隨重啟消失、還沒全部續約回來）
+時回 None＝未知——整次查詢都不算，不用部分或拆字的結果；memory_guard 保守地不卸載共用模型，
+並回報降級狀態（unavailable／warming）。
 """
 
 import json
@@ -97,6 +101,20 @@ def publish_usage(in_use: dict[str, int]) -> None:
         _warn(e)
 
 
+class RegistryFormatError(ValueError):
+    """模型使用登記的內容不是模型名稱陣列。"""
+
+
+def parse_usage(raw: str) -> set[str]:
+    """一筆登記的內容 → 模型名稱集合。必須是 JSON 陣列、每個元素都是非空字串（`[]` 合法，
+    代表沒有使用中的模型）；空白、純量（例如 `"ortho2cad"`，直接 set() 會拆成字元）、物件、
+    含非字串或空字串元素都丟 RegistryFormatError，無法解析的 JSON 丟 ValueError。"""
+    value = json.loads(raw)
+    if not isinstance(value, list) or not all(isinstance(k, str) and k for k in value):
+        raise RegistryFormatError("模型使用登記不是模型名稱陣列")
+    return set(value)
+
+
 def restart_grace_s() -> float:
     """Redis 重啟後多久之內登記可能不完整：每個還活著的行程都會在登記存活時間內續約，
     所以預設等滿一個登記存活時間（120 秒）才相信「沒有登記＝沒人在用」。"""
@@ -117,7 +135,8 @@ def _set_state(state: str, detail: str | None = None) -> None:
 
 def status() -> dict:
     """最近一次查詢的協調狀態：mode＝local（沒有 REDIS_URL，單一行程）／redis；
-    state＝ok／unavailable（Redis 不通）／warming（Redis 剛重啟，等其他行程重新登記）。"""
+    state＝ok／unavailable（Redis 不通或登記格式錯誤）／warming（Redis 剛重啟，
+    等其他行程重新登記）。"""
     if client() is None:
         return {"mode": "local", "state": "ok", "detail": None}
     if _state["state"] is None:
@@ -129,7 +148,8 @@ def others_in_use() -> set[str] | None:
     """其他行程登記的使用中模型。
 
     回 None＝使用情況「未知」，呼叫端要當成可能有人在用：
-    - Redis 連不上或回傳壞資料
+    - Redis 連不上、指令失敗（含 key 不是字串型別）
+    - 任何一筆登記格式不符（parse_usage）：整次查詢都不算，不回部分結果
     - Redis 啟動不到 restart_grace_s()：重啟會清掉所有登記，其他行程還沒全部續約回來
     沒有設定 REDIS_URL（單一行程，沒有背景 worker）回空集合：確認沒有其他行程。"""
     r = client()
@@ -146,11 +166,16 @@ def others_in_use() -> set[str] | None:
             if key == PREFIX + HOLDER:
                 continue
             raw = r.get(key)
-            if raw:
-                out |= set(json.loads(raw))
+            if raw is None:
+                continue  # scan 之後才過期或結束登記：這個登記已經不在
+            out |= parse_usage(raw)
     except (redis.RedisError, ValueError, TypeError) as e:
-        _warn(e)
-        _set_state("unavailable", type(e).__name__)
+        if isinstance(e, (RegistryFormatError, json.JSONDecodeError)):
+            detail = "模型使用登記格式錯誤"
+        else:
+            _warn(e)
+            detail = type(e).__name__
+        _set_state("unavailable", detail)
         return None
     _set_state("ok")
     return out

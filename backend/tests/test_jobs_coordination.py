@@ -190,6 +190,98 @@ def test_redis_restart_window_is_unknown_until_everyone_reregisters(
     assert released == ["clip"] and coordination.status()["state"] == "ok"
 
 
+# ---- 登記格式錯誤也是「未知」（Code Review F1，543a269）
+BAD_REGISTRATIONS = [
+    '"ortho2cad"',  # 合法 JSON 字串：直接 set() 會拆成 {"o", "r", "t", ...}
+    "",  # 內容空白
+    "   ",
+    "not json",
+    "null",
+    "123",
+    "true",
+    '{"ortho2cad": 1}',  # 物件
+    '["ortho2cad", 1]',  # 含非字串
+    "[null]",
+    '[""]',  # 空字串名稱
+    '[["ortho2cad"]]',  # 巢狀
+]
+
+
+@pytest.mark.parametrize("raw", BAD_REGISTRATIONS)
+def test_malformed_registration_is_unknown_and_keeps_shared_models(jobs, guarded, raw):
+    """真實 Redis 裡另一個行程的登記不是模型名稱陣列：整次查詢是未知（None）、狀態 unavailable，
+    共用模型不卸載（手動釋放也一樣），不會用拆字或部分結果宣稱 ok。"""
+    g, released = guarded
+    coordination.client().set(coordination.PREFIX + "broken-process", raw, ex=60)
+    assert coordination.others_in_use() is None
+    st = coordination.status()
+    assert st["state"] == "unavailable" and st["detail"] == "模型使用登記格式錯誤"
+    event = g.check("手動釋放", set(), force=True)
+    assert released == ["clip"] and "ortho2cad" in event["kept"]
+    assert event["coordination"] == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ('["ortho2cad"]', {"ortho2cad"}),
+        ('["ortho2cad", "qwen"]', {"ortho2cad", "qwen"}),
+        ("[]", set()),
+    ],
+)
+def test_well_formed_registrations_are_confirmed(jobs, guarded, raw, expected):
+    """對照組：模型名稱陣列（含空陣列）是確認的結果、狀態 ok；登記在用的保留，確認閒置的才釋放。"""
+    g, released = guarded
+    coordination.client().set(coordination.PREFIX + "other-process", raw, ex=60)
+    assert coordination.others_in_use() == expected
+    assert coordination.status()["state"] == "ok"
+    event = g.check("手動釋放", set(), force=True)
+    assert event["coordination"] == "ok"
+    assert ("ortho2cad" in released) == ("ortho2cad" not in expected)
+    assert "clip" in released
+
+
+def test_one_malformed_registration_spoils_the_whole_query(jobs, two_processes):
+    """一筆壞登記就整次查詢未知：不回其他正常登記的部分結果；壞登記消失後恢復 ok。"""
+    other, me = two_processes
+    other()
+    coordination.publish_usage({"qwen": 1})
+    me()
+    r = coordination.client()
+    r.set(coordination.PREFIX + "broken-process", '"ortho2cad"', ex=60)
+    assert coordination.others_in_use() is None
+    r.delete(coordination.PREFIX + "broken-process")
+    assert coordination.others_in_use() == {"qwen"}
+    assert coordination.status()["state"] == "ok"
+
+
+def test_registration_key_of_the_wrong_type_is_unknown(jobs):
+    """登記的 key 不是字串型別（WRONGTYPE）：未知，不是略過。"""
+    coordination.client().hset(coordination.PREFIX + "broken-process", "ortho2cad", "1")
+    assert coordination.others_in_use() is None
+    assert coordination.status()["state"] == "unavailable"
+
+
+def test_registration_gone_between_scan_and_get_is_skipped(monkeypatch):
+    """scan 列出之後才過期或結束登記（GET 回 None）：那個登記已經不在，不算格式錯誤。"""
+
+    class Reply:
+        def info(self, section):
+            return {"uptime_in_seconds": 999999}
+
+        def scan_iter(self, **_kw):
+            yield coordination.PREFIX + "finished-process"
+            yield coordination.PREFIX + "other-process"
+
+        def get(self, key):
+            return None if key.endswith("finished-process") else '["qwen"]'
+
+    monkeypatch.setattr(coordination, "client", lambda: Reply())
+    monkeypatch.setattr(coordination, "restart_grace_s", lambda: 0)
+    assert coordination.others_in_use() == {"qwen"}
+    assert coordination.status()["state"] == "ok"
+
+
 def test_maintenance_loop_renews_the_usage_registration(jobs, two_processes):
     """各行程的維護執行緒定期續約「使用中的模型」：Redis 重啟清掉登記後，寬限期內自動登記回來。"""
     from app.jobs import broker

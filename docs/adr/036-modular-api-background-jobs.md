@@ -87,7 +87,7 @@
 |---|---|
 | 排程範圍／活動工作 | PostgreSQL：部分唯一索引＋資源租約（取代行程內的 `_busy` 與 `_active` 當唯一依據；API 行程內的 `_active` 只剩舊入口的 `stop()`） |
 | GPU 重工作 | 資源租約 `gpu:0…`，`JOBS_GPU_SLOTS`（預設 1）跨所有 worker 行程；排程與 GPU 工作分佇列、分租約 |
-| 使用中模型 | `memory_guard` 的引用計數照舊，另外把「使用中的模型」以短效 key 登記在 Redis（每個行程一個，各行程的維護執行緒每 `JOBS_DISPATCH_INTERVAL_S` 續約，存活 `JOBS_MODELS_TTL_S`）；`busy()` 是本行程與其他行程的聯集，所以 API 行程判斷記憶體吃緊也不會卸載 worker 正在用的 Ortho2CAD，反之亦然。查詢區分「確認」與「未知」：Redis 不通，或 Redis 啟動未滿 `JOBS_MODELS_RESTART_GRACE_S`（預設 120 秒，不小於 `JOBS_MODELS_TTL_S`；重啟會清掉登記，等每個活著的行程續約回來）時是未知，**共用推論服務上的模型（Ollama、llama-server、Timefold）一律不卸載**（手動釋放也一樣），只放本行程自己的 CLIP、bge；`GET /memory` 的 `coordination` 與釋放紀錄的 `coordination` 回報降級（`unavailable`／`warming`）。沒有 `REDIS_URL`（單一行程）時確認沒有其他行程 |
+| 使用中模型 | `memory_guard` 的引用計數照舊，另外把「使用中的模型」以短效 key 登記在 Redis（每個行程一個，各行程的維護執行緒每 `JOBS_DISPATCH_INTERVAL_S` 續約，存活 `JOBS_MODELS_TTL_S`）；`busy()` 是本行程與其他行程的聯集，所以 API 行程判斷記憶體吃緊也不會卸載 worker 正在用的 Ortho2CAD，反之亦然。每筆登記是模型名稱的 JSON 陣列（例如 `["ortho2cad"]`）。查詢區分「確認」與「未知」：Redis 不通、**任何一筆登記格式不符**（內容空白、不是陣列——例如合法 JSON 字串 `"ortho2cad"`，直接轉集合會被拆成字元——、含非字串或空字串元素、無法解析、key 型別不對；整次查詢都不算，不用部分或拆字的結果，狀態 `unavailable`），或 Redis 啟動未滿 `JOBS_MODELS_RESTART_GRACE_S`（預設 120 秒，不小於 `JOBS_MODELS_TTL_S`；重啟會清掉登記，等每個活著的行程續約回來）時是未知，**共用推論服務上的模型（Ollama、llama-server、Timefold）一律不卸載**（手動釋放也一樣），只放本行程自己的 CLIP、bge；`GET /memory` 的 `coordination` 與釋放紀錄的 `coordination` 回報降級（`unavailable`／`warming`）。沒有 `REDIS_URL`（單一行程）時確認沒有其他行程 |
 | 交接票 | 見上：Redis 共用；失效就重跑第 2 段，不放寬任何關卡 |
 | 確認卡 | 仍在 API 行程記憶體（15 分鐘）；多個 API 行程時別的行程找不到＝要求重新輸入，不會重複寫入 |
 
