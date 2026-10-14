@@ -540,7 +540,7 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     await ask("梵谷畫這幅畫的時候在哪裡？");
     await idle();
     expect(document.querySelector(".jump--art")?.textContent).toContain("進入藝術模組");
-    t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } })));
+    t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "chitchat", reply: "我可以幫你找畫。" } })));
     await ask("今天天氣如何？");
     await idle();
     const last = [...document.querySelectorAll(".msg--ai")].at(-1)!;

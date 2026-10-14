@@ -1330,10 +1330,12 @@ class BlockedInfo(BaseModel):
 
 
 class ShortCircuitInfo(BaseModel):
-    """第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"""
+    """快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
+    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"""
 
     stage: Literal[2]
     by: Literal["Jev", "地端"]
+    kind: Literal["chitchat", "catalog"] = "chitchat"
     reply: str
 
 

@@ -91,7 +91,7 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
   it("401（過期）：重新取得憑證後重送一次", async () => {
     const t = mockTransport();
     let n = 0;
-    t.on("POST", "/agent/route", () => (++n === 1 ? apiError(401, "TOKEN_EXPIRED") : json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }))));
+    t.on("POST", "/agent/route", () => (++n === 1 ? apiError(401, "TOKEN_EXPIRED") : json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "chitchat", reply: "我可以幫你找畫。" } }))));
     t.on("GET", "/auth/accounts", () => json({}));
     const run = start(turn("今天天氣如何？"));
     await run.done;

@@ -18,10 +18,11 @@
 """
 
 import asyncio
+import dataclasses
 import re
 import time
 
-from app.agent import art_resolve, gate, guard, handoff, local_router
+from app.agent import art_resolve, catalog, gate, guard, handoff, local_router
 from app.agent.entities import first, get_index
 from app.agent.types import System1Result
 from app.core.config import get_agent_config
@@ -306,9 +307,20 @@ async def route(
             short = {
                 "stage": 2,
                 "by": "Jev" if guard_res.engine == "jev" else "地端",
+                "kind": "chitchat",
                 "reply": cfg["guard"]["chitchat_reply"],
             }
             outcome = "short_circuit"
+        elif question and not photo and catalog.is_list_question(question):
+            # 知識庫目錄題（docs/adr/039）：問答只檢索最像的幾段，列不出「全部有哪些」；
+            # 第 2 段放行後直接從知識庫列出，不檢索、不呼叫 LLM（本地分流常分錯，例如落到批次辨識）
+            short = {"stage": 2, "by": "地端", "kind": "catalog", "reply": catalog.reply()}
+            outcome = "short_circuit"
+            intent = "art_qa"
+            dispatch["module"] = "art_qa"
+            decision = dataclasses.replace(
+                decision, gate="direct", options=[], reason="知識庫目錄題：直接列出知識庫的畫作"
+            )
 
     resolve_info, resolve_egress = None, 0
     if outcome == "pass":
