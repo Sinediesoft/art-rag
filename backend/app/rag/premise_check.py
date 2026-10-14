@@ -41,6 +41,10 @@ def enabled(requested: bool | None = None) -> bool:
     return get_models_config().premise_check.enabled
 
 
+# 「說錯的部分」要是問題裡的斷定；帶疑問詞或問號的是在問、不是在斷定（模型會把整句問題當成說錯）
+_ASKING = re.compile(r"[？?]|誰|哪|什麼|甚麼|如何|怎麼|多久|多少|幾")
+
+
 def parse_verdict(text: str, valid: set[int]) -> dict | None:
     """模型輸出 → {"mismatch", "claim", "correct", "ref"}；
     格式不對、說錯了卻沒寫清楚哪裡錯時回傳 None。"""
@@ -60,6 +64,8 @@ def parse_verdict(text: str, valid: set[int]) -> dict | None:
         return None
     if not isinstance(ref, int) or (ref != 0 and ref not in valid):
         return None
+    if _ASKING.search(claim):
+        return {"mismatch": False}
     return {
         "mismatch": True,
         "claim": claim.strip()[:60],
