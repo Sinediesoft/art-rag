@@ -1,7 +1,7 @@
 """版本化 migration：`migrations/NNNN_name.up.sql` 依序套用，`schema_migrations` 記版本與雜湊。
 
 - `apply()`：套用還沒套用的；已套用的檔案被改過（雜湊不同）就拒絕，不靜默覆蓋
-- `rollback(steps)`：依相反順序執行 `.down.sql`（回復步驟與備份建議見 docs/adr/036）
+- `rollback(steps)`：依相反順序執行 `.down.sql`（回復步驟與備份建議見 docs/adr/041）
 - 整個流程用 advisory lock 序列化，多個行程同時啟動也只有一個在跑
 - 只動背景工作系統自己的資料表；不碰 uploads、紀錄、知識庫與生產 SQLite
 """

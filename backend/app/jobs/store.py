@@ -1,4 +1,4 @@
-"""工作資料庫的存取層：SQL 只寫在這裡（TASK-20261013-001，docs/adr/036）。
+"""工作資料庫的存取層：SQL 只寫在這裡（TASK-20261013-001，docs/adr/041）。
 
 狀態轉移（`queued → running → succeeded／failed／cancelled`），每一步都是帶條件的單一 UPDATE：
 

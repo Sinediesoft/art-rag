@@ -54,7 +54,7 @@ help:
 	@echo "--- 智慧助理（System 1：Jev／本地路由）---"
 	@echo "make eval-route  智慧助理本地分流的意圖正確率＋第 2 段誤擋、誤短路（不是 eval-router 的領域路由；需後端在執行；沒金鑰只跑地端規則）"
 	@echo "make eval-guard  七段權限控管第 2 段：Jev Choice 與地端規則對 eval/guard_qa.jsonl 的攔截率、誤擋率、閒聊短路率（需後端在執行）"
-	@echo "--- 背景工作（Redis＋Celery＋PostgreSQL，docs/adr/036）---"
+	@echo "--- 背景工作（Redis＋Celery＋PostgreSQL，docs/adr/041）---"
 	@echo "make jobs-up       啟動 PostgreSQL 與 Redis 容器（只綁本機）"
 	@echo "make jobs-migrate  套用背景工作的資料表（版本化 migration，可重複執行）"
 	@echo "make jobs-status   migration 版本與各狀態的工作數、待投遞數"
@@ -160,7 +160,7 @@ test:
 test-jobs:
 	cd backend && uv run pytest -q tests/test_jobs_store.py tests/test_jobs_api.py tests/test_jobs_runner.py tests/test_jobs_integration.py tests/test_jobs_coordination.py
 
-# ---- 背景工作（docs/adr/036）----
+# ---- 背景工作（docs/adr/041）----
 jobs-up:
 	$(COMPOSE) up -d --wait db redis
 

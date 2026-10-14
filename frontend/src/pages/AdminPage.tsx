@@ -664,7 +664,7 @@ function SchedulerCard({ h, demo }: { h: DiagnosticsResponse; demo: boolean }) {
   );
 }
 
-/** 背景工作（docs/adr/036）：PostgreSQL（工作資料庫）、Redis（broker）、worker 行程是否在線，以及各狀態的工作數 */
+/** 背景工作（docs/adr/041）：PostgreSQL（工作資料庫）、Redis（broker）、worker 行程是否在線，以及各狀態的工作數 */
 function JobsCard({ jobs }: { jobs: NonNullable<StatusResponse["jobs"]> | null | undefined }) {
   if (!jobs) return null;
   const counts = jobs.counts as Record<string, number>;

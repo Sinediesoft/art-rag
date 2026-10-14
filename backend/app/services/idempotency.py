@@ -1,4 +1,4 @@
-"""寫入的 Idempotency-Key（TASK-20261013-001，docs/adr/036）。
+"""寫入的 Idempotency-Key（TASK-20261013-001，docs/adr/041）。
 
 相同帳號、操作與 key 的相同請求只會寫入一次：重送（網路中斷、使用者連按、前端重試）拿到先前的回應，
 不會重複開工單、重複異動或重複核准；key 用在參數不同的請求回 409 IDEMPOTENCY_KEY_REUSED；

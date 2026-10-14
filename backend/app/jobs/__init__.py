@@ -1,4 +1,4 @@
-"""背景工作系統（TASK-20261013-001，docs/adr/036）：
+"""背景工作系統（TASK-20261013-001，docs/adr/041）：
 
 PostgreSQL 保存工作、進度事件、擁有者、資源與資料版本（jobs／job_events／job_outbox／
 job_artifacts／resource_leases）；建立工作與 outbox 同一交易，dispatcher 投遞到 Redis（Celery），

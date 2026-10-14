@@ -31,7 +31,7 @@ services:
     # 資料只有幾十筆，用不到多少記憶體；12–16 GB 的筆電要把記憶體留給 Ollama 與 embedding 模型
     mem_limit: 512m
 
-  # 背景工作的 broker（TASK-20261013-001、docs/adr/036）：3D 重建與排程的訊息佇列。
+  # 背景工作的 broker（TASK-20261013-001、docs/adr/041）：3D 重建與排程的訊息佇列。
   # 工作的狀態與事件以 PostgreSQL 為準，Redis 只傳遞「該執行哪個 job_id」：沒有持久化也沒關係
   # （訊息遺失會由 outbox 補投遞）。同樣只綁本機，不對區網或公網開放。
   redis:

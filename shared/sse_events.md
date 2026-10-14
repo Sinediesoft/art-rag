@@ -166,7 +166,7 @@
 （否則第 6 段直接降級；工廠圖紙即使在評估模式也一律降級）、`/agent/route` 的 `engine=local`。
 `api_nokb`（A1）等於關檢索，一樣要評估模式。這些欄位都不能降低七段權限控管的任何一段。
 
-## 背景工作的事件（`GET /api/v1/jobs/{id}/events`，TASK-20261013-001、docs/adr/036）
+## 背景工作的事件（`GET /api/v1/jobs/{id}/events`，TASK-20261013-001、docs/adr/041）
 
 3D 重建與排程的新流程是「建立工作 → 訂閱事件或輪詢 → 取結果」：`POST /cad/jobs`、`POST /schedule/jobs` 回
 `202 {"job_id", "status": "queued", "status_url", "events_url", ...}`，進度事件存在資料庫，離開頁面不會取消工作。

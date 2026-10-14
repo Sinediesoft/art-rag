@@ -7,7 +7,7 @@
 | `VALIDATION_ERROR` | 422 | 請求參數格式錯誤 |
 | `IMAGE_TOO_LARGE` | 413 | 圖片超過 10 MB |
 | `IMAGE_TYPE_NOT_ALLOWED` | 415 | 只收 JPEG、PNG、WebP |
-| `IMAGE_NOT_FOUND` | 404 | `image_id` 不存在、已過期（7 天自動刪除），**或不是目前身分可以用的照片**（只有上傳的帳號與擁有者用 `PUT /images/{id}/acl` 明確授權的帳號可以用；舊資料沒有擁有者一律拒絕）。找不到和沒有權限回同一個回應，不透露別人的照片存不存在（ADR 036） |
+| `IMAGE_NOT_FOUND` | 404 | `image_id` 不存在、已過期（7 天自動刪除），**或不是目前身分可以用的照片**（只有上傳的帳號與擁有者用 `PUT /images/{id}/acl` 明確授權的帳號可以用；舊資料沒有擁有者一律拒絕）。找不到和沒有權限回同一個回應，不透露別人的照片存不存在（ADR 041） |
 | `ARTWORK_NOT_FOUND` | 404 | 畫作 ID 不存在 |
 | `ALIGN_FAILED` | 422 | 影像對位：照片和指定的知識庫原圖、圖紙或另一張照片（兩張照片互比）對不上（對應的特徵點不夠，或算出來的位置不合理），不硬畫位置框（docs/adr/012） |
 | `NOT_IN_KB` | 200（SSE `error`） | 以圖辨識低於門檻：知識庫中沒有這幅畫（領域路由判為工廠圖紙時：知識庫中沒有這張圖紙） |
@@ -41,7 +41,7 @@
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
-| `JOBS_UNAVAILABLE` | 503 | 背景工作系統目前無法使用（沒有啟用 `REDIS_URL`／工作資料庫，或工作資料庫連不上）。可恢復：稍後重試；工作不會改在 API 行程執行（ADR 036）。Redis 單獨不通時不是這個錯誤：工作照樣建立（202），回應 `delayed_dispatch: true`，留在 outbox 等 Redis 恢復後投遞 |
+| `JOBS_UNAVAILABLE` | 503 | 背景工作系統目前無法使用（沒有啟用 `REDIS_URL`／工作資料庫，或工作資料庫連不上）。可恢復：稍後重試；工作不會改在 API 行程執行（ADR 041）。Redis 單獨不通時不是這個錯誤：工作照樣建立（202），回應 `delayed_dispatch: true`，留在 outbox 等 Redis 恢復後投遞 |
 | `JOB_NOT_FOUND` | 404 | 背景工作不存在、已過期，或目前身分沒有權限讀（`GET /jobs/{id}`、`/events`、`/cancel`、`/artifacts/{name}` 回應相同） |
 | `JOB_NOT_FINISHED` | 409 | 產物要等工作完成（成功或失敗）才發布；工作還在排隊或執行 |
 | `JOB_ARTIFACT_NOT_FOUND` | 404 | 產物名稱不在白名單（`input.png`、`code.py`、`model.stl`、`model.step`、`reproj.png`）或沒有發布 |
@@ -59,7 +59,7 @@
 | `CAD_PUBLISH_CONFLICT` | 工作 `error.code` | 這一次嘗試的產物資料夾（`<job>/a<attempt>`）已經存在：不刪、不覆蓋，工作失敗（正常流程不會發生） |
 | `LEASE_EXPIRED` | 工作 `error.code` | worker 連續多次中斷（租約過期），已停止重試 |
 | `PERMISSION_REVOKED` | 403／工作 `error.code` | 提交工作的帳號已不存在或被撤銷；其他撤權（操作、領域、圖紙、照片）依原因回 `PERMISSION_DENIED`／`DATA_SCOPE_DENIED`／`IMAGE_NOT_FOUND`，工作在領取後、執行前、寫回前各驗一次，失敗就不讀圖、不呼叫模型、不寫入 |
-| `INPUT_BLOCKED` | 403 | 工具入口（`POST /inventory/ask`）的共用輸入防護：命中第 2 段的地端 hard-block 規則，不呼叫模型、不查資料，記一筆拒絕並記錄（ADR 036） |
+| `INPUT_BLOCKED` | 403 | 工具入口（`POST /inventory/ask`）的共用輸入防護：命中第 2 段的地端 hard-block 規則，不呼叫模型、不查資料，記一筆拒絕並記錄（ADR 041） |
 | `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得訪客憑證後重送 |
 | `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對或帳號不存在（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
 | `TOKEN_EXPIRED` | 401 | 憑證過期（預設 8 小時，`JWT_TTL_MIN`）；前端自動重新取得 |

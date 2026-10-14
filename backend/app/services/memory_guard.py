@@ -362,7 +362,7 @@ class MemoryGuard:
 
     def busy(self) -> set[str]:
         """使用中的模型：本行程的引用，加上其他行程（API、各 worker）在 Redis 登記的——
-        不卸載別的行程正在用的模型（docs/adr/036）。其他行程的使用情況無法確認時（Redis 不通、
+        不卸載別的行程正在用的模型（docs/adr/041）。其他行程的使用情況無法確認時（Redis 不通、
         登記格式錯誤、剛重啟還沒重新登記），共用推論服務上的模型一律當成使用中，只有本行程自己的能釋放。"""
         others = coordination.others_in_use()
         if others is None:

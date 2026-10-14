@@ -178,7 +178,7 @@ export const usePartPlan = (id: string | undefined) =>
 export const useAccounts = () =>
   useQuery({ queryKey: ["accounts"], queryFn: api.accounts, refetchInterval: 10_000 });
 
-/** 和身分無關、重算又慢的查詢：切換身分時不重抓。上傳照片現在只有擁有者與被授權的帳號能用（ADR 036），
+/** 和身分無關、重算又慢的查詢：切換身分時不重抓。上傳照片現在只有擁有者與被授權的帳號能用（ADR 041），
  * 照片的辨識、色彩、畫作卡、對位都跟身分有關；只剩知識庫畫作的色彩分析（公開、固定）與身分無關 */
 const IDENTITY_FREE = new Set(["artwork-colors"]);
 

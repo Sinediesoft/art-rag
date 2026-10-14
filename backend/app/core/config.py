@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
     database_url: str = ""
 
-    # ---- 背景工作（TASK-20261013-001，docs/adr/036）：Redis＋Celery 投遞、PostgreSQL 保存狀態 ----
+    # ---- 背景工作（TASK-20261013-001，docs/adr/041）：Redis＋Celery 投遞、PostgreSQL 保存狀態 ----
     # 工作系統要 REDIS_URL 與工作資料庫（JOBS_DATABASE_URL；留空沿用 DATABASE_URL）都有值才啟用。
     # 沒有啟用時 POST /cad/jobs、/schedule/jobs 回 503 JOBS_UNAVAILABLE（不會偷偷改在 API 行程執行）
     redis_url: str = ""

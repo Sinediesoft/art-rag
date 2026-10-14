@@ -763,7 +763,7 @@ bge-m3、Qwen3-VL（73% → 49%），載入後 79%；進入 Text-to-SQL 時預�
 
 ⚠️ 機台、工時與委外天數是虛構的示範資料。
 
-### 背景工作（3D 重建與排程，Redis＋Celery＋PostgreSQL，ADR 036）
+### 背景工作（3D 重建與排程，Redis＋Celery＋PostgreSQL，ADR 041）
 
 3D 重建與排程求解不再綁在 API 行程與瀏覽器連線上：`POST /api/v1/cad/jobs`、`POST /api/v1/schedule/jobs` 回
 `202`＋`job_id`，由獨立的 worker 行程執行；進度事件存在 PostgreSQL（`GET /jobs/{id}/events`，可用 `Last-Event-ID`
@@ -799,7 +799,7 @@ Redis 不通或剛重啟時無法確認其他行程在用哪些模型，記憶�
 art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
 ├── backend/app/       B  FastAPI：api/routers/（依領域拆的 APIRouter，總成在 api/routes.py）→ services/ → rag/ + repositories/，core/ 放設定與錯誤碼
-│   ├── jobs/          B  背景工作（ADR 036）：store（工作／事件／outbox／租約的 SQL）、broker（投遞與恢復）、celery_app／tasks（worker）、runner／cad_job／schedule_job（執行）、service（API 層操作）、migrations/、admin（部署與遷移指令）
+│   ├── jobs/          B  背景工作（ADR 041）：store（工作／事件／outbox／租約的 SQL）、broker（投遞與恢復）、celery_app／tasks（worker）、runner／cad_job／schedule_job（執行）、service（API 層操作）、migrations/、admin（部署與遷移指令）
 │   ├── services/security  共用安全上下文與工作授權政策；services/uploads（上傳照片擁有者與 ACL）、cad_access（3D 重建存取紀錄）
 │   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）、
 │   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）、

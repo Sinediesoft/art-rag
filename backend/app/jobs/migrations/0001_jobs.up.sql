@@ -1,4 +1,4 @@
--- 背景工作系統（TASK-20261013-001、docs/adr/036）：工作、進度事件、outbox、產物、資源租約。
+-- 背景工作系統（TASK-20261013-001、docs/adr/041）：工作、進度事件、outbox、產物、資源租約。
 -- 回復：0001_jobs.down.sql（只刪這幾張表，不碰 uploads、紀錄與知識庫的資料）。
 
 CREATE TABLE jobs (

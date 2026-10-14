@@ -3592,7 +3592,7 @@ export interface components {
             kept: string[];
             /**
              * Coordination
-             * @description 跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，共用推論服務上的模型一律保留（docs/adr/036）
+             * @description 跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，共用推論服務上的模型一律保留（docs/adr/041）
              */
             coordination?: ("ok" | "unavailable" | "warming") | null;
         };

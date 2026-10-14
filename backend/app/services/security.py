@@ -1,4 +1,4 @@
-"""共用安全上下文與工作／產物授權政策（TASK-20261013-001，docs/adr/036）。
+"""共用安全上下文與工作／產物授權政策（TASK-20261013-001，docs/adr/041）。
 
 上下文只能由伺服器建立：帳號來自閘道驗過的 JWT 再對回 access.yaml（不看 JWT 裡的角色宣告），
 操作與領域由路由程式決定，`request_id` 由中介層產生。請求內容（body、query、header）裡
@@ -32,7 +32,7 @@ class AccountSource(Protocol):
 
     現在的實作是 services/identity（shared/access.yaml 的展示帳號與 JWT）。之後接公司 SSO／IdP 時
     換一個符合這個介面的實作（`set_account_source`），worker、工作授權與事件串流的撤權重驗都不用改。
-    這次沒有接任何 IdP，也不宣稱展示登入就是正式 SSO（docs/adr/036）。"""
+    這次沒有接任何 IdP，也不宣稱展示登入就是正式 SSO（docs/adr/041）。"""
 
     def get_account(self, account_id: str) -> Account: ...
 
