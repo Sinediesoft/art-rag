@@ -1427,6 +1427,92 @@
         }
       }
     },
+    "/api/v1/cad/jobs/{job_id}/cache/reject": {
+      "post": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Reject Cad Result",
+        "description": "「結果不對」：讀得到這個工作的人都可以作廢它的程式碼（記住雜湊，之後不命中、不寫入、\n不能採用），並記稽核。只適用知識庫圖紙的 Ortho2CAD 結果（docs/adr/042）；\n接著用 `POST /cad/jobs`（regenerate＝true）重抽一個候選。",
+        "operationId": "reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadCacheRejected"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}/cache/adopt": {
+      "post": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Adopt Cad Result",
+        "description": "「採用這個結果」：沒有標準模型的零件（照片建檔）由主管（kb_intake）採用後才寫入結果快取，\n並記稽核（docs/adr/042）。",
+        "operationId": "adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadCacheAdopted"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/parts/{part_id}/reconstructions": {
       "get": {
         "tags": [
@@ -4913,6 +4999,53 @@
         ],
         "title": "Body_upload_image_api_v1_images_post"
       },
+      "CadCacheAdopted": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "adopted": {
+            "type": "boolean",
+            "title": "Adopted"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "adopted",
+          "created_at"
+        ],
+        "title": "CadCacheAdopted"
+      },
+      "CadCacheRejected": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "rejected": {
+            "type": "boolean",
+            "title": "Rejected"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "description": "這次有沒有把快取裡的那一筆移除"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "rejected",
+          "removed"
+        ],
+        "title": "CadCacheRejected"
+      },
       "CadEvalRunsResponse": {
         "properties": {
           "runs": {
@@ -4966,6 +5099,12 @@
             ],
             "title": "Strategy",
             "default": "ortho2cad"
+          },
+          "regenerate": {
+            "type": "boolean",
+            "title": "Regenerate",
+            "description": "結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed 產生一個新候選（docs/adr/042）",
+            "default": false
           }
         },
         "type": "object",

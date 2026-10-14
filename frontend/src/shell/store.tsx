@@ -68,7 +68,8 @@ export interface Shell {
   setAccount: (accountId: string, label: string, source?: object) => void;
   /** 目前正在看的對話（切換身分的提示只留在這一段） */
   setCurrentConv: (convId: string | null) => void;
-  startReconstruct: (convId: string, turnId: string) => void;
+  /** regenerate：結果不對，重新生成（作廢目前的結果、重抽一個候選；docs/adr/042） */
+  startReconstruct: (convId: string, turnId: string, opts?: { regenerate?: boolean }) => void;
   startSchedule: (convId: string, turnId: string) => void;
   /**
    * 取消：還沒開始的任務直接取消；背景工作已建立就送 POST /jobs/{id}/cancel（worker 停止、不寫回任何結果），
@@ -453,12 +454,12 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   };
 
   const startReconstruct = useCallback(
-    (convId: string, turnId: string) => {
+    (convId: string, turnId: string, opts?: { regenerate?: boolean }) => {
       const t = task(convId, turnId);
       if (t?.part?.kind !== "reconstruct" || !mayAct(t)) return;
       const ctrl = control(`${turnId}:task`);
       const update = guarded(convId, turnId, `${turnId}:task`);
-      void runReconstruct(t.part as ReconstructPart, update, ctrl.signal).finally(() => {
+      void runReconstruct(t.part as ReconstructPart, update, ctrl.signal, opts).finally(() => {
         void qc.invalidateQueries({ queryKey: ["part-reconstructions"] });
         updateConv(convId, (c) => ({ ...c, updatedAt: Date.now() }));
       });

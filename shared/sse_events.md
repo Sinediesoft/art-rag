@@ -80,8 +80,8 @@
 |---|---|---|
 | `meta` | `{"request_id", "job_id", "strategy", "model", "image_id", "part", "identified", "layout", "input_url", "input_size", "scale_to", "scale_source"}` | 前處理完成：`layout` 為 `kb`（知識庫圖紙）／`rectified`（照片已拉正）／`upload`（未收錄）；`scale_to` 是等比縮放依據的外形尺寸（mm），未收錄圖紙由本地 Qwen3-VL 讀圖上標註，讀不到為 `null` |
 | `token` | `{"text"}` | CadQuery 程式碼片段（不做 OpenCC 轉換） |
-| `executing` | `{"generation_ms", "code_chars"}` | 程式碼產生完畢，開始沙箱執行 |
-| `result` | `{"ok", "error", "code", "valid", "raw_dims", "dims", "scale", "volume", "faces", "iou", "iou_bbox", "holes", "files"}` | 執行結果；`iou`（論文評估法）與 `iou_bbox`（外框對齊）只有知識庫圖紙才有；`holes` 是孔位校正（ADR 035）：`{"status": "applied"\|"skipped", "reason", "detected", "removed", "applied"}`，`skipped` 時 `reason` 說明為什麼維持模型輸出；`files` 為 STL／STEP／回投影三視圖／程式碼的網址 |
+| `executing` | `{"generation_ms", "code_chars", "cached"?}` | 程式碼產生完畢，開始沙箱執行；`cached: true`＝結果快取命中，沒有生成（docs/adr/042） |
+| `result` | `{"ok", "error", "code", "valid", "raw_dims", "dims", "scale", "volume", "faces", "iou", "iou_bbox", "holes", "files"}` | 執行結果；`iou`（論文評估法）與 `iou_bbox`（外框對齊）只有知識庫圖紙才有；`holes` 是孔位校正（ADR 035）：`{"status": "applied"\|"skipped", "reason", "detected", "removed", "applied"}`，`skipped` 時 `reason` 說明為什麼維持模型輸出；`files` 為 STL／STEP／回投影三視圖／程式碼的網址。知識庫圖紙的 Ortho2CAD 結果另有 `cache`（docs/adr/042）：`{"status": "hit"\|"stored"\|"not_stored"\|"rejected_before", "reason", "created_at", "iou", "candidate": {"kind": "greedy"\|"sample", "temperature", "seed"}, "source"?, "adoptable", "regenerable"}`；`hit` 時 `created_at`、`iou`、`candidate` 是快取那一筆的 |
 | `done` | `{"request_id", "job_id", "strategy", "model", "latency_ms": {"first_token", "generation", "exec", "total"}, "tokens", "egress"}` | 完成；`egress` 恆為 0（只連本機推論伺服器） |
 | `error` | `{"code", "message", "request_id"}` | 錯誤，之後不再有其他事件 |
 

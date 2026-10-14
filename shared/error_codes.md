@@ -56,6 +56,10 @@
 | `SCHEDULE_SCORE_MISMATCH` | 422／工作 `error.code` | Timefold 回的分數和後端用同一套規則重算的不一致，沒有寫回 |
 | `CAD_EXEC_FAILED` | 工作 `error.code` | 3D 重建的沙箱執行失敗（`message` 只留第一行；程式碼、輸入圖在受保護的產物端點給授權的人看） |
 | `CAD_NO_RESULT` | 工作 `error.code` | 3D 重建沒有產出結果事件 |
+| `CAD_CACHE_NOT_APPLICABLE` | 409 | 作廢／採用 3D 重建結果（`POST /cad/jobs/{id}/cache/reject`、`…/adopt`）：這個工作不在結果快取範圍（只有知識庫圖紙本身的 Ortho2CAD 結果，docs/adr/042），或還沒有發布的結果 |
+| `CAD_CACHE_NOT_ADOPTABLE` | 409 | 採用：有標準模型的零件依 IoU 門檻自動寫入，不能手動採用；或結果沒通過檢查（執行失敗、實體無效、孔位校正失敗）；或這份程式碼已被標記為不對 |
+| `CAD_CACHE_EXISTS` | 409 | 採用：這張圖紙已經有快取的結果 |
+| `CAD_RESAMPLE_EXHAUSTED` | SSE `error`／工作 `error.code` | 結果不對，重新生成：這張圖紙已經試過 `cad.resample.max_seeds` 個候選，沒有新的 seed 可以試 |
 | `CAD_PUBLISH_CONFLICT` | 工作 `error.code` | 這一次嘗試的產物資料夾（`<job>/a<attempt>`）已經存在：不刪、不覆蓋，工作失敗（正常流程不會發生） |
 | `LEASE_EXPIRED` | 工作 `error.code` | worker 連續多次中斷（租約過期），已停止重試 |
 | `PERMISSION_REVOKED` | 403／工作 `error.code` | 提交工作的帳號已不存在或被撤銷；其他撤權（操作、領域、圖紙、照片）依原因回 `PERMISSION_DENIED`／`DATA_SCOPE_DENIED`／`IMAGE_NOT_FOUND`，工作在領取後、執行前、寫回前各驗一次，失敗就不讀圖、不呼叫模型、不寫入 |

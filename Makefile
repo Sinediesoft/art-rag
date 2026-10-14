@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad cad-warm eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -45,6 +45,7 @@ help:
 	@echo "make demo-all    同時啟動 Ortho2CAD、排程服務與展示伺服器"
 	@echo "make drawings    由 kb/cad/*.py 標準模型產生 kb/drawings/*.png（改了標準模型後執行）"
 	@echo "make eval-cad    圖紙辨識＋3D 重建評估（需後端與 Ortho2CAD 在執行），結果存 eval/runs/*-cad.json"
+	@echo "make cad-warm    預熱 3D 重建結果快取（需 Ortho2CAD；docs/adr/042）：逐張圖紙先跑 greedy，不合格就重抽 seed，IoU 最高且達門檻的寫入；PARTS=\"mfg-001 mfg-005\" 只跑這幾張"
 	@echo "--- 工廠庫存（Text-to-SQL）---"
 	@echo "make inventory   由 kb/inventory/*.json 重建庫存資料庫 data/inventory.sqlite3（後端也會自動重建）"
 	@echo "make eval-sql    Text-to-SQL 評估（需後端在執行），結果存 eval/runs/*-sql.json"
@@ -143,6 +144,10 @@ drawings:
 
 eval-cad:
 	$(PY) eval/run_cad_eval.py --baseline
+
+# 3D 重建結果快取（docs/adr/042）：跑的時候像 worker 一樣在 Redis 登記 ortho2cad 使用中
+cad-warm:
+	$(PY) pipelines/cad_warm.py $(PARTS)
 
 eval-sql:
 	$(PY) eval/run_sql_eval.py

@@ -366,6 +366,18 @@ cad:
   max_tokens: 4096
   temperature: 0
   exec_timeout_s: 60          # 產生的程式碼在沙箱中的執行上限
+  # 結果快取＋品質閘門（docs/adr/042）：只收知識庫圖紙的 Ortho2CAD 結果；有標準模型的零件
+  # IoU 達門檻才自動寫入，沒有標準模型的要主管（kb_intake）按「採用這個結果」
+  cache:
+    enabled: true
+    min_iou: 0.6
+  # 重抽候選：temperature＋seed 換出不同的程式碼。現場重建不自動重抽，只有按「結果不對，重新生成」
+  # （一次一個候選，下一個沒試過的 seed）與 make cad-warm 會用
+  resample:
+    temperature: 0.7
+    max_seeds: 8              # 每張圖（同一個快取 key）最多試幾個 seed（1…max_seeds）
+    warm_seeds: 3             # make cad-warm 在 greedy 不合格時依序試幾個 seed
+    time_limit_s: 900         # make cad-warm 每張圖重抽的時間上限（秒）
 
 generation:
   temperature: 0              # 評估時固定 0

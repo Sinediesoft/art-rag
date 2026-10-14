@@ -1091,3 +1091,89 @@ def test_worker_authorization_follows_the_pluggable_account_source(clean):
     job = store.get(jid)
     assert job["status"] == "failed" and job["error"]["code"] == "PERMISSION_DENIED"
     assert runs() == []
+
+
+# ------------------------------------------------- 3D 重建結果快取（TASK-20261014-002，ADR 042）
+@pytest.fixture
+def cad_cache_env(tmp_path, monkeypatch):
+    """真模型模式＋假的 Ortho2CAD（回標準模型的程式碼）、模型身分與獨立的快取檔。"""
+    from app.core.config import REPO_ROOT
+    from app.rag.providers import Usage
+    from app.services import cad_cache
+
+    monkeypatch.setattr(get_settings(), "llm_mode", "local")
+    ident = {"alias": "ortho2cad", "model": {"path": "m", "size": 1, "mtime_ns": 1}}
+    monkeypatch.setattr(
+        cad_cache, "model_identity", lambda alias: ident | {"mmproj": ident["model"]}
+    )
+    cache = cad_cache.CadCache(tmp_path / "cache.sqlite3")
+    monkeypatch.setattr(cad_cache, "get_cache", lambda: cache)
+    code = (REPO_ROOT / "kb" / "cad" / "mfg-002.py").read_text(encoding="utf-8")
+    calls: list[tuple] = []
+
+    class FakeOrtho2CAD:
+        model = "ortho2cad"
+
+        def __init__(self):
+            self.usage, self.max_tokens, self.temperature, self.seed = Usage(), None, None, None
+
+        async def stream(self, messages):
+            calls.append((self.temperature, self.seed))
+            yield code
+
+    monkeypatch.setattr(cad_service, "get_provider", lambda strategy: FakeOrtho2CAD())
+    return {"cache": cache, "calls": calls, "code": code.strip()}
+
+
+@needs_limits
+def test_cad_cache_hit_in_job_still_publishes_through_published_attempt(clean, cad_cache_env):
+    from app.services import cad_access
+
+    first = cad_job(part="mfg-002")
+    assert runner.execute(first, "w1") == "done"
+    row = store.get(first)
+    assert row["status"] == "succeeded"
+    assert row["result"]["result"]["cache"]["status"] == "stored"
+    assert len(cad_cache_env["calls"]) == 1
+
+    second = cad_job(part="mfg-002")
+    assert runner.execute(second, "w1") == "done"
+    row = store.get(second)
+    assert row["status"] == "succeeded" and len(cad_cache_env["calls"]) == 1  # 沒有生成
+    result = row["result"]["result"]
+    assert result["cache"]["status"] == "hit" and result["iou"] > 0.95
+    assert "code" not in result  # 事件與結果不帶程式碼（照舊）
+    # 發布照舊：只認 fenced finish 記下的那一次嘗試，產物在那次嘗試自己的資料夾
+    assert cad_access.published_attempt(row) == row["attempt"]
+    d = cad_access.published_dir(second)
+    assert d == cad_access.attempt_dir(second, row["attempt"])
+    assert (d / "model.stl").is_file() and (d / "code.py").read_text() == cad_cache_env["code"]
+    assert {a["name"] for a in store.artifacts(second)} >= {"model.stl", "code.py", "input.png"}
+    assert "token" not in event_types(second)
+
+
+@needs_limits
+def test_cad_job_reject_then_regenerate_samples_a_new_seed(clean, cad_cache_env):
+    from app.services import cad_cache
+
+    jid = cad_job(part="mfg-002")
+    runner.execute(jid, "w1")
+    out = cad_cache.reject_job(identity.get_account("warehouse"), jid, "req_reject")
+    assert out == {"job_id": jid, "rejected": True, "removed": True}
+    job, _ = store.create_job(
+        kind="cad",
+        owner_id="manager",
+        params={"strategy": "ortho2cad", "regenerate": True},
+        resource={"part_id": "mfg-002", "image_id": None},
+        scope="cad:mfg-002",
+        request_id="req_regen",
+    )
+    assert runner.execute(job["id"], "w1") == "done"
+    assert cad_cache_env["calls"][-1] == (0.7, 1)  # temperature＋第一個沒試過的 seed
+    cache = store.get(job["id"])["result"]["result"]["cache"]
+    # 假的模型每個 seed 都回同一份（被否決的）程式碼：標示先前被否決、不寫入
+    assert cache["status"] == "rejected_before" and cache["candidate"]["seed"] == 1
+    # 看不到這張圖紙的身分不能作廢
+    with pytest.raises(security.AppError) as e:
+        cad_cache.reject_job(identity.get_account("sales"), jid, "req_x")
+    assert e.value.code == "CAD_JOB_NOT_FOUND"

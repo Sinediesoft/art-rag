@@ -709,6 +709,18 @@ class ReconstructRequest(BaseModel):
     )
 
 
+class CadCacheRejected(BaseModel):
+    job_id: str
+    rejected: bool
+    removed: bool = Field(description="這次有沒有把快取裡的那一筆移除")
+
+
+class CadCacheAdopted(BaseModel):
+    job_id: str
+    adopted: bool
+    created_at: str
+
+
 class CadJobSummary(BaseModel):
     meta: dict
     result: dict
@@ -1681,6 +1693,11 @@ class CadJobCreate(BaseModel):
         description="上傳的圖紙照片（要是自己的或擁有者授權的）",
     )
     strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
+    regenerate: bool = Field(
+        default=False,
+        description="結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed "
+        "產生一個新候選（docs/adr/042）",
+    )
 
 
 class ScheduleJobCreate(BaseModel):

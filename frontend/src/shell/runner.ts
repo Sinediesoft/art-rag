@@ -207,13 +207,24 @@ async function runPart(route: RouteResponse, part: Part, update: Update, signal:
  * 3D 重建：建立背景工作（POST /cad/jobs → 202）→ 訂閱事件 → 取結果。完成後模型（STL）出現在右側展示區。
  * signal 中止（離開、切換身分）只停止訂閱，工作照常在 worker 執行；要取消用 cancelTask（POST /jobs/{id}/cancel）。
  */
-export async function startReconstruct(part: ReconstructPart, update: Update, signal: AbortSignal) {
+export async function startReconstruct(part: ReconstructPart, update: Update, signal: AbortSignal, opts: { regenerate?: boolean } = {}) {
   const set = (f: (p: ReconstructPart) => ReconstructPart) => setPart<ReconstructPart>(update, f);
   const job = (f: (j: NonNullable<ReconstructPart["job"]>) => NonNullable<ReconstructPart["job"]>) => set((p) => (p.job ? { ...p, job: f(p.job) } : p));
+  // 結果不對，重新生成（docs/adr/042）：先作廢畫面上這個結果的程式碼，再重抽一個候選
+  const rejectId = opts.regenerate ? (part.job?.jobId ?? null) : null;
   set((p) => ({ ...p, job: { status: "queued", jobId: null, meta: null, code: "", result: null, done: null, error: null, startedAt: Date.now() } }));
+  if (rejectId) {
+    try {
+      await api.rejectCadResult(rejectId);
+    } catch (e) {
+      const f = failureOf(e);
+      if (!signal.aborted) job((j) => ({ ...j, status: "error", error: { code: f.code, message: f.message, request_id: f.requestId } }));
+      return;
+    }
+  }
   await runCadJob(
     // 和 3D 重建頁相同：附了照片就帶照片（知識庫圖紙會先依標準圖拉正），沒有就用知識庫的三視圖
-    { part_id: part.partId, image_id: part.imageId, strategy: "ortho2cad" },
+    { part_id: part.partId, image_id: part.imageId, strategy: "ortho2cad", ...(opts.regenerate ? { regenerate: true } : {}) },
     {
       onJob: (jobId) => job((j) => ({ ...j, jobId })),
       onQueued: () => job((j) => ({ ...j, status: "queued" })),

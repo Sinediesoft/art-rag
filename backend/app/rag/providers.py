@@ -45,6 +45,8 @@ class Provider:
     # 不填就用 models.yaml 的 generation；3D 重建要長輸出（cad.max_tokens）
     max_tokens: int | None = None
     temperature: float | None = None
+    # 取樣的亂數種子（llama-server／Ollama 的 seed）：3D 重建重抽候選用（docs/adr/042）。None＝不送
+    seed: int | None = None
     # OpenAI 的 response_format（例如 {"type": "json_schema", ...}）：照片建檔用來限制輸出格式
     # （docs/adr/013）。伺服器不支援時會被忽略，呼叫端仍要自己解析、驗證
     response_format: dict | None = None
@@ -86,6 +88,8 @@ class OpenAICompatProvider(Provider):
             "max_tokens": int(self.max_tokens or gen["max_tokens"]),
             "stream_options": {"include_usage": True},
         }
+        if self.seed is not None:
+            body["seed"] = int(self.seed)
         if self.response_format:
             body["response_format"] = self.response_format
         if self.keep_alive:

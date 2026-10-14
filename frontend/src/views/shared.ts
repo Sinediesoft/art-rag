@@ -39,7 +39,7 @@ export function useThreadActions(conv: Conv | null, mode: "brief" | "full", ask:
     ask,
     regenerate: () => id && shell.regenerate(id),
     rerun: (turnId) => id && shell.rerun(id, turnId),
-    startReconstruct: (turnId) => id && shell.startReconstruct(id, turnId),
+    startReconstruct: (turnId, opts) => id && shell.startReconstruct(id, turnId, opts),
     startSchedule: (turnId) => id && shell.startSchedule(id, turnId),
     cancelTask: (turnId) => id && shell.cancelTask(id, turnId),
     stopSchedule: (turnId) => id && shell.stopSchedule(id, turnId),

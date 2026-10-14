@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, assetUrl } from "../../api/client";
 import { usePart, useStatus, useSwitchAccount } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
+import { cacheHitLabel, cacheNote } from "../../lib/cadCache";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
 import { canRerun, hasMark, REJECTED, writeUnconfirmed } from "../../shell/persist";
@@ -22,7 +23,8 @@ export interface ThreadActions {
   ask: (q: string, forced?: string | null, imageId?: string | null) => void;
   regenerate: () => void;
   rerun: (turnId: string) => void;
-  startReconstruct: (turnId: string) => void;
+  /** regenerate：結果不對，重新生成（docs/adr/042） */
+  startReconstruct: (turnId: string, opts?: { regenerate?: boolean }) => void;
   startSchedule: (turnId: string) => void;
   cancelTask: (turnId: string) => void;
   /** 排程「提前結束」：採用目前最佳的合法解並寫回（取消才是放棄、不寫回） */
@@ -805,6 +807,16 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
             <span className="taskcard__meta">全程在本機・外送 {j.done?.egress.bytes ?? 0} B</span>
           </div>
           {showCode && <pre className="code code--block code--scroll">{j.code}</pre>}
+          {res.cache && (
+            <div className="taskcard__actions">
+              <p className="taskcard__note">{cacheHitLabel(res.cache) ?? cacheNote(res.cache)}</p>
+              {res.cache.regenerable && (
+                <button type="button" className="btn btn--ghost" onClick={() => th.startReconstruct(turn.id, { regenerate: true })}>
+                  結果不對，重新生成
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
