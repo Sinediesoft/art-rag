@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apiError, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "../test/transport";
 import { ctaOf, domainOf } from "./outputs";
-import { runTurn } from "./runner";
+import { initialPart, runTurn } from "./runner";
 import { buildStages, progressOf } from "./stages";
 import type { ChatPart, SqlPart, Turn } from "./types";
 
@@ -210,5 +210,15 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
     expect(p.status).toBe("done");
     expect(p.result?.rows).toEqual([["一廠成品倉", 12]]);
     expect(p.answer).toBe("還有 12 件。");
+  });
+});
+
+describe("initialPart", () => {
+  it("比較題沒指定畫作也直接全庫問答（global_qa，docs/adr/039）", () => {
+    const compare = route({ dispatch: { module: "art_qa", question: "哪幅畫最早完成？", artwork_id: null, part_id: null, global_qa: true } });
+    expect(initialPart(compare, null)).toMatchObject({ kind: "chat", target: {} });
+    // 沒有 global_qa 的畫作問答沒帶畫作時照舊列搜尋結果
+    const plain = route({ dispatch: { module: "art_qa", question: "有猴子的畫", artwork_id: null, part_id: null } });
+    expect(initialPart(plain, null).kind).toBe("artSearch");
   });
 });

@@ -363,14 +363,19 @@ async def route(
                 resolve_egress = guess.egress_bytes
         # 沒指定畫作的比較題（「哪幅畫最早完成？」）會因為「哪幅」被分成以文搜畫，前端只列搜尋結果；
         # 改成畫作問答，問答時附知識庫目錄（docs/adr/039）。使用者自己點以文搜畫時照他選的
-        if (
-            intent == "art_search"
-            and not forced_intent
-            and not dispatch.get("artwork_id")
-            and catalog.is_compare_question(question)
-        ):
-            intent = "art_qa"
-            dispatch["module"] = "art_qa"
+        if intent in ART_RESOLVE_INTENTS and catalog.is_compare_question(question):
+            # 句子裡有兩幅以上的畫名（「〈麥田〉和〈大碗島〉哪一幅先完成？」）：不要只鎖第一幅，
+            # 改成全庫檢索＋知識庫目錄，兩幅的資料才都看得到
+            named = {e.id for e in entities if e.kind == "artwork"}
+            if len(named) >= 2:
+                dispatch["artwork_id"] = None
+                dispatch.pop("artwork_label", None)
+            if intent == "art_search" and not forced_intent and not dispatch.get("artwork_id"):
+                intent = "art_qa"
+                dispatch["module"] = "art_qa"
+            if intent == "art_qa" and not dispatch.get("artwork_id"):
+                # 前端的畫作問答沒帶畫作時會改列搜尋結果；比較題要直接全庫問答
+                dispatch["global_qa"] = True
 
     # 交接票：問答放行時，/chat 憑票沿用第 1、2 段的判斷（帳號、問句、對象都要相符，10 分鐘內有效）
     post_filter = "local" if engine == "local" else "jev"

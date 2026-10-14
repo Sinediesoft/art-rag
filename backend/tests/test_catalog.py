@@ -78,3 +78,13 @@ def test_compare_question_routed_as_search_goes_to_qa(client, monkeypatch):
     assert r["intent"] == "art_qa" and r["dispatch"]["module"] == "art_qa" and r["route_ticket"]
     assert route(client, "找一幅有猴子的畫")["intent"] == "art_search"
     assert route(client, "哪幅畫最早完成？", forced_intent="art_search")["intent"] == "art_search"
+
+
+def test_comparing_two_named_artworks_searches_the_whole_library(client):
+    """「〈麥田〉和〈大碗島〉哪一幅先完成？」：不要只鎖第一幅，全庫問答＋目錄，前端也直接問答。"""
+    r = route(client, "有絲柏的麥田和大碗島的星期天下午，哪一幅先完成？", forced_intent="art_qa")
+    assert r["dispatch"]["artwork_id"] is None and r["dispatch"]["global_qa"] is True
+    assert catalog.needs_catalog("有絲柏的麥田和大碗島的星期天下午，哪一幅先完成？")
+    # 只提到一幅的一般問題照舊鎖那一幅
+    r = route(client, "有絲柏的麥田是在哪裡畫的？", forced_intent="art_qa")
+    assert r["dispatch"]["artwork_id"] == "met-436535" and "global_qa" not in r["dispatch"]
