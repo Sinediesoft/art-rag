@@ -51,3 +51,30 @@ def test_compare_question_gets_the_catalog_as_first_source(client):
     assert all(
         s["chunk_id"] != catalog.CHUNK_ID for s in chat_service.retrieve("這幅畫是誰畫的", None)
     )
+
+
+def test_compare_question_runs_through_the_whole_chat_pipeline(client):
+    """目錄段要能走完第 4～6 段（之前少了 title，第 4 段組處理過程時 KeyError，整個問答中斷）。"""
+    from test_api import parse_sse
+
+    r = client.post("/api/v1/chat", json={"question": "哪幅畫最早完成？", "strategy": "hybrid"})
+    events = parse_sse(r.text)
+    assert r.status_code == 200 and events[-1][0] == "done", events[-1]
+    assert not any(e == "error" for e, _ in events)
+
+
+def test_compare_question_routed_as_search_goes_to_qa(client, monkeypatch):
+    from app.agent import local_router
+    from app.agent.types import System1Result
+    from app.core.config import get_agent_config
+
+    def as_search(question, entities, photo_kind):
+        probs = {k: 0.0 for k in get_agent_config()["intents"]}
+        probs["art_search"] = 0.95
+        return System1Result(engine="local", intent_probs=probs, model="測試")
+
+    monkeypatch.setattr(local_router, "classify", as_search)
+    r = route(client, "哪幅畫最早完成？")
+    assert r["intent"] == "art_qa" and r["dispatch"]["module"] == "art_qa" and r["route_ticket"]
+    assert route(client, "找一幅有猴子的畫")["intent"] == "art_search"
+    assert route(client, "哪幅畫最早完成？", forced_intent="art_search")["intent"] == "art_search"

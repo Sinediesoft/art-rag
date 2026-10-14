@@ -361,6 +361,16 @@ async def route(
                         resolved["switched_from"] = "art_search"
                 resolve_info = resolved
                 resolve_egress = guess.egress_bytes
+        # 沒指定畫作的比較題（「哪幅畫最早完成？」）會因為「哪幅」被分成以文搜畫，前端只列搜尋結果；
+        # 改成畫作問答，問答時附知識庫目錄（docs/adr/039）。使用者自己點以文搜畫時照他選的
+        if (
+            intent == "art_search"
+            and not forced_intent
+            and not dispatch.get("artwork_id")
+            and catalog.is_compare_question(question)
+        ):
+            intent = "art_qa"
+            dispatch["module"] = "art_qa"
 
     # 交接票：問答放行時，/chat 憑票沿用第 1、2 段的判斷（帳號、問句、對象都要相符，10 分鐘內有效）
     post_filter = "local" if engine == "local" else "jev"

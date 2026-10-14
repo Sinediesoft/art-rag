@@ -31,6 +31,11 @@ def is_list_question(question: str) -> bool:
     return _match("list_pattern", question) and not _match("compare_pattern", question)
 
 
+def is_compare_question(question: str) -> bool:
+    """跨畫作的比較題（哪幅最早、最大…）。"""
+    return _match("compare_pattern", question)
+
+
 def needs_catalog(question: str) -> bool:
     """沒指定畫作的問答要不要附知識庫目錄：清單題或跨畫作的比較題。"""
     return _match("list_pattern", question) or _match("compare_pattern", question)
@@ -69,6 +74,8 @@ def source() -> dict:
         "score": 1.0,
         "artwork_id": None,
         "artwork_title": TOPIC,
+        # 第 4 段處理過程與送 Jev 的段落標題讀 title（一般畫作段落也有）
+        "title": TOPIC,
         "source_label": "系統依知識庫的作品資料產生",
         "level": "公開",
     }
