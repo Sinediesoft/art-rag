@@ -75,8 +75,11 @@ def dispatch_now() -> tuple[int, int]:
 
 def maintenance_once(stall_s: float | None = None) -> dict:
     """一輪維護：恢復租約過期的工作 → 補投遞遺失的訊息 → 投遞 outbox。"""
+    from app.jobs import schedule_job
+
     s = get_settings()
-    recovered = store.recover_expired()
+    # 排程寫回到生產資料庫後、結案前中斷的工作：依生產資料庫補做結案（不重跑、不收成 failed）
+    recovered = store.recover_expired(reconcile={"schedule": schedule_job.reconcile})
     stalled = store.redispatch_stalled(stall_s if stall_s is not None else s.jobs_lease_s * 2)
     sent, failed = store.dispatch_pending(publish)
     if recovered or stalled or failed:
@@ -103,10 +106,15 @@ class Maintenance(threading.Thread):
         self.worker = worker  # (名稱, 佇列)：worker 行程順便登記自己還活著
 
     def run(self) -> None:
+        from app.services import memory_guard
+
         interval = get_settings().jobs_dispatch_interval_s
         while True:
             if self.worker:
                 coordination.register_worker(*self.worker)
+            # 續約本行程「使用中的模型」登記（Redis 重啟後也靠這裡在寬限期內重新登記）
+            with suppress(Exception):
+                memory_guard.guard.publish()
             if self._stop_evt.wait(interval):
                 return
             with suppress(db.JobsUnavailable):

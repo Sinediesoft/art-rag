@@ -634,6 +634,12 @@ def validate_outcome(o: SolveOutcome) -> None:
         )
 
 
+def run_id_for_job(job_id: str) -> str:
+    """背景工作的排程 run_id 由 job_id 決定：重送、重試、舊 worker 延遲寫回、恢復迴圈補做結案，
+    對到的都是同一列。"""
+    return "plan_" + hashlib.sha256(job_id.encode()).hexdigest()[:12]
+
+
 def write_back(
     o: SolveOutcome,
     request_id: str,
@@ -641,23 +647,26 @@ def write_back(
     job_id: str | None = None,
     retries: int = 2,
     fence: Callable[[], None] | None = None,
+    audit: dict | None = None,
 ) -> str:
     """把排程結果寫回生產資料庫（單一交易）並讓工廠資料庫跟上。
 
     - 資料版本：交易內比對 production revision；變了就重算輸入版本，內容沒變（例如盤點異動）
       才用新的 revision 重試，內容變了丟 SCHEDULE_INPUT_CHANGED，舊解不會覆蓋新工單
     - 冪等：背景工作的 run_id 由 job_id 決定，重送、重試、舊 worker 延遲寫回都是同一列
-    - 工廠資料庫是生產資料庫的衍生檢視，寫回後重建；中途中斷下次讀取也會依 revision 重建
+    - 工廠資料庫是生產資料庫的衍生檢視，寫回後重建；重建失敗只記錄（排程已經提交，不能讓呼叫端
+      以為沒寫入），下次讀取會依 revision 重建
     - fence：背景工作傳入，在寫入交易裡、真正寫入之前呼叫；資源租約已被接手就丟例外、不寫入
+    - audit：和排程同一個交易寫入的稽核紀錄（見 production_repo.save_run）
     """
     repo = get_production_repo()
-    run_id = "plan_" + hashlib.sha256(job_id.encode()).hexdigest()[:12] if job_id else None
+    run_id = run_id_for_job(job_id) if job_id else None
     expected = o.revision
     for attempt in range(retries + 1):
         try:
             saved = repo.save_run(
                 o.run_row(request_id), o.decorated["operations"], run_id=run_id,
-                expected_revision=expected, fence=fence,
+                expected_revision=expected, fence=fence, audit=audit,
             )  # fmt: skip
             break
         except RevisionConflict as e:
@@ -669,7 +678,10 @@ def write_back(
                     409,
                 ) from e
             expected = e.revision
-    get_inventory_repo().ensure_built(True)
+    try:
+        get_inventory_repo().ensure_built(True)
+    except Exception as e:  # noqa: BLE001 — 衍生檢視重建失敗不改變「已寫入」的事實
+        log.warning(f"排程已寫入，工廠資料庫重建失敗（下次讀取會再重建）：{e}")
     return saved
 
 

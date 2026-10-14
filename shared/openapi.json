@@ -8323,6 +8323,46 @@
         ],
         "title": "MachineInfo"
       },
+      "MemoryCoordination": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "redis"
+            ],
+            "title": "Mode",
+            "description": "local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable",
+              "warming"
+            ],
+            "title": "State",
+            "description": "ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通；warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "state"
+        ],
+        "title": "MemoryCoordination"
+      },
       "MemoryEvent": {
         "properties": {
           "at": {
@@ -8415,6 +8455,23 @@
             "type": "array",
             "title": "Kept",
             "description": "目前流程或其他請求正在用、所以保留的模型"
+          },
+          "coordination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "unavailable",
+                  "warming"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coordination",
+            "description": "跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，共用推論服務上的模型一律保留（docs/adr/036）"
           }
         },
         "type": "object",
@@ -8667,6 +8724,16 @@
             },
             "type": "array",
             "title": "Events"
+          },
+          "coordination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryCoordination"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

@@ -9,13 +9,14 @@
 | reserve_commit | 同上，而且沒被要求取消——之後取消回 409，成功寫回 |
 | finish | 同上；succeeded 還要 committing_attempt = attempt |
 | cancel | queued → 直接 cancelled；running 且沒進入寫回 → cancel_requested |
-| recover_expired | running 但租約過期，而且沒有 worker 正在寫回（advisory lock）→ 回佇列或失敗 |
+| recover_expired | 租約過期、沒有 worker 在寫回（advisory lock）→ 補做結案或回佇列／失敗 |
 
 所有時間都用資料庫的 now()，不依賴 worker 的時鐘。
 """
 
 import hashlib
 import json
+import logging
 import secrets
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
@@ -30,10 +31,16 @@ from app.core.config import get_settings
 from app.core.errors import AppError
 from app.jobs import db
 
+_log = logging.getLogger("artrag.jobs")
 QUEUE_OF = {"cad": "gpu", "schedule": "schedule"}
 ID_PREFIX = {"cad": "cad_", "schedule": "sch_"}
 TERMINAL = ("succeeded", "failed", "cancelled")
 ACTIVE = ("queued", "running")
+
+
+class FinalizeDeferred(Exception):
+    """外部寫入已經提交、但工作資料庫一直無法結案：工作留在 running，不收成 failed，
+    租約過期後由恢復迴圈依外部資料補做結案（recover_expired 的 reconcile）。"""
 
 
 class LeaseLost(Exception):
@@ -548,9 +555,15 @@ def events_after(job_id: str, after_seq: int, limit: int = 200) -> list[dict]:
 
 
 # ----------------------------------------------------------------------------- 恢復與投遞
-def recover_expired(limit: int = 20) -> list[tuple[str, str]]:
+def recover_expired(
+    limit: int = 20, reconcile: dict[str, Callable[[dict], dict | None]] | None = None
+) -> list[tuple[str, str]]:
     """租約過期的執行中工作：要求取消的 → cancelled；用完嘗試次數 → failed；其餘回佇列重投。
-    有 worker 正在寫回（持有 advisory lock）的跳過。回傳 [(job_id, 動作)]。"""
+    有 worker 正在寫回（持有 advisory lock）的跳過。回傳 [(job_id, 動作)]。
+
+    reconcile（種類 → 函式）：先問外部資料庫這個工作的寫回是不是已經提交（寫回後、結案前中斷）。
+    已提交（回傳結果）→ 依它把工作標成 succeeded（reconciled），不重跑、不收成 failed；
+    沒有（None）→ 照上面的規則；不確定（丟例外）→ 這一輪不動它（deferred），下一輪再查。"""
     out = []
     with db.connection() as conn:
         rows = conn.execute(
@@ -567,6 +580,19 @@ def recover_expired(limit: int = 20) -> list[tuple[str, str]]:
             job = get_for_update(conn, r["id"])
             if job["status"] != "running" or job["lease_expires_at"] is None:
                 continue
+            if (fn := (reconcile or {}).get(job["kind"])) is not None:
+                try:
+                    result = fn(job)
+                except Exception as e:  # noqa: BLE001 — 外部資料庫暫時查不了：不能猜
+                    _log.warning("reconcile %s deferred: %s", job["id"], e)
+                    out.append((job["id"], "deferred"))
+                    continue
+                if result is not None:
+                    _finish_locked(
+                        conn, job, "succeeded", result, None, "寫回已完成，依生產資料庫補記結果"
+                    )
+                    out.append((job["id"], "reconciled"))
+                    continue
             if job["cancel_requested"]:
                 _finish_locked(conn, job, "cancelled", None, None, "worker 中斷，依取消要求結束")
                 out.append((job["id"], "cancelled"))

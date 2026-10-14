@@ -12,6 +12,29 @@ from app.services.identity import Account
 _log = logging.getLogger("artrag.jobs")
 
 
+def row(
+    actor: Account | None,
+    action: str,
+    op: str,
+    ref_no: str,
+    summary: str,
+    request_id: str | None = None,
+    detail: dict | None = None,
+    actor_id: str | None = None,
+) -> dict:
+    """一筆稽核紀錄的內容（record() 直接寫入；排程寫回把它交給寫入交易一起提交）。"""
+    return {
+        "actor_id": actor.id if actor else actor_id or "system",
+        "actor_label": actor.label if actor else actor_id or "系統",
+        "action": action,
+        "op": op,
+        "ref_no": ref_no,
+        "summary": summary,
+        "detail": detail,
+        "request_id": request_id,
+    }
+
+
 def record(
     actor: Account | None,
     action: str,
@@ -24,16 +47,7 @@ def record(
 ) -> None:
     try:
         get_production_repo().add_audit(
-            {
-                "actor_id": actor.id if actor else actor_id or "system",
-                "actor_label": actor.label if actor else actor_id or "系統",
-                "action": action,
-                "op": op,
-                "ref_no": ref_no,
-                "summary": summary,
-                "detail": detail,
-                "request_id": request_id,
-            }
+            row(actor, action, op, ref_no, summary, request_id, detail, actor_id)
         )
     except Exception as e:  # noqa: BLE001 — 稽核失敗不影響工作
         _log.warning("audit failed: %s", e)

@@ -891,6 +891,22 @@ class MemoryEvent(BaseModel):
     released: list[MemoryReleased]
     failed: list[MemoryReleased]
     kept: list[str] = Field(description="目前流程或其他請求正在用、所以保留的模型")
+    coordination: Literal["ok", "unavailable", "warming"] | None = Field(
+        default=None,
+        description="跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，"
+        "共用推論服務上的模型一律保留（docs/adr/036）",
+    )
+
+
+class MemoryCoordination(BaseModel):
+    mode: Literal["local", "redis"] = Field(
+        description="local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型"
+    )
+    state: Literal["ok", "unavailable", "warming"] = Field(
+        description="ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通；"
+        "warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
+    )
+    detail: str | None = None
 
 
 class MemoryStatus(BaseModel):
@@ -907,6 +923,7 @@ class MemoryStatus(BaseModel):
     flow_at: str | None
     models: list[MemoryModel]
     events: list[MemoryEvent]
+    coordination: MemoryCoordination | None = None
 
 
 class MemoryReleaseResponse(BaseModel):

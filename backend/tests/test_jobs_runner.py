@@ -17,7 +17,7 @@ from conftest import as_account
 from app.cad.sandbox import RunResult
 from app.core import config
 from app.core.config import get_settings
-from app.jobs import runner, store
+from app.jobs import db, runner, store
 from app.jobs import schedule_job as schedule_job_module
 from app.repositories.production_repo import get_production_repo
 from app.services import cad_service, identity, schedule_service, security
@@ -432,6 +432,214 @@ def test_schedule_old_attempt_committing_first_is_what_the_job_reports(clean, mo
     assert stored["score"] == "0hard/0medium/-424242soft" and len(writes) == 2
     assert job["result"]["score"] == stored["score"]  # 工作結果就是存下的那一列
     assert get_production_repo().latest_run()["run_id"] == stored["run_id"]
+
+
+# ---- 排程寫入生產資料庫之後、工作結案之前的故障（架構審查 F2，0378910）
+def schedule_audits():
+    return [a for a in get_production_repo().audit(50) if a["op"] == "schedule_run"]
+
+
+def expire(clean, jid):
+    clean.sql(
+        "UPDATE jobs SET lease_expires_at = now() - interval '1 second' WHERE id = %s", (jid,)
+    )
+
+
+def recover():
+    """恢復迴圈的一輪（和 broker.maintenance_once 一樣帶排程的補做）。"""
+    return store.recover_expired(reconcile={"schedule": schedule_job_module.reconcile})
+
+
+def assert_one_run_one_audit(job):
+    assert job["status"] == "succeeded", job
+    stored = get_production_repo().get_run(job["result"]["run_id"])
+    assert len(runs()) == 1 and stored is not None
+    assert job["result"]["score"] == stored["score"]  # 工作結果就是存下的那一列
+    audits = schedule_audits()
+    assert len(audits) == 1 and audits[0]["ref_no"] == stored["run_id"]
+    assert audits[0]["actor_id"] == job["owner_id"]
+
+
+def test_schedule_finish_failing_once_after_commit_is_retried_not_failed(clean, monkeypatch):
+    """生產資料庫已提交後，工作資料庫的成功更新暫時失敗一次：worker 退讓重試，工作成功、
+    結果與一筆稽核都在；不會變成「failed、沒有結果、重送 skipped」的永久矛盾。"""
+    jid = schedule_job(engine="greedy")
+    real_finish = store.finish
+    failed = []
+
+    def finish(job_id, attempt, worker_id, status, **kw):
+        if status == "succeeded" and not failed:
+            assert len(runs()) == 1 and len(schedule_audits()) == 1  # 排程與稽核已一起提交
+            failed.append(1)
+            raise db.JobsUnavailable("暫時失敗")
+        return real_finish(job_id, attempt, worker_id, status, **kw)
+
+    monkeypatch.setattr(store, "finish", finish)
+    assert runner.execute(jid, "w1") == "done" and failed
+    assert_one_run_one_audit(clean.job(jid))
+    assert runner.execute(jid, "w2") == "skipped"
+    assert len(runs()) == 1 and len(schedule_audits()) == 1
+
+
+def test_schedule_finish_unavailable_after_commit_is_reconciled_by_recovery(clean, monkeypatch):
+    """結案一直失敗（工作資料庫在整個重試期間都不通）：工作留在 running、不收成 failed；
+    租約過期後恢復迴圈依生產資料庫補做結案——嘗試次數已用完也一樣是成功，不是 LEASE_EXPIRED。"""
+    jid = schedule_job(engine="greedy")
+    clean.sql("UPDATE jobs SET max_attempts = 1 WHERE id = %s", (jid,))
+    real_finish = store.finish
+
+    def finish(job_id, attempt, worker_id, status, **kw):
+        if status == "succeeded":
+            raise db.JobsUnavailable("工作資料庫不通")
+        return real_finish(job_id, attempt, worker_id, status, **kw)
+
+    monkeypatch.setattr(store, "finish", finish)
+    monkeypatch.setattr(schedule_job_module, "FINALIZE_TRIES", 2)
+    assert runner.execute(jid, "w1") == "deferred"
+    job = clean.job(jid)
+    assert job["status"] == "running" and job["result"] is None and job["error"] is None
+    assert len(runs()) == 1 and len(schedule_audits()) == 1
+    monkeypatch.setattr(store, "finish", real_finish)
+    assert recover() == []  # 租約還沒過期：不動
+    expire(clean, jid)
+    assert recover() == [(jid, "reconciled")]
+    job = clean.job(jid)
+    assert_one_run_one_audit(job)
+    assert job["result"]["reconciled"] is True and job["error"] is None
+    assert job["result"]["input_version"] == job["input_version"]
+    assert clean.sql("SELECT count(*) AS n FROM resource_leases")[0]["n"] == 0  # 名額放掉了
+    assert event_types(jid)[-1] == "succeeded"
+    assert runner.execute(jid, "w2") == "skipped" and recover() == []
+    assert len(runs()) == 1 and len(schedule_audits()) == 1
+
+
+class WorkerCrash(BaseException):
+    """模擬 worker 行程在某一點被殺掉（不是一般例外，runner 不會收尾）。"""
+
+
+def test_worker_crash_after_production_commit_is_reconciled_once(clean, monkeypatch):
+    """生產提交後、工作成功更新前 worker 當掉：恢復迴圈依生產資料庫補做，只有一筆排程與一筆稽核；
+    再投遞、再跑恢復迴圈都不會多寫。"""
+    jid = schedule_job(engine="greedy")
+
+    def crash(*_a, **_kw):
+        raise WorkerCrash
+
+    monkeypatch.setattr(schedule_job_module, "_finalize", crash)
+    with pytest.raises(WorkerCrash):
+        runner.execute(jid, "w1")
+    assert clean.job(jid)["status"] == "running"
+    assert len(runs()) == 1 and len(schedule_audits()) == 1  # 稽核和排程同一個交易
+    expire(clean, jid)
+    assert recover() == [(jid, "reconciled")]
+    assert_one_run_one_audit(clean.job(jid))
+    assert runner.execute(jid, "w2") == "skipped" and recover() == []
+    assert len(runs()) == 1 and len(schedule_audits()) == 1
+
+
+def test_recovery_without_a_committed_run_keeps_the_normal_rules(clean):
+    """生產資料庫裡沒有這個工作的排程（寫入前就中斷）：補做查無 → 照原規則回佇列或失敗。"""
+    jid = schedule_job(engine="greedy")
+    store.claim(jid, "w1")
+    expire(clean, jid)
+    assert recover() == [(jid, "requeued")]
+    clean.sql("UPDATE jobs SET max_attempts = 2 WHERE id = %s", (jid,))
+    store.claim(jid, "w1")
+    expire(clean, jid)
+    assert recover() == [(jid, "failed")]
+    assert clean.job(jid)["error"]["code"] == "LEASE_EXPIRED" and runs() == []
+
+
+def test_recovery_defers_when_the_production_db_cannot_confirm(clean, monkeypatch):
+    """生產資料庫查不了（被鎖太久、檔案壞掉）：不猜，這一輪不動（不重跑、不失敗），下一輪再查。"""
+    jid = schedule_job(engine="greedy")
+    clean.sql("UPDATE jobs SET max_attempts = 1 WHERE id = %s", (jid,))
+    store.claim(jid, "w1")
+    expire(clean, jid)
+    repo = get_production_repo()
+    real = repo.committed_run
+
+    def broken(run_id):
+        raise __import__("sqlite3").OperationalError("database is locked")
+
+    monkeypatch.setattr(repo, "committed_run", broken)
+    assert recover() == [(jid, "deferred")]
+    assert clean.job(jid)["status"] == "running"
+    monkeypatch.setattr(repo, "committed_run", real)
+    assert recover() == [(jid, "failed")]  # 確認沒有寫入、嘗試已用完 → 才失敗
+
+
+def test_recovery_waits_for_an_in_flight_production_write(clean, monkeypatch):
+    """舊嘗試已通過寫入交易裡的 fence、持有寫回鎖的連線才中斷：恢復迴圈的補做查詢在 SQLite
+    寫入鎖上等那個交易提交，看到排程就補做成功——不會先判定「沒寫入」重排或失敗、之後才被提交推翻。
+    （另一個行程用另一個 ProductionRepo；同一行程內的鎖不能替代 SQLite 的寫入鎖。）"""
+    from app.repositories.production_repo import ProductionRepo
+
+    jid = schedule_job(engine="greedy")
+    clean.sql("UPDATE jobs SET max_attempts = 1 WHERE id = %s", (jid,))
+    other = ProductionRepo(get_production_repo().path)  # 恢復迴圈所在的「另一個行程」
+    reconciling = threading.Event()
+    outcome: list = []
+
+    def reconcile_elsewhere(job):
+        reconciling.set()  # 這時已持有工作列的鎖（FOR UPDATE）
+        stored = other.committed_run(schedule_service.run_id_for_job(job["id"]))
+        return None if stored is None else schedule_job_module._result(job, stored)
+
+    def recover_elsewhere():
+        outcome.append(store.recover_expired(reconcile={"schedule": reconcile_elsewhere}))
+
+    original_fence = store.CommitSection.fence
+    fences = []
+
+    def fence(section):
+        original_fence(section)
+        fences.append(section.attempt)
+        if len(fences) == 2:  # 寫入交易裡、INSERT 之前：連線中斷，恢復迴圈開始
+            expire(clean, jid)
+            clean.sql("SELECT pg_terminate_backend(%s)", (section._conn.info.backend_pid,))
+            threading.Thread(target=recover_elsewhere, daemon=True).start()
+            assert reconciling.wait(10)
+
+    monkeypatch.setattr(store.CommitSection, "fence", fence)
+    monkeypatch.setattr(schedule_job_module, "FINALIZE_TRIES", 1)
+    assert runner.execute(jid, "w1") in ("lost", "deferred")
+    deadline = time.time() + 30
+    while not outcome and time.time() < deadline:
+        time.sleep(0.05)
+    assert outcome == [[(jid, "reconciled")]]
+    job = clean.job(jid)
+    assert_one_run_one_audit(job)
+    assert job["error"] is None and job["result"]["reconciled"] is True
+
+
+def test_schedule_audit_commits_with_the_run_or_not_at_all(clean, monkeypatch):
+    """稽核和排程在同一個交易：稽核寫不進去，排程也沒有寫入（工作如實失敗），不會只有其中一個。"""
+    from app.repositories.production_repo import ProductionRepo
+
+    jid = schedule_job(engine="greedy")
+
+    def broken(self, conn, row, once=False):
+        raise RuntimeError("audit insert failed")
+
+    monkeypatch.setattr(ProductionRepo, "_insert_audit", broken)
+    assert runner.execute(jid, "w1") == "done"
+    job = clean.job(jid)
+    assert job["status"] == "failed" and job["error"]["code"] == "INTERNAL_ERROR"
+    assert runs() == [] and schedule_audits() == []
+
+
+def test_inventory_rebuild_failure_after_commit_does_not_fail_the_job(clean, monkeypatch):
+    """工廠資料庫（衍生檢視）重建失敗：排程已經提交，工作照樣成功（下次讀取會再重建）。"""
+    from app.repositories.inventory_repo import get_inventory_repo
+
+    def broken(force=False):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(get_inventory_repo(), "ensure_built", broken)
+    jid = schedule_job(engine="greedy")
+    assert runner.execute(jid, "w1") == "done"
+    assert_one_run_one_audit(clean.job(jid))
 
 
 def test_blocked_job_waits_for_the_scope(clean):

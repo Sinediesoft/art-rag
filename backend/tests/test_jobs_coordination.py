@@ -89,6 +89,147 @@ def test_entering_and_leaving_a_flow_publishes_and_clears(jobs, monkeypatch):
     assert coordination.others_in_use() == set()
 
 
+# ---- 協調不可用：「未知」不等於「沒人在用」（架構審查 F3，0378910）
+@pytest.fixture
+def guarded(two_processes, monkeypatch):
+    """記憶體 95%、兩個已載入的模型：共用推論服務上的 ortho2cad、本行程自己的 clip。
+    釋放函式是替身，只記錄被要求卸載的模型，不碰真的模型服務。"""
+    released: list[str] = []
+
+    def model(key, shared):
+        return memory_guard.ManagedModel(
+            key, key, 4000, "test", lambda: True, lambda: released.append(key) or "ok",
+            shared=shared,
+        )  # fmt: skip
+
+    monkeypatch.setattr(
+        memory_guard, "_models", lambda: [model("ortho2cad", True), model("clip", False)]
+    )
+    monkeypatch.setattr(memory_guard.time, "sleep", lambda s: None)
+    monkeypatch.setattr(memory_guard, "has_gpu", lambda: False)
+    monkeypatch.setattr(memory_guard, "memory_percent", lambda: 95.0)
+    settings = memory_guard.get_settings().model_copy(update={"memory_guard": True})
+    monkeypatch.setattr(memory_guard, "get_settings", lambda: settings)
+    return memory_guard.MemoryGuard(), released
+
+
+@pytest.fixture
+def grace(monkeypatch):
+    """暫時改 Redis 重啟寬限期（測試環境預設 0）。"""
+
+    def set_grace(seconds: float) -> None:
+        monkeypatch.setenv("JOBS_MODELS_RESTART_GRACE_S", str(seconds))
+        config.get_settings.cache_clear()
+
+    yield set_grace
+    monkeypatch.undo()
+    config.get_settings.cache_clear()
+
+
+def test_registry_outage_keeps_shared_models_and_reports_degraded(jobs, guarded, two_processes):
+    """Redis 不通：其他行程的使用狀況「未知」，共用模型一律保留，只放本行程自己的模型；
+    釋放紀錄與記憶體狀態都標出降級。恢復後回到依登記判斷。"""
+    g, released = guarded
+    other, me = two_processes
+    other()
+    coordination.publish_usage({"ortho2cad": 1})
+    me()
+    jobs.redis.stop()
+    try:
+        assert coordination.others_in_use() is None
+        event = g.check("背景監控", set())
+        assert released == ["clip"] and "ortho2cad" in event["kept"]
+        assert event["coordination"] == "unavailable"
+        assert coordination.status()["state"] == "unavailable"
+        released.clear()
+        g.check("手動釋放", set(), force=True)  # 手動釋放也不例外
+        assert "ortho2cad" not in released
+    finally:
+        jobs.redis.start()
+    # Redis 回來、登記也還在（這個測試的 Redis 沒有重啟寬限期）：依登記保留
+    other()
+    coordination.publish_usage({"ortho2cad": 1})
+    me()
+    released.clear()
+    event = g.check("背景監控", set())
+    assert "ortho2cad" not in released and event["coordination"] == "ok"
+    # 確認閒置（沒有任何登記）才釋放共用模型
+    other()
+    coordination.publish_usage({})
+    me()
+    released.clear()
+    g.check("背景監控", set())
+    assert set(released) == {"ortho2cad", "clip"}
+
+
+def test_redis_restart_window_is_unknown_until_everyone_reregisters(
+    jobs, guarded, two_processes, grace
+):
+    """Redis 重啟會清掉所有登記：啟動未滿寬限期時，「沒有登記」不代表沒人在用——共用模型不卸載、
+    狀態是 warming；寬限期過了（每個活著的行程都已續約）才依登記判斷。"""
+    g, released = guarded
+    other, me = two_processes
+    other()
+    coordination.publish_usage({"ortho2cad": 1})
+    me()
+    jobs.redis.stop()
+    jobs.redis.start()  # 重啟：登記全沒了，worker 還在用 ortho2cad
+    grace(3600)
+    assert coordination.others_in_use() is None
+    event = g.check("背景監控", set())
+    assert released == ["clip"] and event["coordination"] == "warming"
+    assert coordination.status()["state"] == "warming"
+    assert "ortho2cad" not in released
+    # worker 在寬限期內續約回來；寬限期過了以登記為準
+    other()
+    coordination.publish_usage({"ortho2cad": 1})
+    me()
+    grace(0)
+    released.clear()
+    g.check("背景監控", set())
+    assert released == ["clip"] and coordination.status()["state"] == "ok"
+
+
+def test_maintenance_loop_renews_the_usage_registration(jobs, two_processes):
+    """各行程的維護執行緒定期續約「使用中的模型」：Redis 重啟清掉登記後，寬限期內自動登記回來。"""
+    from app.jobs import broker
+
+    other, me = two_processes
+    g = memory_guard.guard
+    g.enter("reconstruct", {"ortho2cad"})
+    try:
+        jobs.redis.flush()  # 登記消失（等同重啟）
+        other()
+        assert coordination.others_in_use() == set()
+        me()
+        m = broker.Maintenance()
+        m.start()
+        try:
+            other()
+            assert jobs.wait_until(
+                lambda: "ortho2cad" in (coordination.others_in_use() or set()), 10, "重新登記"
+            )
+            me()
+        finally:
+            m.stop()
+            m.join(5)
+    finally:
+        me()
+        g.exit("reconstruct", {"ortho2cad"})
+
+
+def test_memory_status_reports_the_coordination_state(jobs, client):
+    r = client.get("/api/v1/memory")
+    assert r.status_code == 200
+    assert r.json()["coordination"] == {"mode": "redis", "state": "ok", "detail": None}
+    jobs.redis.stop()
+    try:
+        c = client.get("/api/v1/memory").json()["coordination"]
+        assert c["mode"] == "redis" and c["state"] == "unavailable"
+    finally:
+        jobs.redis.start()
+
+
 # ------------------------------------------------------------------ 交接票
 def test_handoff_tickets_are_shared_between_api_processes(jobs, monkeypatch):
     handoff.clear()

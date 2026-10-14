@@ -76,10 +76,13 @@ def get_cad_job(job_id: str, request: Request):
 @router.get("/parts/{part_id}/reconstructions", response_model=S.CadJobListResponse, tags=["cad"])
 def list_part_reconstructions(part_id: str, request: Request):
     visible_part(part_id, request)
+    account = identity.current(request)
     rows = [
         r
         for r in get_logs_repo().recent_cad_for_part(part_id, 10)
-        if (d := cad_access.published_dir(r["job_id"])) is not None
+        if (a := cad_access.read_access(r["job_id"])) is not None
+        and security.cad_can_read(account, a)  # 列表和單筆讀取同一套政策
+        and (d := cad_access.published_dir(r["job_id"])) is not None
         and (d / "summary.json").is_file()
     ]
     return {"items": rows}

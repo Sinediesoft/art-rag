@@ -3531,6 +3531,23 @@ export interface components {
             /** Site */
             site: string;
         };
+        /** MemoryCoordination */
+        MemoryCoordination: {
+            /**
+             * Mode
+             * @description local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型
+             * @enum {string}
+             */
+            mode: "local" | "redis";
+            /**
+             * State
+             * @description ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通；warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載
+             * @enum {string}
+             */
+            state: "ok" | "unavailable" | "warming";
+            /** Detail */
+            detail?: string | null;
+        };
         /** MemoryEvent */
         MemoryEvent: {
             /** At */
@@ -3573,6 +3590,11 @@ export interface components {
              * @description 目前流程或其他請求正在用、所以保留的模型
              */
             kept: string[];
+            /**
+             * Coordination
+             * @description 跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，共用推論服務上的模型一律保留（docs/adr/036）
+             */
+            coordination?: ("ok" | "unavailable" | "warming") | null;
         };
         /** MemoryGpu */
         MemoryGpu: {
@@ -3669,6 +3691,7 @@ export interface components {
             models: components["schemas"]["MemoryModel"][];
             /** Events */
             events: components["schemas"]["MemoryEvent"][];
+            coordination?: components["schemas"]["MemoryCoordination"] | null;
         };
         /**
          * MetaFilterInfo

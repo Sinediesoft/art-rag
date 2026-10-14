@@ -123,7 +123,9 @@ def secure(operation: str, *, domain: str | None = None, op: str | None = None):
 # ----------------------------------------------------------------------------- 3D 重建工作
 @dataclass(frozen=True)
 class CadAccess:
-    """一個 3D 重建工作的存取依據：誰建的、來源資源。工作從建立起就有，不看 summary.json 在不在。"""
+    """一個 3D 重建工作的存取依據：誰建的、來源資源。工作從建立起就有，不看 summary.json 在不在。
+    `owner_id` 是建立工作的人（決定誰能取消）；照片來源的讀取權看照片本身的 ACL，
+    `source_owner_id` 是建立時記下的照片擁有者，只在照片紀錄過期清掉後用來認擁有者本人。"""
 
     job_id: str
     owner_id: str | None
@@ -131,6 +133,7 @@ class CadAccess:
     image_id: str | None  # 來源上傳照片
     identified_part_id: str | None = None  # 照片辨識出的知識庫圖紙
     legacy: bool = False  # 舊資料（沒有存取紀錄）從摘要推導
+    source_owner_id: str | None = None  # 來源照片的擁有者（建立工作當時）
 
     @classmethod
     def from_dict(cls, job_id: str, d: dict, *, legacy: bool = False) -> CadAccess:
@@ -141,6 +144,7 @@ class CadAccess:
             image_id=d.get("image_id"),
             identified_part_id=d.get("identified_part_id"),
             legacy=legacy,
+            source_owner_id=d.get("source_owner_id"),
         )
 
     def to_dict(self) -> dict:
@@ -149,6 +153,7 @@ class CadAccess:
             "part_id": self.part_id,
             "image_id": self.image_id,
             "identified_part_id": self.identified_part_id,
+            "source_owner_id": self.source_owner_id,
         }
 
 
@@ -166,7 +171,8 @@ def cad_can_read(account: Account, access: CadAccess) -> bool:
     """讀取工作的狀態、事件、摘要、程式碼、輸入圖、預覽與模型的共同規則。
     - 要能用工廠圖紙（mfg）
     - 來源是知識庫圖紙（指定或辨識出的）：圖紙看得到（機密等級＋部門）
-    - 來源是上傳照片：照片屬於這個帳號或擁有者授權給它（擁有者本人當然可以）
+    - 來源是上傳照片：照片「目前」屬於這個帳號或擁有者授權給它（uploads.derived_allowed）。
+      建立工作的人沒有額外的讀取權：獲分享後建立工作，分享被撤銷就和其他人一樣讀不到
     舊資料沒有擁有者：照片來源的一律不能讀（要管理者遷移），只有知識庫圖紙的才依圖紙規則讀。"""
     if not account.can_read("mfg"):
         return False
@@ -177,9 +183,7 @@ def cad_can_read(account: Account, access: CadAccess) -> bool:
             if p is None or not identity.can_view_part(account, p):
                 return False
     if access.image_id:
-        return uploads.can_use(access.image_id, account) or (
-            access.owner_id is not None and access.owner_id == account.id and not access.legacy
-        )
+        return uploads.derived_allowed(access.image_id, access.source_owner_id, account)
     if access.legacy:
         return bool(access.part_id or access.identified_part_id)
     return access.owner_id == account.id or bool(access.part_id or access.identified_part_id)

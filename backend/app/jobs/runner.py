@@ -37,7 +37,8 @@ def _error(e: Exception) -> dict:
 
 def execute(job_id: str, worker_id: str | None = None) -> str:
     """回傳 done／skipped（已被處理或不存在）／blocked（GPU 名額、排程範圍被占用，稍後再試）／
-    retry（資料庫暫時不可用）／lost（租約遺失，已放棄）。"""
+    retry（資料庫暫時不可用）／lost（租約遺失，已放棄）／deferred（外部寫入已提交、
+    結案延後，恢復迴圈會補做）。"""
     worker_id = worker_id or default_worker_id()
     try:
         claim = store.claim(job_id, worker_id)
@@ -72,6 +73,12 @@ def execute(job_id: str, worker_id: str | None = None) -> str:
             "job_lease_lost", extra={"fields": {"job_id": job_id, "attempt": job["attempt"]}}
         )
         return "lost"
+    except store.FinalizeDeferred:
+        log.warning(
+            "job_finalize_deferred",
+            extra={"fields": {"job_id": job_id, "attempt": job["attempt"]}},
+        )
+        return "deferred"
     finally:
         control.shutdown()
 
@@ -84,8 +91,8 @@ def _run(job: dict, control: JobControl, worker_id: str) -> None:
         runner(job, control)
     except JobCancelled:
         store.finish(job["id"], job["attempt"], worker_id, "cancelled", note="已取消，沒有寫回")
-    except store.LeaseLost:
-        raise
+    except (store.LeaseLost, store.FinalizeDeferred):
+        raise  # 外部寫入已提交、結案延後：交給恢復迴圈補做，不能收成 failed
     except Exception as e:  # noqa: BLE001 — 任何例外都要把工作收尾成 failed，不能留在 running
         if not isinstance(e, AppError):
             _log.exception("job %s failed", job["id"])

@@ -254,6 +254,28 @@ def test_photo_sourced_cad_job_needs_upload_access(client):
     assert cad_status(client, "wh1", "cad_a000000000000002") == 404
 
 
+def test_photo_cad_job_creator_loses_access_when_the_share_is_revoked(client):
+    """存取紀錄的 owner_id 是建立工作的人，不是照片擁有者：獲分享後建立工作，分享被撤銷就讀不到
+    （架構審查 F1，0378910）。照片紀錄過期清掉後只剩記下的照片擁有者（source_owner_id）。"""
+    as_account(client, "manager")
+    image_id = upload(client)
+    client.put(f"/api/v1/images/{image_id}/acl", json={"accounts": ["planner"]})
+    access = {"owner_id": "planner", "image_id": image_id, "source_owner_id": "manager"}
+    make_job("cad_a000000000000007", access=access)
+    assert cad_status(client, "planner", "cad_a000000000000007") == 200
+    as_account(client, "manager")
+    client.put(f"/api/v1/images/{image_id}/acl", json={"accounts": []})
+    assert cad_status(client, "planner", "cad_a000000000000007") == 404
+    assert cad_status(client, "planner", "cad_a000000000000007", "code.py") == 404
+    assert cad_status(client, "manager", "cad_a000000000000007") == 200
+    get_logs_repo()._exec("DELETE FROM uploads WHERE image_id = ?", (image_id,))
+    assert cad_status(client, "manager", "cad_a000000000000007") == 200
+    assert cad_status(client, "planner", "cad_a000000000000007") == 404
+    # 沒有記下照片擁有者的紀錄、照片也不在了：建立者讀不到
+    make_job("cad_a000000000000008", access={"owner_id": "planner", "image_id": "img_gone"})
+    assert cad_status(client, "planner", "cad_a000000000000008") == 404
+
+
 def test_cad_job_json_summary_has_the_same_policy(client):
     summary = {"meta": {"part": {"id": "mfg-002"}}, "result": {"ok": True}, "done": {}}
     make_job(

@@ -787,6 +787,9 @@ make test-jobs       # 背景工作的測試：自己建立隔離的 PostgreSQL�
 前端的 3D 重建與排程一律走背景工作，所以展示時要先 `make jobs-up`／`jobs-migrate` 並啟動兩個 worker。
 worker 掛掉或重啟：租約過期後工作自動回佇列、**整個重新執行**（不是從模型生成中段續跑），最多 `JOBS_MAX_ATTEMPTS` 次。
 Redis 重啟或訊息遺失：outbox 與補投遞會再送；PostgreSQL 重啟：連線池自動重建，期間回 503。
+排程已寫入生產資料庫、工作卻來不及標成成功（工作資料庫斷線、worker 當掉）：不會變成「失敗」，恢復迴圈依生產資料庫補做結案，
+排程與稽核各只有一筆。照片來源的 3D 重建工作，讀取權跟著照片目前的分享名單（撤銷分享後，建立工作的人也讀不到）。
+Redis 不通或剛重啟時無法確認其他行程在用哪些模型，記憶體管理不卸載 Ollama、llama-server、Timefold 上的模型（`GET /memory` 的 `coordination` 會標出降級）。
 舊上傳照片、舊 3D 重建資料夾沒有擁有者時預設拒絕，管理者用
 `python -m app.jobs.admin adopt-uploads --owner <帳號>`／`adopt-cad --owner <帳號>` 遷移。
 

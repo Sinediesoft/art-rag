@@ -30,7 +30,9 @@ def _owner(account_id: str) -> str:
 
 def cmd_adopt_cad(owner: str) -> int:
     """data/cad 裡沒有 access.json 的舊資料夾：知識庫圖紙來源的本來就依圖紙規則可讀，
-    這裡把（有摘要而且是照片來源的）指派給 owner，讓它之後可讀。"""
+    這裡把（有摘要而且是照片來源的）指派給 owner。照片來源的讀取權仍跟著照片的 ACL：
+    照片紀錄還在時要照片本身屬於 owner（舊上傳先跑 adopt-uploads）；照片紀錄已過期清掉時，
+    才以這裡指定的 owner 當照片擁有者。"""
     root = get_settings().cad_jobs_dir
     n = 0
     for d in sorted(root.glob("cad_*")) if root.is_dir() else []:
@@ -41,7 +43,8 @@ def cmd_adopt_cad(owner: str) -> int:
         cad_access.write_access(
             d.name,
             CadAccess(d.name, owner, None if meta.get("image_id") else part.get("id"),
-                      meta.get("image_id"), part.get("id") if meta.get("image_id") else None),
+                      meta.get("image_id"), part.get("id") if meta.get("image_id") else None,
+                      source_owner_id=owner if meta.get("image_id") else None),
             d,
         )  # fmt: skip
         n += 1

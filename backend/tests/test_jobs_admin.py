@@ -89,3 +89,8 @@ def test_adopt_cad_adds_access_records_to_legacy_photo_folders(jobs, client, cap
     assert code == 0 and "已補上" in out and (d / cad_access.ACCESS_FILE).is_file()
     record = json.loads((d / cad_access.ACCESS_FILE).read_text())
     assert record["owner_id"] == "manager" and record["image_id"] == "img_old0000000000001"
+    # 照片紀錄早已不在：指定的帳號當照片擁有者讀得到，其他人照樣讀不到
+    assert record["source_owner_id"] == "manager"
+    assert client.get("/api/v1/cad/jobs/cad_a0000000000000ad/input.png").status_code == 200
+    as_account(client, "planner")
+    assert client.get("/api/v1/cad/jobs/cad_a0000000000000ad/input.png").status_code == 404

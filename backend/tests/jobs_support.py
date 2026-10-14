@@ -351,7 +351,7 @@ class Worker:
 JOB_ENV_KEYS = [
     "REDIS_URL", "JOBS_DATABASE_URL", "JOBS_LEASE_S", "JOBS_HEARTBEAT_S",
     "JOBS_DISPATCH_INTERVAL_S", "JOBS_POLL_S", "SCHEDULER_BASE_URL", "SCHEDULER_MODE",
-    "JOBS_MAX_ATTEMPTS", "LEGACY_SYNC_JOBS", "JOBS_GPU_SLOTS",
+    "JOBS_MAX_ATTEMPTS", "LEGACY_SYNC_JOBS", "JOBS_GPU_SLOTS", "JOBS_MODELS_RESTART_GRACE_S",
 ]  # fmt: skip
 
 
@@ -371,6 +371,8 @@ class JobsEnv:
             "SCHEDULER_BASE_URL": fake.url,
             "SCHEDULER_MODE": "real",
             "LEGACY_SYNC_JOBS": "auto",
+            # 測試的 Redis 是這個測試階段才啟動的：不等重啟寬限期（寬限期本身另有測試）
+            "JOBS_MODELS_RESTART_GRACE_S": "0",
         }
 
     def worker_env(self) -> dict:

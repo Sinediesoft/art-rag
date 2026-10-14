@@ -39,7 +39,7 @@
 |---|---|
 | `/schedule/stop` | 要 `schedule_run`（只有生管）＋能讀工廠資料庫；訪客、業務、倉管、藝術家、主管都是 403，擋下後 `stop()` 沒被呼叫 |
 | 上傳照片 | `uploads` 記錄 `owner_id` 與 `acl`（擁有者用 `PUT /images/{id}/acl` 明確授權）。原圖、色彩、色塊圖、畫作卡、對位、辨識（圖／圖紙／不指定領域）、問答、助理路由、建檔、批次、3D 重建都先驗；結果以 `image_id` 快取的服務，授權在快取之外每次都驗。找不到和沒有權限同一個 404 `IMAGE_NOT_FOUND`。舊資料沒有擁有者＝沒有人能用；管理者用 `python -m app.jobs.admin adopt-uploads --owner <帳號>` 遷移。照片建檔草稿（含照片副本）同樣只有建檔人與能收錄的身分（主管）讀得到 |
-| 3D 重建產物 | 工作從建立起就有存取紀錄（背景工作＝jobs 列；舊 SSE 入口＝資料夾裡第一個寫入的 `access.json`）。未完成、失敗、完成的狀態、事件、摘要、程式碼、輸入圖、預覽與模型都走 `cad_can_read`：知識庫圖紙來源要看得到該圖紙；照片來源要是照片的擁有者或被授權者；舊資料夾沒有存取紀錄：知識庫圖紙來源照圖紙規則可讀（相容讀取），照片來源或完全沒有紀錄的拒絕，`adopt-cad` 補紀錄 |
+| 3D 重建產物 | 工作從建立起就有存取紀錄（背景工作＝jobs 列；舊 SSE 入口＝資料夾裡第一個寫入的 `access.json`）。未完成、失敗、完成的狀態、事件、摘要、程式碼、輸入圖、預覽與模型都走 `cad_can_read`：知識庫圖紙來源要看得到該圖紙；照片來源**一律看照片「目前」的擁有者與授權名單**（`uploads.derived_allowed`）：工作與產物（含輸入圖副本）是照片的衍生資料，撤銷分享立刻傳到狀態、事件、新舊產物入口與列表——建立工作的人（存取紀錄的 `owner_id`，決定誰能取消）沒有額外的讀取權，獲分享後建立工作、分享被撤銷就和其他人一樣 404。建立工作時另記照片擁有者 `source_owner_id`（不回給前端），只在照片紀錄超過保存期限被清掉、分享名單無從確認時，用來認擁有者本人。舊資料夾沒有存取紀錄：知識庫圖紙來源照圖紙規則可讀（相容讀取），照片來源或完全沒有紀錄的拒絕，`adopt-cad` 補紀錄（照片紀錄還在時仍依照片的 ACL，舊上傳先 `adopt-uploads`） |
 
 ### 4. 背景工作（AC-09～AC-14）
 ```
@@ -57,13 +57,18 @@
 - **投遞**：dispatcher 以 `FOR UPDATE SKIP LOCKED` 取 outbox 送 Celery，失敗指數退讓、留在 outbox；排隊中卻很久沒被領走的工作（broker 重啟、訊息遺失）會補投遞。至少一次投遞，重複由 `claim` 擋掉。Redis 單獨不通：工作仍建立（202，`delayed_dispatch: true`，維持 `queued`），恢復後投遞；工作資料庫不通：503 `JOBS_UNAVAILABLE`。**不會**退回 API 行程執行。
 - **領取與互斥**：`claim` 在一個交易裡鎖列、取得資源租約（排程範圍 `schedule:plant`，或 GPU 名額 `gpu:0…`，`JOBS_GPU_SLOTS` 預設 1）才轉成 `running`。租約有期限、過期的直接接手並遞增 fencing。舊的 SSE 排程入口（`LEGACY_SYNC_JOBS=on`）也拿同一個範圍租約，所以和背景工作互斥。
 - **狀態機**：`queued → running → succeeded／failed／cancelled`，記錄時間與 `attempt`。每個寫入都是帶條件的單一 UPDATE（`attempt`＋`lease_owner`＋`status='running'`，而且工作**仍持有自己的資源租約**——`resource_leases` 的 holder 還是這個工作、attempt 一致），租約被接手後的舊 worker 一律 `LeaseLost`，什麼都寫不進去。
-- **心跳與恢復**：worker 每 `JOBS_HEARTBEAT_S` 續約並讀回取消／停止旗標；超過 `JOBS_LEASE_S` 沒續約，恢復迴圈把工作放回佇列（用完 `JOBS_MAX_ATTEMPTS` 就失敗為 `LEASE_EXPIRED`，要求取消的直接 `cancelled`）。**這是整個重新執行，不是從 LLM token 中段續跑**，文件與事件都不宣稱續跑。
+- **心跳與恢復**：worker 每 `JOBS_HEARTBEAT_S` 續約並讀回取消／停止旗標；超過 `JOBS_LEASE_S` 沒續約，恢復迴圈把工作放回佇列（用完 `JOBS_MAX_ATTEMPTS` 就失敗為 `LEASE_EXPIRED`，要求取消的直接 `cancelled`）。排程工作先問生產資料庫寫回是否已提交（見下方「排程寫入之後的結案」），已提交的直接補做成 `succeeded`。**這是整個重新執行，不是從 LLM token 中段續跑**，文件與事件都不宣稱續跑。
 - **寫回與競態**：進入寫回前先 `reserve_commit`（資料庫列上的原子條件：沒被要求取消才成功）。取消在前 → worker 看到旗標，不寫回、標 `cancelled`；寫回在前 → 取消回 409 `JOB_COMMITTING`，工作會完成。寫回期間持有工作專用的 advisory lock，恢復迴圈遇到就跳過，所以租約剛好過期的舊 worker 不會和接手的新 worker 同時寫回。
   - **資源租約的 fencing**：GPU 名額或排程範圍的租約過期後可能被別的工作接手，而原工作的 `jobs` 列在恢復迴圈收回之前仍是 `running`。所以續約（`heartbeat`）要同時更新工作列與資源租約，資源租約的 holder 已經不是自己就丟 `LeaseLost` 並回滾（不替它延長工作租約）；`reserve_commit` 與所有帶 fencing 的寫入（事件、結束）同樣要求仍持有資源。過期但沒有被接手的租約仍可續約。
   - **互斥涵蓋整段外部寫回**：`reserve_commit` 成功的同一個交易把該工作的資源租約標成 `expires_at = 'infinity'`（`heartbeat` 不會改回有期限的）。從取得寫回資格到工作結束，GPU 名額與排程範圍都不會因為租約過期被別的工作或舊同步入口接手（接手條件是 `expires_at < now()`）；拿不到的工作維持 `queued`／`blocked`。寫回區段（`commit_section`）持有工作專用的 advisory lock，並提供 `fence()`：在**持有寫回鎖的那條連線上**查「仍是現行嘗試、已取得寫回資格、資源租約仍是自己的而且仍是 `infinity`」，連線斷了或被接手就丟 `LeaseLost`。每個不可回滾的外部寫入前都要 `fence()`：CAD 在建立這次嘗試的資料夾與 `os.replace` 發布之前；排程在 SQLite 寫入交易裡（`BEGIN IMMEDIATE` 之後、INSERT 之前，`save_run(fence=)`）。寫回途中 worker 死了：寫回鎖隨連線釋放、工作租約過期，恢復迴圈收回工作並刪掉資源租約，不會永遠占住。**`fence()` 之後的窗口由寫入目的地自己擋**：`fence()` 通過到實際寫入之間，持有寫回鎖的連線仍可能被中斷（例如伺服器端 `pg_terminate_backend`），鎖隨之釋放、工作被收回由新嘗試完成。所以寫入目的地本身不能讓舊嘗試覆蓋新嘗試：測試：`test_jobs_store`（`test_nobody_can_take_over_the_resource_during_the_write_back`、`test_fence_stops_a_writer_whose_resource_was_forcibly_taken`、`test_a_writer_that_died_does_not_pin_the_resource_forever` 等）、`test_jobs_runner`（驗證通過後停頓、他者接手、舊 worker 恢復：排程與 3D 重建各一個，確認不寫入、不發布；以及真正的接手路徑被拒絕、寫回照常完成）。
     - **3D 重建**：每次嘗試只發布到自己的資料夾 `data/cad/<job_id>/a<attempt>/`（暫存資料夾整個改名，目的地已存在就失敗 `CAD_PUBLISH_CONFLICT`，**不刪、不覆蓋任何既有資料夾**）。讀取端（`GET /jobs/{id}/artifacts/{name}`、相容的 `GET /cad/jobs/{id}`、`/cad/jobs/{id}/{name}`、圖紙的重建紀錄）全部經過 `cad_access.published_dir`，只認 **fenced 的 `finish()` 寫進工作結果的發布紀錄**（`result.published_attempt`）指定的那一次嘗試——不是只看狀態：恢復迴圈判定的失敗（`LEASE_EXPIRED`，從沒通過 `finish()`）、取消、執行中的工作都沒有發布紀錄，晚到的舊嘗試就算把資料夾發布到磁碟上，新舊入口也一律 404；正常結束的成功與執行失敗（`CAD_EXEC_FAILED`，有可檢視的產物）都有發布紀錄。所以資料庫的 `attempt`、產物清單（`job_artifacts` 的雜湊）與實際下載的檔案一定是同一次嘗試，新舊入口對「產物是否已發布」的答案一致。晚到的舊嘗試只會多出一個沒人讀的 `a<舊>` 資料夾（隨工作的保存期限一起清掉）。舊 SSE 入口的工作（資料庫沒有這一列）維持原本的 `data/cad/<job_id>/` 結構。
     - **排程**：`run_id` 由工作 id 決定，SQLite 寫入交易（`BEGIN IMMEDIATE`）讓同一個工作的嘗試依序寫入，**先提交的為準**，之後的嘗試看到同一個 `run_id` 已存在就不寫、不覆蓋。工作結果一律依資料庫裡實際存下的那一列填寫（分數、狀態、引擎），所以舊嘗試在連線中斷後搶先提交時，工作結果、排程詳情與「目前排程」仍是同一份；舊嘗試寫入前已在交易內比對過資料版本，寫進去的一定是合法、對應目前輸入的解。
     - 釋放寫回鎖的錯誤（例如連線已斷）不會蓋掉原本的例外（`LeaseLost`）；解鎖失敗就關掉那條連線，鎖不會留在連線池裡。
+  - **排程寫入之後的結案**：生產資料庫（SQLite）和工作資料庫（PostgreSQL）沒有共同交易，所以把「排程已提交」當成事實來源，結案設計成可重做：
+    - 排程寫回的稽核（`audit_log`，`寫入／schedule_run／run_id`）和排程在**同一個 SQLite 交易**寫入（`save_run(audit=)`）：有排程就有、而且只有一筆稽核；同一個 `run_id` 已存在就兩者都不寫。不再於寫入之後另外記。
+    - 寫入之後的任何失敗都不能把工作收成 `failed`：worker 依存下的那一列填結果並 `finish(succeeded)`，工作資料庫暫時不通就退讓重試（`FINALIZE_TRIES`）；一直不行丟 `FinalizeDeferred`，工作留在 `running`（runner 回 `deferred`，不重投）。寫回鎖連線中斷、工作被收回（`LeaseLost`）也一樣交給恢復迴圈。工廠資料庫（衍生檢視）重建失敗只記錄，不影響已提交的排程。
+    - 恢復迴圈遇到租約過期的排程工作，先用 `committed_run(run_id)` 問生產資料庫——在 `BEGIN IMMEDIATE` 裡查，**有寫入交易正在進行（已通過 `fence()`、還沒 COMMIT）就等它提交或回滾**，所以「沒寫入」的答案不會在之後被推翻。已提交 → 依存下的那一列把工作標成 `succeeded`（`result.reconciled: true`，事件備註「寫回已完成，依生產資料庫補記結果」，嘗試次數用完也一樣）；沒有 → 照原規則重試或 `LEASE_EXPIRED`；生產資料庫查不了 → 這一輪不動（`deferred`），下一輪再查，不猜。
+    - 測試：`test_jobs_runner`（結案暫時失敗重試、結案一直失敗由恢復迴圈補做、生產提交後 worker 當掉、恢復迴圈等待進行中的寫入、稽核與排程同生同滅、衍生檢視重建失敗）。
 - **取消與提前停止是兩件事**：`POST /jobs/{id}/cancel` 放棄、不寫回；`POST /schedule/stop`（可帶 `{job_id}`）請 Timefold 提前結束，採用目前最佳的合法解，照常驗證、寫回，`result.run_status` 為 `stopped`。兩者都驗授權（排程要 `schedule_run`；3D 重建取消只有建立的人）。
 - **事件**：`GET /jobs/{id}/events` 輪詢資料庫送出持久化事件，每一輪重驗目前權限（被撤權就送 `error: PERMISSION_REVOKED` 並結束），終態後結束；輪詢備援 `GET /jobs/{id}`。進度事件**不含模型輸出**：3D 重建的生成進度只有字元數，程式碼放在受保護的 `code.py` 產物；失敗訊息只留第一行。
 - **產物**：worker 寫到暫存資料夾，成功寫回時整個資料夾一次改名發布（原子），讀取端不會看到半成品。`GET /jobs/{id}/artifacts/{name}` 白名單（`input.png`、`code.py`、`model.stl`、`model.step`、`reproj.png`），工作完成前 409，每次請求重驗目前授權，`no-store`＋`nosniff`。舊網址 `GET /cad/jobs/{id}/{name}` 走同一套授權。
@@ -82,7 +87,7 @@
 |---|---|
 | 排程範圍／活動工作 | PostgreSQL：部分唯一索引＋資源租約（取代行程內的 `_busy` 與 `_active` 當唯一依據；API 行程內的 `_active` 只剩舊入口的 `stop()`） |
 | GPU 重工作 | 資源租約 `gpu:0…`，`JOBS_GPU_SLOTS`（預設 1）跨所有 worker 行程；排程與 GPU 工作分佇列、分租約 |
-| 使用中模型 | `memory_guard` 的引用計數照舊，另外把「使用中的模型」以短效 key 登記在 Redis（每個行程一個，心跳續約）；`busy()` 是本行程與其他行程的聯集，所以 API 行程判斷記憶體吃緊也不會卸載 worker 正在用的 Ortho2CAD，反之亦然。Redis 不通時退回只看本行程 |
+| 使用中模型 | `memory_guard` 的引用計數照舊，另外把「使用中的模型」以短效 key 登記在 Redis（每個行程一個，各行程的維護執行緒每 `JOBS_DISPATCH_INTERVAL_S` 續約，存活 `JOBS_MODELS_TTL_S`）；`busy()` 是本行程與其他行程的聯集，所以 API 行程判斷記憶體吃緊也不會卸載 worker 正在用的 Ortho2CAD，反之亦然。查詢區分「確認」與「未知」：Redis 不通，或 Redis 啟動未滿 `JOBS_MODELS_RESTART_GRACE_S`（預設 120 秒，不小於 `JOBS_MODELS_TTL_S`；重啟會清掉登記，等每個活著的行程續約回來）時是未知，**共用推論服務上的模型（Ollama、llama-server、Timefold）一律不卸載**（手動釋放也一樣），只放本行程自己的 CLIP、bge；`GET /memory` 的 `coordination` 與釋放紀錄的 `coordination` 回報降級（`unavailable`／`warming`）。沒有 `REDIS_URL`（單一行程）時確認沒有其他行程 |
 | 交接票 | 見上：Redis 共用；失效就重跑第 2 段，不放寬任何關卡 |
 | 確認卡 | 仍在 API 行程記憶體（15 分鐘）；多個 API 行程時別的行程找不到＝要求重新輸入，不會重複寫入 |
 
@@ -116,7 +121,8 @@
 - 開多個 API 行程（`uvicorn --workers N`）時 `JWT_SECRET` 要填同一組（否則各行程的憑證互相不認，這是原本就有的限制）；每個 API 與 worker 行程都內建維護執行緒（outbox 投遞、租約恢復、補投遞），用 `SKIP LOCKED` 互相避讓，不需要另外的排程器。
 - SQLite 連線逾時調成 30 秒（API 與 worker 兩個行程寫同一個檔案時互相等候）；庫存資料庫重建的暫存檔每次獨立，兩個行程同時重建不會互相覆蓋。
 - `GET /status` 的 `jobs` 與管理頁的「背景工作」卡片：PostgreSQL、Redis、在線 worker（行程自己定期登記的短效 key）、待投遞數、各狀態工作數。沒有在線的 worker 時前端排隊畫面會提示。
-- 稽核：建立、取消、提前結束與排程結果寫回都記一筆 `audit_log`（誰、哪個工作或結果、request_id；不記參數與模型輸出）。
+- 稽核：建立、取消、提前結束與排程結果寫回都記一筆 `audit_log`（誰、哪個工作或結果、request_id；不記參數與模型輸出）。排程結果寫回的那一筆和排程在同一個交易。
+- Redis 重啟後的 `JOBS_MODELS_RESTART_GRACE_S` 內，記憶體管理不卸載共用模型（只放後端行程自己的模型）；記憶體吃緊又剛好碰上 Redis 重啟時，釋放會延後到寬限期結束。
 
 ## 隱私與外送
 原圖、工廠內部／機密段落、SQL schema、結果與 CAD 輸入全部留地端。Jev 維持既有的代號化／公開內容邊界與外送量紀錄（啟用 Jev 時**不是**零外送）；背景工作系統不增加任何外送：worker 不連 Jev、不連雲端，進度與錯誤事件不含未檢查的 prompt、模型程式碼、帳密或敏感原文。

@@ -35,7 +35,7 @@ from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import cad_access, memory_guard
+from app.services import cad_access, memory_guard, uploads
 from app.services.cad_access import JOB_FILES
 from app.services.chat_service import NO_EGRESS, sse
 from app.services.identity import Account, require_part, visible_part_ids
@@ -239,6 +239,7 @@ async def _reconstruct_stream(
                 part_id,
                 image_id,
                 identified["best_part_id"] if identified and identified["matched"] else None,
+                source_owner_id=uploads.owner_of(image_id) if image_id else None,
             ),
             job_dir,
         )

@@ -148,7 +148,10 @@ class Settings(BaseSettings):
     # 舊的 SSE 入口（POST /cad/reconstruct、/schedule/solve）在 API 行程內執行：
     # auto＝沒有啟用工作系統才開（單機開發）、on＝一律開、off＝一律關（回 409 USE_JOBS_API）
     legacy_sync_jobs: Literal["auto", "on", "off"] = "auto"
-    jobs_models_ttl_s: float = 120.0  # worker 登記「使用中模型」的存活時間（心跳續約）
+    jobs_models_ttl_s: float = 120.0  # 各行程登記「使用中模型」的存活時間（維護執行緒與心跳續約）
+    # Redis 重啟後這段時間內登記可能不完整（其他行程還沒續約回來）：視為「未知」、不卸載共用模型。
+    # 不要小於 jobs_models_ttl_s（每個活著的行程一定在存活時間內續約過）
+    jobs_models_restart_grace_s: float = 120.0
 
     @property
     def jobs_db_url(self) -> str:

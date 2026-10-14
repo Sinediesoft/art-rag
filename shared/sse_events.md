@@ -187,7 +187,7 @@
 | `cancel_requested` | `{"attempt"}` | 已要求取消；worker 在下一個檢查點停止 |
 | `stop_requested` | `{"attempt"}` | 排程：已要求提前結束（採用目前最佳的合法解並照常驗證、寫回） |
 | `committing` | `{"attempt"}` | 進入寫回／發布產物；之後取消回 409 `JOB_COMMITTING` |
-| `succeeded` | `{"status", "result"}` | 終態。3D 重建的 `result` 同 `GET /cad/jobs/{id}`（`meta`／`result`／`done`），但 **`result.code` 不存在**，`result.files` 指向 `/jobs/{id}/artifacts/{name}`；排程的 `result` 是 `{"run_id", "engine", "run_status": "done"\|"stopped", "score", "hard", "medium", "soft", "input_version", "latency_ms", ...}`，完整結果用 `GET /schedule/runs/{run_id}` |
+| `succeeded` | `{"status", "result", "note"?}` | 終態。排程寫入生產資料庫後來不及結案（worker 當掉、工作資料庫斷線）、由恢復迴圈依生產資料庫補記的，`result.reconciled` 為 `true`、`note` 是「寫回已完成，依生產資料庫補記結果」、`latency_ms` 只有 `solve`。3D 重建的 `result` 同 `GET /cad/jobs/{id}`（`meta`／`result`／`done`），但 **`result.code` 不存在**，`result.files` 指向 `/jobs/{id}/artifacts/{name}`；排程的 `result` 是 `{"run_id", "engine", "run_status": "done"\|"stopped", "score", "hard", "medium", "soft", "input_version", "latency_ms", ...}`，完整結果用 `GET /schedule/runs/{run_id}` |
 | `failed` | `{"status", "code", "message"}` | 終態；`message` 是安全的短訊息（不含模型輸出、程式碼、路徑）。3D 重建沙箱失敗的 `result` 仍附上，`code.py`、`input.png` 可由授權的人下載 |
 | `cancelled` | `{"status", "note"}` | 終態；取消後不會寫回任何結果 |
 | `error` | `{"code", "message"}` | 串流本身的錯誤（`PERMISSION_REVOKED`、`JOBS_UNAVAILABLE`），不是工作的終態；用 `Last-Event-ID` 重連 |

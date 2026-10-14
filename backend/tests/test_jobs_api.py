@@ -16,6 +16,7 @@ from app.core import config
 from app.core.config import REPO_ROOT, get_settings
 from app.jobs import broker, store
 from app.main import app
+from app.repositories.logs_repo import get_logs_repo
 
 PHOTO = REPO_ROOT / "kb/drawings/mfg-001.png"
 KEY = {"Idempotency-Key": "test-key-0000000001"}
@@ -229,6 +230,86 @@ def test_job_visibility_follows_the_resource_policy(api, client, published):
     client.put(f"/api/v1/images/{photo}/acl", json={"accounts": []})
     as_account(client, "planner")
     assert client.get(f"/api/v1/jobs/{photo_job}").status_code == 404  # 收回之後立刻失效
+
+
+def photo_job_paths(job_id: str) -> list[str]:
+    """照片來源工作的所有讀取入口：狀態、事件、新產物、舊相容入口（摘要與檔案）。"""
+    return [
+        f"/api/v1/jobs/{job_id}",
+        f"/api/v1/jobs/{job_id}/events",
+        f"/api/v1/jobs/{job_id}/artifacts/input.png",
+        f"/api/v1/jobs/{job_id}/artifacts/code.py",
+        f"/api/v1/cad/jobs/{job_id}",
+        f"/api/v1/cad/jobs/{job_id}/input.png",
+        f"/api/v1/cad/jobs/{job_id}/code.py",
+    ]
+
+
+def finished_photo_job(api, client, photo: str, creator: str) -> str:
+    as_account(client, creator)
+    r = client.post("/api/v1/cad/jobs", json={"image_id": photo})
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    finish_with_artifacts(api, job_id)
+    summary = '{"meta": {}, "result": {"ok": true}, "done": {}}'
+    (get_settings().cad_jobs_dir / job_id / "a1" / "summary.json").write_text(summary)
+    return job_id
+
+
+def reads(client, who: str, job_id: str) -> tuple[set[int], bool]:
+    """(各讀取入口的狀態碼集合, 是否出現在工作列表)。"""
+    as_account(client, who)
+    listed = job_id in {j["id"] for j in client.get("/api/v1/jobs").json()["items"]}
+    return {client.get(p).status_code for p in photo_job_paths(job_id)}, listed
+
+
+def test_photo_job_reads_follow_the_source_upload_acl_not_the_creator(api, client, published):
+    """照片來源的工作與衍生產物，讀取權跟著照片「目前」的 ACL（架構審查 F1，0378910）：
+    獲分享後建立工作的帳號，分享被撤銷就和其他人一樣讀不到狀態、事件、新舊產物與列表；
+    照片擁有者與仍在分享名單上的其他帳號照常可讀；重新分享立刻恢復。"""
+    as_account(client, "manager")
+    photo = upload(client)
+    client.put(f"/api/v1/images/{photo}/acl", json={"accounts": ["planner", "wh1"]})
+    jid = finished_photo_job(api, client, photo, "planner")
+    # 照片擁有者、建立工作的被分享者、另一個被分享者都讀得到；沒被分享的讀不到
+    for who in ("manager", "planner", "wh1"):
+        assert reads(client, who, jid) == ({200}, True), who
+    assert reads(client, "sales_a", jid) == ({404}, False)
+    # 擁有者撤銷建立者的分享（另一個被分享者保留）
+    as_account(client, "manager")
+    client.put(f"/api/v1/images/{photo}/acl", json={"accounts": ["wh1"]})
+    assert reads(client, "planner", jid) == ({404}, False)  # 建立者不因為建過工作就保有讀取權
+    as_account(client, "planner")
+    assert client.post(f"/api/v1/jobs/{jid}/cancel").status_code == 404  # 也確認不了工作存在
+    for who in ("manager", "wh1"):
+        assert reads(client, who, jid) == ({200}, True), who
+    # 全部撤銷：只剩照片擁有者
+    as_account(client, "manager")
+    client.put(f"/api/v1/images/{photo}/acl", json={"accounts": []})
+    assert reads(client, "wh1", jid) == ({404}, False)
+    assert reads(client, "manager", jid) == ({200}, True)
+    # 重新分享：依目前的 ACL 立刻恢復
+    as_account(client, "manager")
+    client.put(f"/api/v1/images/{photo}/acl", json={"accounts": ["planner"]})
+    assert reads(client, "planner", jid) == ({200}, True)
+    # 記下的照片擁有者只供授權，不回給前端
+    assert "source_owner_id" not in client.get(f"/api/v1/jobs/{jid}").json()["target"]
+
+
+def test_photo_job_after_the_upload_record_expires_only_the_photo_owner_reads(
+    api, client, published
+):
+    """照片紀錄超過保存期限被清掉後，分享名單無從確認：只剩建立工作時記下的照片擁有者本人可讀，
+    建立工作的被分享者讀不到。"""
+    as_account(client, "manager")
+    photo = upload(client)
+    client.put(f"/api/v1/images/{photo}/acl", json={"accounts": ["planner"]})
+    jid = finished_photo_job(api, client, photo, "planner")
+    row = api.sql("SELECT owner_id, resource FROM jobs WHERE id = %s", (jid,))[0]
+    assert row["owner_id"] == "planner" and row["resource"]["source_owner_id"] == "manager"
+    get_logs_repo()._exec("DELETE FROM uploads WHERE image_id = ?", (photo,))
+    assert reads(client, "planner", jid) == ({404}, False)
+    assert reads(client, "manager", jid) == ({200}, True)
 
 
 def test_job_list_only_shows_what_the_account_may_see(api, client, published):

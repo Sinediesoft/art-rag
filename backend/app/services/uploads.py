@@ -36,6 +36,23 @@ def can_use(image_id: str, viewer: Account) -> bool:
     return rec is not None and allowed(rec, viewer)
 
 
+def owner_of(image_id: str) -> str | None:
+    """照片目前的擁有者（沒有紀錄或舊資料沒有擁有者回 None）。建立衍生資料時記下來源擁有者用。"""
+    rec = get_logs_repo().get_upload_record(image_id)
+    return rec.get("owner_id") if rec else None
+
+
+def derived_allowed(image_id: str, source_owner_id: str | None, viewer: Account) -> bool:
+    """由這張照片衍生的資料（3D 重建工作的狀態、事件、輸入圖副本、程式碼、預覽、模型）能不能讀：
+    跟著照片「目前」的擁有者與授權名單——撤銷分享後衍生資料立刻跟著讀不到，不因為誰建立了
+    衍生資料就保留讀取權。照片紀錄超過保存期限被清掉時分享名單已無從確認，只剩建立衍生資料
+    當時記下的照片擁有者本人（`source_owner_id`）。"""
+    rec = get_logs_repo().get_upload_record(image_id)
+    if rec is not None:
+        return allowed(rec, viewer)
+    return bool(source_owner_id) and source_owner_id == viewer.id
+
+
 def load(image_id: str, viewer: Account) -> bytes:
     """授權後讀出 JPEG 位元組。這是讀取上傳原檔的唯一入口。"""
     rec = record_of(image_id, viewer)

@@ -11,11 +11,13 @@ from pathlib import Path
 from app.core.errors import AppError
 from app.jobs import audit, broker, db, store
 from app.jobs import enabled as jobs_enabled
-from app.services import cad_access, security
+from app.services import cad_access, security, uploads
 from app.services.identity import Account
 
 IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 SCHEDULE_SCOPE = "schedule:plant"
+# 回給前端的 3D 重建來源（找回進行中的工作用）；source_owner_id 只供授權，不回傳
+TARGET_KEYS = ("part_id", "image_id", "identified_part_id")
 CONTENT_TYPES = {
     "stl": "model/stl",
     "step": "application/step",
@@ -72,7 +74,7 @@ def public(job: dict, *, with_artifacts: bool = True) -> dict:
         "input_version": job["input_version"],
         "params": job["params"],
         # 3D 重建的來源（圖紙或自己的照片）：找回進行中的工作、避免重複建立時比對用
-        "target": ({k: v for k, v in job["resource"].items() if v} or None)
+        "target": ({k: v for k, v in job["resource"].items() if v and k in TARGET_KEYS} or None)
         if job["kind"] == "cad"
         else None,
         "created_at": store.iso(job["created_at"]),
@@ -112,7 +114,12 @@ def create_cad(ctx: security.SecurityContext, body: dict, key: str | None, reque
         raise AppError("VALIDATION_ERROR", "請指定 part_id 或 image_id", 422)
     security.cad_check_create(ctx, part_id, image_id)  # 授權在建立工作之前：失敗不留任何工作
     params = {"strategy": body.get("strategy", "ortho2cad")}
-    resource = {"part_id": part_id, "image_id": image_id}
+    # 照片來源記下照片擁有者：讀取權跟著照片的 ACL，這只在照片紀錄過期後用來認擁有者本人
+    resource = {
+        "part_id": part_id,
+        "image_id": image_id,
+        "source_owner_id": uploads.owner_of(image_id) if image_id else None,
+    }
     scope = f"cad:{part_id or image_id}"
     job, new = _guard(
         store.create_job,

@@ -312,7 +312,7 @@ def test_gpu_heavy_jobs_run_one_at_a_time_across_two_workers(env, client):
         peak = max(peak, sum(1 for r in rows if r["status"] == "running"))
         leases = env.sql("SELECT resource FROM resource_leases")
         assert len(leases) <= 1  # GPU 名額最多一個
-        seen_models = seen_models or ("ortho2cad" in coordination.others_in_use())
+        seen_models = seen_models or ("ortho2cad" in (coordination.others_in_use() or set()))
         if all(r["status"] in ("succeeded", "failed") for r in rows):
             break
         time.sleep(0.03)

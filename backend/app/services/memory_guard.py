@@ -131,6 +131,8 @@ class ManagedModel:
     worth_releasing: Callable[[], bool] | None = None  # 有載入但不一定值得釋放（JVM 閒置時）
     # ram＝系統記憶體；gpu＝顯示記憶體（有 NVIDIA 顯示卡時的 Ollama、llama-server）
     pool: str = "ram"
+    # 在共用的推論服務上（Ollama、llama-server、JVM），其他行程也會用；後端行程內的是 False
+    shared: bool = True
 
 
 # ------------------------------------------------------------------ 各模型的偵測與釋放
@@ -273,8 +275,8 @@ def _models() -> list[ManagedModel]:
     # （不在本機時 probe 回 None，本來就不動它）
     gpu = "gpu" if has_gpu() else "ram"
     return [
-        ManagedModel("clip", "Chinese-CLIP（以圖搜圖）", 750, "後端行程", *clip),
-        ManagedModel("bge", "bge-m3（文字檢索）", 2200, "後端行程", *bge),
+        ManagedModel("clip", "Chinese-CLIP（以圖搜圖）", 750, "後端行程", *clip, shared=False),
+        ManagedModel("bge", "bge-m3（文字檢索）", 2200, "後端行程", *bge, shared=False),
         ManagedModel(
             "qwen",
             "Qwen3-VL（問答、Text-to-SQL）",
@@ -360,8 +362,12 @@ class MemoryGuard:
 
     def busy(self) -> set[str]:
         """使用中的模型：本行程的引用，加上其他行程（API、各 worker）在 Redis 登記的——
-        不卸載別的行程正在用的模型（docs/adr/036）。"""
-        return self.local_busy() | coordination.others_in_use()
+        不卸載別的行程正在用的模型（docs/adr/036）。其他行程的使用情況無法確認時（Redis 不通、
+        剛重啟還沒重新登記），共用推論服務上的模型一律當成使用中，只有本行程自己的能釋放。"""
+        others = coordination.others_in_use()
+        if others is None:
+            others = {m.key for m in _models() if m.shared}
+        return self.local_busy() | others
 
     def publish(self) -> None:
         """把本行程使用中的模型登記到 Redis（沒有 REDIS_URL 時什麼都不做）。"""
@@ -458,6 +464,8 @@ class MemoryGuard:
                 "released": released,
                 "failed": failed,
                 "kept": kept,
+                # 不是 ok：無法確認其他行程的使用狀況，kept 含所有已載入的共用模型
+                "coordination": coordination.status()["state"],
             }
             self.events.appendleft(event)
             log.info(
@@ -516,6 +524,7 @@ class MemoryGuard:
             "flow_at": self.flow_at,
             "models": models,
             "events": list(self.events)[:10],
+            "coordination": coordination.status(),
         }
 
 

@@ -12,7 +12,6 @@ import time
 
 from app.core.config import get_settings
 from app.jobs import db, store
-from app.services import memory_guard
 
 _log = logging.getLogger("artrag.jobs")
 
@@ -72,7 +71,6 @@ class JobControl:
                     self._cancel.set()
                 if flags["stop_requested"]:
                     self._stop.set()
-                memory_guard.guard.publish()  # 續約「使用中的模型」登記
             except store.LeaseLost:
                 self._lost.set()
                 return

@@ -243,6 +243,7 @@ class ProductionRepo:
         run_id: str | None = None,
         expected_revision: str | None = None,
         fence: Callable[[], None] | None = None,
+        audit: dict | None = None,
     ) -> str:
         """寫入一次排程結果（單一交易，BEGIN IMMEDIATE）。
 
@@ -251,7 +252,9 @@ class ProductionRepo:
         run_id 由呼叫端指定（背景工作用 job_id 推出來的固定值）時是冪等的：同一個 run_id
         已經存在就直接回傳，不重複寫入、不覆蓋（重送、重試、租約過期的舊 worker 延遲寫回）。
         fence：背景工作的資源 fencing，在持有寫入鎖、比對完版本之後、INSERT 之前呼叫；
-        丟例外就整個交易回滾（資源租約已被接手的舊 worker 不寫入）。"""
+        丟例外就整個交易回滾（資源租約已被接手的舊 worker 不寫入）。
+        audit：和排程結果在同一個交易寫入的稽核紀錄（背景工作用）——排程寫入了就一定有稽核、
+        而且只有一筆；不會因為寫入之後的中斷漏記，重送或補做結案也不會重複記。"""
         run_id = run_id or run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
         row = {
             **run,
@@ -299,6 +302,8 @@ class ProductionRepo:
                         ],
                     )  # fmt: skip
                     self._bump(conn)
+                    if audit is not None:
+                        self._insert_audit(conn, audit)
                     conn.execute("COMMIT")
                 except BaseException:
                     if conn.in_transaction:
@@ -307,6 +312,26 @@ class ProductionRepo:
             finally:
                 conn.close()
         return run_id
+
+    def committed_run(self, run_id: str) -> dict | None:
+        """這個 run_id 是否已經寫入（背景工作寫回後、結案前中斷時，恢復迴圈依此補做結案）。
+        在 BEGIN IMMEDIATE 裡查：有寫入交易正在進行（已通過 fence、還沒 COMMIT）就等它提交或回滾
+        才回答，所以回 None 時不會有已經開始的寫入在之後才提交。查不了（資料庫被鎖太久、檔案
+        壞掉）丟例外——呼叫端要當成「不確定」。"""
+        with self._lock:
+            conn = self._conn()
+            conn.isolation_level = None
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    row = conn.execute(
+                        "SELECT * FROM schedule_runs WHERE run_id = ?", (run_id,)
+                    ).fetchone()
+                finally:
+                    conn.execute("ROLLBACK")
+            finally:
+                conn.close()
+        return self._decode(dict(row)) if row else None
 
     def find_run(self, run_id: str) -> dict | None:
         rows = self._read("SELECT run_id, status FROM schedule_runs WHERE run_id = ?", (run_id,))
@@ -471,27 +496,28 @@ class ProductionRepo:
     def add_audit(self, row: dict, once: bool = False) -> None:
         """once：同一個（動作、操作、單號）已經有紀錄就不再寫——冪等重送、中斷後補做收尾時
         不會重複記稽核（這些單號每個只會被寫入一次）。"""
-        row = {**row, "at": self.now()}
-        if isinstance(row.get("detail"), (dict, list)):
-            row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
         with self._lock:
             conn = self._conn()
             try:
-                cols = ", ".join(row)
-                marks = ", ".join("?" for _ in row)
-                if once:
-                    conn.execute(
-                        f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
-                        " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",
-                        (*row.values(), row.get("action"), row.get("op"), row.get("ref_no")),
-                    )
-                else:
-                    conn.execute(
-                        f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values())
-                    )
+                self._insert_audit(conn, row, once)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _insert_audit(self, conn: sqlite3.Connection, row: dict, once: bool = False) -> None:
+        row = {**row, "at": self.now()}
+        if isinstance(row.get("detail"), (dict, list)):
+            row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        if once:
+            conn.execute(
+                f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
+                " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",
+                (*row.values(), row.get("action"), row.get("op"), row.get("ref_no")),
+            )
+        else:
+            conn.execute(f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values()))
 
     def audit(self, limit: int = 50) -> list[dict]:
         rows = self._read("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))
