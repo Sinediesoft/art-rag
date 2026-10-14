@@ -61,6 +61,25 @@ security_leak_check）→ ⑤ **Jev Score** 評分重排（最多 3 段）→ �
          （Ollama keep_alive=0、llama-server router /models/unload、後端卸載 CLIP／bge-m3、JVM GC），用到時自動重新載入
 ```
 
+## 一鍵安裝
+
+新電腦用一個指令裝好並啟動：自動偵測顯卡選方案（12 GB 以上 8B、4～12 GB 4B、沒有顯卡 mock）、寫好 `.env`
+（你自己改過的設定不會被覆蓋）、裝套件、下載模型、建索引、建置前端，最後啟動並檢查。
+缺少 uv、Node.js、Ollama、Docker 時先列出來，問過才安裝；沒有 Docker 時改用檔案索引＋SQLite（功能相同）。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Windows
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -DryRun    # 只列出會做什麼
+```
+
+```bash
+bash deploy/install.sh              # macOS、Linux、WSL2
+bash deploy/install.sh --dry-run    # 只列出會做什麼
+```
+
+指定方案：`-Mode full|light|mock`（`--mode`）；不問直接安裝：`-Yes`（`--yes`）；裝完不啟動：`-NoStart`（`--no-start`）。
+3D 重建（Ortho2CAD）與生產排程（Java 21）是選裝，沒有也能用，安裝方式見下方。
+
 ## 快速開始（macOS／WSL2）
 
 需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Docker](https://docs.docker.com/get-docker/)（資料庫；沒有也能跑，見下方「資料庫」）、
