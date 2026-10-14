@@ -225,6 +225,7 @@ async def chat(body: S.ChatRequest, request: Request):
         inject=[d.model_dump() for d in body.inject] if body.inject else None,
         send_image=body.send_image,
         conflict_check=body.conflict_check,
+        premise_check=body.premise_check,
     )
     return StreamingResponse(
         safe_stream(stream, request.state.request_id),

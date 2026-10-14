@@ -411,6 +411,11 @@ class ChatRequest(BaseModel):
         description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
         "（docs/adr/028）；null＝依伺服器設定",
     )
+    premise_check: bool | None = Field(
+        default=None,
+        description="回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒"
+        "（docs/adr/037 補）；null＝依伺服器設定",
+    )
     route_ticket: str | None = Field(
         default=None,
         max_length=64,

@@ -33,6 +33,7 @@ from app.agent.entities import get_index
 from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
 from app.core.logging import log
 from app.rag import conflict_check as conflict_mod
+from app.rag import premise_check as premise_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import artwork_card, build_messages, part_card, prompt_version
@@ -256,6 +257,7 @@ async def chat_stream(
     inject: list[dict] | None = None,
     send_image: bool | None = None,
     conflict_check: bool | None = None,
+    premise_check: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -268,6 +270,7 @@ async def chat_stream(
     inject：評估用的干擾段落（docs/adr/019），API 層只在受信任的評估模式傳入。
     send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
     conflict_check：回答前先檢查參考資料有沒有互相矛盾（docs/adr/028）；None＝依 .env／models.yaml。
+    premise_check：回答前先檢查問題有沒有把事實說錯（docs/adr/037 補）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -286,6 +289,7 @@ async def chat_stream(
         inject,
         send_image,
         conflict_check,
+        premise_check,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
@@ -314,6 +318,7 @@ async def _chat_stream(
     inject: list[dict] | None = None,
     send_image: bool | None = None,
     conflict_check: bool | None = None,
+    premise_check: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -345,6 +350,7 @@ async def _chat_stream(
                 "route": None,
                 "rearrange": None,
                 "conflict_check": None,
+                "premise_check": None,
                 "use_retrieval": use_retrieval,
                 "sources": [],
                 "filter": None,
@@ -561,6 +567,7 @@ async def _chat_stream(
 
     # ------------------------------------------------------------ 第 4～6 段
     conflict_info = None
+    premise_info = None
     context_note = None
     card = None
     if artwork:
@@ -625,6 +632,14 @@ async def _chat_stream(
             conflict_info = await conflict_mod.check(asked, sources, strategy)
             if conflict_info and conflict_info["conflict"]:
                 context_note = conflict_mod.note(conflict_info["refs"])
+        # 前提檢查：問題把人、年份說錯時，回答模型常只回「沒有資料」；先指出錯在哪，讓它更正後再答
+        if not post.degraded and premise_mod.enabled(premise_check):
+            premise_info = await premise_mod.check(
+                asked, sources, card["text"] if card else "", strategy
+            )
+            if premise_info and premise_info["mismatch"]:
+                fix = premise_mod.note(premise_info)
+                context_note = f"{context_note}\n{fix}" if context_note else fix
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     sources_event = {
         "request_id": request_id,
@@ -635,6 +650,7 @@ async def _chat_stream(
         "route": route_info,
         "rearrange": rearrange_info,
         "conflict_check": conflict_info,
+        "premise_check": premise_info,
         "use_retrieval": use_retrieval,
         "sources": sources if use_retrieval else [],
         "filter": meta.public() if meta else None,
