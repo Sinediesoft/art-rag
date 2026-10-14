@@ -41,6 +41,8 @@ def run(client: httpx.Client, engine: str, items: list[dict]) -> dict:
                 "got": got,
                 "ok": got == q["expect"],
                 "intent": d["intent"],
+                # clarify＝本地分流信心不夠，前端會先請使用者選要做什麼（選了畫作問答才會帶畫作）
+                "gate": d["gate"],
                 "by": info.get("by"),
                 "prob": info.get("prob"),
                 "ms": info.get("ms"),
@@ -64,6 +66,7 @@ def run(client: httpx.Client, engine: str, items: list[dict]) -> dict:
         "negatives_ok": sum(r["ok"] for r in neg),
         "negatives": len(neg),
         "p50_ms": timed[len(timed) // 2] if timed else None,
+        "clarify_first": sum(r["ok"] and r["gate"] == "clarify" for r in pos),
     }
     return {"engine": engine, "summary": summary, "rows": rows}
 
@@ -92,7 +95,7 @@ def main() -> int:
             f"  {res['engine']:6} 答對 {s['correct']}/{s['n']} · "
             f"認出 {s['resolved']}/{s['positives']} · "
             f"認錯成別幅 {s['wrong_artwork']} · 反例 {s['negatives_ok']}/{s['negatives']} · "
-            f"判斷 p50 {s['p50_ms']} ms"
+            f"判斷 p50 {s['p50_ms']} ms · 認出但會先請使用者選 {s['clarify_first']}"
         )
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     out = EVAL / "runs" / "experiments" / f"{run_id}-art-resolve.json"
