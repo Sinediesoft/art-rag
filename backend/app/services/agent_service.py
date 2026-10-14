@@ -21,7 +21,7 @@ import asyncio
 import re
 import time
 
-from app.agent import gate, guard, handoff, local_router
+from app.agent import art_resolve, gate, guard, handoff, local_router
 from app.agent.entities import first, get_index
 from app.agent.types import System1Result
 from app.core.config import get_agent_config
@@ -33,6 +33,8 @@ from app.services.identity import Auth, level_rank, visible_part_ids
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 只有照片、沒有文字時，問答模組用的預設問句（交接票綁這句話）
+# 沒說畫名時要判斷是哪一幅畫的意圖（docs/adr/038）
+ART_RESOLVE_INTENTS = {"art_qa", "art_search"}
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
 
 
@@ -308,6 +310,7 @@ async def route(
             }
             outcome = "short_circuit"
 
+    resolve_info, resolve_egress = None, 0
     if outcome == "pass":
         # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
         # bge-m3 一律保留：本地分流下一句還要用（釋放後重新載入要 1～2 秒）
@@ -317,6 +320,23 @@ async def route(
         await asyncio.to_thread(
             memory_guard.guard.check, f"智慧助理預估（{labels[intent]}）", keep, False, True
         )
+        # 沒說畫名、畫家、也沒附照片的畫作問題：判斷問的是哪一幅（docs/adr/038）。
+        # 放在第 2 段之後：被擋下的問句不再送 Jev；交接票也要帶推測出的畫作
+        if (
+            intent in ART_RESOLVE_INTENTS
+            and question
+            and not photo
+            and not dispatch.get("artwork_id")
+        ):
+            guess = await art_resolve.resolve(question, masked.text, engine != "local")
+            if guess is not None:
+                resolved = guess.public()
+                if guess.artwork_id and (a := get_store().get_artwork(guess.artwork_id)):
+                    dispatch["artwork_id"] = guess.artwork_id
+                    dispatch["artwork_label"] = a["title"]["zh"]
+                    dispatch["artwork_guess"] = resolved
+                resolve_info = resolved
+                resolve_egress = guess.egress_bytes
 
     # 交接票：問答放行時，/chat 憑票沿用第 1、2 段的判斷（帳號、問句、對象都要相符，10 分鐘內有效）
     post_filter = "local" if engine == "local" else "jev"
@@ -333,7 +353,7 @@ async def route(
             request_id,
         )
 
-    egress = guard_res.egress_bytes if guard_res else 0
+    egress = (guard_res.egress_bytes if guard_res else 0) + resolve_egress
     out = {
         "request_id": request_id,
         "account": account.public(),
@@ -373,6 +393,8 @@ async def route(
         "blocked": blocked,
         "short_circuit": short,
         "dispatch": dispatch,
+        # 沒說畫名時判斷是哪一幅畫的過程（沒判斷時是 null，docs/adr/038）
+        "art_resolve": resolve_info,
         # 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；/chat 不收這個參數）
         "post_filter": post_filter,
         "route_ticket": ticket,

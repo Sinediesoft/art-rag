@@ -4199,6 +4199,13 @@ export interface components {
                 [key: string]: unknown;
             };
             /**
+             * Art Resolve
+             * @description 沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）：{artwork_id, by, prob, ms, fallback_reason}；artwork_id 為 null＝判斷不出來、照全庫檢索作答。判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null
+             */
+            art_resolve?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Post Filter
              * @description 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）
              * @enum {string}
