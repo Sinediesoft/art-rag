@@ -378,7 +378,8 @@ def test_department_scope_applies_to_every_endpoint(client, dept_account, spies,
 def test_department_scope_for_drawing_photo_search(client, dept_account):
     c = client_as(dept_account)
     path = config.REPO_ROOT / "kb/drawings/mfg-002.png"
-    image_id = client.post(
+    # 照片要是自己上傳的（或擁有者授權）：用被測的身分上傳
+    image_id = c.post(
         "/api/v1/images", files={"file": (path.name, path.read_bytes(), "image/png")}
     ).json()["image_id"]
     r = c.post("/api/v1/search/drawing", json={"image_id": image_id, "top_k": 6})
@@ -914,6 +915,7 @@ def test_reconstruct_photo_identification_is_scoped(client, drawing_reads):
     from app.services import cad_service
 
     image_id = _upload_hidden(client)
+    get_logs_repo().set_upload_acl(image_id, ["sales"])  # 擁有者（主管）明確授權給業務
 
     async def first_event():
         gen = cad_service.reconstruct_stream(

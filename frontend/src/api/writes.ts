@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { ApiError } from "./client";
+import { ApiError } from "./http";
 
 /**
  * 送出中的寫入（確認寫入、送主管核准、核准／退回、開立／取消工單、照片建檔入庫）。

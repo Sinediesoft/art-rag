@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -10,7 +10,7 @@ import {
   type ProductionOverview,
   type ScheduleKpis,
 } from "../api/client";
-import { useProductionOverview } from "../api/hooks";
+import { useProductionOverview, useStatus } from "../api/hooks";
 import { ApiErrorMessage, ErrorMessage, Loading } from "../components/common/Feedback";
 import { GanttChart, GanttLegend, orderColor, type GanttOrder } from "../components/schedule/GanttChart";
 import { useScheduleSolve, type SolveState } from "../hooks/useScheduleSolve";
@@ -71,15 +71,21 @@ export function MemoryNotice({ event }: { event: MemoryEvent | null | undefined 
 export function SchedulePage() {
   const qc = useQueryClient();
   const { data, isLoading, error } = useProductionOverview();
+  const { data: sys } = useStatus();
   const refresh = () => {
     for (const key of ["production-overview", "part-plan", "inventory-overview", "part-inventory", "diagnostics"]) {
       void qc.invalidateQueries({ queryKey: [key] });
     }
   };
-  const { state, start } = useScheduleSolve(refresh);
+  const { state, start, attach, stop, cancel } = useScheduleSolve(refresh);
   const [secondsLimit, setSecondsLimit] = useState(20);
   const [view, setView] = useState<"machine" | "order">("machine");
-  const [stopping, setStopping] = useState(false);
+  // 重新整理、回到頁面：排程範圍裡還有排隊或執行中的工作就接回它的進度，不重複建立
+  const activeJobId = data?.active_job?.id ?? null;
+  useEffect(() => {
+    if (activeJobId && state.status === "idle") attach(activeJobId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeJobId]);
 
   if (isLoading) return <Loading />;
   if (error || !data)
@@ -90,7 +96,7 @@ export function SchedulePage() {
       />
     );
 
-  const solving = state.status === "starting" || state.status === "solving";
+  const solving = state.status === "queued" || state.status === "starting" || state.status === "solving";
   const run = data.current;
   // 顯示優先順序：求解中的最新解 → 這次的結果 → 目前排程
   const live = state.progress ?? null;
@@ -108,11 +114,6 @@ export function SchedulePage() {
   const axis = state.solution?.axis ?? state.meta?.axis ?? run?.axis ?? [];
   const kpis = (state.solution ?? live ?? run)?.kpis ?? null;
   const analysis = state.solution?.analysis ?? (live ? null : (run?.analysis ?? null));
-
-  const stop = async () => {
-    setStopping(true);
-    await api.stopSchedule().finally(() => setStopping(false));
-  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -166,14 +167,20 @@ export function SchedulePage() {
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={stop}
-              disabled={stopping || state.meta?.engine !== "timefold"}
-              className="btn-dark"
-            >
-              {stopping ? "停止中…" : "提前結束，採用目前最佳解"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => void stop()}
+                disabled={state.stopping || state.status !== "solving" || state.meta?.engine !== "timefold"}
+                className="btn-dark"
+                title="採用目前最佳的合法解，照常驗證並寫回"
+              >
+                {state.stopping ? "收尾中…" : "提前結束，採用目前最佳解"}
+              </button>
+              <button type="button" onClick={() => void cancel()} className="btn-ghost" title="放棄這次求解，不寫回任何結果">
+                取消（不寫回）
+              </button>
+            </>
           )}
           <Link to="/" className="link ml-auto text-sm" title="例如「法蘭開 80 件 10/16 交」：一樣經過七段權限控管與確認卡">
             回智慧助理開立工單 →
@@ -182,6 +189,21 @@ export function SchedulePage() {
       </section>
 
       {state.error && <ErrorMessage title="排程失敗" message={state.error.message} code={state.error.code} requestId={state.error.request_id} />}
+      {state.status === "queued" && sys?.jobs?.enabled && sys.jobs.workers.length === 0 && (
+        <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">目前沒有在線的 worker，排程會一直排隊。請啟動 make worker-schedule。</div>
+      )}
+      {state.status === "cancelled" && (
+        <div className="rounded-xl border border-hairline bg-card p-3 text-sm text-ink-80">已取消這次排程，沒有寫回任何結果；目前排程維持原樣。可以按「開始排程」重新排。</div>
+      )}
+      {state.status === "stopped" && state.jobId && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">
+          這個畫面停止追蹤了；排程仍在背景執行。
+          <button type="button" className="btn-ghost" onClick={() => attach(state.jobId!)}>
+            重新連線
+          </button>
+        </div>
+      )}
+      {state.reconnecting > 0 && solving && <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">進度串流中斷，正在重新連線（第 {state.reconnecting} 次）；排程不受影響。</div>}
       {state.meta?.fallback_reason && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">{state.meta.fallback_reason}</div>
       )}
@@ -295,7 +317,7 @@ function LivePanel({ state }: { state: SolveState }) {
   const limit = (state.meta?.seconds ?? 0) * 1000;
   const elapsed = state.elapsedMs;
   const pct = limit ? Math.min(100, (elapsed / limit) * 100) : 100;
-  const running = state.status === "solving" || state.status === "starting";
+  const running = state.status === "solving" || state.status === "starting" || state.status === "queued";
   return (
     <section className="card grid gap-4 p-5 md:grid-cols-[1.2fr_1fr]">
       <div className="flex flex-col gap-2">
@@ -305,7 +327,7 @@ function LivePanel({ state }: { state: SolveState }) {
             {state.meta?.engine_version && <span className="ml-1 font-mono text-xs text-ink-48">{state.meta.engine_version}</span>}
           </p>
           <p className="text-sm text-ink-80">
-            {running ? (p?.phase ?? "準備中") : state.solution?.status === "stopped" ? "已提前結束" : "完成"} ·{" "}
+            {state.status === "queued" ? "排隊中，等背景 worker 領取" : running ? (p?.phase ?? "準備中") : state.solution?.status === "stopped" ? "已提前結束" : "完成"} ·{" "}
             {seconds(elapsed)}
             {limit > 0 && ` / ${limit / 1000} 秒`}
           </p>

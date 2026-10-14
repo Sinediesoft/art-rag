@@ -240,6 +240,11 @@ async def run_cad(
         proc.kill()
         await proc.wait()
         return RunResult(False, f"執行逾時（>{timeout_s:.0f} 秒），已中止", {})
+    except asyncio.CancelledError:
+        # 背景工作被取消、租約遺失：子行程不能留在背景繼續吃 CPU（也不會再寫任何產物）
+        proc.kill()
+        await proc.wait()
+        raise
     result_path = job_dir / "result.json"
     if not result_path.exists():
         # CPU 硬限制的 SIGKILL（直接執行是 -9；經過 wsl.exe 回 9，timeout -k 補砍是 128+9），

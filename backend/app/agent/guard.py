@@ -42,6 +42,7 @@ import httpx
 from app.agent import jev
 from app.agent.entities import Entity, get_index
 from app.core.config import get_agent_config, get_settings
+from app.core.errors import AppError
 from app.rag import rearrange as rearrange_mod
 from app.rag.prompt import load_template
 from app.rag.providers import ProviderUnavailable, get_provider
@@ -1373,6 +1374,30 @@ def check_output(answer: str, kept: list[dict], hidden: set[str], flagged: list[
 
 
 # ================================================================ 拒絕並記錄（Log & Block）
+def tool_input_check(text: str, account: Account, request_id: str, tool: str) -> None:
+    """工具入口（自然語言 SQL 等）的共用輸入防護：不經智慧助理、直接打 API 也先過第 2 段的
+    地端 hard-block（和 /chat 同一份規則，Jev 不介入、也不外送任何東西）。
+    命中就 403 INPUT_BLOCKED、記一筆拒絕並記錄（只存問句雜湊），不呼叫模型、不查資料。
+    這只是共用的輸入檢查：SQL 的唯讀白名單、CAD 的 AST 與沙箱仍由各工具自己執行。"""
+    masked, _ = mask_pii(text)
+    direct, _ = _local_hits(masked)
+    if direct is None:
+        return
+    no = log_block(
+        2,
+        direct[0],
+        account,
+        f"{tool} 問句雜湊 {fingerprint(masked)}",
+        request_id,
+        "地端規則（工具入口）",
+    )
+    raise AppError(
+        "INPUT_BLOCKED",
+        f"輸入防護擋下這個請求（{direct[0]}），沒有呼叫模型、沒有查詢任何資料（紀錄 {no}）",
+        403,
+    )
+
+
 def log_block(
     stage: int, rule: str, account: Account | None, text: str, request_id: str, judge: str
 ) -> str:

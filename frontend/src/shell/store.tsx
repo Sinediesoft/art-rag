@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { RouteResponse } from "../api/client";
+import { api, ApiError, clearKeys, type RouteResponse } from "../api/client";
 import { ACCOUNT_EVENTS, identityBound } from "../api/hooks";
 import { orphanWrites } from "../api/writes";
 
@@ -55,6 +55,8 @@ export interface Shell {
    * 各頁自己的 state（SQL 結果、串流、表單）不會留到下一個身分
    */
   identityEpoch: number;
+  /** 已確認的帳號 id（確認前為 null）：附加的照片只有擁有者能用，帳號換了輸入框要放掉它 */
+  accountId: string | null;
   /**
    * 目前的身分（/auth/accounts 或切換回應）：和之前不同時，中止舊身分還在跑的請求、清掉舊身分的快取、
    * 收起其他身分的非公開內容
@@ -68,7 +70,13 @@ export interface Shell {
   setCurrentConv: (convId: string | null) => void;
   startReconstruct: (convId: string, turnId: string) => void;
   startSchedule: (convId: string, turnId: string) => void;
+  /**
+   * 取消：還沒開始的任務直接取消；背景工作已建立就送 POST /jobs/{id}/cancel（worker 停止、不寫回任何結果），
+   * 畫面等「已取消」事件。這和離開頁面只停止訂閱不同
+   */
   cancelTask: (convId: string, turnId: string) => void;
+  /** 排程「提前結束」：採用目前最佳的合法解並寫回（不是取消） */
+  stopSchedule: (convId: string, turnId: string) => void;
   commitChange: (convId: string, turnId: string, note: string | null) => void;
 }
 
@@ -81,6 +89,8 @@ export function useShell() {
 }
 
 const RUNNING = new Set<Turn["phase"]>(["routing", "running"]);
+/** 背景工作還在排隊或執行（取消、提前結束有意義）的狀態 */
+const JOB_ACTIVE = new Set(["queued", "preparing", "generating", "executing", "starting", "solving"]);
 
 /** 這一輪有沒有使用者按了才開始、還在跑的任務（3D 重建、排程、寫入） */
 function taskRunning(t: Turn) {
@@ -116,11 +126,14 @@ export function ShellProvider({ children }: { children: ReactNode }) {
   /** 身分確認了沒有（剛打開頁面、憑證更新之後都要等 /auth/accounts 回來）：確認前不接受提問與任務 */
   const [identityReady, setIdentityReady] = useState(false);
   const [identityEpoch, setIdentityEpoch] = useState(0);
+  const [accountId, setAccountId] = useState<string | null>(null);
   /** 身分世代加一：舊的 callback 失效、功能頁重建、還沒收到結果的寫入改成「身分改變時送出中」 */
   const bumpEpoch = () => {
     identity.current.epoch++;
     setIdentityEpoch(identity.current.epoch);
     orphanWrites();
+    // 不同身分的動作不共用 Idempotency-Key；背景工作的訂閱由 interruptAll／功能頁重建中止（只停止訂閱，不取消工作）
+    clearKeys();
   };
   /** 這次切換開始時中止了請求（提示裡要說） */
   const stoppedBySwitch = useRef(false);
@@ -356,6 +369,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
       if (prev === accountId) return;
       identity.current.accountId = accountId;
       identity.current.label = label;
+      setAccountId(accountId);
       // 身分確認或換了：剛打開頁面第一次確認、憑證更新後重新確認、主動切換、憑證過期改發一般員工都一樣處理——
       // 這之前就在跑的一律中止（世代加一，之後舊的 callback 都不寫回）、和身分有關的快取清掉重抓
       // （看不到的停在 403，不會繼續顯示舊資料）、其他身分查到的非公開內容收起。不能假定確認前沒有任何請求
@@ -465,12 +479,36 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     [guarded, qc, updateConv],
   );
 
+  const jobNotice = useCallback(
+    (convId: string, e: unknown) => {
+      const msg = e instanceof ApiError ? `${e.message}（${e.code}）` : String((e as Error)?.message ?? e);
+      updateConv(convId, (c) => ({ ...c, notices: [...c.notices, { id: uid(), ts: Date.now(), text: msg }] }));
+    },
+    [updateConv],
+  );
+
+  const stopSchedule = useCallback(
+    (convId: string, turnId: string) => {
+      const p = task(convId, turnId)?.part;
+      if (p?.kind !== "schedule" || !p.job?.jobId || !JOB_ACTIVE.has(p.job.status)) return;
+      updateTurn(convId, turnId)((t) => (t.part?.kind === "schedule" && t.part.job ? { ...t, part: { ...t.part, job: { ...t.part.job, stopping: true } } } : t));
+      api.stopSchedule(p.job.jobId).catch((e) => jobNotice(convId, e));
+    },
+    [jobNotice, updateTurn],
+  );
+
   const cancelTask = useCallback(
     (convId: string, turnId: string) => {
+      const p = task(convId, turnId)?.part;
+      if ((p?.kind === "reconstruct" || p?.kind === "schedule") && p.job?.jobId && JOB_ACTIVE.has(p.job.status)) {
+        // 背景工作已經建立：真的取消它（不是只停止訂閱）；訂閱繼續，等終態事件回來
+        api.cancelJob(p.job.jobId).catch((e) => jobNotice(convId, e));
+        return;
+      }
       controllers.current.get(`${turnId}:task`)?.abort();
       updateTurn(convId, turnId)((t) => (t.part && (t.part.kind === "reconstruct" || t.part.kind === "schedule") && !t.part.job ? { ...t, part: { ...t.part, cancelled: true } } : t));
     },
-    [updateTurn],
+    [jobNotice, updateTurn],
   );
 
   const commitChange = useCallback(
@@ -542,11 +580,13 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     switching,
     identityReady,
     identityEpoch,
+    accountId,
     setAccount,
     setCurrentConv: (id) => void (currentConv.current = id),
     startReconstruct,
     startSchedule,
     cancelTask,
+    stopSchedule,
     commitChange,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

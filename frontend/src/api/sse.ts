@@ -1,25 +1,24 @@
 // SSE 解析：全專案只有這一份實作（共用層 §八）。問答（POST /chat）、3D 重建（POST /cad/reconstruct）、
 // 庫存 Text-to-SQL（POST /inventory/ask）、生產排程（POST /schedule/solve）與照片建檔（POST /intake）共用。
 // 瀏覽器內建 EventSource 只支援 GET，所以用 fetch 讀取串流。事件格式見 shared/sse_events.md。
-import {
-  API_BASE,
-  renewIfExpired,
-  type ArtworkSummary,
-  type Schemas,
-  type AxisDay,
-  type ChatRequest,
-  type ConstraintScore,
-  type IntakeDraft,
-  type InventoryAskRequest,
-  type MemoryEvent,
-  type PartSummary,
-  type PlannedWorkOrder,
-  type ReconstructRequest,
-  type ScheduledOp,
-  type ScheduleKpis,
-  type ScheduleSolveRequest,
-  type ScheduleWorkOrder,
-} from "./client";
+import { API_BASE, ApiError, renewIfExpired } from "./http";
+import type {
+  ArtworkSummary,
+  Schemas,
+  AxisDay,
+  ChatRequest,
+  ConstraintScore,
+  IntakeDraft,
+  InventoryAskRequest,
+  MemoryEvent,
+  PartSummary,
+  PlannedWorkOrder,
+  ReconstructRequest,
+  ScheduledOp,
+  ScheduleKpis,
+  ScheduleSolveRequest,
+  ScheduleWorkOrder,
+} from "./types";
 
 export interface SourceItem {
   ref: number;
@@ -616,4 +615,76 @@ export function streamCompareSummary(a: string, b: string, h: CompareSummaryHand
     { sources: h.onSources, token: (d) => h.onToken?.(d.text), done: h.onDone, error: h.onError },
     signal,
   );
+}
+
+
+// ---- 背景工作的事件串流（GET /jobs/{id}/events，TASK-20261013-001）
+/** 持久化事件：id 在同一個工作內連續遞增，斷線後用最後收到的 id 重連就不會重複 */
+export interface JobEventMsg {
+  id: number;
+  type: string;
+  data: Record<string, any>;
+}
+
+export const JOB_TERMINAL = new Set(["succeeded", "failed", "cancelled"]);
+
+/**
+ * 訂閱一次事件串流，串流正常結束（工作到終態或連線被關）時 resolve；HTTP 錯誤與串流中的 error 事件丟 ApiError，
+ * 呼叫端（jobs.ts 的 followJob）決定重連或放棄。signal 中止時安靜返回。
+ */
+export async function streamJobEvents(jobId: string, after: number, onEvent: (e: JobEventMsg) => void, signal?: AbortSignal): Promise<void> {
+  const url = `${API_BASE}/api/v1/jobs/${encodeURIComponent(jobId)}/events`;
+  const send = () => fetch(url, { headers: { Accept: "text/event-stream", ...(after > 0 ? { "Last-Event-ID": String(after) } : {}) }, signal });
+  let res: Response;
+  try {
+    res = await send();
+    if (await renewIfExpired(res)) res = await send();
+  } catch (err) {
+    if ((err as Error).name === "AbortError") return;
+    throw new ApiError("NETWORK_ERROR", "連不上伺服器", "", 0);
+  }
+  if (signal?.aborted) return;
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(data?.error?.code ?? `HTTP_${res.status}`, data?.error?.message ?? res.statusText, data?.error?.request_id ?? res.headers.get("X-Request-ID") ?? "", res.status);
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  const dispatch = (block: string) => {
+    let event = "message";
+    let id = "";
+    const data: string[] = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("id:")) id = line.slice(3).trim();
+      else if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data.push(line.slice(5).trimStart());
+    }
+    if (!data.length) return;
+    const body = JSON.parse(data.join("\n"));
+    if (event === "error") {
+      // 串流本身的錯誤（被撤權、工作資料庫暫時不可用）：不是工作的終態
+      throw new ApiError(body.code ?? "STREAM_ERROR", body.message ?? "串流中斷", "", body.code === "PERMISSION_REVOKED" ? 403 : 503);
+    }
+    onEvent({ id: Number(id) || 0, type: event, data: body });
+  };
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (signal?.aborted) {
+        void reader.cancel().catch(() => undefined);
+        return;
+      }
+      if (done) break;
+      buffer += value.replace(/\r\n/g, "\n");
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0 && !signal?.aborted) {
+        dispatch(buffer.slice(0, idx));
+        buffer = buffer.slice(idx + 2);
+      }
+    }
+    if (buffer.trim() && !signal?.aborted) dispatch(buffer);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    if ((err as Error).name !== "AbortError") throw new ApiError("STREAM_ERROR", "串流中斷", "", 0);
+  }
 }

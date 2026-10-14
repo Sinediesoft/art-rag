@@ -117,7 +117,7 @@ def identify_one(image_id: str, index: int, domain: str | None, account: Account
         "note": None,
     }
     try:
-        img = load_image(load_upload(image_id))
+        img = load_image(load_upload(image_id, account))
         row["blur"] = round(page.blur_score(img), 3)
         if row["blur"] > cfg.max_blur:
             row["status"] = "blurry"
@@ -125,17 +125,21 @@ def identify_one(image_id: str, index: int, domain: str | None, account: Account
             return row
         if domain == "art":
             row["domain"] = "art"
-            _row_from_artwork(row, identify(image_id))
+            _row_from_artwork(row, identify(image_id, viewer=account))
         elif domain == "mfg":
             row["domain"] = "mfg"
             if not account.can_read("mfg"):
                 row.update(status="hidden", note="目前身分不能使用工廠圖紙")
                 return row
             visible = visible_part_ids(account, get_store().parts)
-            _row_from_drawing(row, identify_drawing(image_id, part_ids=visible), account)
+            _row_from_drawing(
+                row, identify_drawing(image_id, part_ids=visible, viewer=account), account
+            )
         else:
             # 判成圖紙時只在看得到的圖紙裡辨識（docs/adr/030；不能用工廠圖紙的身分是空集合）
-            found = identify_any(image_id, part_ids=visible_part_ids(account, get_store().parts))
+            found = identify_any(
+                image_id, part_ids=visible_part_ids(account, get_store().parts), viewer=account
+            )
             row["route"] = found["route"]
             row["domain"] = found["route"]["domain"]
             if found["artwork_result"] is not None:
