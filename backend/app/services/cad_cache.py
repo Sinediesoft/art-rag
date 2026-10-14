@@ -4,8 +4,9 @@
 直接快取只會把錯的固定下來。所以：
 - 只收「合格」的結果（`gate`）：執行成功、實體有效、孔位校正沒有失敗，有標準模型時 IoU 達
   `cad.cache.min_iou`；沒有標準模型的零件不自動寫入，要主管（kb_intake）按「採用這個結果」
-- key 是「送進模型的一切」：input.png 的 sha256、策略、模型身分（GGUF 與 mmproj 的
-  路徑＋大小＋mtime）、prompt、max_pixels、max_tokens、前處理版本；任何一項變了都不命中
+- key 是「哪張圖紙＋送進模型的一切」：零件 id、input.png 的 sha256、策略、模型身分（GGUF 與
+  mmproj 的路徑＋大小＋mtime）、prompt、max_pixels、max_tokens、前處理版本；任何一項變了都不命中
+  （兩張圖紙影像相同也不會互相沿用）
 - 「結果不對，重新生成」：記住被否決的程式碼雜湊（不再命中、寫入或採用），改用 temperature＋seed
   重抽一個新候選（下一個沒試過的 seed）
 
@@ -127,6 +128,7 @@ def model_identity(alias: str) -> dict | None:
 
 def key_fields(
     *,
+    part_id: str,
     input_png: bytes,
     strategy: str,
     model: dict,
@@ -135,7 +137,9 @@ def key_fields(
     max_tokens: int,
     preprocess_version: int = PREPROCESS_VERSION,
 ) -> dict:
+    # part_id：兩張圖紙送進模型的影像相同時，也不能互相沿用（沒有標準模型的零件只認自己的採用結果）
     return {
+        "part_id": part_id,
         "input_sha256": hashlib.sha256(input_png).hexdigest(),
         "strategy": strategy,
         "model": model,
@@ -309,11 +313,12 @@ class CadCache:
             created_at=row["created_at"],
         )
 
-    def get(self, key: str) -> Entry | None:
-        """命中的結果；被否決的程式碼不算（順便清掉）。"""
+    def get(self, key: str, part_id: str | None = None) -> Entry | None:
+        """命中的結果；被否決的程式碼不算（順便清掉）。part_id：只認這張圖紙自己的結果
+        （key 已含零件身分，這裡再確認一次）。"""
         with closing(self._conn()) as conn, conn:
             row = conn.execute("SELECT * FROM entries WHERE key = ?", (key,)).fetchone()
-            if row is None:
+            if row is None or (part_id is not None and row["part_id"] != part_id):
                 return None
             if self._rejected(conn, key, row["code_sha"]):
                 conn.execute("DELETE FROM entries WHERE key = ?", (key,))
@@ -472,7 +477,7 @@ class Context:
     has_gt: bool
 
     def lookup(self) -> Entry | None:
-        return get_cache().get(self.key)
+        return get_cache().get(self.key, part_id=self.part_id)
 
 
 def context(
@@ -495,6 +500,7 @@ def context(
     if model is None:
         return None
     fields = key_fields(
+        part_id=part["id"],
         input_png=input_png,
         strategy=strategy,
         model=model,

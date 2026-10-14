@@ -164,6 +164,19 @@ describe("3D 重建流程（runCadJob）", () => {
     expect(log[0]).toBe(`job:${JOB}`);
   });
 
+  it("重新生成（regenerate）：同一個目標有進行中的一般工作也不接回，一定送出 regenerate 請求（docs/adr/042）", async () => {
+    t.on("GET", "/jobs", () => json({ items: [job({ id: "cad_aaaaaaaaaaaaaaaa", status: "running", target: { part_id: "mfg-002" } })] }));
+    t.on("POST", "/cad/jobs", () => created());
+    t.on("GET", `/jobs/${JOB}/events`, () => jobSse([["created", {}], ["started", { attempt: 1 }], ["succeeded", {}]]));
+    t.on("GET", `/jobs/${JOB}`, () => json(job({ result: { meta: cadMeta, result: cadResult, done: cadDone } })));
+    t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("C"));
+    const { log, h } = handlers();
+    await runCadJob({ part_id: "mfg-002", strategy: "ortho2cad", regenerate: true }, h, new AbortController().signal);
+    expect(calls("POST", "/cad/jobs")).toHaveLength(1);
+    expect(calls("POST", "/cad/jobs")[0].body).toEqual({ part_id: "mfg-002", strategy: "ortho2cad", regenerate: true });
+    expect(log[0]).toBe(`job:${JOB}`); // 跟的是新建立的重抽工作，不是進行中的一般工作
+  });
+
   it("沙箱執行失敗的工作（失敗但有結果）：照樣取回程式碼與結果給授權的人看", async () => {
     t.on("GET", "/jobs", () => json({ items: [] }));
     t.on("POST", "/cad/jobs", () => created());

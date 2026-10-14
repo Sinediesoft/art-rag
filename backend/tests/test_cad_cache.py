@@ -42,6 +42,7 @@ def gt_code(part_id: str) -> str:
 # ---------------------------------------------------------------- 單元：key
 def fields(**over):
     base = dict(
+        part_id="mfg-002",
         input_png=b"png-bytes",
         strategy="ortho2cad",
         model=IDENTITY,
@@ -56,6 +57,7 @@ def fields(**over):
 def test_key_contains_every_input_and_changes_with_each():
     f = fields()
     assert set(f) == {
+        "part_id",
         "input_sha256",
         "strategy",
         "model",
@@ -67,6 +69,7 @@ def test_key_contains_every_input_and_changes_with_each():
     base = cad_cache.make_key(f)
     assert cad_cache.make_key(fields()) == base  # 同樣的輸入＝同一個 key
     changed = [
+        fields(part_id="mfg-005"),  # 影像相同、不同圖紙
         fields(input_png=b"other"),
         fields(strategy="hybrid"),
         fields(model=IDENTITY | {"model": IDENTITY["model"] | {"size": 101}}),
@@ -138,6 +141,40 @@ def test_only_kb_drawings_with_ortho2cad_and_known_model_are_cached(monkeypatch)
         )
         is None
     )
+
+
+def test_same_image_on_another_part_never_hits_its_result(tmp_path, monkeypatch):
+    """兩張圖紙送進模型的影像相同：B（沒有標準模型）不能沿用 A 採用的結果（Review High）。"""
+    monkeypatch.setattr(cad_cache, "model_identity", lambda alias: IDENTITY)
+    store = CadCache(tmp_path / "cache.sqlite3")
+    monkeypatch.setattr(cad_cache, "get_cache", lambda: store)
+    common = dict(
+        strategy="ortho2cad",
+        layout="kb",
+        model_alias="ortho2cad",
+        input_png=b"same-image",
+        prompt="p",
+        max_pixels=1,
+        max_tokens=1,
+        has_gt=False,
+    )
+    a = cad_cache.context(part={"id": "part-A"}, **common)
+    b = cad_cache.context(part={"id": "part-B"}, **common)
+    assert a.key != b.key
+    store.put(
+        a.key,
+        part_id="part-A",
+        fields=a.fields,
+        code="A-only-code",
+        iou=None,
+        candidate=Candidate(0.0),
+        source="adopted",
+    )
+    assert a.lookup().code == "A-only-code"
+    assert b.lookup() is None
+    # 就算 key 撞在一起（舊資料、雜湊碰撞），讀取時也只認自己的零件
+    assert store.get(a.key, part_id="part-B") is None
+    assert store.get(a.key, part_id="part-A").code == "A-only-code"
 
 
 # ---------------------------------------------------------------- 單元：閘門

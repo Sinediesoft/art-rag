@@ -15,9 +15,10 @@
 ### 1. 只快取「知識庫圖紙本身＋Ortho2CAD」
 `strategy == "ortho2cad"` 且 `layout == "kb"`。照片（`rectified`／`upload`）每張像素都不同、對照組 `hybrid` 只是展示用，都不進快取。mock 模式或模型身分不明時不查也不寫。
 
-### 2. key＝送進模型的一切
+### 2. key＝哪張圖紙＋送進模型的一切
 | 欄位 | 來源 |
 |---|---|
+| `part_id` | 知識庫零件 id：兩張圖紙送進模型的影像相同也不會互相沿用（沒有標準模型的零件只認自己被採用的結果）；讀取時再確認一次快取那一筆的零件 |
 | `input_sha256` | 實際送進模型的 input.png（前處理後） |
 | `strategy` | `ortho2cad` |
 | `model` | `deploy/llama-router.ini` 裡這個 alias 的 `model`、`mmproj`：路徑＋大小＋mtime（換 GGUF 或 mmproj 就不命中；檔案找不到＝身分不明） |
@@ -38,7 +39,7 @@
 
 ### 5. 結果不對，重新生成
 - `POST /cad/jobs/{id}/cache/reject`：讀得到這個工作的人都可以作廢（記稽核）。記下程式碼雜湊：之後不命中、不寫入、不能採用。作廢的是「畫面上那一份」——已發布的 `code.py` 雜湊要和工作的候選紀錄一致。
-- 接著 `POST /cad/jobs`（`regenerate: true`）：不查快取，用 `cad.resample.temperature`（0.7）＋下一個沒試過的 seed（1…`max_seeds`，預設 8）產生**一個**候選；全部試過回 `CAD_RESAMPLE_EXHAUSTED`。現場重建不自動重抽（一個候選就要 1–2 分鐘）。
+- 接著 `POST /cad/jobs`（`regenerate: true`）：前端不接回同一張圖紙進行中的一般重建（那會跑出同一份 greedy），一定送出這個請求；伺服器不查快取，用 `cad.resample.temperature`（0.7）＋下一個沒試過的 seed（1…`max_seeds`，預設 8）產生**一個**候選；全部試過回 `CAD_RESAMPLE_EXHAUSTED`。現場重建不自動重抽（一個候選就要 1–2 分鐘）。
 - greedy 被否決後，一般重建仍會跑出同一份 greedy：結果標示「先前被否決」（`rejected_before`）、不寫入，提示重新生成。
 
 ### 6. `make cad-warm`

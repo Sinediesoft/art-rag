@@ -1680,6 +1680,28 @@ describe("背景工作（TASK-20261013-001）：3D 重建與排程在 worker 執
       await waitFor(() => expect(document.body.textContent).toContain("排隊中"));
     });
 
+    it("對話卡片：同一張圖紙另有進行中的一般重建，按「結果不對，重新生成」仍建立 regenerate 工作，不接回那個工作", async () => {
+      const t = reconstructBackend();
+      const OTHER = "cad_aaaaaaaaaaaaaaaa";
+      t.on("GET", `/jobs/${JOB}/events`, () => jobSse([["created", {}], ["started", { attempt: 1 }], ["meta", meta], ["succeeded", {}]]));
+      t.on("GET", `/jobs/${JOB}`, () => json(jobBody({ status: "succeeded", result: { meta, result: res(hit), done: doneEv } })));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      t.on("POST", `/cad/jobs/${JOB}/cache/reject`, () => json({ job_id: JOB, rejected: true, removed: true }));
+      let n = 0;
+      t.on("POST", "/cad/jobs", () => created(n++ === 0 ? JOB : NEXT));
+      const live = liveSse();
+      t.on("GET", `/jobs/${NEXT}/events`, ({ signal }) => live.respond(signal));
+      await startCad();
+      await waitFor(() => expect(document.body.textContent).toContain(hitLabel), { timeout: 4000 });
+      // 另一個分頁開了同一張圖紙的一般重建
+      t.on("GET", "/jobs", () => json({ items: [jobBody({ id: OTHER, status: "running", target: { part_id: "mfg-002", image_id: null } })] }));
+      fireEvent.click(screen.getByText("結果不對，重新生成"));
+      await waitFor(() => expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toHaveLength(2));
+      expect(t.calls.at(-1)?.path).not.toBe(`/jobs/${OTHER}/events`);
+      expect(t.calls.filter((c) => c.path.startsWith(`/jobs/${OTHER}`))).toEqual([]);
+      expect(t.calls.findLast((c) => c.method === "POST" && c.path === "/cad/jobs")?.body).toEqual({ part_id: "mfg-002", image_id: null, strategy: "ortho2cad", regenerate: true });
+    });
+
     it("3D 重建頁：命中顯示沿用的結果與「結果不對，重新生成」；作廢失敗就不建立新工作", async () => {
       const t = factoryBackend();
       t.on("GET", `/cad/jobs/${JOB}`, () => json({ meta, result: pageRes(hit), done: doneEv }));
