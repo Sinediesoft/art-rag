@@ -335,6 +335,18 @@ async def route(
                     dispatch["artwork_id"] = guess.artwork_id
                     dispatch["artwork_label"] = a["title"]["zh"]
                     dispatch["artwork_guess"] = resolved
+                    # 「有猴子的那幅畫裡，…陽傘是什麼顏色？」會因為「畫裡」被分成以文搜畫，
+                    # 前端只列搜尋結果；
+                    # 已經知道是哪幅、句子又是在發問，就改成畫作問答（「找一幅有猴子的畫」照舊搜尋）
+                    # 使用者自己點了以文搜畫（forced_intent）就照他選的
+                    if (
+                        intent == "art_search"
+                        and not forced_intent
+                        and art_resolve.asks_about_it(question)
+                    ):
+                        intent = "art_qa"
+                        dispatch["module"] = "art_qa"
+                        resolved["switched_from"] = "art_search"
                 resolve_info = resolved
                 resolve_egress = guess.egress_bytes
 

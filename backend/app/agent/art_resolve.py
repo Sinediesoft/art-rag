@@ -104,6 +104,14 @@ async def _collect(provider, messages: list[dict]) -> str:
     return "".join([p async for p in provider.stream(messages)])
 
 
+def asks_about_it(question: str) -> bool:
+    """句子是在問那幅畫的內容（有問句詞），不是只在找畫（「找…」「有沒有…的畫」「哪一幅」）。"""
+    cfg = get_agent_config().get("art_resolve") or {}
+    if re.search(cfg.get("search_pattern", r"$^"), question):
+        return False
+    return bool(re.search(cfg.get("ask_pattern", r"$^"), question))
+
+
 async def resolve(question: str, masked: str, use_jev: bool) -> Guess | None:
     """回傳推測結果（artwork_id 為 None＝判斷不出來）；關閉或知識庫沒有畫作時回傳 None。
     question：個資已遮蔽的原文（只給本地模型）；masked：代號化後的問句（只送 Jev）。"""
