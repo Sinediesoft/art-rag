@@ -20,7 +20,7 @@ from app.core.config import (
     get_settings,
     kb_version,
 )
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.rag import conflict_check, providers, rearrange
 from app.rag.kb import current_kb_hash
 from app.rag.preprocess import load_image, to_jpeg_bytes
@@ -227,7 +227,7 @@ async def chat(body: S.ChatRequest, request: Request):
         conflict_check=body.conflict_check,
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -382,7 +382,7 @@ async def reconstruct(body: S.ReconstructRequest, request: Request):
         account=account,
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -414,7 +414,7 @@ async def batch_identify(body: S.BatchIdentifyRequest, request: Request):
         body.image_ids, body.domain, account, request.state.request_id
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -449,7 +449,7 @@ async def compare_summary(body: S.CompareSummaryRequest, request: Request):
     )
     first = await anext(stream)  # 權限、找不到在這裡就丟 AppError（回 4xx，不是串流裡的 error）
     return StreamingResponse(
-        _prepend(first, stream),
+        safe_stream(_prepend(first, stream), request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -504,7 +504,7 @@ async def create_intake(body: S.IntakeRequest, request: Request):
         body.image_id, request.state.request_id, body.domain, identity.current(request)
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -692,7 +692,7 @@ async def inventory_ask(body: S.InventoryAskRequest, request: Request):
         account=identity.current(request),
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -782,7 +782,7 @@ async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
         request_id=request.state.request_id, seconds=body.seconds, engine=body.engine
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

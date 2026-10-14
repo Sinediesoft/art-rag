@@ -17,8 +17,10 @@ from app.api.routes import router
 from app.core import jwt
 from app.core.config import get_settings
 from app.core.errors import (
+    DB_DOWN,
     AppError,
     app_error_handler,
+    db_error_handler,
     error_body,
     http_error_handler,
     unhandled_error_handler,
@@ -27,6 +29,7 @@ from app.core.errors import (
 from app.core.logging import log, new_request_id, setup_logging
 from app.rag.embedders import warmup
 from app.repositories import db
+from app.repositories.db import DatabaseUnavailable
 from app.repositories.index_store import IndexMismatch, get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
@@ -101,6 +104,9 @@ app = FastAPI(
 )
 app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(StarletteHTTPException, http_error_handler)
+# 資料庫連不上：503 DATABASE_UNAVAILABLE（比 Exception 更具體，先比對到這裡）
+for _exc in (*DB_DOWN, DatabaseUnavailable):
+    app.add_exception_handler(_exc, db_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 

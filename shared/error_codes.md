@@ -58,6 +58,7 @@
 | `COMPARE_KIND_MISMATCH` | 422 | 兩件並排比較（`/compare/items`、`/compare/summary`）的兩件不同類：一幅畫和一張圖紙（docs/adr/017） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
 | `INTERNAL_ERROR` | 500 | 其他未預期錯誤；訊息固定為「伺服器內部錯誤」，例外內容只寫伺服器 log（用 `request_id` 對照） |
+| `DATABASE_UNAVAILABLE` | 503／SSE `error` | 資料庫暫時連不上（Docker 停了、連線池拿不到連線）；串流途中出錯時以 SSE `error` 事件送出，之後串流結束 |
 | `NOT_FOUND` | 404 | 沒有這個 API（`/api/...` 底下不存在的路徑） |
 | `METHOD_NOT_ALLOWED` | 405 | 這個 API 不接受這種 HTTP 方法 |
 | `HTTP_ERROR` | 其他 4xx | 框架層的其他 HTTP 錯誤 |

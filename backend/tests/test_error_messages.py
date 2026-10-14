@@ -101,3 +101,50 @@ def test_scheduler_status_does_not_show_its_address(monkeypatch):
     monkeypatch.setattr(timefold_client, "health", down)
     status = asyncio.run(schedule_service.engine_status())
     assert status["available"] is False and "127.0.0.1" not in status["detail"]
+
+
+def test_database_down_is_503_with_a_readable_message(client, monkeypatch):
+    """Docker 停了、連線池拿不到連線：503 DATABASE_UNAVAILABLE，不是籠統的 500。"""
+    from psycopg_pool import PoolTimeout
+
+    from app.api import routes
+
+    def down():
+        raise PoolTimeout("couldn't get a connection after 5.00 sec")
+
+    monkeypatch.setattr(routes.memory_guard.guard, "status", down)
+    with TestClient(app, raise_server_exceptions=False) as c:
+        c.cookies = client.cookies
+        r = c.get("/api/v1/memory")
+    body = r.json()["error"]
+    assert r.status_code == 503 and body["code"] == "DATABASE_UNAVAILABLE"
+    assert "資料庫" in body["message"] and "PoolTimeout" not in r.text
+
+
+def test_stream_failure_becomes_an_sse_error_event():
+    """串流途中出錯：送 SSE error 事件再結束，前端才知道發生什麼事；例外內容不送出。"""
+    import json
+
+    from psycopg_pool import PoolTimeout
+
+    from app.core.errors import safe_stream
+
+    def broken(exc):
+        async def gen():
+            yield "event: sources\ndata: {}\n\n"
+            raise exc
+
+        return gen()
+
+    async def collect(stream):
+        return [chunk async for chunk in stream]
+
+    for exc, code in (
+        (PoolTimeout("secret pool"), "DATABASE_UNAVAILABLE"),
+        (KeyError("x"), "INTERNAL_ERROR"),
+    ):
+        chunks = asyncio.run(collect(safe_stream(broken(exc), "req_t")))
+        assert chunks[0].startswith("event: sources") and chunks[-1].startswith("event: error")
+        data = json.loads(chunks[-1].split("data: ", 1)[1])
+        assert data["code"] == code and data["request_id"] == "req_t"
+        assert "secret" not in chunks[-1] and "KeyError" not in chunks[-1]
