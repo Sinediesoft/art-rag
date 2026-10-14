@@ -47,7 +47,7 @@ export async function runTurn(turn: Turn, update: Update, { signal, token, accep
   update((t) => ({ ...t, phase: "routing", route: null, failure: null, part: null, archived: undefined }));
   let route: RouteResponse;
   try {
-    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced }, token, signal);
+    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced, domain: turn.domain ?? null }, token, signal);
   } catch (e) {
     if (signal.aborted) return update((t) => ({ ...t, phase: "stopped" }));
     return update((t) => ({ ...t, phase: "error", failure: failureOf(e) }));

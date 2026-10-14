@@ -385,3 +385,10 @@ catalog:
   # 「梵谷有哪些作品」）不算，交給問答
   list_pattern: '^(請問|請|幫我)?(目前|現在)?(你們|這裡|知識庫|館藏|美術館|系統|資料庫)?(裡面|裡|中|內)?(總共|一共|共)?(有|收了|收藏了|收錄了|典藏了)?(哪些|什麼|幾幅|幾件|多少)(畫|畫作|作品|館藏|藏品)?(可以看)?(呢|啊)?[？?。!！\s]*$|^(請|幫我)?列(出|一下)?(所有|全部)?的?(畫|畫作|作品)(清單)?[？?。!！\s]*$'
   compare_pattern: '最(早|晚|大|小|新|舊|久|高|寬|長)|哪(一)?幅.{0,12}(比較|較|更|先|後)|比較|排序|依.{0,4}(年代|時間|大小|尺寸)|(先|後)(完成|畫|創作)|(早|晚)於'
+
+# 入口的分類（docs/adr/040）：選了畫作或工廠時，本地分流只在這些意圖裡挑（機率重新正規化）；
+# always 兩邊都保留（系統狀態、超出範圍）。只縮小範圍，權限照樣由第 1 段依角色檢查
+domain_intents:
+  art: [art_qa, art_search, compare, batch_identify]
+  mfg: [drawing_qa, drawing_search, data_query, reconstruct, schedule, modify, compare, batch_identify]
+  always: [system, out_of_scope]

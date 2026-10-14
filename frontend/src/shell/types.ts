@@ -147,6 +147,9 @@ export type RoutePart = { kind: "route" };
 
 export type Part = ChatPart | SqlPart | ArtSearchPart | PartSearchPart | ReconstructPart | SchedulePart | ChangePart | ComparePart | RoutePart;
 
+/** 入口的分類：畫作、工廠（docs/adr/040） */
+export type EntryDomain = "art" | "mfg";
+
 export interface Turn {
   id: string;
   /** 使用者輸入（送出前）；有 route 之後畫面改顯示 route.question（已遮蔽個資） */
@@ -154,6 +157,8 @@ export interface Turn {
   imageId: string | null;
   /** 點澄清按鈕選的意圖 */
   forced: string | null;
+  /** 入口選的分類（docs/adr/040）：只縮小分流範圍，不影響權限；null＝自動判斷 */
+  domain?: EntryDomain | null;
   /** 在入口或哪個模組問的 */
   at: View;
   ts: number;

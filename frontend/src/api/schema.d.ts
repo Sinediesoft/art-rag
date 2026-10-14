@@ -4110,6 +4110,11 @@ export interface components {
              */
             forced_intent?: string | null;
             /**
+             * Domain
+             * @description 入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限
+             */
+            domain?: ("art" | "mfg") | null;
+            /**
              * Engine
              * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/030）
              * @default auto

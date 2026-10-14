@@ -1127,6 +1127,7 @@ async def agent_route(body: S.RouteRequest, request: Request):
         image_id=body.image_id,
         forced_intent=body.forced_intent,
         engine=engine,
+        domain=body.domain,
     )
 
 

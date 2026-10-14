@@ -222,3 +222,15 @@ describe("initialPart", () => {
     expect(initialPart(plain, null).kind).toBe("artSearch");
   });
 });
+
+describe("入口的分類", () => {
+  it("選了畫作或工廠就帶 domain 給 /agent/route；自動判斷帶 null（docs/adr/040）", async () => {
+    for (const domain of ["art", "mfg", null] as const) {
+      const t = mockTransport();
+      t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "catalog", reply: "目前知識庫共有 3 幅畫" } })));
+      const run = start({ ...turn("列出所有畫"), domain });
+      await run.done;
+      expect((t.calls.find((c) => c.path === "/agent/route")!.body as { domain: string | null }).domain).toBe(domain);
+    }
+  });
+});

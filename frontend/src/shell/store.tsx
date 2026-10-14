@@ -9,7 +9,7 @@ const TOKEN_RENEWED = "artrag:token-renewed";
 import type { Domain, View } from "./design";
 import { applyMarks, canRerun, clearUnconfirmed, hasMark, interruptForAccount, load, markUnconfirmed, otherMarks, readMarks, redactForeign, redactPrivate, save, serialize, UNCONFIRMED_PREFIX } from "./persist";
 import { commitChange as runCommit, runTurn, startReconstruct as runReconstruct, startSchedule as runSchedule } from "./runner";
-import type { ChangePart, Conv, ReconstructPart, Turn } from "./types";
+import type { ChangePart, Conv, EntryDomain, ReconstructPart, Turn } from "./types";
 import type { EntryTheme } from "./theme";
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -21,6 +21,8 @@ export interface AskInput {
   text: string;
   imageId?: string | null;
   forced?: string | null;
+  /** 入口選的分類（docs/adr/040） */
+  domain?: EntryDomain | null;
   /** 竄改過的 JWT（示範第 1 段）；只用在這一次請求，不進狀態也不存檔 */
   token?: string;
 }
@@ -238,6 +240,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
         text,
         imageId: input.imageId ?? null,
         forced: input.forced ?? null,
+        domain: input.domain ?? null,
         at,
         ts: Date.now(),
         tamper: !!input.token,

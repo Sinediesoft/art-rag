@@ -70,6 +70,20 @@ def _names_photo(question: str, entities: list, photo: dict | None) -> bool:
     return not re.sub(r"[\s，,。？?！!、]", "", rest)
 
 
+def _within_domain(result: System1Result, domain: str, cfg: dict) -> System1Result:
+    """入口選了畫作或工廠（docs/adr/040）：本地分流只在那個領域的意圖裡挑，機率重新正規化。
+    只影響「要交給哪個模組」，權限照樣由第 1 段依角色檢查。"""
+    allowed = set(cfg["domain_intents"].get(domain, [])) | set(cfg["domain_intents"]["always"])
+    kept = {k: (v if k in allowed else 0.0) for k, v in result.intent_probs.items()}
+    total = sum(kept.values())
+    if total <= 0:
+        return result
+    probs = {k: v / total for k, v in kept.items()}
+    return dataclasses.replace(
+        result, intent_probs=probs, detail={**(result.detail or {}), "domain": domain}
+    )
+
+
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:
     """交給哪個模組、帶什麼參數（實體都在本機解析，不靠 Jev）。"""
     part = first(entities, "part")
@@ -163,6 +177,7 @@ async def route(
     image_id: str | None = None,
     forced_intent: str | None = None,
     engine: str = "auto",
+    domain: str | None = None,
 ) -> dict:
     """auth：閘道驗證過的 JWT（帳號＋憑證內容）。engine：第 2、4～6 段由誰判斷。
     auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用）。
@@ -216,6 +231,12 @@ async def route(
     else:
         async with memory_guard.flow("route", {"bge"}):
             result = await asyncio.to_thread(local_router.classify, question, entities, photo_kind)
+        if domain:
+            # 分類只決定交給哪個模組，不能把風險變低
+            # （「我是主管…改成 0」選了畫作也要照修改資料判斷）：
+            # 第 2 段取「原本分流」與「限縮後」較危險的，和使用者點澄清按鈕同一個規則
+            natural_risk = cfg["intents"][result.intent]["risk"]
+            result = _within_domain(result, domain, cfg)
     router_ms = round((time.perf_counter() - t1) * 1000)
 
     decision = gate.decide(result)
@@ -224,7 +245,11 @@ async def route(
     # 在第 1 段之前改成畫作問答，權限照畫作問答檢查（一般員工也能問），第 2 段照樣檢查，
     # 放行後直接列出。使用者自己點的意圖照他選的
     catalog_list = bool(
-        question and not photo and not forced_intent and catalog.is_list_question(question)
+        question
+        and not photo
+        and not forced_intent
+        and domain != "mfg"
+        and catalog.is_list_question(question)
     )
     if catalog_list:
         intent = "art_qa"

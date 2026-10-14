@@ -1208,6 +1208,11 @@ class RouteRequest(BaseModel):
     question: str = Field(default="", max_length=300)
     image_id: str | None = None
     forced_intent: str | None = Field(default=None, description="使用者點澄清按鈕選的意圖")
+    domain: Literal["art", "mfg"] | None = Field(
+        default=None,
+        description="入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。"
+        "只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限",
+    )
     engine: Literal["auto", "jev", "local"] = Field(
         default="auto",
         description="第 2、4～6 段由誰判斷：auto／jev＝用 Jev，"
