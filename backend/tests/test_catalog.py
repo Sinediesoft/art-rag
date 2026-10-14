@@ -88,3 +88,27 @@ def test_comparing_two_named_artworks_searches_the_whole_library(client):
     # 只提到一幅的一般問題照舊鎖那一幅
     r = route(client, "有絲柏的麥田是在哪裡畫的？", forced_intent="art_qa")
     assert r["dispatch"]["artwork_id"] == "met-436535" and "global_qa" not in r["dispatch"]
+
+
+def test_list_question_is_not_blocked_by_a_wrong_route(client, monkeypatch):
+    """「列出所有畫」被分成圖紙查找時，一般員工在第 1 段就被擋（不能用工廠圖紙）；
+    目錄題要在第 1 段之前改成畫作問答。"""
+    from conftest import as_account
+
+    from app.agent import local_router
+    from app.agent.types import System1Result
+    from app.core.config import get_agent_config
+
+    def as_drawing_search(question, entities, photo_kind):
+        probs = {k: 0.0 for k in get_agent_config()["intents"]}
+        probs["drawing_search"] = 0.9
+        return System1Result(engine="local", intent_probs=probs, model="測試")
+
+    monkeypatch.setattr(local_router, "classify", as_drawing_search)
+    as_account(client, "guest")
+    try:
+        r = route(client, "列出所有畫")
+        assert r["outcome"] == "short_circuit" and r["short_circuit"]["kind"] == "catalog"
+        assert r["blocked"] is None and r["intent"] == "art_qa"
+    finally:
+        as_account(client, "manager")

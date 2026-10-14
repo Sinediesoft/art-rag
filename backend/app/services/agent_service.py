@@ -220,6 +220,17 @@ async def route(
 
     decision = gate.decide(result)
     intent = result.intent
+    # 知識庫目錄題（docs/adr/039）：本地分流常分錯（落到批次辨識、圖紙查找）；
+    # 在第 1 段之前改成畫作問答，權限照畫作問答檢查（一般員工也能問），第 2 段照樣檢查，
+    # 放行後直接列出。使用者自己點的意圖照他選的
+    catalog_list = bool(
+        question and not photo and not forced_intent and catalog.is_list_question(question)
+    )
+    if catalog_list:
+        intent = "art_qa"
+        decision = dataclasses.replace(
+            decision, gate="direct", options=[], reason="知識庫目錄題：直接列出知識庫的畫作"
+        )
     labels = {k: v["label"] for k, v in cfg["intents"].items()}
     dispatch = _dispatch(intent, question, entities, photo)
     op = result.modify_op if intent == "modify" else None
@@ -311,16 +322,10 @@ async def route(
                 "reply": cfg["guard"]["chitchat_reply"],
             }
             outcome = "short_circuit"
-        elif question and not photo and catalog.is_list_question(question):
-            # 知識庫目錄題（docs/adr/039）：問答只檢索最像的幾段，列不出「全部有哪些」；
-            # 第 2 段放行後直接從知識庫列出，不檢索、不呼叫 LLM（本地分流常分錯，例如落到批次辨識）
+        elif catalog_list:
+            # 問答只檢索最像的幾段，列不出「全部有哪些」：直接從知識庫列出，不檢索、不呼叫 LLM
             short = {"stage": 2, "by": "地端", "kind": "catalog", "reply": catalog.reply()}
             outcome = "short_circuit"
-            intent = "art_qa"
-            dispatch["module"] = "art_qa"
-            decision = dataclasses.replace(
-                decision, gate="direct", options=[], reason="知識庫目錄題：直接列出知識庫的畫作"
-            )
 
     resolve_info, resolve_egress = None, 0
     if outcome == "pass":
