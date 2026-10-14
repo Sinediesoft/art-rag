@@ -7,7 +7,7 @@
 {"id": "adv-07", "split": "dev", "kind": "not_in_kb", "artwork_id": "npm-000001", "question": "〈谿山行旅圖〉上一共蓋了幾枚收藏印？", "keywords": [["沒有", "未提及", "沒提到", "無法", "找不到", "未記載", "不清楚"]], "forbidden": []}
 {"id": "adv-08", "split": "holdout", "kind": "not_in_kb", "artwork_id": "met-436535", "question": "梵谷畫這幅畫用的是哪個牌子的顏料？", "keywords": [["沒有", "未提及", "沒提到", "無法", "找不到", "未記載", "不清楚"]], "forbidden": []}
 {"id": "adv-09", "split": "dev", "kind": "not_in_kb", "artwork_id": "aic-27992", "question": "這幅畫目前的保險估值是多少？", "keywords": [["沒有", "未提及", "沒提到", "無法", "找不到", "未記載", "不清楚"]], "forbidden": []}
-{"id": "adv-10", "split": "dev", "kind": "math", "artwork_id": "aic-27992", "question": "這幅畫的畫面面積大約幾平方公尺？", "keywords": [["6.4", "6.39", "6.3", "約 6", "約6", "六平方"]], "forbidden": []}
+{"id": "adv-10", "split": "dev", "kind": "math", "artwork_id": "aic-27992", "question": "這幅畫的畫面面積大約幾平方公尺？", "keywords": [["6.39", "6.4"]], "forbidden": [], "note": "207.5 × 308.1 公分＝63,930.75 平方公分≈6.39 平方公尺；原標準接受「6.3」開頭，算錯成 6.36 也會判對（2026-10-14 修正）"}
 {"id": "adv-11", "split": "holdout", "kind": "math", "artwork_id": "npm-000001", "question": "這幅畫的高大約是寬的幾倍？", "keywords": [["2 倍", "2倍", "兩倍", "二倍", "1.99", "2.0"]], "forbidden": []}
 {"id": "adv-12", "split": "dev", "kind": "math", "artwork_id": "met-436535", "question": "大都會買下這幅畫時，距離它畫完過了幾年？", "keywords": [["104"]], "forbidden": []}
 {"id": "adv-13", "split": "holdout", "kind": "math", "artwork_id": "aic-27992", "question": "秀拉加上點描邊框時，距離這幅畫首次展出大約過了幾年？", "keywords": [["2", "兩", "3", "三"]], "forbidden": []}
