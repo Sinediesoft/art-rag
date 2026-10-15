@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.api import schemas as S
 from app.api.deps import visible_part
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.repositories.logs_repo import get_logs_repo
 from app.services import cad_access, cad_service, identity, security
 
@@ -48,7 +48,7 @@ async def reconstruct(body: S.ReconstructRequest, request: Request):
         account=ctx.account,
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -491,3 +491,46 @@ def test_draft_not_found_and_discard(client, reads):
     assert client.get(f"/api/v1/intake/{did}/secret.txt").status_code == 422
     assert client.delete(f"/api/v1/intake/{did}").status_code == 200
     assert client.get(f"/api/v1/intake/{did}").status_code == 404
+
+
+def test_draft_is_only_visible_to_its_creator_and_managers(client, reads):
+    """建檔草稿只有建立者本人與能收錄的主管碰得到；其他人讀、改、刪、拿照片都當作找不到
+    （之前任何人知道草稿 ID 就能在主管收錄前改欄位）。"""
+    as_account(client, "warehouse")
+    did = ready_draft(client, reads)["draft_id"]
+    try:
+        as_account(client, "sales")
+        for r in (
+            client.get(f"/api/v1/intake/{did}"),
+            client.put(f"/api/v1/intake/{did}", json={"values": {"owner": "公開"}}),
+            client.get(f"/api/v1/intake/{did}/photo.jpg"),
+            client.delete(f"/api/v1/intake/{did}"),
+        ):
+            assert r.status_code == 404 and r.json()["error"]["code"] == "INTAKE_DRAFT_NOT_FOUND"
+        as_account(client, "warehouse")
+        assert fields(client.get(f"/api/v1/intake/{did}").json())["owner"]["value"] == "生產技術課"
+        assert client.get(f"/api/v1/intake/{did}/photo.jpg").status_code == 200
+        as_account(client, "manager")
+        assert client.get(f"/api/v1/intake/{did}").status_code == 200
+    finally:
+        as_account(client, "manager")
+        client.delete(f"/api/v1/intake/{did}")
+
+
+def test_failed_rebuild_keeps_exception_details_out_of_the_draft(client, reads, kb, monkeypatch):
+    """收錄失敗時草稿只寫例外類型：建立者也讀得到草稿，例外內容可能含資料庫位址、路徑。"""
+
+    def broken():
+        raise RuntimeError("postgresql://artrag:secret@10.0.0.5/artrag 連線失敗")
+
+    as_account(client, "warehouse")
+    draft = ready_draft(client, reads)
+    monkeypatch.setattr(intake_service, "_rebuild_index", broken)
+    r = commit_as_manager(client, draft["draft_id"])
+    assert r.status_code == 200, r.text
+    as_account(client, "warehouse")
+    failed = client.get(f"/api/v1/intake/{draft['draft_id']}").json()
+    assert failed["status"] == "failed"
+    assert failed["commit"]["error"].startswith("重建索引失敗（RuntimeError）")
+    assert "postgresql" not in json.dumps(failed, ensure_ascii=False)
+    as_account(client, "guest")

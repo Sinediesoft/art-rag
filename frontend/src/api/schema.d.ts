@@ -1332,6 +1332,7 @@ export interface paths {
         /**
          * Sql Eval Runs
          * @description 工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+         *     含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。
          */
         get: operations["sql_eval_runs_api_v1_eval_sql_runs_get"];
         put?: never;
@@ -1696,7 +1697,7 @@ export interface components {
             clearance: number;
             /**
              * Views
-             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）
+             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）
              * @default []
              */
             views: string[];

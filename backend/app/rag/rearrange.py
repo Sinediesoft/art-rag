@@ -99,7 +99,9 @@ async def rearrange(
     except TimeoutError:
         info["fallback"] = f"篩選逾時（>{cfg.timeout_s:.0f} 秒）"
     except (ProviderUnavailable, httpx.HTTPError) as e:
-        info["fallback"] = f"本地模型無法使用：{type(e).__name__}: {e}"
+        # httpx 的例外字串含推論伺服器網址，這個欄位會送到前端：httpx 的只留類型
+        why = e if isinstance(e, ProviderUnavailable) else type(e).__name__
+        info["fallback"] = f"本地模型無法使用：{why}"
     info["ms"] = round((time.perf_counter() - t0) * 1000)
     info["kept"] = len(kept)
     return [{**s, "ref": i + 1} for i, s in enumerate(kept)], info

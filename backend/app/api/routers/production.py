@@ -7,7 +7,7 @@ from starlette.concurrency import run_in_threadpool
 from app import jobs
 from app.api import schemas as S
 from app.api.deps import ID_PATTERN, IDEMPOTENCY
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.jobs import legacy, service
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.production_repo import get_production_repo, idem_note
@@ -163,7 +163,7 @@ async def solve_schedule(body: S.ScheduleSolveRequest, request: Request):
         request_id=request.state.request_id, seconds=body.seconds, engine=body.engine
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

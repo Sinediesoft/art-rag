@@ -7,7 +7,7 @@ from app.api import schemas as S
 from app.core.config import (
     get_models_config,
 )
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.repositories.index_store import get_store
 from app.repositories.production_repo import get_production_repo
 from app.services import (
@@ -46,7 +46,7 @@ async def batch_identify(body: S.BatchIdentifyRequest, request: Request):
         body.image_ids, body.domain, account, request.state.request_id
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -81,7 +81,7 @@ async def compare_summary(body: S.CompareSummaryRequest, request: Request):
     )
     first = await anext(stream)  # 權限、找不到在這裡就丟 AppError（回 4xx，不是串流裡的 error）
     return StreamingResponse(
-        _prepend(first, stream),
+        safe_stream(_prepend(first, stream), request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -136,7 +136,7 @@ async def create_intake(body: S.IntakeRequest, request: Request):
         body.image_id, request.state.request_id, body.domain, identity.current(request)
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

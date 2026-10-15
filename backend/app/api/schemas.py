@@ -1186,7 +1186,7 @@ class Account(BaseModel):
     clearance: int = Field(description="機密等級：公開 0、內部 1、機密 2（寫進 JWT）")
     views: list[str] = Field(
         default=[],
-        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
+        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）",
     )
 
 

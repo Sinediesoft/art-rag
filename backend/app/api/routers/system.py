@@ -44,13 +44,16 @@ def memory_status():
 def release_memory(request: Request):
     """展示用：不管使用率，立刻釋放目前流程與其他請求用不到的模型（只在展示模式、本機）。"""
     identity.require_demo(request, "手動釋放模型")
+    # 只看主機的話，同一台機器上任何身分（含訪客）都能卸載模型
+    identity.require(identity.current(request), "demo_reset", "手動釋放模型")
     g = memory_guard.guard
     event = g.check("手動釋放", set(g.current_models), force=True)
     return {"event": event, "status": g.status()}
 
 
 @router.get("/eval/runs", response_model=S.EvalRunsResponse, tags=["eval"])
-def eval_runs():
+def eval_runs(request: Request):
+    identity.require_view(identity.current(request), "eval", "評估結果")
     runs = []
     for p in sorted((REPO_ROOT / "eval" / "runs").glob("*.json"), reverse=True):
         # 圖紙、領域路由、Text-to-SQL、色彩分析、展示測試、智慧助理路由（-route）、
@@ -81,22 +84,26 @@ def eval_runs():
 
 
 @router.get("/eval/cad-runs", response_model=S.CadEvalRunsResponse, tags=["eval"])
-def cad_eval_runs():
+def cad_eval_runs(request: Request):
     """工廠圖紙評估（make eval-cad）：圖紙辨識與 Ortho2CAD 3D 重建。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-cad.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
 
 
 @router.get("/eval/sql-runs", response_model=S.SqlEvalRunsResponse, tags=["eval"])
-def sql_eval_runs():
-    """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。"""
+def sql_eval_runs(request: Request):
+    """工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+    含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-sql.json"), reverse=True)
     return {"runs": [json.loads(p.read_text(encoding="utf-8")) for p in paths]}
 
 
 @router.get("/eval/route-runs", response_model=S.RouteEvalRunsResponse, tags=["eval"])
-def route_eval_runs():
+def route_eval_runs(request: Request):
     """智慧助理路由評估（make eval-route）：Jev 與本地路由的正確率、修改誤判、延遲、外送量。"""
+    identity.require_view(identity.current(request), "eval", "評估結果")
     paths = sorted((REPO_ROOT / "eval" / "runs").glob("*-route.json"), reverse=True)[:10]
     runs = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
     for r in runs:  # 清單只回摘要，逐題結果留在檔案
@@ -303,6 +310,7 @@ def _system1_status() -> S.System1Status:
 def simulate_outage(body: S.OutageRequest, request: Request):
     """展示用：模擬主推論伺服器斷線，本地備援模型不受影響（只在展示模式、本機，docs/adr/030）。"""
     identity.require_demo(request, "模擬斷線")
+    identity.require(identity.current(request), "demo_reset", "模擬斷線")
     providers.OUTAGE["enabled"] = body.enabled
     return S.OkResponse()
 

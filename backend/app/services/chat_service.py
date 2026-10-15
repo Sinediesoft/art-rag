@@ -43,7 +43,7 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
-from app.rag.textproc import drop_stray_no_data, to_taiwan
+from app.rag.textproc import drop_contradicting_no_data, drop_stray_no_data, to_taiwan
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
@@ -735,7 +735,13 @@ async def _chat_stream(
     problems = guard.check_output(answer, given, hidden, flagged)
     # 答完才補的拒答句不送出：前面已引用資料回答，「知識庫中沒有這方面的資料」只會讓人以為沒找到。
     # 拿掉後實際送出的是另一段文字，送出前再檢查一次；原回答或送出的版本任一沒過都擋下
-    cleaned = answer if problems else drop_stray_no_data(answer, asked, _bare_references(artwork))
+    cleaned = (
+        answer
+        if problems
+        else drop_contradicting_no_data(
+            drop_stray_no_data(answer, asked, _bare_references(artwork))
+        )
+    )
     if cleaned != answer:
         problems = guard.check_output(cleaned, given, hidden, flagged)
     if problems:
@@ -757,7 +763,7 @@ async def _chat_stream(
         ):
             yield e
         return
-    note = "；已拿掉答完才補的「知識庫中沒有這方面的資料」" if cleaned != answer else ""
+    note = "；已拿掉和回答矛盾的「知識庫中沒有這方面的資料」" if cleaned != answer else ""
     if note:
         answer, pieces = cleaned, [cleaned]
     _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過{note}")
