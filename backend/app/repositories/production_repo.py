@@ -493,24 +493,41 @@ class ProductionRepo:
             self.decide_approval(r["ap_no"], "已失效", "system", "系統", "超過 24 小時沒人處理")
         return [r["ap_no"] for r in rows]
 
-    def add_audit(self, row: dict, once: bool = False) -> None:
+    def add_audit(self, row: dict, once: bool = False, once_request: bool = False) -> None:
         """once：同一個（動作、操作、單號）已經有紀錄就不再寫——冪等重送、中斷後補做收尾時
-        不會重複記稽核（這些單號每個只會被寫入一次）。"""
+        不會重複記稽核（這些單號每個只會被寫入一次）。
+        once_request：同一個（動作、操作、單號、request_id）已經有紀錄就不再寫——同一個單號可能
+        被不同請求操作多次（3D 重建結果的作廢、採用），補送同一筆時不重複（docs/adr/042）。"""
         with self._lock:
             conn = self._conn()
             try:
-                self._insert_audit(conn, row, once)
+                self._insert_audit(conn, row, once, once_request)
                 conn.commit()
             finally:
                 conn.close()
 
-    def _insert_audit(self, conn: sqlite3.Connection, row: dict, once: bool = False) -> None:
+    def _insert_audit(
+        self, conn: sqlite3.Connection, row: dict, once: bool = False, once_request: bool = False
+    ) -> None:
         row = {**row, "at": self.now()}
         if isinstance(row.get("detail"), (dict, list)):
             row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)
-        if once:
+        if once_request:
+            conn.execute(
+                f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
+                " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?"
+                " AND request_id IS ?)",
+                (
+                    *row.values(),
+                    row.get("action"),
+                    row.get("op"),
+                    row.get("ref_no"),
+                    row.get("request_id"),
+                ),
+            )
+        elif once:
             conn.execute(
                 f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
                 " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",

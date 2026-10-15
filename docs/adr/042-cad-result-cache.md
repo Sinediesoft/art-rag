@@ -42,11 +42,17 @@
 - 接著 `POST /cad/jobs`（`regenerate: true`）：前端不接回同一張圖紙進行中的一般重建（那會跑出同一份 greedy），一定送出這個請求；伺服器不查快取，用 `cad.resample.temperature`（0.7）＋下一個沒試過的 seed（1…`max_seeds`，預設 8）產生**一個**候選；全部試過回 `CAD_RESAMPLE_EXHAUSTED`。現場重建不自動重抽（一個候選就要 1–2 分鐘）。
 - greedy 被否決後，一般重建仍會跑出同一份 greedy：結果標示「先前被否決」（`rejected_before`）、不寫入，提示重新生成。
 
+### 5a. 作廢、採用的稽核不能遺失
+作廢、採用會改變「標準答案」，一定要追得到誰在什麼時候改的。稽核紀錄在生產資料庫（`audit_log`），快取在另一個 SQLite 檔，跨資料庫沒辦法同一個交易，所以用待送清單（outbox）：
+- 快取變更（`rejected`／`entries`）和稽核紀錄寫進 `audit_outbox` 是**同一個 SQLite 交易**：放不進待送清單，快取也不改。
+- 交易提交後立刻送進 `audit_log`。送得進去回 `audit: "recorded"`；稽核資料庫故障時變更與稽核已經一起存下，回 200 與 `audit: "pending"`，不會出現「改了卻沒有紀錄」。
+- 補送：下一次作廢／採用、主管讀 `GET /audit` 之前、背景維護執行緒每一輪都會送待送清單（`cad_cache.flush_audit`）。以（動作、操作、單號、request_id）去重（`add_audit(once_request=True)`），送到一半中斷後重送不會多一筆；不同請求作用在同一個工作各記一筆。
+
 ### 6. `make cad-warm`
-逐張有標準模型的知識庫零件：先跑一般重建（已有合格快取就命中），不合格就依序重抽 seed 1…`warm_seeds`（預設 3），每張重抽時間上限 `time_limit_s`（900 秒）；快取只在 IoU 更高時換掉，所以最後留下 IoU 最高且達門檻的那個。執行時像 worker 一樣在 Redis 登記 ortho2cad 使用中（memory_guard＋每 30 秒續約），不會被其他行程判斷記憶體吃緊而卸載。試過的 seed 記在快取裡，之後按「重新生成」從下一個 seed 開始。
+逐張有標準模型的知識庫零件：先跑一般重建（已有合格快取就命中），不合格就依序重抽 seed 1…`warm_seeds`（預設 3），每張重抽時間上限 `time_limit_s`（900 秒）；快取只在 IoU 更高時換掉，所以最後留下 IoU 最高且達門檻的那個。執行時像 worker 一樣在 Redis 登記 ortho2cad 使用中（memory_guard＋每 30 秒續約），不會被其他行程判斷記憶體吃緊而卸載。試過的 seed 記在快取裡，之後按「重新生成」從下一個 seed 開始。退出碼：每張有標準模型的零件都有合格快取（命中或寫入）才是 0；有任何一張失敗、沒有合格候選或模型身分不明回 1（逐張結果照樣印出）；設定不能預熱（mock 模式、找不到模型檔、圖紙不存在）回 2。沒有標準模型的零件略過，不算失敗。
 
 ### 7. 儲存
-`data/cad_cache/cache.sqlite3`（WAL）：`entries`（快取）、`rejected`（被否決的雜湊）、`tried_seeds`、`runs`（每個工作用的是哪一份程式碼，作廢、採用用）。不在 `data/cad/` 底下；下載端點只認 `data/cad/<job_id>/` 與固定檔名（`JOB_FILES`），讀不到快取檔。
+`data/cad_cache/cache.sqlite3`（WAL）：`entries`（快取）、`rejected`（被否決的雜湊）、`tried_seeds`、`runs`（每個工作用的是哪一份程式碼，作廢、採用用）、`audit_outbox`（作廢、採用的稽核待送清單）。不在 `data/cad/` 底下；下載端點只認 `data/cad/<job_id>/` 與固定檔名（`JOB_FILES`），讀不到快取檔。
 
 ## 後果
 - 同一張知識庫圖紙第二次重建只剩沙箱執行（約幾秒），不載入、不呼叫 Ortho2CAD。

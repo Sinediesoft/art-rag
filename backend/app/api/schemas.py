@@ -709,16 +709,24 @@ class ReconstructRequest(BaseModel):
     )
 
 
+CAD_AUDIT_STATE = (
+    "recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），"
+    "稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）"
+)
+
+
 class CadCacheRejected(BaseModel):
     job_id: str
     rejected: bool
     removed: bool = Field(description="這次有沒有把快取裡的那一筆移除")
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
 
 
 class CadCacheAdopted(BaseModel):
     job_id: str
     adopted: bool
     created_at: str
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
 
 
 class CadJobSummary(BaseModel):

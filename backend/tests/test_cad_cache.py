@@ -6,6 +6,7 @@
 
 import asyncio
 import os
+import sqlite3
 import uuid
 
 import pytest
@@ -593,7 +594,8 @@ def test_reject_requires_read_access_and_is_audited(client, api_cache):
     before = len(audits())
     as_account(client, "warehouse")  # 讀得到這個工作就能作廢（不需要 kb_intake）
     r = client.post(f"/api/v1/cad/jobs/{job}/cache/reject")
-    assert r.status_code == 200 and r.json() == {"job_id": job, "rejected": True, "removed": True}
+    assert r.status_code == 200
+    assert r.json() == {"job_id": job, "rejected": True, "removed": True, "audit": "recorded"}
     assert api_cache.get("kr") is None and api_cache.is_rejected("kr", cad_cache.code_sha(BOX))
     rows = audits()
     assert len(rows) == before + 1
@@ -672,3 +674,173 @@ def test_end_to_end_sse_hit_reject_and_regenerate(client, env, monkeypatch):
     assert len(env["provider"].calls) == 2
     assert third["result"]["cache"]["status"] == "rejected_before"
     assert post()["result"]["cache"]["status"] == "rejected_before"
+
+
+# ------------------------------------------- 稽核寫不進去（Architecture High）：不能悄悄變更快取
+@pytest.fixture
+def audit_down(monkeypatch):
+    """生產資料庫的稽核寫入故障；state["down"] 改成 False 就恢復。"""
+    repo = get_production_repo()
+    real = repo.add_audit
+    state = {"down": True, "calls": 0}
+
+    def add_audit(row, *a, **k):
+        state["calls"] += 1
+        if state["down"]:
+            raise OSError("audit store unavailable")
+        return real(row, *a, **k)
+
+    monkeypatch.setattr(repo, "add_audit", add_audit)
+    return state
+
+
+def test_reject_with_audit_store_down_keeps_audit_pending_and_delivers_once(
+    client, api_cache, audit_down
+):
+    job = legacy_job("manager", "mfg-002", BOX)
+    record(api_cache, job, BOX, has_gt=True, key="k_down")
+    g = Candidate(0.0)
+    api_cache.put(
+        "k_down", part_id="mfg-002", fields={}, code=BOX, iou=0.9, candidate=g, source="a"
+    )
+    before = len(audits())
+    as_account(client, "warehouse")
+    r = client.post(f"/api/v1/cad/jobs/{job}/cache/reject")
+    # 否決和稽核已經在同一個交易存下：回 200，但明白告訴呼叫端稽核還沒寫進稽核紀錄
+    assert r.status_code == 200 and r.json()["audit"] == "pending"
+    assert api_cache.is_rejected("k_down", cad_cache.code_sha(BOX))
+    pending = api_cache.pending_audit()
+    assert len(pending) == 1 and pending[0][1]["action"] == "作廢"
+    assert pending[0][1]["ref_no"] == job and pending[0][1]["detail"]["removed"] is True
+    assert len(audits()) == before  # 稽核資料庫還沒有
+    # 恢復後：主管讀稽核紀錄之前先補送，只有一筆
+    audit_down["down"] = False
+    as_account(client, "manager")
+    items = client.get("/api/v1/audit", params={"limit": 200}).json()["items"]
+    assert [a["ref_no"] for a in items if a["op"] == "cad_cache"].count(job) == 1
+    assert api_cache.pending_audit() == []
+    assert cad_cache.flush_audit() == 0
+    assert len(audits()) == before + 1  # 再補送也不重複
+
+
+def test_adopt_with_audit_store_down_is_recorded_later(client, api_cache, audit_down):
+    job = legacy_job("manager", "mfg-005", BOX)
+    record(api_cache, job, BOX, has_gt=False, key="k_adopt_down")
+    as_account(client, "manager")
+    before = len(audits())
+    r = client.post(f"/api/v1/cad/jobs/{job}/cache/adopt")
+    assert r.status_code == 200 and r.json()["audit"] == "pending"
+    assert api_cache.get("k_adopt_down").source == "adopted"
+    assert [row["action"] for _, row in api_cache.pending_audit()] == ["採用"]
+    assert len(audits()) == before
+    audit_down["down"] = False
+    assert cad_cache.flush_audit() == 0  # 背景維護執行緒每一輪呼叫的同一個函式
+    rows = [a for a in audits() if a["ref_no"] == job]
+    assert len(rows) == 1 and rows[0]["action"] == "採用" and rows[0]["actor_id"] == "manager"
+
+
+def test_audit_enqueue_failure_rolls_back_the_cache_change(cache, monkeypatch):
+    """稽核放不進待送清單（同一個交易）：否決、採用一起回滾，不會只改了快取。"""
+    g = Candidate(0.0)
+    cache.put("k", part_id="p", fields={}, code="a", iou=0.9, candidate=g, source="auto")
+
+    def boom(*a, **k):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(CadCache, "_enqueue", staticmethod(boom))
+    row = {"action": "作廢", "op": "cad_cache", "ref_no": "cad_x", "request_id": "r1"}
+    with pytest.raises(sqlite3.OperationalError):
+        cache.reject("k", cad_cache.code_sha("a"), job_id="cad_x", actor_id="m", audit=row)
+    assert not cache.is_rejected("k", cad_cache.code_sha("a")) and cache.get("k").code == "a"
+    with pytest.raises(sqlite3.OperationalError):
+        cache.put(
+            "k2",
+            part_id="p",
+            fields={},
+            code="b",
+            iou=None,
+            candidate=g,
+            source="adopted",
+            audit=row | {"action": "採用"},
+        )
+    assert cache.get("k2") is None
+
+
+def test_redelivery_of_the_same_audit_is_not_duplicated(cache, monkeypatch):
+    """寫進稽核紀錄之後、標記送出之前中斷：下一次補送以 request_id 去重，不會多一筆。"""
+    monkeypatch.setattr(cad_cache, "get_cache", lambda: cache)
+    row = {
+        "actor_id": "manager",
+        "actor_label": "主管",
+        "action": "作廢",
+        "op": "cad_cache",
+        "ref_no": "cad_dup_0000000001",
+        "summary": "s",
+        "detail": None,
+        "request_id": "req_dup_1",
+    }
+    with cache._conn() as conn:
+        CadCache._enqueue(conn, row, "outbox-1")
+    get_production_repo().add_audit(row, once_request=True)  # 第一次送出成功，但沒標記
+    assert cad_cache.flush_audit() == 0
+    assert len([a for a in audits() if a["ref_no"] == "cad_dup_0000000001"]) == 1
+    # 不同請求作用在同一個工作：各記一筆
+    get_production_repo().add_audit(row | {"request_id": "req_dup_2"}, once_request=True)
+    assert len([a for a in audits() if a["ref_no"] == "cad_dup_0000000001"]) == 2
+
+
+# ------------------------------------------- make cad-warm 退出碼（Architecture Medium）
+@pytest.mark.parametrize(
+    "statuses,code",
+    [
+        (["stored"], 0),
+        (["hit", "stored"], 0),
+        (["error"], 1),
+        (["not_stored"], 1),
+        (["not_cacheable"], 1),
+        (["stored", "error"], 1),
+    ],
+)
+def test_cad_warm_exit_code_reflects_failed_parts(monkeypatch, capsys, statuses, code):
+    import cad_warm
+
+    from app.repositories.index_store import get_store
+
+    monkeypatch.setattr(get_settings(), "llm_mode", "local")
+    monkeypatch.setattr(cad_cache, "model_identity", lambda alias: IDENTITY)
+    monkeypatch.setattr(get_store(), "load", lambda: None)
+    parts = ["mfg-001", "mfg-002"][: len(statuses)]
+    it = iter(statuses)
+
+    async def fake_warm(part, rs):
+        return {"part_id": part["id"], "status": next(it), "tries": []}
+
+    monkeypatch.setattr(cad_warm, "warm_part", fake_warm)
+    assert asyncio.run(cad_warm.main_async(parts)) == code
+    if code:
+        assert "預熱沒有完成" in capsys.readouterr().err
+
+
+def test_cad_warm_skipped_parts_without_gt_do_not_fail(monkeypatch, tmp_path):
+    import cad_warm
+
+    from app.repositories.index_store import get_store
+
+    monkeypatch.setattr(get_settings(), "llm_mode", "local")
+    monkeypatch.setattr(cad_cache, "model_identity", lambda alias: IDENTITY)
+    store = get_store()
+    monkeypatch.setattr(store, "load", lambda: None)
+    monkeypatch.setattr(type(store), "parts_dir", property(lambda self: tmp_path))  # 沒有 gt/
+
+    async def never(part, rs):
+        raise AssertionError("沒有標準模型的零件不預熱")
+
+    monkeypatch.setattr(cad_warm, "warm_part", never)
+    assert asyncio.run(cad_warm.main_async(["mfg-001"])) == 0
+
+
+def test_cad_warm_refuses_mock_mode():
+    import cad_warm
+
+    assert get_settings().llm_mode == "mock"
+    assert asyncio.run(cad_warm.main_async(["mfg-001"])) == 2

@@ -20,6 +20,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+import uuid
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -241,6 +242,14 @@ CREATE TABLE IF NOT EXISTS runs (
     basic_ok INTEGER NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS audit_outbox (
+    id TEXT PRIMARY KEY,
+    row TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    delivered_at TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+);
 """
 
 
@@ -350,9 +359,13 @@ class CadCache:
         source: str,
         job_id: str | None = None,
         created_by: str | None = None,
+        audit: dict | None = None,
+        audit_id: str | None = None,
     ) -> Entry | None:
         """寫入一筆。被否決的程式碼不寫；已經有一筆時，只有 IoU 比較高才換掉
-        （採用的結果沒有 IoU：只在還沒有任何一筆時寫入）。回寫入後的那一筆，沒寫入回 None。"""
+        （採用的結果沒有 IoU：只在還沒有任何一筆時寫入）。回寫入後的那一筆，沒寫入回 None。
+        audit：這次寫入的稽核紀錄，和寫入同一個交易放進待送清單（_enqueue），
+        之後由 flush_audit 送出。"""
         sha = code_sha(code)
         with closing(self._conn()) as conn, conn:
             if self._rejected(conn, key, sha):
@@ -381,6 +394,8 @@ class CadCache:
                     now(),
                 ),
             )
+            if audit is not None:
+                self._enqueue(conn, audit, audit_id)
             row = conn.execute("SELECT * FROM entries WHERE key = ?", (key,)).fetchone()
             return self._entry(row)
 
@@ -392,8 +407,18 @@ class CadCache:
                 cur = conn.execute("DELETE FROM entries WHERE key = ? AND code_sha = ?", (key, sha))
             return cur.rowcount > 0
 
-    def reject(self, key: str, sha: str, *, job_id: str | None, actor_id: str | None) -> bool:
-        """否決一份程式碼：之後不命中、不寫入、不能採用。回這次有沒有移除快取裡的那一筆。"""
+    def reject(
+        self,
+        key: str,
+        sha: str,
+        *,
+        job_id: str | None,
+        actor_id: str | None,
+        audit: dict | None = None,
+        audit_id: str | None = None,
+    ) -> bool:
+        """否決一份程式碼：之後不命中、不寫入、不能採用。回這次有沒有移除快取裡的那一筆。
+        audit：稽核紀錄（detail 補上 removed），和否決同一個交易放進待送清單。"""
         with closing(self._conn()) as conn, conn:
             conn.execute(
                 "INSERT OR IGNORE INTO rejected (key, code_sha, job_id, actor_id, created_at)"
@@ -401,7 +426,51 @@ class CadCache:
                 (key, sha, job_id, actor_id, now()),
             )
             cur = conn.execute("DELETE FROM entries WHERE key = ? AND code_sha = ?", (key, sha))
-            return cur.rowcount > 0
+            removed = cur.rowcount > 0
+            if audit is not None:
+                detail = {**(audit.get("detail") or {}), "removed": removed}
+                self._enqueue(conn, audit | {"detail": detail}, audit_id)
+            return removed
+
+    # ---- 稽核待送清單（outbox）：作廢、採用的稽核和快取變更同一個交易寫進這裡，
+    # 再送進生產資料庫的 audit_log；送不進去（資料庫故障）就留著，之後補送，不會遺失
+    @staticmethod
+    def _enqueue(conn: sqlite3.Connection, audit: dict, audit_id: str | None = None) -> None:
+        conn.execute(
+            "INSERT INTO audit_outbox (id, row, created_at) VALUES (?,?,?)",
+            (audit_id or uuid.uuid4().hex, json.dumps(audit, ensure_ascii=False), now()),
+        )
+
+    def delivered(self, outbox_id: str) -> bool:
+        with closing(self._conn()) as conn:
+            row = conn.execute(
+                "SELECT delivered_at FROM audit_outbox WHERE id = ?", (outbox_id,)
+            ).fetchone()
+        return row is not None and row["delivered_at"] is not None
+
+    def pending_audit(self, limit: int = 100) -> list[tuple[str, dict]]:
+        with closing(self._conn()) as conn:
+            rows = conn.execute(
+                "SELECT id, row FROM audit_outbox WHERE delivered_at IS NULL"
+                " ORDER BY created_at, rowid LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [(r["id"], json.loads(r["row"])) for r in rows]
+
+    def mark_delivered(self, outbox_id: str) -> None:
+        with closing(self._conn()) as conn, conn:
+            conn.execute(
+                "UPDATE audit_outbox SET delivered_at = ?, attempts = attempts + 1,"
+                " last_error = NULL WHERE id = ?",
+                (now(), outbox_id),
+            )
+
+    def mark_failed(self, outbox_id: str, error: str) -> None:
+        with closing(self._conn()) as conn, conn:
+            conn.execute(
+                "UPDATE audit_outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?",
+                (error[:300], outbox_id),
+            )
 
     def mark_tried(self, key: str, seed: int) -> None:
         with closing(self._conn()) as conn, conn:
@@ -606,30 +675,68 @@ def _job_run(account, job_id: str) -> tuple[Run, object]:
     return run, access
 
 
-def reject_job(account, job_id: str, request_id: str | None) -> dict:
-    """「結果不對」：讀得到這個工作的人都可以作廢；記下程式碼雜湊（之後不命中、不寫入、
-    不能採用）並記稽核。"""
+_flush_lock = threading.Lock()
+
+
+def flush_audit(limit: int = 100) -> int:
+    """把待送的作廢／採用稽核送進生產資料庫的 audit_log，回還沒送出的筆數。
+    送不進去（資料庫故障）就停在那一筆、記下錯誤，下次再送；同一筆以 request_id 去重
+    （add_audit 的 once_request），送到一半中斷後重送也不會重複。作廢、採用之後、
+    讀稽核紀錄（GET /audit）之前、背景維護執行緒每一輪都會呼叫。"""
+    from app.repositories.production_repo import get_production_repo
+
+    cache = get_cache()
+    with _flush_lock:
+        for outbox_id, row in cache.pending_audit(limit):
+            try:
+                get_production_repo().add_audit(row, once_request=True)
+            except Exception as e:  # noqa: BLE001 — 資料庫故障：留在待送清單，之後補送
+                cache.mark_failed(outbox_id, f"{type(e).__name__}: {e}")
+                log.warning(
+                    "cad_cache_audit_pending",
+                    extra={"fields": {"outbox_id": outbox_id, "error": type(e).__name__}},
+                )
+                break
+            cache.mark_delivered(outbox_id)
+        return len(cache.pending_audit(limit))
+
+
+def _audit_row(account, action: str, job_id: str, summary: str, request_id, detail) -> dict:
     from app.jobs import audit
 
+    # request_id 是補送去重的依據：沒有（直接呼叫）就給一個唯一值
+    rid = request_id or "cadcache_" + uuid.uuid4().hex[:16]
+    return audit.row(account, action, "cad_cache", job_id, summary, rid, detail)
+
+
+def _audit_state(audit_id: str) -> str:
+    """recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下，稽核資料庫暫時寫不進去，稍後補送。"""
+    flush_audit()
+    return "recorded" if get_cache().delivered(audit_id) else "pending"
+
+
+def reject_job(account, job_id: str, request_id: str | None) -> dict:
+    """「結果不對」：讀得到這個工作的人都可以作廢；記下程式碼雜湊（之後不命中、不寫入、
+    不能採用）。稽核和否決在同一個交易存進待送清單，再送進稽核紀錄（送不進去就稍後補送）。"""
     run, _ = _job_run(account, job_id)
-    cache = get_cache()
-    removed = cache.reject(run.key, run.code_sha, job_id=job_id, actor_id=account.id)
-    audit.record(
+    audit_id = uuid.uuid4().hex
+    row = _audit_row(
         account,
         "作廢",
-        "cad_cache",
         job_id,
         f"3D 重建結果標記為不對（{run.part_id}）",
         request_id,
-        detail={"part_id": run.part_id, "removed": removed, **run.candidate.to_dict()},
+        {"part_id": run.part_id, **run.candidate.to_dict()},
     )
-    return {"job_id": job_id, "rejected": True, "removed": removed}
+    removed = get_cache().reject(
+        run.key, run.code_sha, job_id=job_id, actor_id=account.id, audit=row, audit_id=audit_id
+    )
+    return {"job_id": job_id, "rejected": True, "removed": removed, "audit": _audit_state(audit_id)}
 
 
 def adopt_job(account, job_id: str, request_id: str | None) -> dict:
     """「採用這個結果」：只給沒有標準模型的零件（有標準模型的依 IoU 門檻自動寫入），
-    要 kb_intake（主管）；被否決過、沒通過基本檢查的不能採用。記稽核。"""
-    from app.jobs import audit
+    要 kb_intake（主管）；被否決過、沒通過基本檢查的不能採用。稽核和寫入在同一個交易。"""
     from app.services import identity
 
     identity.require_domain(account, "mfg")
@@ -654,6 +761,7 @@ def adopt_job(account, job_id: str, request_id: str | None) -> dict:
 
     d = cad_access.published_dir(job_id)
     code = (d / "code.py").read_text(encoding="utf-8")
+    audit_id = uuid.uuid4().hex
     entry = cache.put(
         run.key,
         part_id=run.part_id,
@@ -664,16 +772,21 @@ def adopt_job(account, job_id: str, request_id: str | None) -> dict:
         source="adopted",
         job_id=job_id,
         created_by=account.id,
+        audit=_audit_row(
+            account,
+            "採用",
+            job_id,
+            f"採用 3D 重建結果為標準答案（{run.part_id}）",
+            request_id,
+            {"part_id": run.part_id, **run.candidate.to_dict()},
+        ),
+        audit_id=audit_id,
     )
     if entry is None:
         raise AppError("CAD_CACHE_EXISTS", "這張圖紙已經有快取的結果", 409)
-    audit.record(
-        account,
-        "採用",
-        "cad_cache",
-        job_id,
-        f"採用 3D 重建結果為標準答案（{run.part_id}）",
-        request_id,
-        detail={"part_id": run.part_id, **run.candidate.to_dict()},
-    )
-    return {"job_id": job_id, "adopted": True, "created_at": entry.created_at}
+    return {
+        "job_id": job_id,
+        "adopted": True,
+        "created_at": entry.created_at,
+        "audit": _audit_state(audit_id),
+    }

@@ -2170,6 +2170,12 @@ export interface components {
             adopted: boolean;
             /** Created At */
             created_at: string;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
         };
         /** CadCacheRejected */
         CadCacheRejected: {
@@ -2182,6 +2188,12 @@ export interface components {
              * @description 這次有沒有把快取裡的那一筆移除
              */
             removed: boolean;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
         };
         /** CadEvalRunsResponse */
         CadEvalRunsResponse: {

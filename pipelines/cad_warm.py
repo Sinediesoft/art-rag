@@ -12,6 +12,9 @@
 
     make cad-warm                     # 全部零件
     make cad-warm PARTS="mfg-001 mfg-005"
+
+退出碼：每張有標準模型的零件都有合格快取（命中或寫入）才是 0；有任何一張失敗、沒有合格候選
+或模型身分不明回 1；設定不能預熱（mock 模式、找不到模型檔、圖紙不存在）回 2。
 """
 
 import argparse
@@ -32,6 +35,9 @@ from app.repositories.index_store import get_store  # noqa: E402
 from app.services import cad_cache, cad_service, memory_guard  # noqa: E402
 
 RENEW_S = 30  # 模型使用登記的續約間隔（登記存活時間預設 120 秒）
+# 算預熱成功的結果：有合格快取（命中或剛寫入），或沒有標準模型（預期略過，要主管採用）。
+# error（模型、沙箱失敗）、not_stored（每個候選都不合格）、not_cacheable（模型身分不明）都回非零
+OK_STATUSES = {"hit", "stored", "no_gt"}
 
 
 class UsageRenewal(threading.Thread):
@@ -184,6 +190,11 @@ async def main_async(part_ids: list[str]) -> int:
             else ""
         )
         print(f"  {r['part_id']}: {r['status']}{extra}")
+    failed = [r["part_id"] for r in report if r["status"] not in OK_STATUSES]
+    if failed:
+        # 部署腳本、操作者看退出碼判斷預熱完成：有標準模型的零件沒拿到合格快取就不算成功
+        print(f"\n預熱沒有完成：{', '.join(failed)} 沒有合格的快取", file=sys.stderr)
+        return 1
     return 0
 
 

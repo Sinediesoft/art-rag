@@ -1159,7 +1159,7 @@ def test_cad_job_reject_then_regenerate_samples_a_new_seed(clean, cad_cache_env)
     jid = cad_job(part="mfg-002")
     runner.execute(jid, "w1")
     out = cad_cache.reject_job(identity.get_account("warehouse"), jid, "req_reject")
-    assert out == {"job_id": jid, "rejected": True, "removed": True}
+    assert out == {"job_id": jid, "rejected": True, "removed": True, "audit": "recorded"}
     job, _ = store.create_job(
         kind="cad",
         owner_id="manager",
