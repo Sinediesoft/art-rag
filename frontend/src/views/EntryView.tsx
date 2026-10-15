@@ -6,7 +6,7 @@ import { Composer } from "../components/shell/Composer";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
-import { SettingsMenu } from "../components/shell/SettingsMenu";
+import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
 import { COPY, type Domain } from "../shell/design";
@@ -151,6 +151,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
                 <AccountMenu onClose={close} />
               </Popover>
             </div>
+            <ThemeToggle className="topbar__btn topbar__icon" />
             <div className="topbar__slot">
               <button
                 type="button"

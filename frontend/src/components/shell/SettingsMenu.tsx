@@ -1,41 +1,18 @@
 import { useStatus } from "../../api/hooks";
 import { SWITCH_TEXT, SWITCHES, setSetting, useSettings, type Choice } from "../../shell/settings";
 import { useShell } from "../../shell/store";
-import type { EntryTheme } from "../../shell/theme";
 import { Icon } from "./Icons";
 
-const THEMES: [EntryTheme, string][] = [
-  ["dark", "深色"],
-  ["light", "淺色"],
-];
-
 /**
- * 設定面板（頁首右上角，Q-2026-10-12-02）：深淺色（入口與模組共用）、問答的三個開關。
+ * 設定面板（頁首右上角，Q-2026-10-12-02）：問答的三個開關（深淺色改用頁首的太陽／月亮圖示）。
  * 只存在這個瀏覽器（shell/settings.ts），從下一題開始生效；第 1～7 段安全關卡由伺服器決定，這裡沒有開關。
  */
 export function SettingsMenu() {
-  const shell = useShell();
   const settings = useSettings();
   const { data: status } = useStatus();
   const server = status?.chat_defaults;
   return (
     <div className="settings">
-      <section className="settings__group">
-        <p className="settings__title">外觀</p>
-        <div className="settings__row">
-          <span className="settings__text">
-            深淺色
-            <small>入口、工廠與藝術模組共用</small>
-          </span>
-          <div className="segmented segmented--small" role="radiogroup" aria-label="深淺色">
-            {THEMES.map(([t, label]) => (
-              <button key={t} type="button" role="radio" aria-checked={shell.theme === t} className={shell.theme === t ? "is-on" : ""} onClick={() => shell.setTheme(t)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
       <section className="settings__group">
         <p className="settings__title">問答</p>
         {SWITCHES.map((k) => {
@@ -71,12 +48,15 @@ export function SettingsMenu() {
   );
 }
 
-/** 模組與功能頁頂列的明暗切換（來源：ArtRAG-整合版demo 的 mtop__theme）：和設定面板的「深淺色」是同一個設定 */
-export function ThemeToggle() {
+/**
+ * 頁首的明暗切換（來源：ArtRAG-整合版demo 的太陽／月亮圖示）：入口、模組、功能頁的頁首各有一顆，切的是同一個設定。
+ * className 跟著所在頁首的按鈕樣式（入口 topbar__btn、模組 mtop__btn）
+ */
+export function ThemeToggle({ className = "mtop__btn mtop__theme" }: { className?: string }) {
   const shell = useShell();
   const label = shell.theme === "dark" ? "切換成明亮模式" : "切換成暗色模式";
   return (
-    <button type="button" className="mtop__btn mtop__theme" onClick={() => shell.setTheme(shell.theme === "dark" ? "light" : "dark")} title={label} aria-label={label}>
+    <button type="button" className={className} onClick={() => shell.setTheme(shell.theme === "dark" ? "light" : "dark")} title={label} aria-label={label}>
       <Icon name={shell.theme === "dark" ? "sun" : "moon"} strokeWidth={1.5} />
     </button>
   );
