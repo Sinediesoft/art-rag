@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-art-resolve eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -25,6 +25,7 @@ help:
 	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/"
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
+	@echo "make eval-art-resolve 智慧助理判斷沒說畫名的畫作問題是哪一幅（ADR 038；需後端在執行）"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
 	@echo "make eval-send-image 問答附圖／不附圖對照（Issue #2）：正確率、引用、首字與總時間"
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
@@ -239,6 +240,9 @@ eval-intake:
 	$(PY) eval/run_intake_eval.py
 
 # 檢索段落篩選（MIRA 的 Rearrange）開關對照：同一批題目各跑一次，比正確率、引用、段數與延遲
+eval-art-resolve:
+	$(PY) eval/run_art_resolve_eval.py
+
 eval-rearrange:
 	$(PY) eval/run_eval.py --strategies hybrid_plain,hybrid_rearrange
 

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccounts, useSwitchAccount } from "../api/hooks";
 import { AccountMenu, pendingCount, Popover, SecurityPanel, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
+import { DomainPicker } from "../components/shell/DomainPicker";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
@@ -14,7 +15,7 @@ import { useEscape, useMedia, useStickyScroll } from "../shell/hooks";
 import { ctaOf, deriveOutputs } from "../shell/outputs";
 import { titleOf } from "../shell/persist";
 import { useShell } from "../shell/store";
-import type { Conv } from "../shell/types";
+import type { Conv, EntryDomain } from "../shell/types";
 import { forgeToken, lockReason, useThreadActions } from "./shared";
 
 /**
@@ -40,9 +41,12 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
   const switchAccount = useSwitchAccount();
   const renewal = useTokenRenewal();
   const close = () => setMenu(null);
+  // 入口的分類（docs/adr/040）：null＝自動判斷；選了就只在那個領域裡分流。
+  // 第一句送出後網址從 / 換到 /c/:id、這個畫面會重建：從這段對話最後一句帶回來，不要跳回自動判斷
+  const [domain, setDomain] = useState<EntryDomain | null>(() => conv?.turns.at(-1)?.domain ?? null);
 
   const ask = (text: string, imageId: string | null = null, forced: string | null = null, token?: string) => {
-    const id = shell.ask(conv?.id ?? null, "entry", { text, imageId, forced, token });
+    const id = shell.ask(conv?.id ?? null, "entry", { text, imageId, forced, token, domain });
     if (!conv) navigate(`/c/${id}`);
     sticky.follow();
   };
@@ -69,7 +73,12 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
     if (c.id === conv?.id) navigate("/");
   };
 
-  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} key={heroComposer ? "hero" : "dock"} />;
+  const composer = (
+    <div className="entry-compose" key={heroComposer ? "hero" : "dock"}>
+      <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} />
+      <DomainPicker value={domain} onChange={setDomain} />
+    </div>
+  );
   const sidebar = (variant: "rail" | "drawer") => (
     <Sidebar
       convs={shell.convs}
