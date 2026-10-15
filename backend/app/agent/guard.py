@@ -606,33 +606,32 @@ async def guard_input(
     tag = None
     fallback = None
     reply = None
-    # [laya測試] 地端規則註解：hard-block 不跑，全部交給 Jev／Laya 判斷
-    # （開發/laya測試-開發日誌.md）。
-    # 要恢復就把下面這段取消註解，並刪掉 suspects 的空清單。
-    # # 確定性的 hard-block 永遠先跑（docs/adr/030）：命中就擋，Jev 不能覆寫，也不必再送 Jev
-    # direct, suspects = _local_hits(text)
-    # eff = risk or risk_hint or "read"
-    # said = "、".join(f"「{m}」" for _, m in suspects)
-    # if direct or (suspects and eff in ("heavy", "write")):
-    #     if direct:
-    #         detail = f"命中「{direct[0]}」（「{direct[1]}」）→ 攔截（地端硬性規則，Jev 不能覆寫）"
-    #         tag = direct[0]
-    #     else:
-    #         detail = (
-    #             f"{'＋'.join(r for r, _ in suspects)}（{said}），又要{RISK_VERB[eff]} → 越權嘗試"
-    #             "（地端硬性規則，Jev 不能覆寫）"
-    #         )
-    #         tag = "越權嘗試"
-    #     return GuardResult(
-    #         passed=False,
-    #         engine="local",
-    #         checks=[Check("intent_guard", "意圖防護", "地端", False, detail)],
-    #         tag=tag,
-    #         reason=detail,
-    #         verdict="attack",
-    #         overrides=True,
-    #     )
-    suspects: list[tuple[str, str]] = []
+    # [laya測試] 2026-10-14 恢復第 2 段的 hard-block（開發/laya測試-開發日誌.md 2026-10-14-09）：
+    # 規則擋在 Laya 前面，Laya 只判斷規則沒命中的句子。要再拿掉就把下面這段註解，並加回
+    # `suspects: list[tuple[str, str]] = []`。
+    # 確定性的 hard-block 永遠先跑（docs/adr/030）：命中就擋，Jev 不能覆寫，也不必再送 Jev
+    direct, suspects = _local_hits(text)
+    eff = risk or risk_hint or "read"
+    said = "、".join(f"「{m}」" for _, m in suspects)
+    if direct or (suspects and eff in ("heavy", "write")):
+        if direct:
+            detail = f"命中「{direct[0]}」（「{direct[1]}」）→ 攔截（地端硬性規則，Jev 不能覆寫）"
+            tag = direct[0]
+        else:
+            detail = (
+                f"{'＋'.join(r for r, _ in suspects)}（{said}），又要{RISK_VERB[eff]} → 越權嘗試"
+                "（地端硬性規則，Jev 不能覆寫）"
+            )
+            tag = "越權嘗試"
+        return GuardResult(
+            passed=False,
+            engine="local",
+            checks=[Check("intent_guard", "意圖防護", "地端", False, detail)],
+            tag=tag,
+            reason=detail,
+            verdict="attack",
+            overrides=True,
+        )
 
     # [laya測試] 一律問決策模型：use_jev＝可以送雲端 Jev（叫不到改問 Laya）；
     # False（engine=local）只問 Laya

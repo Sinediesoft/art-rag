@@ -5,15 +5,19 @@
 12 句攻擊（直接注入、換句話說的注入、冒充身分又要改資料、套取系統設定、SQL 注入）
 ＋12 句正常請求（含「忽略」「主管說」「系統提示」這類容易誤擋的說法）＋6 句閒聊。
 每題先切換成題目指定的展示身分，讓第 1 段角色授權不擋，只看第 2 段。
+--file 也可以給 route_qa.jsonl（51 句正常使用，量誤擋），或用逗號合併多個檔：
+沒有 expect 的題目當作分流題目，超出範圍（out_of_scope）應該閒聊短路、其他應該放行，
+身分照 run_route_eval.py 的 account_for()。
 後端要開 DEMO_CONTROLS（切換身分）與 EVAL_CONTROLS（engine=local 才生效），docs/adr/030。
 
 - 攔截率：攻擊被第 2 段擋下的比例
-- 誤擋率：正常請求被第 2 段擋下、或被判成閒聊短路的比例
+- 誤擋率：正常請求被第 2 段擋下、或被判成閒聊短路的比例；也分類別列出（各類放行）
 - 閒聊短路率：閒聊被快速短路回覆（不檢索、不生成）的比例
 - 第 2 段延遲、外送位元組（地端規則恆為 0）
 結果存 eval/runs/<run_id>-guard.json。Jev 沒有金鑰時 jev 那一欄標示「略過」。
 
 用法：python eval/run_guard_eval.py [--base http://localhost:8000] [--engines local,jev]
+                                  [--file guard_qa.jsonl,route_qa.jsonl]
 """
 
 import argparse
@@ -26,9 +30,30 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+from run_route_eval import account_for
 
 EVAL = Path(__file__).resolve().parent
 print = functools.partial(print, flush=True)  # noqa: A001 — 背景執行時也能即時看到進度
+
+
+def load(name: str) -> list[dict]:
+    """讀 eval/ 底下的題目檔。route_qa.jsonl 這類分流題目（沒有 expect）都是正常使用：
+    超出範圍應該閒聊短路，其他應該放行。"""
+    items = [json.loads(x) for x in (EVAL / name).read_text("utf-8").splitlines() if x]
+    for it in items:
+        if "expect" not in it:
+            it["expect"] = "short" if it["intent"] == "out_of_scope" else "pass"
+            it["kind"] = f"分流：{it['intent']}"
+            it["account"] = account_for(it)
+    return items
+
+
+def rate(hits: int, total: int) -> float | None:
+    return round(hits / total, 4) if total else None
+
+
+def pct(x: float | None) -> str:
+    return "—" if x is None else f"{x:.0%}"
 
 
 def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
@@ -42,8 +67,10 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
             "/api/v1/agent/route", json={"question": it["question"], "engine": engine}
         ).json()
         guard = r.get("guard") or {}
-        if engine == "jev" and guard.get("engine") == "local":
-            skipped = guard.get("fallback_reason") or "Jev 無法使用"
+        # 判斷者是地端、而且有叫不到 Jev 的原因才算略過：地端硬性規則命中時判斷者也是地端
+        # （docs/adr/030：規則永遠先跑），但沒有 fallback_reason，照常計分
+        if engine == "jev" and guard.get("engine") == "local" and guard.get("fallback_reason"):
+            skipped = guard["fallback_reason"]
             break
         got = {"blocked_guard": "block", "short_circuit": "short"}.get(r["outcome"], "pass")
         rows.append(
@@ -76,16 +103,20 @@ def run_engine(client: httpx.Client, engine: str, items: list[dict]) -> dict:
     by_kind: dict[str, list[bool]] = defaultdict(list)
     for r in attacks:
         by_kind[r["kind"]].append(r["got"] == "block")
+    # 正常請求各類別有幾句放行（看是哪一類被誤擋、誤判成閒聊）
+    benign_by_kind: dict[str, list[bool]] = defaultdict(list)
+    for r in benign:
+        benign_by_kind[r["kind"]].append(r["got"] == "pass")
+    # 題目檔可能沒有攻擊或閒聊（例如只跑 route_qa.jsonl）：那一項是 None，摘要印「—」
     return {
         "engine": engine,
         "skipped": None,
         "n": len(rows),
-        "catch_rate": round(sum(r["got"] == "block" for r in attacks) / max(1, len(attacks)), 4),
-        "false_block_rate": round(sum(r["got"] != "pass" for r in benign) / max(1, len(benign)), 4),
-        "chitchat_rate": round(
-            sum(r["got"] == "short" for r in chitchat) / max(1, len(chitchat)), 4
-        ),
+        "catch_rate": rate(sum(r["got"] == "block" for r in attacks), len(attacks)),
+        "false_block_rate": rate(sum(r["got"] != "pass" for r in benign), len(benign)),
+        "chitchat_rate": rate(sum(r["got"] == "short" for r in chitchat), len(chitchat)),
         "by_kind": {k: f"{sum(v)}/{len(v)}" for k, v in by_kind.items()},
+        "benign_by_kind": {k: f"{sum(v)}/{len(v)}" for k, v in benign_by_kind.items()},
         "auth_blocked": sum(r["auth_blocked"] for r in rows),
         "guard_p50_ms": statistics.median(r["guard_ms"] for r in rows),
         "egress_bytes": sum(r["egress_bytes"] for r in rows),
@@ -97,10 +128,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", default="http://localhost:8000")
     parser.add_argument("--engines", default="local,jev")
-    # guard_holdout.jsonl、guard_blind.jsonl：量地端規則的泛化與誤擋（docs/adr/022）
-    parser.add_argument("--file", default="guard_qa.jsonl", help="eval/ 底下的題目檔")
+    # guard_holdout.jsonl、guard_blind.jsonl：量地端規則的泛化與誤擋（docs/adr/022）；
+    # route_qa.jsonl：51 句正常使用，量誤擋（沒有攻擊）
+    parser.add_argument(
+        "--file", default="guard_qa.jsonl", help="eval/ 底下的題目檔，多個用逗號分隔"
+    )
     args = parser.parse_args()
-    items = [json.loads(x) for x in (EVAL / args.file).read_text("utf-8").splitlines() if x]
+    items = [it for name in args.file.split(",") for it in load(name)]
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
         client.get("/api/v1/health").raise_for_status()
@@ -125,10 +159,10 @@ def main() -> int:
             print(f"  {r['engine']:<6} 略過：{r['skipped']}")
             continue
         print(
-            f"  {r['engine']:<6} 攔截率 {r['catch_rate']:.0%} · 誤擋率 {r['false_block_rate']:.0%}"
-            f" · 閒聊短路 {r['chitchat_rate']:.0%}"
-            f" · 各類攔截 {r['by_kind']} · 護欄 p50 {r['guard_p50_ms']} ms"
-            f" · 外送 {r['egress_bytes']} B"
+            f"  {r['engine']:<6} 攔截率 {pct(r['catch_rate'])}"
+            f" · 誤擋率 {pct(r['false_block_rate'])} · 閒聊短路 {pct(r['chitchat_rate'])}"
+            f" · 各類攔截 {r['by_kind']} · 各類放行 {r['benign_by_kind']}"
+            f" · 護欄 p50 {r['guard_p50_ms']} ms · 外送 {r['egress_bytes']} B"
         )
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     out = EVAL / "runs" / f"{run_id}-guard.json"

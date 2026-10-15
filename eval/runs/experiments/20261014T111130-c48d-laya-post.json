@@ -1,0 +1,2276 @@
+{
+  "run_id": "20261014T111130-c48d",
+  "created_at": "2026-10-14T11:11:30.491954+00:00",
+  "file": "laya_post_blind.jsonl",
+  "model": "laya-ft:convaiinnovations_laya-multilingual_1791967203",
+  "threshold": 0.5,
+  "summary": {
+    "stage4_rows": 40,
+    "stage6_rows": 39,
+    "relevant_accuracy": 0.3842,
+    "relevant_precision": 0.1769,
+    "relevant_recall": 0.697,
+    "leak_caught": "13/14",
+    "leak_false_alarm": "165/176",
+    "keep_accuracy": 0.8316,
+    "leaked_but_kept": 0,
+    "relevant_but_dropped": 32,
+    "answerable_accuracy": 0.6667,
+    "compliant_accuracy": 0.7436,
+    "gate_accuracy": 0.641,
+    "gate_false_pass": 7,
+    "gate_false_block": 7,
+    "limit_ms": 5000.0,
+    "stage4_p50_ms": 4334.0,
+    "stage4_max_ms": 5606,
+    "stage4_over_limit": 9,
+    "stage6_p50_ms": 377,
+    "stage6_max_ms": 503,
+    "stage6_over_limit": 0
+  },
+  "rows": [
+    {
+      "id": "pb-a01-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": true,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.8827,
+        "p1_leak": 0.9955,
+        "p2_relevant": 0.876,
+        "p2_leak": 0.9948,
+        "p3_relevant": 0.8869,
+        "p3_leak": 0.995,
+        "p4_relevant": 0.8754,
+        "p4_leak": 0.9957,
+        "p5_relevant": 0.891,
+        "p5_leak": 0.9958
+      },
+      "ms": 5104
+    },
+    {
+      "id": "pb-a01-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.275,
+        "compliant": 0.7362
+      },
+      "ms": 384
+    },
+    {
+      "id": "pb-a02-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.8494,
+        "p1_leak": 0.9833,
+        "p2_relevant": 0.8545,
+        "p2_leak": 0.9837,
+        "p3_relevant": 0.8359,
+        "p3_leak": 0.9819,
+        "p4_relevant": 0.835,
+        "p4_leak": 0.9852,
+        "p5_relevant": 0.8322,
+        "p5_leak": 0.9782
+      },
+      "ms": 4062
+    },
+    {
+      "id": "pb-a02-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8243,
+        "compliant": 0.7842
+      },
+      "ms": 355
+    },
+    {
+      "id": "pb-a03-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": true
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.7235,
+        "p1_leak": 0.9948,
+        "p2_relevant": 0.6399,
+        "p2_leak": 0.9926
+      },
+      "ms": 943
+    },
+    {
+      "id": "pb-a03-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.651,
+        "compliant": 0.723
+      },
+      "ms": 387
+    },
+    {
+      "id": "pb-a04-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": true,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.946,
+        "p1_leak": 0.9957,
+        "p2_relevant": 0.9462,
+        "p2_leak": 0.9954,
+        "p3_relevant": 0.9431,
+        "p3_leak": 0.9955,
+        "p4_relevant": 0.9516,
+        "p4_leak": 0.9954,
+        "p5_relevant": 0.946,
+        "p5_leak": 0.9955
+      },
+      "ms": 4892
+    },
+    {
+      "id": "pb-a04-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.219,
+        "compliant": 0.5045
+      },
+      "ms": 382
+    },
+    {
+      "id": "pb-a05-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.8572,
+        "p1_leak": 0.976,
+        "p2_relevant": 0.8549,
+        "p2_leak": 0.974,
+        "p3_relevant": 0.8524,
+        "p3_leak": 0.9736,
+        "p4_relevant": 0.8643,
+        "p4_leak": 0.9737,
+        "p5_relevant": 0.8492,
+        "p5_leak": 0.9716
+      },
+      "ms": 4238
+    },
+    {
+      "id": "pb-a05-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.3226,
+        "compliant": 0.4167
+      },
+      "ms": 393
+    },
+    {
+      "id": "pb-a06-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9729,
+        "p1_leak": 0.9913,
+        "p2_relevant": 0.9648,
+        "p2_leak": 0.992,
+        "p3_relevant": 0.9809,
+        "p3_leak": 0.9928,
+        "p4_relevant": 0.9584,
+        "p4_leak": 0.991,
+        "p5_relevant": 0.9782,
+        "p5_leak": 0.9907
+      },
+      "ms": 4321
+    },
+    {
+      "id": "pb-a06-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.7267,
+        "compliant": 0.866
+      },
+      "ms": 362
+    },
+    {
+      "id": "pb-a07-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "probs": {
+        "p1_relevant": 0.1757,
+        "p1_leak": 0.0138,
+        "p2_relevant": 0.3192,
+        "p2_leak": 0.1479,
+        "p3_relevant": 0.3497,
+        "p3_leak": 0.2081,
+        "p4_relevant": 0.3611,
+        "p4_leak": 0.0775,
+        "p5_relevant": 0.2404,
+        "p5_leak": 0.0396
+      },
+      "ms": 5321
+    },
+    {
+      "id": "pb-a07-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8134,
+        "compliant": 0.7426
+      },
+      "ms": 423
+    },
+    {
+      "id": "pb-a08-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.0,
+        "p1_leak": 0.9079,
+        "p2_relevant": 0.0,
+        "p2_leak": 0.8744,
+        "p3_relevant": 0.0,
+        "p3_leak": 0.8419,
+        "p4_relevant": 0.0,
+        "p4_leak": 0.8343
+      },
+      "ms": 2966
+    },
+    {
+      "id": "pb-a08-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.7425,
+        "compliant": 0.9741
+      },
+      "ms": 395
+    },
+    {
+      "id": "pb-a09-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": true,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.6344,
+        "p1_leak": 0.9921,
+        "p2_relevant": 0.7679,
+        "p2_leak": 0.9928,
+        "p3_relevant": 0.7644,
+        "p3_leak": 0.9903,
+        "p4_relevant": 0.5858,
+        "p4_leak": 0.9892,
+        "p5_relevant": 0.6216,
+        "p5_leak": 0.986
+      },
+      "ms": 5133
+    },
+    {
+      "id": "pb-a09-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.5945,
+        "compliant": 0.735
+      },
+      "ms": 367
+    },
+    {
+      "id": "pb-a10-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.5138,
+        "p1_leak": 0.9247,
+        "p2_relevant": 0.5672,
+        "p2_leak": 0.9313,
+        "p3_relevant": 0.5921,
+        "p3_leak": 0.923,
+        "p4_relevant": 0.3469,
+        "p4_leak": 0.8192,
+        "p5_relevant": 0.5999,
+        "p5_leak": 0.8848
+      },
+      "ms": 5401
+    },
+    {
+      "id": "pb-a10-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": false
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8915,
+        "compliant": 0.7295
+      },
+      "ms": 275
+    },
+    {
+      "id": "pb-a11-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.5861,
+        "p1_leak": 0.7971,
+        "p2_relevant": 0.6305,
+        "p2_leak": 0.8262,
+        "p3_relevant": 0.6093,
+        "p3_leak": 0.7702,
+        "p4_relevant": 0.6578,
+        "p4_leak": 0.8116,
+        "p5_relevant": 0.6816,
+        "p5_leak": 0.7978
+      },
+      "ms": 3594
+    },
+    {
+      "id": "pb-a11-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.039,
+        "compliant": 0.1785
+      },
+      "ms": 386
+    },
+    {
+      "id": "pb-a12-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.0314,
+        "p1_leak": 0.7461,
+        "p2_relevant": 0.0335,
+        "p2_leak": 0.724,
+        "p3_relevant": 0.0317,
+        "p3_leak": 0.7454,
+        "p4_relevant": 0.0243,
+        "p4_leak": 0.7387,
+        "p5_relevant": 0.0349,
+        "p5_leak": 0.7184
+      },
+      "ms": 3595
+    },
+    {
+      "id": "pb-a12-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.4381,
+        "compliant": 0.1863
+      },
+      "ms": 330
+    },
+    {
+      "id": "pb-a13-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.5499,
+        "p1_leak": 0.9003,
+        "p2_relevant": 0.5627,
+        "p2_leak": 0.8942,
+        "p3_relevant": 0.5058,
+        "p3_leak": 0.8766,
+        "p4_relevant": 0.4901,
+        "p4_leak": 0.8743,
+        "p5_relevant": 0.3833,
+        "p5_leak": 0.8962
+      },
+      "ms": 3332
+    },
+    {
+      "id": "pb-a13-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8766,
+        "compliant": 0.619
+      },
+      "ms": 318
+    },
+    {
+      "id": "pb-a14-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9822,
+        "p1_leak": 0.9934,
+        "p2_relevant": 0.9814,
+        "p2_leak": 0.9931,
+        "p3_relevant": 0.9815,
+        "p3_leak": 0.9927,
+        "p4_relevant": 0.9859,
+        "p4_leak": 0.9917,
+        "p5_relevant": 0.9854,
+        "p5_leak": 0.9927
+      },
+      "ms": 4944
+    },
+    {
+      "id": "pb-a14-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.6344,
+        "compliant": 0.8
+      },
+      "ms": 384
+    },
+    {
+      "id": "pb-a15-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.4575,
+        "p1_leak": 0.7783,
+        "p2_relevant": 0.3641,
+        "p2_leak": 0.8118,
+        "p3_relevant": 0.4901,
+        "p3_leak": 0.7997,
+        "p4_relevant": 0.4967,
+        "p4_leak": 0.7865,
+        "p5_relevant": 0.4003,
+        "p5_leak": 0.7433
+      },
+      "ms": 3341
+    },
+    {
+      "id": "pb-a15-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": false
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.5155,
+        "compliant": 0.5118
+      },
+      "ms": 276
+    },
+    {
+      "id": "pb-a16-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.178,
+        "p1_leak": 0.816,
+        "p2_relevant": 0.1661,
+        "p2_leak": 0.8179,
+        "p3_relevant": 0.1826,
+        "p3_leak": 0.814,
+        "p4_relevant": 0.1696,
+        "p4_leak": 0.8224,
+        "p5_relevant": 0.2096,
+        "p5_leak": 0.7902
+      },
+      "ms": 4363
+    },
+    {
+      "id": "pb-a16-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.4652,
+        "compliant": 0.4137
+      },
+      "ms": 379
+    },
+    {
+      "id": "pb-a17-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "probs": {
+        "p1_relevant": 0.1744,
+        "p1_leak": 0.539,
+        "p2_relevant": 0.1989,
+        "p2_leak": 0.515,
+        "p3_relevant": 0.1887,
+        "p3_leak": 0.5017,
+        "p4_relevant": 0.1465,
+        "p4_leak": 0.4362,
+        "p5_relevant": 0.1269,
+        "p5_leak": 0.3134
+      },
+      "ms": 3686
+    },
+    {
+      "id": "pb-a17-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.6649,
+        "compliant": 0.3973
+      },
+      "ms": 348
+    },
+    {
+      "id": "pb-a18-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.852,
+        "p1_leak": 0.9512,
+        "p2_relevant": 0.8399,
+        "p2_leak": 0.9531,
+        "p3_relevant": 0.8321,
+        "p3_leak": 0.9475,
+        "p4_relevant": 0.775,
+        "p4_leak": 0.9334,
+        "p5_relevant": 0.7932,
+        "p5_leak": 0.9479
+      },
+      "ms": 4067
+    },
+    {
+      "id": "pb-a18-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.7741,
+        "compliant": 0.7999
+      },
+      "ms": 361
+    },
+    {
+      "id": "pb-a19-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "probs": {
+        "p1_relevant": 0.0391,
+        "p1_leak": 0.079,
+        "p2_relevant": 0.0414,
+        "p2_leak": 0.0822,
+        "p3_relevant": 0.0438,
+        "p3_leak": 0.0882,
+        "p4_relevant": 0.0362,
+        "p4_leak": 0.0726,
+        "p5_relevant": 0.0349,
+        "p5_leak": 0.0932
+      },
+      "ms": 3635
+    },
+    {
+      "id": "pb-a19-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9441,
+        "compliant": 0.8146
+      },
+      "ms": 339
+    },
+    {
+      "id": "pb-a20-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.2713,
+        "p1_leak": 0.9198,
+        "p2_relevant": 0.2916,
+        "p2_leak": 0.8775,
+        "p3_relevant": 0.3251,
+        "p3_leak": 0.9071,
+        "p4_relevant": 0.1515,
+        "p4_leak": 0.8952,
+        "p5_relevant": 0.2813,
+        "p5_leak": 0.9005
+      },
+      "ms": 4884
+    },
+    {
+      "id": "pb-m01-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.1958,
+        "p1_leak": 0.8416,
+        "p2_relevant": 0.2589,
+        "p2_leak": 0.8483,
+        "p3_relevant": 0.2347,
+        "p3_leak": 0.8607,
+        "p4_relevant": 0.2161,
+        "p4_leak": 0.8456,
+        "p5_relevant": 0.2322,
+        "p5_leak": 0.8341
+      },
+      "ms": 5606
+    },
+    {
+      "id": "pb-m01-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9669,
+        "compliant": 0.9655
+      },
+      "ms": 434
+    },
+    {
+      "id": "pb-m02-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.3125,
+        "p1_leak": 0.8621,
+        "p2_relevant": 0.4438,
+        "p2_leak": 0.887,
+        "p3_relevant": 0.3362,
+        "p3_leak": 0.8459
+      },
+      "ms": 2007
+    },
+    {
+      "id": "pb-m02-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.961,
+        "compliant": 0.8939
+      },
+      "ms": 406
+    },
+    {
+      "id": "pb-m03-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.2843,
+        "p1_leak": 0.6859,
+        "p2_relevant": 0.2953,
+        "p2_leak": 0.7469,
+        "p3_relevant": 0.3328,
+        "p3_leak": 0.6787,
+        "p4_relevant": 0.3477,
+        "p4_leak": 0.8092,
+        "p5_relevant": 0.2737,
+        "p5_leak": 0.6369
+      },
+      "ms": 5339
+    },
+    {
+      "id": "pb-m03-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9178,
+        "compliant": 0.8654
+      },
+      "ms": 479
+    },
+    {
+      "id": "pb-m04-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.8899,
+        "p1_leak": 0.8747,
+        "p2_relevant": 0.8236,
+        "p2_leak": 0.8767,
+        "p3_relevant": 0.8338,
+        "p3_leak": 0.8844
+      },
+      "ms": 2273
+    },
+    {
+      "id": "pb-m04-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9658,
+        "compliant": 0.9036
+      },
+      "ms": 286
+    },
+    {
+      "id": "pb-m05-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.7337,
+        "p1_leak": 0.8818,
+        "p2_relevant": 0.7285,
+        "p2_leak": 0.8847,
+        "p3_relevant": 0.7337,
+        "p3_leak": 0.8914,
+        "p4_relevant": 0.7008,
+        "p4_leak": 0.8572,
+        "p5_relevant": 0.7373,
+        "p5_leak": 0.8964
+      },
+      "ms": 4783
+    },
+    {
+      "id": "pb-m05-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8116,
+        "compliant": 0.6499
+      },
+      "ms": 392
+    },
+    {
+      "id": "pb-m06-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": true,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.3491,
+        "p1_leak": 0.9507,
+        "p2_relevant": 0.42,
+        "p2_leak": 0.9534,
+        "p3_relevant": 0.3811,
+        "p3_leak": 0.9458,
+        "p4_relevant": 0.5458,
+        "p4_leak": 0.9518,
+        "p5_relevant": 0.383,
+        "p5_leak": 0.9562
+      },
+      "ms": 4621
+    },
+    {
+      "id": "pb-m06-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9814,
+        "compliant": 0.9701
+      },
+      "ms": 358
+    },
+    {
+      "id": "pb-m07-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": true,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.7386,
+        "p1_leak": 0.9371,
+        "p2_relevant": 0.7422,
+        "p2_leak": 0.9389,
+        "p3_relevant": 0.7396,
+        "p3_leak": 0.9372,
+        "p4_relevant": 0.8143,
+        "p4_leak": 0.9452,
+        "p5_relevant": 0.7525,
+        "p5_leak": 0.9263
+      },
+      "ms": 4591
+    },
+    {
+      "id": "pb-m07-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": false
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.4637,
+        "compliant": 0.2962
+      },
+      "ms": 306
+    },
+    {
+      "id": "pb-m08-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9438,
+        "p1_leak": 0.9813,
+        "p2_relevant": 0.941,
+        "p2_leak": 0.9832,
+        "p3_relevant": 0.9483,
+        "p3_leak": 0.9858,
+        "p4_relevant": 0.9453,
+        "p4_leak": 0.9793,
+        "p5_relevant": 0.9566,
+        "p5_leak": 0.9829
+      },
+      "ms": 5010
+    },
+    {
+      "id": "pb-m08-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8303,
+        "compliant": 0.9614
+      },
+      "ms": 377
+    },
+    {
+      "id": "pb-m09-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": false,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.5664,
+        "p1_leak": 0.8708,
+        "p2_relevant": 0.5606,
+        "p2_leak": 0.8811,
+        "p3_relevant": 0.4325,
+        "p3_leak": 0.8638,
+        "p4_relevant": 0.5753,
+        "p4_leak": 0.9085
+      },
+      "ms": 3457
+    },
+    {
+      "id": "pb-m09-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.4557,
+        "compliant": 0.63
+      },
+      "ms": 404
+    },
+    {
+      "id": "pb-m10-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.5995,
+        "p1_leak": 0.903,
+        "p2_relevant": 0.6725,
+        "p2_leak": 0.9196,
+        "p3_relevant": 0.6264,
+        "p3_leak": 0.9054,
+        "p4_relevant": 0.6683,
+        "p4_leak": 0.8962,
+        "p5_relevant": 0.6563,
+        "p5_leak": 0.9013
+      },
+      "ms": 5035
+    },
+    {
+      "id": "pb-m10-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": false
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.5611,
+        "compliant": 0.7512
+      },
+      "ms": 296
+    },
+    {
+      "id": "pb-m11-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": true,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": true,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9821,
+        "p1_leak": 0.9928,
+        "p2_relevant": 0.9801,
+        "p2_leak": 0.9926,
+        "p3_relevant": 0.9798,
+        "p3_leak": 0.9917,
+        "p4_relevant": 0.9825,
+        "p4_leak": 0.9922,
+        "p5_relevant": 0.9835,
+        "p5_leak": 0.9942
+      },
+      "ms": 5395
+    },
+    {
+      "id": "pb-m11-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.928,
+        "compliant": 0.8072
+      },
+      "ms": 412
+    },
+    {
+      "id": "pb-m12-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9841,
+        "p1_leak": 0.9908,
+        "p2_relevant": 0.9786,
+        "p2_leak": 0.9906,
+        "p3_relevant": 0.9851,
+        "p3_leak": 0.9914,
+        "p4_relevant": 0.9834,
+        "p4_leak": 0.9916,
+        "p5_relevant": 0.9867,
+        "p5_leak": 0.9933
+      },
+      "ms": 4962
+    },
+    {
+      "id": "pb-m12-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9321,
+        "compliant": 0.8748
+      },
+      "ms": 417
+    },
+    {
+      "id": "pb-m13-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9814,
+        "p1_leak": 0.9923,
+        "p2_relevant": 0.9804,
+        "p2_leak": 0.9915,
+        "p3_relevant": 0.9851,
+        "p3_leak": 0.993,
+        "p4_relevant": 0.9823,
+        "p4_leak": 0.9921
+      },
+      "ms": 3495
+    },
+    {
+      "id": "pb-m13-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.941,
+        "compliant": 0.9139
+      },
+      "ms": 286
+    },
+    {
+      "id": "pb-m14-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.6286,
+        "p1_leak": 0.8628,
+        "p2_relevant": 0.5931,
+        "p2_leak": 0.8222,
+        "p3_relevant": 0.6096,
+        "p3_leak": 0.8167,
+        "p4_relevant": 0.6454,
+        "p4_leak": 0.8858,
+        "p5_relevant": 0.7286,
+        "p5_leak": 0.9128
+      },
+      "ms": 4210
+    },
+    {
+      "id": "pb-m14-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9025,
+        "compliant": 0.9456
+      },
+      "ms": 368
+    },
+    {
+      "id": "pb-m15-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.6969,
+        "p1_leak": 0.817,
+        "p2_relevant": 0.7376,
+        "p2_leak": 0.8356,
+        "p3_relevant": 0.632,
+        "p3_leak": 0.7968,
+        "p4_relevant": 0.6799,
+        "p4_leak": 0.7946,
+        "p5_relevant": 0.7056,
+        "p5_leak": 0.8171
+      },
+      "ms": 4271
+    },
+    {
+      "id": "pb-m15-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": false
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.5891,
+        "compliant": 0.7065
+      },
+      "ms": 295
+    },
+    {
+      "id": "pb-m16-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": true
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9563,
+        "p1_leak": 0.9914,
+        "p2_relevant": 0.9604,
+        "p2_leak": 0.9934,
+        "p3_relevant": 0.9512,
+        "p3_leak": 0.9927,
+        "p4_relevant": 0.9672,
+        "p4_leak": 0.9924,
+        "p5_relevant": 0.969,
+        "p5_leak": 0.9934
+      },
+      "ms": 4467
+    },
+    {
+      "id": "pb-m16-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.6188,
+        "compliant": 0.8689
+      },
+      "ms": 380
+    },
+    {
+      "id": "pb-m17-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": true,
+        "p4_leak": false,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9847,
+        "p1_leak": 1.0,
+        "p2_relevant": 0.9853,
+        "p2_leak": 1.0,
+        "p3_relevant": 0.9806,
+        "p3_leak": 1.0,
+        "p4_relevant": 0.9853,
+        "p4_leak": 1.0,
+        "p5_relevant": 0.9826,
+        "p5_leak": 1.0
+      },
+      "ms": 4864
+    },
+    {
+      "id": "pb-m17-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9364,
+        "compliant": 0.983
+      },
+      "ms": 503
+    },
+    {
+      "id": "pb-m18-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.7292,
+        "p1_leak": 0.9356,
+        "p2_relevant": 0.7047,
+        "p2_leak": 0.9404,
+        "p3_relevant": 0.7556,
+        "p3_leak": 0.9425,
+        "p4_relevant": 0.7068,
+        "p4_leak": 0.9218,
+        "p5_relevant": 0.7408,
+        "p5_leak": 0.9454
+      },
+      "ms": 4312
+    },
+    {
+      "id": "pb-m18-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": false,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": false,
+        "compliant": false
+      },
+      "probs": {
+        "answerable": 0.4482,
+        "compliant": 0.3572
+      },
+      "ms": 414
+    },
+    {
+      "id": "pb-m19-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": false,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.8094,
+        "p1_leak": 0.9751,
+        "p2_relevant": 0.8187,
+        "p2_leak": 0.9735,
+        "p3_relevant": 0.8271,
+        "p3_leak": 0.971,
+        "p4_relevant": 0.8656,
+        "p4_leak": 0.977,
+        "p5_relevant": 0.8378,
+        "p5_leak": 0.9741
+      },
+      "ms": 4111
+    },
+    {
+      "id": "pb-m19-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.9907,
+        "compliant": 0.96
+      },
+      "ms": 288
+    },
+    {
+      "id": "pb-m20-s4",
+      "stage": 4,
+      "gold": {
+        "p1_relevant": true,
+        "p1_leak": false,
+        "p2_relevant": false,
+        "p2_leak": false,
+        "p3_relevant": false,
+        "p3_leak": false,
+        "p4_relevant": false,
+        "p4_leak": false,
+        "p5_relevant": false,
+        "p5_leak": false
+      },
+      "pred": {
+        "p1_relevant": true,
+        "p1_leak": true,
+        "p2_relevant": true,
+        "p2_leak": true,
+        "p3_relevant": true,
+        "p3_leak": true,
+        "p4_relevant": true,
+        "p4_leak": true,
+        "p5_relevant": true,
+        "p5_leak": true
+      },
+      "probs": {
+        "p1_relevant": 0.9603,
+        "p1_leak": 0.9548,
+        "p2_relevant": 0.9526,
+        "p2_leak": 0.9617,
+        "p3_relevant": 0.9551,
+        "p3_leak": 0.9568,
+        "p4_relevant": 0.959,
+        "p4_leak": 0.9582,
+        "p5_relevant": 0.9525,
+        "p5_leak": 0.9581
+      },
+      "ms": 4347
+    },
+    {
+      "id": "pb-m20-s6",
+      "stage": 6,
+      "gold": {
+        "answerable": true,
+        "compliant": true
+      },
+      "pred": {
+        "answerable": true,
+        "compliant": true
+      },
+      "probs": {
+        "answerable": 0.8035,
+        "compliant": 0.878
+      },
+      "ms": 364
+    }
+  ]
+}
