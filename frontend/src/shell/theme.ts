@@ -30,6 +30,12 @@ export function applyStyles(view: View, theme: EntryTheme) {
   for (const id of ["entry", "module", "art"] as const) sheet(id).media = on[id] ? "all" : "not all";
   const root = document.documentElement;
   root.dataset.view = view;
-  root.dataset.theme = view === "entry" ? theme : "dark";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", view === "art" ? "#0f0c09" : view === "factory" ? "#000000" : theme === "light" ? "#faf9f7" : "#0f0f0e");
+  // 入口與兩個模組共用同一個深淺色設定（模組的明亮模式見 module.css、art.css 的 :root[data-theme="light"]）
+  root.dataset.theme = theme;
+  const color = {
+    entry: theme === "light" ? "#faf9f7" : "#0f0f0e",
+    factory: theme === "light" ? "#f3f4f6" : "#000000",
+    art: theme === "light" ? "#f7f7f6" : "#0f0c09",
+  }[view];
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
 }

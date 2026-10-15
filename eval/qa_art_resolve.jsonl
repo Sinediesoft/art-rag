@@ -1,0 +1,18 @@
+{"id": "res-01", "split": "dev", "question": "那個點點畫的島 現在誰收著啊", "expect": "aic-27992"}
+{"id": "res-02", "split": "dev", "question": "有猴子的那幅畫是在哪裡畫的？", "expect": "aic-27992"}
+{"id": "res-03", "split": "holdout", "question": "很多人在河邊草地上撐陽傘休息的那幅，花了多久畫完？", "expect": "aic-27992"}
+{"id": "res-04", "split": "holdout", "question": "用很多小色點畫成、四周還有一圈彩色邊框的那幅畫有多大？", "expect": "aic-27992"}
+{"id": "res-05", "split": "dev", "question": "有一棵像火焰一樣扭動的深綠色大樹的那幅畫，是在哪裡畫的？", "expect": "met-436535"}
+{"id": "res-06", "split": "dev", "question": "金黃色麥田那幅畫，大都會是哪一年買的？", "expect": "met-436535"}
+{"id": "res-07", "split": "holdout", "question": "在療養院附近寫生的那幅，還有其他版本嗎？", "expect": "met-436535"}
+{"id": "res-08", "split": "holdout", "question": "天空有白色漩渦雲朵的那幅風景畫，用的是什麼技法？", "expect": "met-436535"}
+{"id": "res-09", "split": "dev", "question": "那幅有騾隊在山路上趕路的山水畫，簽名藏在哪裡？", "expect": "npm-000001"}
+{"id": "res-10", "split": "dev", "question": "有一座巨大主峰和細長瀑布的那幅畫，是畫在什麼材質上？", "expect": "npm-000001"}
+{"id": "res-11", "split": "holdout", "question": "被稱為巨碑式山水的那幅，作者是哪裡人？", "expect": "npm-000001"}
+{"id": "res-12", "split": "holdout", "question": "用雨點皴畫山石的那幅畫，現在收藏在哪？", "expect": "npm-000001"}
+{"id": "neg-01", "split": "dev", "question": "印象派和新印象派有什麼不同？", "expect": null}
+{"id": "neg-02", "split": "dev", "question": "美術館幾點開門？", "expect": null}
+{"id": "neg-03", "split": "dev", "question": "推薦我幾幅適合小朋友看的畫", "expect": null}
+{"id": "neg-04", "split": "holdout", "question": "油畫和水墨畫的差別在哪？", "expect": null}
+{"id": "neg-05", "split": "holdout", "question": "有哪些畫是在戶外寫生完成的？", "expect": null}
+{"id": "neg-06", "split": "holdout", "question": "知識庫裡哪一幅畫的尺寸最大？", "expect": null}

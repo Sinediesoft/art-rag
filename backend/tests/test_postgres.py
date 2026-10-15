@@ -104,10 +104,10 @@ def test_logs_roundtrip(pool):
         conn.execute("TRUNCATE uploads, chat_logs, cad_logs, sql_logs, route_logs, feedback")
     assert repo.ping()
 
-    repo.add_upload("img-new", "img-new.jpg")
+    repo.add_upload("img_0000000000000001", "img_0000000000000001.jpg")
     old = (datetime.now(UTC) - timedelta(days=8)).isoformat()
     repo._exec("INSERT INTO uploads VALUES (?, ?, ?)", ("img-old", "img-old.jpg", old))
-    assert repo.get_upload("img-new") == "img-new.jpg"
+    assert repo.get_upload("img_0000000000000001") == "img_0000000000000001.jpg"
     assert repo.purge_uploads(7) == ["img-old.jpg"]  # 照片 7 天後刪除
     assert repo.get_upload("img-old") is None
 
@@ -154,7 +154,7 @@ def test_import_sqlite_is_idempotent(pool, tmp_path):
 
     path = tmp_path / "old.sqlite3"
     old = LogsRepo(path)
-    old.add_upload("img-a", "img-a.jpg")
+    old.add_upload("img_000000000000000a", "img_000000000000000a.jpg")
     created = old.now()
     old.add_chat_log({"request_id": "req-a", "created_at": created, "use_retrieval": 1})
     old.add_cad_log(

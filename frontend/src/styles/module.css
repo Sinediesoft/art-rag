@@ -37,6 +37,11 @@
   --factory: #e5533d;
   --art: #c9a45c;
   --on-mod: #fff;
+  --line-3: #3a3a3a;
+  --side-bg: #0a0a0a;
+  --menu-bg: #111111;
+  --glass: rgb(22 22 22 / 0.62);
+  --glass-line: rgb(255 255 255 / 0.08);
   color-scheme: dark;
 
   --font-ui: "Noto Sans TC", system-ui, sans-serif;
@@ -54,6 +59,48 @@
   --topbar-h: 64px;
   --gap-msg: 22px;
   --measure: 760px;
+}
+
+/* 明亮模式：柔和的中性白（不偏黃、不刺眼），用層次做出質感——
+   霧灰的工作檯面、白色卡片浮在上面、展示區是更深一階的灰並鋪細格點，像製圖桌。重點色仍是訊號紅 */
+:root[data-theme="light"] {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #eceef1;
+  --surface-3: #dfe3e8;
+  --text: #16181c;
+  --text-2: #4d535b;
+  --text-3: #868c95;
+  --line: #dce0e5;
+  --line-2: #e6e9ed;
+  --line-3: #c2c8d0;
+  --accent: #16181c;
+  --on-accent: #ffffff;
+  --accent-soft: #eceef1;
+  --ok: #2f7d4a;
+  --warn: #a86a1f;
+  --danger: #c0392b;
+  --code-bg: #eef0f3;
+  --code-text: #2b2e33;
+  --series-1: #16181c;
+  --series-2: #7a7f87;
+  --series-3: #a86a1f;
+  --series-4: #3b6fb6;
+  --series-5: #b9bdc3;
+  --model: #eceef1;
+  --model-edge: #1c1f24;
+  --shadow-art: 0 1px 2px rgb(16 24 40 / 0.06), 0 18px 40px -16px rgb(16 24 40 / 0.24);
+  --shadow-pop: 0 1px 2px rgb(16 24 40 / 0.05), 0 24px 48px -12px rgb(16 24 40 / 0.18);
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 14px -6px rgb(16 24 40 / 0.08);
+  --show-bg: #e7eaee;
+  --grid-dot: rgb(20 30 45 / 0.1);
+  --glass: rgb(255 255 255 / 0.68);
+  --glass-line: rgb(255 255 255 / 0.75);
+  --factory: #d2412b;
+  --art: #9a7432;
+  --side-bg: #f8f9fa;
+  --menu-bg: #ffffff;
+  color-scheme: light;
 }
 
 /* 2. Layout ----------------------------------------------------------- */
@@ -158,7 +205,7 @@
 .cite:hover,
 .cite.is-active {
   background: none;
-  color: #fff;
+  color: var(--text);
   text-decoration: underline;
 }
 .answer__note {
@@ -185,7 +232,7 @@
   color: var(--text-2);
 }
 .followup:hover {
-  color: #fff;
+  color: var(--text);
 }
 .link-btn {
   color: var(--text);
@@ -217,7 +264,7 @@
 .composer__input {
   flex-basis: 100%;
   padding: 8px 0 10px;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid var(--line-3);
   font-size: 13.5px;
   letter-spacing: 0.06em;
 }
@@ -247,7 +294,7 @@
 }
 .composer__send:not(:disabled):hover {
   background: var(--text);
-  color: #000;
+  color: var(--bg);
 }
 .composer__send:disabled {
   background: transparent;
@@ -269,7 +316,7 @@
   height: 36px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--line-3);
   background: transparent;
   color: var(--text-2);
   font-size: 12px;
@@ -308,7 +355,7 @@
 }
 .btn--primary:hover {
   background: var(--text);
-  color: #000;
+  color: var(--bg);
   filter: none;
 }
 .btn--ghost {
@@ -373,6 +420,7 @@
 }
 .strip {
   padding-left: 40px;
+  padding-right: 24px;
 }
 .titleblock,
 .view__foot {
@@ -390,7 +438,6 @@
 
 /* 側欄（模組裡以抽屜打開） */
 .side {
-  --side-bg: #0a0a0a;
   border-right: 1px solid var(--line);
 }
 .side .mark {
@@ -413,7 +460,7 @@
   border-radius: 0;
 }
 .menu {
-  background: #111;
+  background: var(--menu-bg);
   border-color: var(--line);
 }
 
@@ -439,4 +486,40 @@
     padding-left: 16px;
     padding-right: 16px;
   }
+}
+
+/* 工廠的細節：展示區鋪極淡格點（明亮模式才看得到） */
+.app--factory .showcase {
+  background-image: radial-gradient(circle, var(--grid-dot, transparent) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  background-position: 11px 11px;
+}
+
+/* 明亮模式的縮放工具：白色毛玻璃 */
+:root[data-theme="light"] .zp__tools {
+  background: rgb(255 255 255 / 0.82);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line), 0 6px 18px -6px rgb(0 0 0 / 0.18);
+}
+:root[data-theme="light"] .zp__tools button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+/* 工廠明亮：頂列是一條白色的帶子，卡片是浮在灰色檯面上的白紙 */
+:root[data-theme="light"] .app--factory .mtop {
+  background: rgb(255 255 255 / 0.78);
+  border-bottom-color: var(--line);
+}
+:root[data-theme="light"] .app--factory .mchat .panel-card,
+:root[data-theme="light"] .app--factory .outchip,
+:root[data-theme="light"] .app--factory .jump {
+  background: var(--surface);
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="light"] .app--factory .outchip.is-on {
+  border-color: var(--mod);
+}
+:root[data-theme="light"] .app--factory .msplit::before {
+  background: var(--line);
 }

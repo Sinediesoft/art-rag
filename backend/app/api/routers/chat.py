@@ -7,7 +7,7 @@ from app.api import schemas as S
 from app.core.config import (
     get_settings,
 )
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.repositories.logs_repo import get_logs_repo
 from app.services import (
     chat_service,
@@ -66,7 +66,7 @@ async def chat(body: S.ChatRequest, request: Request):
         conflict_check=body.conflict_check,
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

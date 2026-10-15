@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { apiError, done, factoryRoute, json, liveSse, mockTransport, route, sources, sse } from "../test/transport";
 import { ctaOf, domainOf } from "./outputs";
-import { runTurn } from "./runner";
+import { initialPart, runTurn } from "./runner";
 import { buildStages, progressOf } from "./stages";
 import type { ChatPart, SqlPart, Turn } from "./types";
 
@@ -91,7 +91,7 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
   it("401（過期）：重新取得憑證後重送一次", async () => {
     const t = mockTransport();
     let n = 0;
-    t.on("POST", "/agent/route", () => (++n === 1 ? apiError(401, "TOKEN_EXPIRED") : json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }))));
+    t.on("POST", "/agent/route", () => (++n === 1 ? apiError(401, "TOKEN_EXPIRED") : json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "chitchat", reply: "我可以幫你找畫。" } }))));
     t.on("GET", "/auth/accounts", () => json({}));
     const run = start(turn("今天天氣如何？"));
     await run.done;
@@ -210,5 +210,27 @@ describe("runner：/agent/route → 分派到的模組（全部來自 mock trans
     expect(p.status).toBe("done");
     expect(p.result?.rows).toEqual([["一廠成品倉", 12]]);
     expect(p.answer).toBe("還有 12 件。");
+  });
+});
+
+describe("initialPart", () => {
+  it("比較題沒指定畫作也直接全庫問答（global_qa，docs/adr/039）", () => {
+    const compare = route({ dispatch: { module: "art_qa", question: "哪幅畫最早完成？", artwork_id: null, part_id: null, global_qa: true } });
+    expect(initialPart(compare, null)).toMatchObject({ kind: "chat", target: {} });
+    // 沒有 global_qa 的畫作問答沒帶畫作時照舊列搜尋結果
+    const plain = route({ dispatch: { module: "art_qa", question: "有猴子的畫", artwork_id: null, part_id: null } });
+    expect(initialPart(plain, null).kind).toBe("artSearch");
+  });
+});
+
+describe("入口的分類", () => {
+  it("選了畫作或工廠就帶 domain 給 /agent/route；自動判斷帶 null（docs/adr/040）", async () => {
+    for (const domain of ["art", "mfg", null] as const) {
+      const t = mockTransport();
+      t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "catalog", reply: "目前知識庫共有 3 幅畫" } })));
+      const run = start({ ...turn("列出所有畫"), domain });
+      await run.done;
+      expect((t.calls.find((c) => c.path === "/agent/route")!.body as { domain: string | null }).domain).toBe(domain);
+    }
   });
 });

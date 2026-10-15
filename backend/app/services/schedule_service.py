@@ -239,10 +239,12 @@ async def engine_status() -> dict:
         }
     info = await timefold_client.health()
     if info is None:
+        # 這段狀態所有工廠角色都看得到：不帶排程服務的內網位址
+        log.info(f"排程服務 {s.scheduler_base_url} 連不上，改用簡易排程")
         return {
             "available": False,
             "engine": "greedy",
-            "detail": f"{s.scheduler_base_url} 連不上（請執行 make scheduler）；改用簡易排程",
+            "detail": "排程服務連不上（請執行 make scheduler）；改用簡易排程",
         }
     return {
         "available": True,

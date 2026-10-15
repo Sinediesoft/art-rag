@@ -18,6 +18,10 @@ _TRAILING_NO_DATA_RE = re.compile(
     r"(?:^|(?<=[\n。！？!?]))[ \t]*知識庫中沒有這方面的資料[。.]?(?:[ \t]*\[\d+\])*\s*\Z"
 )
 _CITED_RE = re.compile(r"\[(?:[1-9]\d*|畫面)\]")
+# 一整句的拒答句（開頭、換行或句號／問號／驚嘆號之後，到句號為止；不是接在句中的）
+_NO_DATA_SENTENCE_RE = re.compile(
+    r"(?:^|(?<=[\n。！？!?]))[ \t]*知識庫中沒有這方面的資料[。.]?(?:[ \t]*\[\d+\])*[ \t]*\n?"
+)
 # 比對「問題是不是純粹指名這份文件」時忽略的空白與標點（兩邊都先 NFKC，全形標點已轉半形）
 _IGNORED_RE = re.compile(r"[\s,.?!:;、。，．？！：；「」『』〈〉《》()（）]+")
 # 拿掉拒答句後，前面那段要以句號／問號／驚嘆號或引用結尾；結尾是「包裝方式：」這類子標題時，
@@ -93,3 +97,23 @@ def drop_stray_no_data(answer: str, question: str = "", bare: Iterable[str] = ()
     if not _CITED_RE.search(rest) or not _ENDS_SENTENCE_RE.search(rest):
         return answer
     return rest
+
+
+def drop_contradicting_no_data(answer: str) -> str:
+    """說了「知識庫中沒有這方面的資料。」，後面卻又引用資料回答：拿掉那句。
+    錯誤前提題（「董其昌是怎麼在 1958 年找到簽名的？」）常見：
+    先說沒有資料，接著用 [1] 更正成李霖燦，
+    前後矛盾、讀者會以為沒找到。
+    只拿「後面還有引用（[n] 或 [畫面]）」的那句：放在最後的拒答句可能是在說「其餘的部分查不到」，
+    交給 drop_stray_no_data 的保守規則；沒有任何引用的拒答（真的答不出來）不動。"""
+    if NO_DATA[:-1] not in answer:
+        return answer
+    out, last = [], 0
+    for m in _NO_DATA_SENTENCE_RE.finditer(answer):
+        if _CITED_RE.search(answer[m.end() :]):
+            out.append(answer[last : m.start()])
+            last = m.end()
+    if not out:
+        return answer
+    out.append(answer[last:])
+    return "".join(out).strip()

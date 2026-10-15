@@ -1186,7 +1186,7 @@ class Account(BaseModel):
     clearance: int = Field(description="機密等級：公開 0、內部 1、機密 2（寫進 JWT）")
     views: list[str] = Field(
         default=[],
-        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
+        description="看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）",
     )
 
 
@@ -1244,6 +1244,11 @@ class RouteRequest(BaseModel):
     question: str = Field(default="", max_length=300)
     image_id: str | None = None
     forced_intent: str | None = Field(default=None, description="使用者點澄清按鈕選的意圖")
+    domain: Literal["art", "mfg"] | None = Field(
+        default=None,
+        description="入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。"
+        "只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限",
+    )
     engine: Literal["auto", "jev", "local"] = Field(
         default="auto",
         description="第 2、4～6 段由誰判斷：auto／jev＝用 Jev，"
@@ -1366,10 +1371,12 @@ class BlockedInfo(BaseModel):
 
 
 class ShortCircuitInfo(BaseModel):
-    """第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"""
+    """快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
+    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"""
 
     stage: Literal[2]
     by: Literal["Jev", "地端"]
+    kind: Literal["chitchat", "catalog"] = "chitchat"
     reply: str
 
 
@@ -1415,6 +1422,14 @@ class RouteResponse(BaseModel):
     blocked: BlockedInfo | None
     short_circuit: ShortCircuitInfo | None
     dispatch: dict
+    art_resolve: dict | None = Field(
+        default=None,
+        description="沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）："
+        "{artwork_id, by, prob, ms, fallback_reason}；"
+        "artwork_id 為 null＝判斷不出來、照全庫檢索作答。"
+        "判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess"
+        "（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null",
+    )
     post_filter: Literal["jev", "local"] = Field(
         description="第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）"
     )
