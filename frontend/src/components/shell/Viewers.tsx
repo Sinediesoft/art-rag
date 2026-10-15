@@ -354,41 +354,16 @@ export function ScheduleView({ o }: { o: Output }) {
 
 // ================================================================ 藝術：作品
 
-function MuseumLabel({ id }: { id: string }) {
-  const { data: a } = useArtwork(id);
-  if (!a) return null;
-  return (
-    <div className="museum-label">
-      <p className="museum-label__title">{a.title.zh}</p>
-      {a.title.en && <p className="museum-label__en">{a.title.en}</p>}
-      <p className="museum-label__by">
-        {a.artist.zh}・{short(a.date_text)}
-      </p>
-      {a.medium && <p className="museum-label__fine">{a.medium}</p>}
-      <p className="museum-label__fine">{short(a.collection)}</p>
-      {a.style_tags.length > 0 && (
-        <p className="museum-label__tags">
-          {a.style_tags.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function ArtworkView({ o }: { o: Output }) {
   const { data: a, error, isLoading } = useArtwork(o.artworkId);
   if (isLoading) return <Loading label="讀取作品…" />;
   if (error || !a) return <Failed error={error} />;
   return (
     <div className="view view--artwork">
+      {/* 展品標籤（名稱、畫家、年代、媒材、收藏、標籤）放在展示區的標題列，畫作用完整高度呈現 */}
       <div className="view__canvas view__canvas--wall">
         <ZoomPan src={assetUrl(a.image_url)} alt={a.title.zh} />
-      </div>
-      <div className="view__foot view__foot--label">
-        <MuseumLabel id={a.id} />
-        <p className="view__credit">
+        <p className="view__credit view__credit--over">
           圖片來源：{a.image.attribution ?? short(a.collection)}・{a.image.license}
         </p>
       </div>

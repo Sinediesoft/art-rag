@@ -5,11 +5,11 @@ import { AccountMenu, pendingCount, Popover, StatusChip, useTokenRenewal, WriteN
 import { Composer } from "../components/shell/Composer";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
-import { SettingsMenu } from "../components/shell/SettingsMenu";
+import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
 import { Showcase } from "../components/shell/Showcase";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
-import { COPY, MODULE, type Domain } from "../shell/design";
+import { COPY, MODULE, TOOLS, type Domain } from "../shell/design";
 import { useEscape, useMedia, useStickyScroll } from "../shell/hooks";
 import { ctaOf, deriveOutputs, domainOf, subjectFor, withSubject } from "../shell/outputs";
 import { titleOf } from "../shell/persist";
@@ -17,30 +17,6 @@ import { egressOf, progressOf } from "../shell/stages";
 import { useShell } from "../shell/store";
 import type { Conv } from "../shell/types";
 import { lockReason, useThreadActions } from "./shared";
-
-/** 模組裡的功能頁捷徑：不是功能選單，是原本「深入」能到的完整頁面（照片建檔、批次辨識、核准…都還在） */
-const TOOLS: Record<Domain, { label: string; to: string }[]> = {
-  factory: [
-    { label: "圖紙查找", to: "/drawings/search" },
-    { label: "3D 重建", to: "/reconstruct" },
-    { label: "庫存・訂單・工單查詢", to: "/inventory" },
-    { label: "生產排程", to: "/schedule" },
-    { label: "主管核准", to: "/approvals" },
-    { label: "照片建檔（圖紙）", to: "/drawings/intake" },
-    { label: "批次辨識", to: "/batch" },
-    { label: "兩件並排比較", to: "/compare-items" },
-    { label: "系統狀態", to: "/admin" },
-  ],
-  art: [
-    { label: "以文搜畫・以圖搜圖", to: "/search" },
-    { label: "比對兩張照片", to: "/photo-diff" },
-    { label: "照片建檔（畫作）", to: "/artworks/intake" },
-    { label: "批次辨識", to: "/batch" },
-    { label: "兩件並排比較", to: "/compare-items" },
-    { label: "策略比較", to: "/compare" },
-    { label: "系統狀態", to: "/admin" },
-  ],
-};
 
 /**
  * 來源：ArtRAG-前端demo/source/src/views/ModuleView.tsx。
@@ -105,7 +81,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
   return (
     <div className={`app app--module app--${domain}`}>
       <header className="mtop">
-        <button type="button" className="mtop__back" onClick={() => navigate(`/c/${conv.id}`)} title="回到入口（保留這段對話）">
+        <button type="button" className="mtop__back" onClick={() => navigate(conv.turns.length ? `/c/${conv.id}` : "/")} title={conv.turns.length ? "回到入口（保留這段對話）" : "回到入口"}>
           <Icon name="arrowLeft" strokeWidth={1.6} />
           <span>入口</span>
         </button>
@@ -116,6 +92,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
         <p className="mtop__conv">{titleOf(conv)}</p>
         <div className="mtop__actions">
           <StatusChip className="mtop__status" />
+          <ThemeToggle />
           <button type="button" className="mtop__btn" onClick={() => setDrawer(true)} aria-label="對話紀錄">
             <Icon name="clock" strokeWidth={1.5} />
             <span>對話紀錄</span>
@@ -273,10 +250,20 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
             activeId={conv.id}
             collapsed={false}
             variant="drawer"
+            current={domain}
             onToggle={() => {}}
             onNew={() => {
               setDrawer(false);
               navigate("/");
+            }}
+            onModule={(d) => {
+              setDrawer(false);
+              if (d === domain && conv.turns.length === 0) return;
+              onJump(shell.openModule(d), d);
+            }}
+            onTool={(to) => {
+              setDrawer(false);
+              navigate(to);
             }}
             onOpen={(c) => {
               setDrawer(false);

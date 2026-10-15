@@ -2,6 +2,7 @@ import { useStatus } from "../../api/hooks";
 import { SWITCH_TEXT, SWITCHES, setSetting, useSettings, type Choice } from "../../shell/settings";
 import { useShell } from "../../shell/store";
 import type { EntryTheme } from "../../shell/theme";
+import { Icon } from "./Icons";
 
 const THEMES: [EntryTheme, string][] = [
   ["dark", "深色"],
@@ -9,7 +10,7 @@ const THEMES: [EntryTheme, string][] = [
 ];
 
 /**
- * 設定面板（頁首右上角，Q-2026-10-12-02）：入口深淺色、問答的三個開關。
+ * 設定面板（頁首右上角，Q-2026-10-12-02）：深淺色（入口與模組共用）、問答的三個開關。
  * 只存在這個瀏覽器（shell/settings.ts），從下一題開始生效；第 1～7 段安全關卡由伺服器決定，這裡沒有開關。
  */
 export function SettingsMenu() {
@@ -23,10 +24,10 @@ export function SettingsMenu() {
         <p className="settings__title">外觀</p>
         <div className="settings__row">
           <span className="settings__text">
-            入口深淺色
-            <small>工廠、藝術模組固定深色</small>
+            深淺色
+            <small>入口、工廠與藝術模組共用</small>
           </span>
-          <div className="segmented segmented--small" role="radiogroup" aria-label="入口深淺色">
+          <div className="segmented segmented--small" role="radiogroup" aria-label="深淺色">
             {THEMES.map(([t, label]) => (
               <button key={t} type="button" role="radio" aria-checked={shell.theme === t} className={shell.theme === t ? "is-on" : ""} onClick={() => shell.setTheme(t)}>
                 {label}
@@ -67,5 +68,16 @@ export function SettingsMenu() {
       </section>
       <p className="settings__foot">只存在這個瀏覽器，換身分不會變；改了從下一題開始生效。「預設」照這台伺服器的設定。安全關卡（第 1～7 段）由伺服器決定，這裡不能改。</p>
     </div>
+  );
+}
+
+/** 模組與功能頁頂列的明暗切換（來源：ArtRAG-整合版demo 的 mtop__theme）：和設定面板的「深淺色」是同一個設定 */
+export function ThemeToggle() {
+  const shell = useShell();
+  const label = shell.theme === "dark" ? "切換成明亮模式" : "切換成暗色模式";
+  return (
+    <button type="button" className="mtop__btn mtop__theme" onClick={() => shell.setTheme(shell.theme === "dark" ? "light" : "dark")} title={label} aria-label={label}>
+      <Icon name={shell.theme === "dark" ? "sun" : "moon"} strokeWidth={1.5} />
+    </button>
   );
 }

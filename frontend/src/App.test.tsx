@@ -434,7 +434,7 @@ describe("頁首設定（Q-2026-10-12-02）：存在瀏覽器，從下一題開�
     fireEvent.click(screen.getByLabelText("設定"));
     // 伺服器預設來自 /status 的 chat_defaults
     await waitFor(() => expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "預設（開）" }).getAttribute("aria-checked")).toBe("true"));
-    pick("入口深淺色", "淺色");
+    pick("深淺色", "淺色");
     expect(document.documentElement.dataset.theme).toBe("light");
     pick("段落篩選", "關");
     expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "關" }).getAttribute("aria-checked")).toBe("true");

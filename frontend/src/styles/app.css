@@ -119,6 +119,161 @@ body.is-dragging * {
   width: 13px;
   height: 13px;
 }
+/* 模組捷徑：按名稱進模組，按右邊箭頭展開功能頁 */
+.side__mods {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.side__mods > .side__label {
+  padding-top: 2px;
+}
+.side__modgroup {
+  --c: var(--text-3);
+  border-radius: var(--radius-s);
+}
+.side__modgroup.is-factory {
+  --c: var(--factory);
+}
+.side__modgroup.is-art {
+  --c: var(--art);
+}
+.side__modgroup.is-open {
+  background: var(--surface-2);
+}
+.side__modrow {
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius-s);
+}
+.side__modrow:hover {
+  background: var(--surface-2);
+}
+.side__modgo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px 7px 6px;
+  text-align: left;
+}
+.side__modicon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: var(--radius-s);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent);
+  color: var(--c);
+}
+.side__modicon .icon {
+  width: 16px;
+  height: 16px;
+}
+.side__modgo:hover .side__modicon,
+.side__modgroup.is-on .side__modicon {
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+}
+.side__modtext {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.side__modname {
+  font-size: 14px;
+  color: var(--text);
+}
+.side__modgroup.is-on .side__modname::after {
+  content: "目前";
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--text-3);
+  vertical-align: 1px;
+}
+.side__modsub {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side__modtoggle {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-s);
+  color: var(--text-3);
+}
+.side__modtoggle:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.side__modtoggle .icon {
+  width: 15px;
+  height: 15px;
+  transition: rotate 0.18s;
+}
+.side__modtoggle[aria-expanded="true"] .icon {
+  rotate: 180deg;
+}
+.side__tools {
+  max-height: min(300px, 36dvh);
+  overflow-y: auto;
+  padding: 2px 4px 6px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.side__tool {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+}
+.side__tool::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.side__tool:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.side__tool:hover::before {
+  background: var(--c);
+}
+.side__tool .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.side__tool:hover .icon {
+  color: var(--c);
+}
+.side__modmini.is-factory {
+  color: var(--factory);
+}
+.side__modmini.is-art {
+  color: var(--art);
+}
 .side__list {
   flex: 1;
   min-height: 0;
@@ -885,6 +1040,48 @@ body.is-dragging * {
   background: var(--show-bg, var(--surface));
   outline: 0;
 }
+/* 大圖類成果（作品、圖紙、3D）：標題列浮在圖上，不另外占一塊。
+   文字放在一張「玻璃展籤」裡：平常完全透明、只看得到字；
+   一旦圖放大到標題底下（或 3D 轉到底下），玻璃才浮現（霧面＋淡底），字永遠讀得到。 */
+.showcase {
+  position: relative;
+}
+.showcase--overlay .showcase__head {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.showcase--overlay .showcase__titles {
+  flex: 0 1 auto;
+  max-width: min(600px, 100%);
+  margin: -12px 0 0 -16px;
+  padding: 12px 16px 14px;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: 0 0 0 1px transparent;
+  transition: background 0.35s, box-shadow 0.35s, backdrop-filter 0.35s;
+}
+.showcase--overlay .showcase__tools {
+  margin-left: auto;
+  pointer-events: auto;
+}
+.showcase--overlay .tool {
+  background: var(--glass);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+}
+/* 有東西在底下時：玻璃浮現 */
+.showcase--overlay:has(.zp.is-zoomed) .showcase__titles,
+.showcase--overlay:has(.view--model) .showcase__titles {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 0 0 1px var(--glass-line), 0 12px 32px -16px rgb(0 0 0 / 0.35);
+}
 .showcase:fullscreen {
   background: var(--show-bg, var(--surface));
 }
@@ -990,31 +1187,89 @@ body.is-dragging * {
   color: var(--text-2);
 }
 
-/* 縮圖列 */
+/* 縮圖列：預設收起，只留一條細列（成果數、上一個／下一個）；點了往上拉開縮圖 */
 .strip {
+  position: relative;
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 24px 18px 32px;
+  padding: 0 24px 0 32px;
   border-top: 1px solid var(--line-2);
 }
-.strip__label {
-  font-size: 10px;
-  letter-spacing: 0.24em;
+.strip__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 44px;
+}
+.strip__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding-right: 10px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
   color: var(--text-3);
-  writing-mode: vertical-rl;
-  display: none;
+  transition: color 0.2s;
+}
+.strip__toggle:hover {
+  color: var(--text);
+}
+.strip__toggle .icon {
+  width: 14px;
+  height: 14px;
+  transform: rotate(180deg);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.strip.is-open .strip__toggle .icon {
+  transform: none;
+}
+.strip__count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: 10px;
+  letter-spacing: 0;
+  line-height: 16px;
+  text-align: center;
+}
+/* 上緣的握把：看起來可以往上拉 */
+.strip__grip {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  margin-left: -18px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  transition: background 0.2s;
+}
+.strip__toggle:hover .strip__grip {
+  background: var(--mod);
+}
+.strip__drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.strip.is-open .strip__drawer {
+  grid-template-rows: 1fr;
 }
 .strip__list {
+  min-height: 0;
   display: flex;
   gap: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
-  padding: 4px 2px 6px;
-  grid-column: 1 / 3;
+  padding: 0 2px;
+}
+.strip__list > li {
+  padding: 4px 0 16px;
 }
 .strip__item {
   display: flex;
@@ -1537,49 +1792,35 @@ body.is-dragging * {
   padding: 16px 0 6px;
 }
 
-/* 藝術：展品標籤 */
+/* 藝術：作品（展品標籤的內容放在標題列） */
 .view__canvas--wall {
   background: radial-gradient(ellipse at 50% 38%, var(--wall-light, rgb(255 255 255 / 0.05)), transparent 68%);
 }
-.view__foot--label {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  padding-top: 16px;
+.view__credit--over {
+  position: absolute;
+  left: 0;
+  bottom: 12px;
+  z-index: 2;
+  margin: 0;
+  font-size: 10px;
+  opacity: 0.75;
+  pointer-events: none;
 }
-.museum-label {
-  max-width: 420px;
-  padding: 14px 18px;
-  border-left: 2px solid var(--mod);
-  background: var(--surface-2);
-}
-.museum-label__title {
-  font-size: 16px;
-  letter-spacing: 0.08em;
-}
-.museum-label__en {
-  margin-top: 2px;
-  font-size: 11.5px;
+.showcase__en {
+  margin-left: 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
   font-style: italic;
+  letter-spacing: 0.02em;
   color: var(--text-3);
 }
-.museum-label__by {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--text-2);
-}
-.museum-label__fine {
-  font-size: 11.5px;
-  color: var(--text-3);
-}
-.museum-label__tags {
+.showcase__tags {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
-.museum-label__tags span {
+.showcase__tags span {
   padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1587,7 +1828,6 @@ body.is-dragging * {
   line-height: 18px;
   color: var(--text-2);
 }
-
 /* 藝術：細看 */
 .view--detail {
   flex-direction: row;
@@ -2066,7 +2306,7 @@ body.is-dragging * {
     margin: 10px 16px 4px;
   }
   .strip {
-    padding: 10px 12px 12px 16px;
+    padding: 0 12px 0 16px;
   }
   .view__foot {
     padding: 0 16px;

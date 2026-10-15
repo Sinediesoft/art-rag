@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAccounts } from "../api/hooks";
 import { AccountMenu, pendingCount, Popover, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Icon } from "../components/shell/Icons";
-import { SettingsMenu } from "../components/shell/SettingsMenu";
+import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
 import { domainOfPath, MODULE } from "../shell/design";
 import { useShell } from "../shell/store";
 
@@ -75,6 +75,7 @@ export function FeatureView({ backTo }: { backTo: string | null }) {
         <p className="mtop__conv">功能頁・{page}</p>
         <div className="mtop__actions">
           <StatusChip className="mtop__status" />
+          <ThemeToggle />
           <div className="topbar__slot">
             <button type="button" className={`mtop__btn${menu === "account" ? " is-open" : ""}`} onClick={() => setMenu(menu === "account" ? null : "account")} aria-expanded={menu === "account"}>
               <span>{accounts?.current.label ?? "讀取中"}</span>

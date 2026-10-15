@@ -456,17 +456,3 @@
   }
 }
 
-/* 入口的分類（docs/adr/040）：輸入框下方，自動判斷／畫作／工廠 */
-.entry-domain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-.entry-domain__label {
-  font-size: 12px;
-  color: var(--text-3);
-}
-.entry-domain .segmented {
-  display: inline-grid;
-}

@@ -47,6 +47,8 @@ export interface Shell {
   remove: (convId: string) => boolean;
   setActive: (convId: string, domain: Domain, key: string) => void;
   enterModule: (convId: string, domain: Domain, key?: string) => void;
+  /** 不用先問一句、直接進模組：沿用那個模組還沒開始的空白對話（沒有就開一段），回傳對話 id */
+  openModule: (domain: Domain) => string;
   notice: (convId: string, text: string) => void;
   /** 正在切換身分：切換完成前不接受新提問 */
   switching: boolean;
@@ -324,6 +326,17 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     [updateConv],
   );
 
+  const openModule = useCallback((domain: Domain) => {
+    // 每按一次就多一段空白對話沒有意義：同一個模組還沒問過任何一句的那段直接沿用（空白對話不存檔、不列在紀錄裡）
+    const blank = convsRef.current.find((c) => c.turns.length === 0 && c.module === domain);
+    if (blank) return blank.id;
+    const id = uid();
+    const conv: Conv = { id, createdAt: Date.now(), updatedAt: Date.now(), turns: [], active: {}, notices: [], module: domain };
+    convsRef.current = [conv, ...convsRef.current];
+    setConvs((cs) => [conv, ...cs]);
+    return id;
+  }, []);
+
   const notice = useCallback(
     (convId: string, text: string) => updateConv(convId, (c) => ({ ...c, notices: [...c.notices, { id: uid(), ts: Date.now(), text }] })),
     [updateConv],
@@ -579,6 +592,7 @@ export function ShellProvider({ children }: { children: ReactNode }) {
     remove,
     setActive,
     enterModule,
+    openModule,
     notice,
     switching,
     identityReady,
