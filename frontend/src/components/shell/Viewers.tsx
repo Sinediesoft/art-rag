@@ -185,7 +185,7 @@ export function StockView({ o, onRerun }: { o: Output; onRerun?: (turnId: string
       : null;
   const sql = p.attempts.filter((a) => a.ok).at(-1)?.sql ?? p.attempts.at(-1)?.sql ?? "";
   return (
-    <div className="view view--data">
+    <div className="view view--data view--stock">
       <div className="view__scroll">
         {res.rows.length === 1 && numIdx >= 0 && (
           <div className="hero-figure">
@@ -194,20 +194,20 @@ export function StockView({ o, onRerun }: { o: Output; onRerun?: (turnId: string
           </div>
         )}
         {p.answer && (
-          <section className="view__section">
+          <section className="view__section view__section--answer">
             <p className="view__label">回答（本地 LLM 依查詢結果）</p>
             <p className="view__answer">{p.answer.replace(/\s?\[\d+\]/g, "")}</p>
           </section>
         )}
         {chart && (
-          <section className="view__section">
+          <section className="view__section view__section--chart">
             <p className="view__label">
               {cols[numIdx]}・依{cols[labelIdx]}
             </p>
             <Bars unit="" items={chart} />
           </section>
         )}
-        <section className="view__section">
+        <section className="view__section view__section--detail">
           <p className="view__label">
             明細・{res.row_count} 筆{res.truncated ? "（已截斷）" : ""}
           </p>
@@ -240,7 +240,8 @@ export function ModelView({ o }: { o: Output }) {
   return (
     <div className="view view--model">
       <div ref={ref} className="view__canvas view__canvas--model">
-        {size.h > 0 && <ModelViewer layers={[{ url: res.files["model.stl"], color: "#9a9a9a" }]} height={Math.max(240, size.h)} />}
+        {/* 容器量到高度才建立檢視器；之後填滿容器，拖曳板塊大小時只調整畫布、不重新載入模型 */}
+        {size.h > 0 && <ModelViewer layers={[{ url: res.files["model.stl"], color: "#9a9a9a" }]} height="fill" />}
       </div>
       <div className="view__foot">
         <dl className="specs">
@@ -293,9 +294,9 @@ export function ScheduleView({ o }: { o: Output }) {
   const k = run.kpis;
   const created = "created_at" in run ? formatTaipei(run.created_at) : null;
   return (
-    <div className="view view--data">
+    <div className="view view--data view--schedule">
       <div className="view__scroll">
-        <section className="view__section">
+        <section className="view__section view__section--kpis">
           <dl className="specs">
             {(
               [
@@ -312,7 +313,7 @@ export function ScheduleView({ o }: { o: Output }) {
             ))}
           </dl>
         </section>
-        <section className="view__section">
+        <section className="view__section view__section--gantt">
           <div className="view__row">
             <p className="view__label">
               {o.solve
@@ -340,7 +341,7 @@ export function ScheduleView({ o }: { o: Output }) {
             <GanttLegend view={view} />
           </div>
         </section>
-        <section className="view__section">
+        <section className="view__section view__section--detail">
           <p className="view__label">工單明細</p>
           <DataTable
             columns={["工單", "零件", "數量", "優先", "延遲（分）"]}

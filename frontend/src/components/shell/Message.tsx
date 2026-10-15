@@ -628,7 +628,7 @@ function SqlBody({ part: p }: { part: SqlPart }) {
       {p.answer && <RichText text={p.answer.trim()} streaming={p.status === "answering"} />}
       {p.result && (
         <p className="answer__meta num">
-          {p.result.row_count} 筆{p.result.truncated ? "（已截斷）" : ""}・唯讀・{p.result.exec_ms} ms{th.mode === "brief" ? "・結果表與圖表在工廠模組" : "・結果表在右側展示區"}
+          {p.result.row_count} 筆{p.result.truncated ? "（已截斷）" : ""}・唯讀・{p.result.exec_ms} ms{th.mode === "brief" ? "・結果表與圖表在工廠模組" : "・結果表在右側的庫存板塊"}
         </p>
       )}
       {th.mode === "full" && (last || p.draft) && (
@@ -674,7 +674,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
         <RichText
           text={
             source
-              ? `可以把${source}轉成 **3D 模型**。約 1–2 分鐘、會載入約 6 GB 的模型，全程在本機；進入工廠模組按「開始轉換」後，模型會顯示在右側展示區，可以旋轉、縮放。`
+              ? `可以把${source}轉成 **3D 模型**。約 1–2 分鐘、會載入約 6 GB 的模型，全程在本機；進入工廠模組按「開始轉換」後，模型會放進右側的 3D 板塊，可以旋轉、縮放。`
               : "這句話交給 Ortho2CAD 3D 重建，但還不知道要轉哪一張圖紙：可以附一張圖紙照片再說一次。"
           }
         />
@@ -832,7 +832,7 @@ function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
         </span>
         <div className="taskcard__body">
           <p className="taskcard__title">重新排程所有未完工工單</p>
-          <p className="taskcard__desc">Timefold 求解約 20 秒，結果寫回資料庫；目前的排程已顯示在右側展示區。</p>
+          <p className="taskcard__desc">Timefold 求解約 20 秒，結果寫回資料庫；目前的排程已放在右側的排程板塊。</p>
         </div>
       </div>
       {!j && !p.cancelled && (
@@ -1171,7 +1171,7 @@ export function OutputChip({ o, on, onClick }: { o: Output; on: boolean; onClick
   const img = thumbOf(o);
   const pic = o.kind === "drawing" || o.kind === "artwork" || o.kind === "detail" || o.kind === "similar";
   return (
-    <button type="button" className={`outchip outchip--${o.kind}${on ? " is-on" : ""}`} onClick={onClick} title="在右側展示區顯示">
+    <button type="button" className={`outchip outchip--${o.kind}${on ? " is-on" : ""}`} onClick={onClick} title={o.domain === "factory" ? "放進右側對應的板塊" : "在右側展示區顯示"}>
       <span className="outchip__thumb">
         {pic && img ? (
           <img src={assetUrl(img)} alt="" />

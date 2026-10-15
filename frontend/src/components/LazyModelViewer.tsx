@@ -10,7 +10,7 @@ export function ModelViewer(props: ComponentProps<typeof Viewer>) {
     <Suspense
       fallback={
         <div
-          style={{ height: props.height ?? 360 }}
+          style={{ height: props.height === "fill" ? "100%" : (props.height ?? 360) }}
           className="grid place-items-center rounded-xl border border-hairline bg-canvas text-sm text-ink-48"
         >
           載入 3D 檢視器…
