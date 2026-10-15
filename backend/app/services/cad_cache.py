@@ -680,8 +680,8 @@ _flush_lock = threading.Lock()
 
 def flush_audit(limit: int = 100) -> int:
     """把待送的作廢／採用稽核送進生產資料庫的 audit_log，回還沒送出的筆數。
-    送不進去（資料庫故障）就停在那一筆、記下錯誤，下次再送；同一筆以 request_id 去重
-    （add_audit 的 once_request），送到一半中斷後重送也不會重複。作廢、採用之後、
+    送不進去（資料庫故障）就停在那一筆、記下錯誤，下次再送；以待送清單的編號去重（伺服器產生、
+    一個事件一個，寫在 detail.audit_id），送到一半中斷後重送也不會重複。作廢、採用之後、
     讀稽核紀錄（GET /audit）之前、背景維護執行緒每一輪都會呼叫。"""
     from app.repositories.production_repo import get_production_repo
 
@@ -689,7 +689,7 @@ def flush_audit(limit: int = 100) -> int:
     with _flush_lock:
         for outbox_id, row in cache.pending_audit(limit):
             try:
-                get_production_repo().add_audit(row, once_request=True)
+                get_production_repo().add_audit(row, audit_id=outbox_id)
             except Exception as e:  # noqa: BLE001 — 資料庫故障：留在待送清單，之後補送
                 cache.mark_failed(outbox_id, f"{type(e).__name__}: {e}")
                 log.warning(
@@ -702,11 +702,10 @@ def flush_audit(limit: int = 100) -> int:
 
 
 def _audit_row(account, action: str, job_id: str, summary: str, request_id, detail) -> dict:
+    """request_id 原樣保留當追蹤欄位（呼叫端可指定 X-Request-ID，不拿來去重）。"""
     from app.jobs import audit
 
-    # request_id 是補送去重的依據：沒有（直接呼叫）就給一個唯一值
-    rid = request_id or "cadcache_" + uuid.uuid4().hex[:16]
-    return audit.row(account, action, "cad_cache", job_id, summary, rid, detail)
+    return audit.row(account, action, "cad_cache", job_id, summary, request_id, detail)
 
 
 def _audit_state(audit_id: str) -> str:

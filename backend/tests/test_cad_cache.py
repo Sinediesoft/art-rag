@@ -767,7 +767,7 @@ def test_audit_enqueue_failure_rolls_back_the_cache_change(cache, monkeypatch):
 
 
 def test_redelivery_of_the_same_audit_is_not_duplicated(cache, monkeypatch):
-    """寫進稽核紀錄之後、標記送出之前中斷：下一次補送以 request_id 去重，不會多一筆。"""
+    """寫進稽核紀錄之後、標記送出之前中斷：下一次補送以待送清單的編號去重，不會多一筆。"""
     monkeypatch.setattr(cad_cache, "get_cache", lambda: cache)
     row = {
         "actor_id": "manager",
@@ -776,17 +776,44 @@ def test_redelivery_of_the_same_audit_is_not_duplicated(cache, monkeypatch):
         "op": "cad_cache",
         "ref_no": "cad_dup_0000000001",
         "summary": "s",
-        "detail": None,
+        "detail": {"part_id": "mfg-002"},
         "request_id": "req_dup_1",
     }
     with cache._conn() as conn:
         CadCache._enqueue(conn, row, "outbox-1")
-    get_production_repo().add_audit(row, once_request=True)  # 第一次送出成功，但沒標記
+    get_production_repo().add_audit(row, audit_id="outbox-1")  # 第一次送出成功，但沒標記
     assert cad_cache.flush_audit() == 0
-    assert len([a for a in audits() if a["ref_no"] == "cad_dup_0000000001"]) == 1
-    # 不同請求作用在同一個工作：各記一筆
-    get_production_repo().add_audit(row | {"request_id": "req_dup_2"}, once_request=True)
+    rows = [a for a in audits() if a["ref_no"] == "cad_dup_0000000001"]
+    assert len(rows) == 1 and rows[0]["detail"]["audit_id"] == "outbox-1"
+    assert rows[0]["request_id"] == "req_dup_1"  # 呼叫端的 request_id 原樣留著追蹤
+    # 不同事件：即使單號、request_id 都相同，也各記一筆
+    get_production_repo().add_audit(row, audit_id="outbox-2")
     assert len([a for a in audits() if a["ref_no"] == "cad_dup_0000000001"]) == 2
+
+
+def test_reused_client_request_id_does_not_swallow_another_operators_audit(client, api_cache):
+    """兩位操作者對同一個工作作廢、帶同一個 X-Request-ID：兩筆稽核都要在（Review Medium）。"""
+    job = legacy_job("manager", "mfg-002", BOX)
+    record(api_cache, job, BOX, has_gt=True, key="k_reuse")
+    g = Candidate(0.0)
+    api_cache.put(
+        "k_reuse", part_id="mfg-002", fields={}, code=BOX, iou=0.9, candidate=g, source="a"
+    )
+    headers = {"X-Request-ID": "client-reused-trace-id"}
+    as_account(client, "warehouse")
+    first = client.post(f"/api/v1/cad/jobs/{job}/cache/reject", headers=headers)
+    as_account(client, "manager")
+    second = client.post(f"/api/v1/cad/jobs/{job}/cache/reject", headers=headers)
+    assert first.status_code == second.status_code == 200
+    assert first.json()["removed"] is True and second.json()["removed"] is False
+    assert first.json()["audit"] == second.json()["audit"] == "recorded"
+    rows = [a for a in audits() if a["ref_no"] == job and a["action"] == "作廢"]
+    assert sorted(a["actor_id"] for a in rows) == ["manager", "warehouse"]
+    assert {a["request_id"] for a in rows} == {"client-reused-trace-id"}
+    assert len({a["detail"]["audit_id"] for a in rows}) == 2
+    # 再補送一次：都已送出，不重複
+    assert cad_cache.flush_audit() == 0
+    assert len([a for a in audits() if a["ref_no"] == job and a["action"] == "作廢"]) == 2
 
 
 # ------------------------------------------- make cad-warm 退出碼（Architecture Medium）
