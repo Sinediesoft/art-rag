@@ -196,3 +196,41 @@ def test_empty_result_answers_without_model(client, monkeypatch):
     )
     events = parse_sse(client.post("/api/v1/inventory/ask", json={"question": "x"}).text)
     assert "".join(d["text"] for e, d in events if e == "token") == "查無符合條件的資料。"
+
+
+def test_sql_only_sees_parts_within_the_accounts_levels(repo):
+    """看不到機密的身分（業務：公開、內部），模型產生的 SQL 查不到機密零件與相關資料
+    （之前業務在圖紙頁看不到的零件，用 SQL 就查得到品名、材料、成本）。"""
+    secret = {
+        r["part_id"]
+        for r in repo._query("SELECT part_id FROM parts WHERE confidentiality = '機密'")
+    }
+    assert secret
+    scoped = ("公開", "內部")
+    for sql in (
+        "SELECT part_id FROM parts",
+        "SELECT part_id FROM stock",
+        "SELECT part_id FROM sales_orders",
+        "SELECT part_id FROM v_part_stock",
+        "SELECT w.part_id FROM schedule_ops s JOIN work_orders w ON w.wo_no = s.wo_no",
+    ):
+        seen = {r[0] for r in repo.run_readonly(sql, 500, 2000, scoped).rows}
+        assert not seen & secret, sql
+    every = {r[0] for r in repo.run_readonly("SELECT part_id FROM parts", 50, 2000).rows}
+    assert secret <= every  # 不限時照舊
+    with pytest.raises(SqlError):  # 過濾後的複本照樣唯讀、照樣只准白名單
+        repo.run_readonly("DELETE FROM parts", 10, 1000, scoped)
+
+
+def test_ask_hides_confidential_parts_from_sales(client):
+    from conftest import as_account
+
+    as_account(client, "sales")
+    try:
+        r = client.post(
+            "/api/v1/inventory/ask", json={"question": "哪些零件的可用庫存低於安全庫存？"}
+        )
+        result = next(d for e, d in parse_sse(r.text) if e == "result")
+        assert result["rows"] == []  # 連接法蘭、階梯傳動軸都是機密
+    finally:
+        as_account(client, "manager")

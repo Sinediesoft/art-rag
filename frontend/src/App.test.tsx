@@ -427,16 +427,18 @@ describe("頁首設定（Q-2026-10-12-02）：存在瀏覽器，從下一題開�
   const chatBodies = (t: ReturnType<typeof factoryBackend>) => t.calls.filter((c) => c.method === "POST" && c.path === "/chat").map((c) => c.body as Record<string, unknown>);
   const pick = (group: string, option: string) => fireEvent.click(within(screen.getByRole("radiogroup", { name: group })).getByRole("radio", { name: option }));
 
-  it("入口：深淺色收進設定；段落篩選設成「關」→ 下一題的 /chat 帶 rearrange=false，回答下方標出用了你的設定", async () => {
+  it("入口：深淺色用頁首圖示切換、不在設定裡；段落篩選設成「關」→ 下一題的 /chat 帶 rearrange=false，回答下方標出用了你的設定", async () => {
     const t = factoryBackend();
     renderApp();
     await ready();
-    expect(screen.queryByLabelText("切換成淺色")).toBeNull();
+    // 深淺色：頁首的太陽／月亮圖示，設定面板裡沒有
+    fireEvent.click(screen.getByLabelText("切換成明亮模式"));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(screen.getByLabelText("切換成暗色模式")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("設定"));
     // 伺服器預設來自 /status 的 chat_defaults
     await waitFor(() => expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "預設（開）" }).getAttribute("aria-checked")).toBe("true"));
-    pick("入口深淺色", "淺色");
-    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(screen.queryByRole("radiogroup", { name: "深淺色" })).toBeNull();
     pick("段落篩選", "關");
     expect(within(screen.getByRole("radiogroup", { name: "段落篩選" })).getByRole("radio", { name: "關" }).getAttribute("aria-checked")).toBe("true");
     expect(JSON.parse(localStorage.getItem("artrag-settings-v1")!).rearrange).toBe("off");
@@ -551,7 +553,7 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     await ask("梵谷畫這幅畫的時候在哪裡？");
     await idle();
     expect(document.querySelector(".jump--art")?.textContent).toContain("進入藝術模組");
-    t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } })));
+    t.on("POST", "/agent/route", () => json(route({ outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "chitchat", reply: "我可以幫你找畫。" } })));
     await ask("今天天氣如何？");
     await idle();
     const last = [...document.querySelectorAll(".msg--ai")].at(-1)!;

@@ -136,7 +136,10 @@ function TurnBody({ turn }: { turn: Turn }) {
       <div className="answer">
         <RichText text={r.short_circuit.reply} />
         <p className="answer__note">
-          <Icon name="info" />第 2 段{r.short_circuit.by === "Jev" ? " Jev Choice" : "（地端規則）"}判為無關閒聊：快速短路回覆，沒有檢索、沒有呼叫 LLM
+          <Icon name="info" />
+          {r.short_circuit.kind === "catalog"
+            ? "知識庫目錄題：直接從知識庫列出，沒有檢索、沒有呼叫 LLM"
+            : `第 2 段${r.short_circuit.by === "Jev" ? " Jev Choice" : "（地端規則）"}判為無關閒聊：快速短路回覆，沒有檢索、沒有呼叫 LLM`}
         </p>
       </div>
     );

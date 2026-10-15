@@ -6,7 +6,7 @@ import { Composer } from "../components/shell/Composer";
 import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
-import { SettingsMenu } from "../components/shell/SettingsMenu";
+import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
 import { COPY, type Domain } from "../shell/design";
@@ -69,7 +69,11 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
     if (c.id === conv?.id) navigate("/");
   };
 
-  const composer = <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} key={heroComposer ? "hero" : "dock"} />;
+  const composer = (
+    <div className="entry-compose" key={heroComposer ? "hero" : "dock"}>
+      <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} />
+    </div>
+  );
   const sidebar = (variant: "rail" | "drawer") => (
     <Sidebar
       convs={shell.convs}
@@ -80,6 +84,14 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
       onNew={() => {
         setDrawer(false);
         navigate("/");
+      }}
+      onModule={(d) => {
+        setDrawer(false);
+        onJump(shell.openModule(d), d);
+      }}
+      onTool={(to) => {
+        setDrawer(false);
+        navigate(to);
       }}
       onOpen={(c) => {
         setDrawer(false);
@@ -139,6 +151,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
                 <AccountMenu onClose={close} />
               </Popover>
             </div>
+            <ThemeToggle className="topbar__btn topbar__icon" />
             <div className="topbar__slot">
               <button
                 type="button"

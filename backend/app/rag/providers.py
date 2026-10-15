@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from app.core.config import get_models_config, get_settings
+from app.core.logging import log
 
 LOCAL_STRATEGIES = {"hybrid", "hybrid_fallback", "lora", "ortho2cad"}
 CLOUD_STRATEGIES = {"api_nokb", "api_kb"}
@@ -111,8 +112,10 @@ class OpenAICompatProvider(Provider):
             ):
                 if resp.status_code >= 400:
                     detail = (await resp.aread()).decode("utf-8", "replace")[:300]
+                    # 上游回應內容可能含模型路徑、內部設定：只記 log，回給使用者的只有狀態碼
+                    log.warning(f"{self.strategy} 推論伺服器 HTTP {resp.status_code}：{detail}")
                     raise ProviderUnavailable(
-                        f"HTTP {resp.status_code}: {detail}", retryable=resp.status_code >= 500
+                        f"推論伺服器回應 HTTP {resp.status_code}", retryable=resp.status_code >= 500
                     )
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
@@ -129,7 +132,9 @@ class OpenAICompatProvider(Provider):
                         if text:
                             yield text
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
-            raise ProviderUnavailable(f"連不上 {self.base_url}：{type(e).__name__}") from e
+            # 錯誤訊息會送到前端（fallback_reason）：不帶推論伺服器的內網位址
+            log.warning(f"{self.strategy} 連不上 {self.base_url}：{type(e).__name__}")
+            raise ProviderUnavailable(f"連不上推論伺服器：{type(e).__name__}") from e
         except httpx.TimeoutException as e:
             raise ProviderUnavailable(
                 f"生成逾時（>{s.generate_timeout_s:.0f} 秒）", retryable=True
@@ -173,7 +178,8 @@ OLLAMA_STRATEGIES = {"hybrid", "hybrid_fallback", "lora"}
 
 def _local(strategy: str, base_url: str, model: str, api_key: str) -> Provider:
     if not is_local_url(base_url):
-        raise ProviderUnavailable(f"{base_url} 不是本機或內網位址，拒絕連線（本地策略不外送資料）")
+        log.warning(f"{strategy} 的位址 {base_url} 不是本機或內網位址，拒絕連線")
+        raise ProviderUnavailable("設定的位址不是本機或內網位址，拒絕連線（本地策略不外送資料）")
     keep = get_settings().model_keep_alive.strip()
     return OpenAICompatProvider(
         strategy=strategy,

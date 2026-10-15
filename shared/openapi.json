@@ -3082,7 +3082,7 @@
           "eval"
         ],
         "summary": "Sql Eval Runs",
-        "description": "工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。",
+        "description": "工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。\n含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。",
         "operationId": "sql_eval_runs_api_v1_eval_sql_runs_get",
         "responses": {
           "200": {
@@ -3842,7 +3842,7 @@
             },
             "type": "array",
             "title": "Views",
-            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
+            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）",
             "default": []
           }
         },
@@ -10960,6 +10960,22 @@
             "title": "Forced Intent",
             "description": "使用者點澄清按鈕選的意圖"
           },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "art",
+                  "mfg"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限"
+          },
           "engine": {
             "type": "string",
             "enum": [
@@ -11157,6 +11173,19 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Dispatch"
+          },
+          "art_resolve": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Art Resolve",
+            "description": "沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）：{artwork_id, by, prob, ms, fallback_reason}；artwork_id 為 null＝判斷不出來、照全庫檢索作答。判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null"
           },
           "post_filter": {
             "type": "string",
@@ -12328,6 +12357,15 @@
             ],
             "title": "By"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chitchat",
+              "catalog"
+            ],
+            "title": "Kind",
+            "default": "chitchat"
+          },
           "reply": {
             "type": "string",
             "title": "Reply"
@@ -12340,7 +12378,7 @@
           "reply"
         ],
         "title": "ShortCircuitInfo",
-        "description": "第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"
+        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"
       },
       "SkippedWorkOrder": {
         "properties": {

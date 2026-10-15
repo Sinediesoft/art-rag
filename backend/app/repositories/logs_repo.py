@@ -5,6 +5,7 @@
 """
 
 import json
+import re
 import sqlite3
 import threading
 from datetime import UTC, datetime, timedelta
@@ -70,6 +71,9 @@ _ADDED_COLUMNS = {
     "route_logs": {"outcome": "TEXT"},
 }
 
+# 上傳照片的 ID（routes.upload_image：img_ 加 16 個十六進位字元）
+UPLOAD_ID = re.compile(r"img_[0-9a-f]{16}")
+
 
 class LogsRepo:
     def __init__(self, path: Path):
@@ -104,6 +108,9 @@ class LogsRepo:
         )
 
     def get_upload(self, image_id: str) -> str | None:
+        # 格式不對就當作找不到：含 NUL 的字串會讓 PostgreSQL 丟例外變成 500
+        if not UPLOAD_ID.fullmatch(image_id):
+            return None
         rows = self._exec("SELECT path FROM uploads WHERE image_id = ?", (image_id,))
         return rows[0]["path"] if rows else None
 

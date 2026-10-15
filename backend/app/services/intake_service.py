@@ -994,13 +994,14 @@ def _in_index(domain: str, item_id: str) -> bool:
 def _finish(
     draft_id: str, domain: str, item_id: str, written: list[Path], version_path: Path, old: str
 ) -> None:
-    t0, error = time.perf_counter(), None
+    t0, error, detail = time.perf_counter(), None, ""
     try:
         _rebuild_index()
         if not _in_index(domain, item_id):
             error = "新的資料沒有進索引（知識庫驗證沒過，見 /health 的問題清單）"
     except (Exception, SystemExit) as e:  # noqa: BLE001 — 建索引失敗要還原，不能讓執行緒默默結束
-        error = f"重建索引失敗：{e}"
+        # 草稿的 error 建立者也讀得到：只寫例外類型，內容（可能含資料庫位址、路徑）只進 log
+        error, detail = f"重建索引失敗（{type(e).__name__}）", f"{type(e).__name__}: {e}"
     if error:
         # 還原：刪掉寫進去的檔案、版本改回去，再建一次索引讓知識庫與索引一致
         for p in written:
@@ -1009,8 +1010,9 @@ def _finish(
         try:
             _rebuild_index()
         except (Exception, SystemExit) as e:  # noqa: BLE001
-            error += f"；還原後重建也失敗：{e}"
-        log.error(f"照片建檔 {draft_id} 收錄失敗：{error}")
+            error += f"；還原後重建也失敗（{type(e).__name__}）"
+            detail += f"；還原後：{type(e).__name__}: {e}"
+        log.error(f"照片建檔 {draft_id} 收錄失敗：{error}；{detail}")
     with _lock:
         d = _load(draft_id)
         d["status"] = "failed" if error else "done"

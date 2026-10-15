@@ -28,7 +28,7 @@ EXPECTED = {
     "manager": ("manager", MANAGER, ALL, SECRET, ALL_PARTS),
     "artist": ("artist", {"kb_annotate"}, {"art"}, PUBLIC, set()),
 }
-VIEWS = {"manager": {"diagnostics", "security_logs", "audit"}}
+VIEWS = {"manager": {"diagnostics", "security_logs", "audit", "eval"}}
 
 
 def test_there_are_exactly_the_five_accounts_and_five_roles():

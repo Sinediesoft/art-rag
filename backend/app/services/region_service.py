@@ -353,14 +353,15 @@ def _in_index(artwork_id: str, region_id: str) -> bool:
 
 
 def _finish(draft_id: str, json_path: Path, old_json: str, version_path: Path, old: str) -> None:
-    t0, error = time.perf_counter(), None
+    t0, error, detail = time.perf_counter(), None, ""
     d = _load(draft_id)
     try:
         intake._rebuild_index()
         if not _in_index(d["artwork_id"], d["commit"]["region_id"]):
             error = "新的區域沒有進索引（知識庫驗證沒過，見 /health 的問題清單）"
     except (Exception, SystemExit) as e:  # noqa: BLE001 — 建索引失敗要還原，不能讓執行緒默默結束
-        error = f"重建索引失敗：{e}"
+        # 草稿的 error 建立者也讀得到：只寫例外類型，內容（可能含資料庫位址、路徑）只進 log
+        error, detail = f"重建索引失敗（{type(e).__name__}）", f"{type(e).__name__}: {e}"
     if error:
         # 還原：畫作 JSON 與版本改回去，再建一次索引讓知識庫與索引一致
         json_path.write_text(old_json, encoding="utf-8", newline="\n")
@@ -368,8 +369,9 @@ def _finish(draft_id: str, json_path: Path, old_json: str, version_path: Path, o
         try:
             intake._rebuild_index()
         except (Exception, SystemExit) as e:  # noqa: BLE001
-            error += f"；還原後重建也失敗：{e}"
-        log.error(f"區域解說 {draft_id} 收錄失敗：{error}")
+            error += f"；還原後重建也失敗（{type(e).__name__}）"
+            detail += f"；還原後：{type(e).__name__}: {e}"
+        log.error(f"區域解說 {draft_id} 收錄失敗：{error}；{detail}")
     with intake._lock:
         d = _load(draft_id)
         d["status"] = "failed" if error else "done"

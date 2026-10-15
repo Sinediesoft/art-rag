@@ -22,6 +22,8 @@ export interface Dispatched {
   path?: string;
   op?: string | null;
   compare?: { kind: "artwork" | "part"; refs: string[]; labels: string[] } | null;
+  /** 跨畫作的比較題（docs/adr/039）：沒指定畫作也直接全庫問答，不改列搜尋結果 */
+  global_qa?: boolean;
 }
 
 export const dispatchOf = (r: RouteResponse) => r.dispatch as unknown as Dispatched;
@@ -46,7 +48,7 @@ export async function runTurn(turn: Turn, update: Update, { signal, token, accep
   update((t) => ({ ...t, phase: "routing", route: null, failure: null, part: null, archived: undefined }));
   let route: RouteResponse;
   try {
-    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced }, token, signal);
+    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced, domain: turn.domain ?? null }, token, signal);
   } catch (e) {
     if (signal.aborted) return update((t) => ({ ...t, phase: "stopped" }));
     return update((t) => ({ ...t, phase: "error", failure: failureOf(e) }));
@@ -76,6 +78,7 @@ export function initialPart(route: RouteResponse, imageId: string | null): Part 
       return { kind: "sql", question: d.question, status: "generating", attempts: [], draft: "", result: null, answer: "", done: null, error: null };
     case "art_qa":
       if (d.artwork_id) return chatPart({ artwork_id: d.artwork_id });
+      if (d.global_qa) return chatPart({});
       return { kind: "artSearch", q: d.question, status: "loading", items: [], error: null };
     case "art_search":
       return { kind: "artSearch", q: d.question, status: "loading", items: [], error: null };

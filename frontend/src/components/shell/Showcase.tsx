@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { assetUrl } from "../../api/client";
+import { useArtwork } from "../../api/hooks";
 import { MODULE, type Domain } from "../../shell/design";
 import { KIND_LABEL, thumbOf, type Output } from "../../shell/outputs";
 import { Icon } from "./Icons";
 import { ArtworkView, DetailView, DrawingView, ModelView, ScheduleView, SimilarView, StockView, TimelineView } from "./Viewers";
+import { ZoomInset } from "./ZoomPan";
 
 /** 表格下載成 CSV（Excel 開得了：加 BOM）；檔案在瀏覽器裡產生，下載後立刻釋放，不留本機檔案網址 */
 function csvOf(columns: string[], rows: (string | number | null)[][]) {
@@ -87,10 +89,46 @@ function Thumb({ o }: { o: Output }) {
   );
 }
 
+/** 這幾種成果是一張大圖：標題列改成浮在圖上的「玻璃展籤」，不另外占一塊 */
+const OVERLAY = new Set(["artwork", "drawing", "model"]);
+
+/** 縮圖列拉開或收起：只是這個瀏覽器的偏好，讀寫失敗（私密視窗、封鎖儲存）就當作收起 */
+const STRIP_KEY = "artrag-strip-open";
+const short = (s: string) => s.split("（")[0];
+
+/** 作品：展品標籤的內容（中英文名、畫家・年代・媒材・收藏、風格標籤）直接放在標題列，不另外框起來 */
+function ArtworkHead({ o }: { o: Output }) {
+  const { data: a } = useArtwork(o.artworkId);
+  if (!a)
+    return (
+      <>
+        <h2 className="showcase__title">{o.title}</h2>
+        <p className="showcase__meta">{o.meta}</p>
+      </>
+    );
+  return (
+    <>
+      <h2 className="showcase__title">
+        {a.title.zh}
+        {a.title.en && <span className="showcase__en">{a.title.en}</span>}
+      </h2>
+      <p className="showcase__meta">{[a.artist.zh, short(a.date_text), a.medium, short(a.collection)].filter(Boolean).join("・")}</p>
+      {a.style_tags.length > 0 && (
+        <p className="showcase__tags">
+          {a.style_tags.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </p>
+      )}
+    </>
+  );
+}
+
 /**
- * 來源：ArtRAG-前端demo/source/src/components/Showcase.tsx。
+ * 來源：ArtRAG-整合版demo/source/src/components/Showcase.tsx。
  * 展示區：模組右半邊。只顯示對話產生的成果（目前的一張放大），下方一排縮圖可以切回之前的結果（← →）；
- * 成果跟著對話紀錄，不會消失。
+ * 成果跟著對話紀錄，不會消失。作品、圖紙、3D 的標題浮在圖上：全圖時透明（圖自動避開），放大到標題底下才浮現霧面。
+ * 縮圖列預設收起，只留一條細列，點「這段對話的成果」才拉開，會記住上次的狀態。
  */
 export function Showcase({
   domain,
@@ -111,6 +149,24 @@ export function Showcase({
   const root = useRef<HTMLElement>(null);
   const strip = useRef<HTMLOListElement>(null);
   const [full, setFull] = useState(false);
+  const head = useRef<HTMLElement>(null);
+  const [headH, setHeadH] = useState(0);
+  const overlay = !!active && OVERLAY.has(active.kind);
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(STRIP_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(STRIP_KEY, open ? "0" : "1");
+    } catch {
+      // 存不了就只在這次有效
+    }
+  };
   const idx = active ? outputs.findIndex((o) => o.key === active.key) : -1;
   const go = (d: number) => {
     if (!outputs.length) return;
@@ -127,14 +183,25 @@ export function Showcase({
   // 新成果出現時，縮圖列捲到它
   useEffect(() => {
     strip.current?.querySelector(".strip__item.is-on")?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  }, [active?.key]);
+  }, [active?.key, open]);
+
+  // 浮在圖上的標題列有多高：圖在全圖時避開這一段
+  useLayoutEffect(() => {
+    const el = head.current;
+    if (!el || !overlay) return setHeadH(0);
+    const ro = new ResizeObserver(() => setHeadH(el.offsetHeight));
+    ro.observe(el);
+    setHeadH(el.offsetHeight);
+    return () => ro.disconnect();
+  }, [overlay, active?.key]);
 
   const dl = active ? downloadOf(active) : null;
 
   return (
     <section
       ref={root}
-      className={`showcase showcase--${domain}`}
+      className={`showcase showcase--${domain}${overlay ? " showcase--overlay" : ""}`}
+      style={{ "--head-h": `${headH}px` } as CSSProperties}
       aria-label="展示區"
       tabIndex={-1}
       onKeyDown={(e) => {
@@ -151,14 +218,20 @@ export function Showcase({
     >
       {active ? (
         <>
-          <header className="showcase__head">
+          <header ref={head} className="showcase__head">
             <div className="showcase__titles">
               <p className="showcase__kind">
                 <span className="showcase__dot" />
                 {KIND_LABEL[active.kind]}
               </p>
-              <h2 className="showcase__title">{active.title}</h2>
-              <p className="showcase__meta">{active.meta}</p>
+              {active.kind === "artwork" ? (
+                <ArtworkHead o={active} />
+              ) : (
+                <>
+                  <h2 className="showcase__title">{active.title}</h2>
+                  <p className="showcase__meta">{active.meta}</p>
+                </>
+              )}
             </div>
             <div className="showcase__tools">
               {dl && (
@@ -178,6 +251,7 @@ export function Showcase({
               </button>
             </div>
           </header>
+          <ZoomInset.Provider value={headH}>
           <div className="showcase__body" key={active.key}>
             {active.kind === "drawing" && <DrawingView o={active} />}
             {(active.kind === "stock" || active.kind === "query") && <StockView o={active} onRerun={onRerun} />}
@@ -188,6 +262,7 @@ export function Showcase({
             {active.kind === "timeline" && <TimelineView o={active} onAsk={onAsk} />}
             {active.kind === "similar" && <SimilarView o={active} onAsk={onAsk} />}
           </div>
+          </ZoomInset.Provider>
         </>
       ) : (
         <div className="showcase__empty">
@@ -203,39 +278,48 @@ export function Showcase({
         </div>
       )}
 
-      <footer className="strip">
-        <p className="strip__label">這段對話的成果</p>
-        <ol ref={strip} className="strip__list">
-          {outputs.map((o, i) => (
-            <li key={o.key}>
-              <button
-                type="button"
-                className={`strip__item${o.key === active?.key ? " is-on" : ""}`}
-                onClick={() => onSelect(o.key)}
-                title={`${KIND_LABEL[o.kind]}・${o.title}`}
-                aria-current={o.key === active?.key ? "true" : undefined}
-              >
-                <span className="strip__thumb">
-                  <Thumb o={o} />
-                </span>
-                <span className="strip__text">
-                  <span className="strip__n num">{String(i + 1).padStart(2, "0")}</span>
-                  {KIND_LABEL[o.kind]}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-        <div className="strip__nav">
-          <button type="button" onClick={() => go(-1)} disabled={outputs.length < 2} title="上一個（←）" aria-label="上一個成果">
-            <Icon name="chevronLeft" strokeWidth={1.6} />
+      <footer className={`strip${open ? " is-open" : ""}`}>
+        <div className="strip__bar">
+          <button type="button" className="strip__toggle" onClick={toggle} aria-expanded={open} title={open ? "收起縮圖" : "拉開縮圖，切換這段對話的其他成果"}>
+            <span className="strip__grip" aria-hidden />
+            <Icon name="chevronDown" strokeWidth={1.6} />
+            <span>這段對話的成果</span>
+            <span className="strip__count num">{outputs.length}</span>
           </button>
-          <span className="num">
-            {String(Math.max(0, idx + 1)).padStart(2, "0")} / {String(outputs.length).padStart(2, "0")}
-          </span>
-          <button type="button" onClick={() => go(1)} disabled={outputs.length < 2} title="下一個（→）" aria-label="下一個成果">
-            <Icon name="chevronRight" strokeWidth={1.6} />
-          </button>
+          <div className="strip__nav">
+            <button type="button" onClick={() => go(-1)} disabled={outputs.length < 2} title="上一個（←）" aria-label="上一個成果">
+              <Icon name="chevronLeft" strokeWidth={1.6} />
+            </button>
+            <span className="num">
+              {String(Math.max(0, idx + 1)).padStart(2, "0")} / {String(outputs.length).padStart(2, "0")}
+            </span>
+            <button type="button" onClick={() => go(1)} disabled={outputs.length < 2} title="下一個（→）" aria-label="下一個成果">
+              <Icon name="chevronRight" strokeWidth={1.6} />
+            </button>
+          </div>
+        </div>
+        <div className="strip__drawer" inert={!open}>
+          <ol ref={strip} className="strip__list">
+            {outputs.map((o, i) => (
+              <li key={o.key}>
+                <button
+                  type="button"
+                  className={`strip__item${o.key === active?.key ? " is-on" : ""}`}
+                  onClick={() => onSelect(o.key)}
+                  title={`${KIND_LABEL[o.kind]}・${o.title}`}
+                  aria-current={o.key === active?.key ? "true" : undefined}
+                >
+                  <span className="strip__thumb">
+                    <Thumb o={o} />
+                  </span>
+                  <span className="strip__text">
+                    <span className="strip__n num">{String(i + 1).padStart(2, "0")}</span>
+                    {KIND_LABEL[o.kind]}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
         </div>
       </footer>
     </section>

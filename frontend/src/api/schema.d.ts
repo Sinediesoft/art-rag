@@ -1375,6 +1375,7 @@ export interface paths {
         /**
          * Sql Eval Runs
          * @description 工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。
+         *     含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。
          */
         get: operations["sql_eval_runs_api_v1_eval_sql_runs_get"];
         put?: never;
@@ -1739,7 +1740,7 @@ export interface components {
             clearance: number;
             /**
              * Views
-             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）
+             * @description 看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）
              * @default []
              */
             views: string[];
@@ -4617,6 +4618,11 @@ export interface components {
              */
             forced_intent?: string | null;
             /**
+             * Domain
+             * @description 入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限
+             */
+            domain?: ("art" | "mfg") | null;
+            /**
              * Engine
              * @description 第 2、4～6 段由誰判斷：auto／jev＝用 Jev，叫不到 Jev（斷網、逾時、回錯誤、沒金鑰）才改地端規則；local＝只用地端規則。只有評估模式（EVAL_CONTROLS＋本機）才採用 local，其他情況一律由伺服器決定（docs/adr/030）
              * @default auto
@@ -4705,6 +4711,13 @@ export interface components {
             dispatch: {
                 [key: string]: unknown;
             };
+            /**
+             * Art Resolve
+             * @description 沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）：{artwork_id, by, prob, ms, fallback_reason}；artwork_id 為 null＝判斷不出來、照全庫檢索作答。判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null
+             */
+            art_resolve?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Post Filter
              * @description 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）
@@ -5094,7 +5107,8 @@ export interface components {
         };
         /**
          * ShortCircuitInfo
-         * @description 第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。
+         * @description 快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
+         *     或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。
          */
         ShortCircuitInfo: {
             /**
@@ -5107,6 +5121,12 @@ export interface components {
              * @enum {string}
              */
             by: "Jev" | "地端";
+            /**
+             * Kind
+             * @default chitchat
+             * @enum {string}
+             */
+            kind: "chitchat" | "catalog";
             /** Reply */
             reply: string;
         };

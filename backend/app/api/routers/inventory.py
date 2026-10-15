@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from app.agent import guard
 from app.api import schemas as S
 from app.api.deps import ID_PATTERN
-from app.core.errors import AppError
+from app.core.errors import AppError, safe_stream
 from app.rag.text2sql import load_examples, prompt_versions
 from app.repositories.inventory_repo import get_inventory_repo
 from app.services import (
@@ -74,9 +74,10 @@ async def inventory_ask(body: S.InventoryAskRequest, request: Request):
         request_id=request.state.request_id,
         strategy=body.strategy,
         allow_fallback=body.allow_fallback,
+        account=account,
     )
     return StreamingResponse(
-        stream,
+        safe_stream(stream, request.state.request_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
