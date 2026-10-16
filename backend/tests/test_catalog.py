@@ -9,7 +9,15 @@ from app.services import chat_service
 
 
 @pytest.mark.parametrize(
-    "question", ["目前知識庫有哪些畫", "你們有哪些館藏？", "列出所有畫作", "知識庫總共有幾幅畫？"]
+    "question",
+    [
+        "目前知識庫有哪些畫",
+        "你們有哪些館藏？",
+        "列出所有畫作",
+        "知識庫總共有幾幅畫？",
+        "列出知識庫裡所有的畫",  # 探測題 p-02：中間多了地點
+        "列出館藏中全部的作品",
+    ],
 )
 def test_list_question_is_answered_from_the_knowledge_base(client, question):
     """本地分流常把這類問題分錯（落到批次辨識、先請使用者選）；
