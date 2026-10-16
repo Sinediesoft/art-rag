@@ -137,6 +137,9 @@ def test_drawing_search_with_a_question_about_a_named_part_becomes_drawing_qa(
         ("階梯傳動軸的總長是多少？", "drawing_qa", ("drawing_qa", "direct")),  # p-30
         ("階梯傳動軸還剩幾件？", "data_query", ("data_query", "clarify")),  # 零件數量本來就該查庫存
         ("找一幅有騾隊的畫", "art_search", ("art_search", "clarify")),  # 沒指名、在找畫
+        # 指名兩件：只帶第一件會答不出來（探測題 p-42），照舊請使用者選
+        ("T 型槽螺帽和 L 型固定支架哪個比較重？", "drawing_qa", ("drawing_qa", "clarify")),
+        ("谿山行旅圖和有絲柏的麥田哪一幅比較高？", "art_qa", ("art_qa", "clarify")),
     ],
 )
 def test_named_item_question_skips_clarify(client, fake_jev, monkeypatch, question, top, expected):

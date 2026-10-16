@@ -292,6 +292,10 @@ async def route(
     ):
         art = first(entities, "artwork") or first(entities, "artist")
         part = first(entities, "part")
+        # 只指名一件才直接問答：「T 型槽螺帽和 L 型固定支架哪個比較重？」只帶第一件會答不出來
+        named = {(e.kind, e.id) for e in entities if e.kind in ("artwork", "part")}
+        if len(named) > 1:
+            art = part = None
         if art and not part and intent in NAMED_ART_INTENTS and domain != "mfg":
             intent = "art_qa"
             reason = "指名畫作的問句：直接畫作問答"
