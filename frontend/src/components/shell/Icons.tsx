@@ -44,6 +44,7 @@ const PATHS: Record<string, string> = {
   minus: "M5 12h14",
   fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   expand: "M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7",
+  unfocus: "M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7",
   sidebar: "M4 5h16v14H4zM9.5 5v14",
   clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2",
   trash: "M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",

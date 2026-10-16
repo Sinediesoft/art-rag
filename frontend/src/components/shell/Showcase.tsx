@@ -22,7 +22,8 @@ function download(href: string, name: string, revoke: boolean) {
   if (revoke) setTimeout(() => URL.revokeObjectURL(href), 1000);
 }
 
-function downloadOf(o: Output): (() => void) | null {
+/** 成果的下載（展示區與工廠工作台的板塊共用） */
+export function downloadOf(o: Output): (() => void) | null {
   switch (o.kind) {
     case "drawing":
       return o.partId ? () => download(assetUrl(`/api/v1/parts/${encodeURIComponent(o.partId!)}/drawing`), `${o.partId}.png`, false) : null;

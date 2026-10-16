@@ -382,13 +382,13 @@ describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL
     await ask("連接法蘭有哪些公差要求？");
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
-    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".workbench")).not.toBeNull());
     await ask("法蘭還剩幾件可以出貨？");
     await idle();
     await ask("把連接法蘭轉成 3D");
     await idle();
     fireEvent.click(screen.getByText("開始轉換"));
-    await waitFor(() => expect([...document.querySelectorAll(".strip__item")].some((b) => b.textContent?.includes("3D"))).toBe(true));
+    await waitFor(() => expect(document.querySelector('.wb-panel[data-panel="model"] .view--model')).not.toBeNull());
     const before = document.body.textContent ?? "";
     expect(before).toContain("±0.02");
     expect(before).toContain("111×222×33");
@@ -401,11 +401,11 @@ describe("憑證更新時已完成的非公開成果（審查報告：完成 SQL
       window.dispatchEvent(new CustomEvent("artrag:token-renewed", { detail: "TOKEN_EXPIRED" }));
     });
     await waitFor(() => expect(document.querySelector(".composer__lock")?.textContent).toContain("正在確認身分"));
-    // 左邊對話、右邊展示區、縮圖歷程都不能再有舊身分的結果
-    for (const kind of ["圖紙", "查詢", "庫存", "3D"]) {
-      const item = [...document.querySelectorAll(".strip__item")].find((b) => b.textContent?.includes(kind));
-      if (item) {
-        fireEvent.click(item);
+    // 左邊對話、右邊四個板塊（同時都在畫面上）都不能再有舊身分的結果；每個板塊的上一份、下一份也一樣
+    for (const panel of ["drawing", "model", "schedule", "stock"]) {
+      const prev = document.querySelector<HTMLElement>(`.wb-panel[data-panel="${panel}"] .wb-panel__nav button`);
+      if (prev) {
+        fireEvent.click(prev);
         await new Promise((r) => setTimeout(r, 20));
       }
       const text = document.body.textContent ?? "";
@@ -542,8 +542,9 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     fireEvent.click(jump);
     await waitFor(() => expect(where).toBe(`/factory/${convId}`));
     expect(screen.getByText("連接法蘭有哪些公差要求？", { selector: ".msg__bubble" })).toBeTruthy();
-    await waitFor(() => expect(document.querySelector(".showcase__kind")?.textContent).toContain("圖紙"));
-    await waitFor(() => expect(document.querySelector(".titleblock")?.textContent).toContain("FLG-2002"));
+    // 右側是工作台：圖紙放進圖紙板塊（目前在看的那一塊）
+    await waitFor(() => expect(document.querySelector('.wb-panel.is-active')?.getAttribute("data-panel")).toBe("drawing"));
+    await waitFor(() => expect(document.querySelector('.wb-panel[data-panel="drawing"] .titleblock')?.textContent).toContain("FLG-2002"));
   });
 
   it("畫作問題：「進入藝術模組」；一般問答（閒聊）不給任何跳轉", async () => {
@@ -567,7 +568,7 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
     await waitFor(() => expect(document.querySelector(".msplit")).not.toBeNull());
-    const sep = screen.getByRole("separator");
+    const sep = screen.getByRole("separator", { name: /左右寬度/ });
     const body = document.querySelector(".mbody") as HTMLElement;
     body.getBoundingClientRect = () => ({ left: 0, width: 1000, top: 0, height: 800, right: 1000, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
     expect(sep.getAttribute("aria-valuenow")).toBe("50");
@@ -592,35 +593,37 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     expect(sep.getAttribute("aria-valuenow")).toBe("50");
   });
 
-  it("成果歷程：新成果自動成為目前成果，點縮圖、← → 切換；回入口再開紀錄回到模組與當時的成果", async () => {
+  it("成果歷程：新成果放進對應的板塊並成為目前成果，對話裡的成果標籤可以切回；回入口再開紀錄回到模組與當時的成果", async () => {
     factoryBackend();
     renderApp();
     await ask("連接法蘭有哪些公差要求？");
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
-    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".workbench")).not.toBeNull());
     const url = where;
     await ask("法蘭還剩幾件可以出貨？");
     await idle();
-    await waitFor(() => expect(document.querySelectorAll(".strip__item")).toHaveLength(2));
-    // 新的查詢結果自動放上展示區
-    expect(document.querySelector(".showcase__kind")?.textContent).toMatch(/庫存|查詢/);
-    expect(document.querySelector(".view--data table")?.textContent).toContain("一廠成品倉");
-    fireEvent.click(document.querySelectorAll(".strip__item")[0]);
-    expect(document.querySelector(".showcase__kind")?.textContent).toContain("圖紙");
-    const show = document.querySelector(".showcase") as HTMLElement;
-    fireEvent.keyDown(show, { key: "ArrowRight" });
-    expect(document.querySelector(".showcase__kind")?.textContent).toMatch(/庫存|查詢/);
-    fireEvent.keyDown(show, { key: "ArrowLeft" });
-    expect(document.querySelector(".showcase__kind")?.textContent).toContain("圖紙");
+    const activePanel = () => document.querySelector(".wb-panel.is-active")?.getAttribute("data-panel");
+    // 新的查詢結果自動放進庫存板塊、成為目前成果；圖紙板塊照樣留著那張圖紙
+    await waitFor(() => expect(activePanel()).toBe("stock"));
+    expect(document.querySelector('.wb-panel[data-panel="stock"] .view--data table')?.textContent).toContain("一廠成品倉");
+    await waitFor(() => expect(document.querySelector('.wb-panel[data-panel="drawing"] .titleblock')?.textContent).toContain("FLG-2002"));
+    // 對話裡第一輪的成果標籤（圖紙）：切回圖紙板塊
+    fireEvent.click(document.querySelector(".outchip--drawing")!);
+    expect(activePanel()).toBe("drawing");
+    fireEvent.click(document.querySelector(".outchip--stock, .outchip--query")!);
+    expect(activePanel()).toBe("stock");
+    fireEvent.click(document.querySelector(".outchip--drawing")!);
+    expect(activePanel()).toBe("drawing");
     // 回入口（保留這段對話）→ 新對話 → 從紀錄打開：回到工廠模組，成果歷程與目前成果都還在
     fireEvent.click(screen.getByTitle("回到入口（保留這段對話）"));
     expect(where).toMatch(/^\/c\//);
     fireEvent.click(screen.getByText("新對話", { selector: ".side__new span" }));
     fireEvent.click(document.querySelector(".side__open")!);
     await waitFor(() => expect(where).toBe(url));
-    expect(document.querySelectorAll(".strip__item")).toHaveLength(2);
-    expect(document.querySelector(".showcase__kind")?.textContent).toContain("圖紙");
+    // 兩個板塊的成果都還在，目前成果仍是圖紙
+    expect(document.querySelector('.wb-panel[data-panel="stock"] .view--data table')?.textContent).toContain("一廠成品倉");
+    expect(activePanel()).toBe("drawing");
     // 存檔裡沒有憑證、交接票或內部數字
     await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).convs[0].module).toBe("factory"));
     const saved = localStorage.getItem(STORAGE_KEY)!;
@@ -635,12 +638,12 @@ describe("入口 → 模組：跳轉、雙窗格、成果歷程、開啟紀錄",
     await ask("連接法蘭有哪些公差要求？");
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
-    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".workbench")).not.toBeNull());
     const url = where;
     await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).convs[0].module).toBe("factory"));
     first.unmount();
     renderApp(url);
-    await waitFor(() => expect(document.querySelector(".showcase__kind")?.textContent).toContain("圖紙"));
+    await waitFor(() => expect(document.querySelector(".wb-panel.is-active")?.getAttribute("data-panel")).toBe("drawing"));
     expect(screen.getAllByText("以目前身分重新查詢").length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toContain("±0.02");
   });
@@ -839,7 +842,7 @@ describe("已送出的寫入（架構審查 F2：中止接收不等於撤銷交�
     await ask("連接法蘭有哪些公差要求？");
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
-    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".workbench")).not.toBeNull());
     await ask("連接法蘭庫存加 5");
     await idle();
     await screen.findByRole("button", { name: over.next === "approval" ? "送主管核准" : "確認寫入" });
@@ -1555,7 +1558,7 @@ describe("背景工作（TASK-20261013-001）：3D 重建與排程在 worker 執
     await ask("連接法蘭有哪些公差要求？");
     await idle();
     fireEvent.click(document.querySelector(".jump--factory")!);
-    await waitFor(() => expect(document.querySelector(".showcase")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(".workbench")).not.toBeNull());
     await ask(question);
     await idle();
   };

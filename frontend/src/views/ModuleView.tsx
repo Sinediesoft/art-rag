@@ -9,6 +9,7 @@ import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
 import { Showcase } from "../components/shell/Showcase";
 import { Sidebar } from "../components/shell/Sidebar";
 import { Thread } from "../components/shell/Thread";
+import { Workbench } from "../components/shell/Workbench";
 import { COPY, MODULE, TOOLS, type Domain } from "../shell/design";
 import { useEscape, useMedia, useStickyScroll } from "../shell/hooks";
 import { ctaOf, deriveOutputs, domainOf, subjectFor, withSubject } from "../shell/outputs";
@@ -22,6 +23,8 @@ import { lockReason, useThreadActions } from "./shared";
  * 來源：ArtRAG-前端demo/source/src/views/ModuleView.tsx。
  * 模組（10 Night 的版面）：左半邊是延續入口的對話，右半邊是對話產生的成果。
  * 左右預設各一半，中間的分隔線可以拖曳（30%–70%）、方向鍵微調，雙擊回到一半；窄螢幕改成「對話／展示區」兩個分頁。
+ * 工廠模組的右半邊是工作台（Workbench）：圖紙、3D、排程、庫存四個板塊同時擺著，對話產生的成果放進對應的板塊；
+ * 藝術模組維持展示區＋縮圖列。
  */
 export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domain; onJump: (convId: string, domain: Domain, key?: string) => void }) {
   const shell = useShell();
@@ -32,6 +35,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
   const activeOut = outs.find((o) => o.key === conv.active[domain]) ?? outs[outs.length - 1];
   const subject = subjectFor(domain, activeOut, conv);
   const narrow = !useMedia("(min-width: 900px)");
+  const bench = domain === "factory";
   const [pane, setPane] = useState<"chat" | "show">("chat");
   const [seen, setSeen] = useState(activeOut?.key);
   const [drawer, setDrawer] = useState(false);
@@ -160,7 +164,7 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
             對話
           </button>
           <button type="button" role="tab" aria-selected={pane === "show"} className={pane === "show" ? "is-on" : ""} onClick={() => setPane("show")}>
-            展示區 <span className="num">{outs.length}</span>
+            {bench ? "工作台" : "展示區"} <span className="num">{outs.length}</span>
             {activeOut && activeOut.key !== seen && pane === "chat" && <span className="mtabs__new">新</span>}
           </button>
         </div>
@@ -239,7 +243,24 @@ export function ModuleView({ conv, domain, onJump }: { conv: Conv; domain: Domai
           </div>
         )}
 
-        <Showcase domain={domain} outputs={outs} active={activeOut} onSelect={select} onAsk={(q) => ask(q)} onRerun={(turnId) => shell.rerun(conv.id, turnId)} />
+        {bench ? (
+          <Workbench
+            conv={conv}
+            outputs={outs}
+            active={activeOut}
+            subject={subject}
+            narrow={narrow}
+            locked={busy || !!lockReason(shell)}
+            onSelect={select}
+            onAsk={(q) => {
+              ask(q);
+              if (narrow) setPane("chat");
+            }}
+            onRerun={(turnId) => shell.rerun(conv.id, turnId)}
+          />
+        ) : (
+          <Showcase domain={domain} outputs={outs} active={activeOut} onSelect={select} onAsk={(q) => ask(q)} onRerun={(turnId) => shell.rerun(conv.id, turnId)} />
+        )}
       </div>
 
       {drawer && (
