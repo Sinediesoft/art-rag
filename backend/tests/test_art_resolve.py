@@ -126,6 +126,8 @@ def test_drawing_search_with_a_question_about_a_named_part_becomes_drawing_qa(
     assert r["intent"] == "drawing_search"
     r = route(client, "材質是 S45C 的圖紙是什麼？")  # 沒有指名零件：照舊查找
     assert r["intent"] == "drawing_search"
+    r = route(client, "圖號 D-24-0117 是什麼零件？")  # 在認是哪一張（分流評估 r11）：照舊查找
+    assert r["intent"] == "drawing_search"
 
 
 @pytest.mark.parametrize(

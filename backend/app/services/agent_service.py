@@ -40,6 +40,8 @@ DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙
 # 指名畫作時，分流信心不夠也可以直接改成畫作問答的意圖（不含寫入、耗時、閒聊）
 NAMED_ART_INTENTS = {"art_qa", "art_search", "data_query"}
 _INTRO_RE = re.compile(r"介紹|說明|講解|說說|聊聊")
+# 「圖號 D-24-0117 是什麼零件？」是在認是哪一張，圖紙查找本來就對（列出那張圖紙）
+_IDENTIFY_RE = re.compile(r"是(什麼|甚麼|哪(一)?(個|張|件|種))(零件|圖紙|圖|東西|東東)")
 
 
 def _chitchat_reply(question: str, gcfg: dict) -> str:
@@ -451,6 +453,7 @@ async def route(
             and not forced_intent
             and dispatch.get("part_id")
             and art_resolve.asks_about_it(question)
+            and not _IDENTIFY_RE.search(question)
         ):
             intent = "drawing_qa"
             dispatch["module"] = "drawing_qa"
