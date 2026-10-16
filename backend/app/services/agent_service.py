@@ -393,6 +393,19 @@ async def route(
                         resolved["switched_from"] = "art_search"
                 resolve_info = resolved
                 resolve_egress = guess.egress_bytes
+        # 圖紙也一樣：「連接法蘭的圖紙是哪一版？材質是什麼？」因為「圖紙」被分成圖紙查找，
+        # 前端只列零件清單、沒有回答。句子已經指名零件又是在發問，就改成圖紙問答；
+        # 兩者讀同一個資料領域，問答時照樣檢查看不看得到這張圖紙。使用者自己點的照他選的
+        if (
+            intent == "drawing_search"
+            and question
+            and not forced_intent
+            and dispatch.get("part_id")
+            and art_resolve.asks_about_it(question)
+        ):
+            intent = "drawing_qa"
+            dispatch["module"] = "drawing_qa"
+            dispatch.pop("path", None)
         # 沒指定畫作的比較題（「哪幅畫最早完成？」）會因為「哪幅」被分成以文搜畫，前端只列搜尋結果；
         # 改成畫作問答，問答時附知識庫目錄（docs/adr/039）。使用者自己點以文搜畫時照他選的
         if intent in ART_RESOLVE_INTENTS and catalog.is_compare_question(question):

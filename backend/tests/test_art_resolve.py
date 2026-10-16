@@ -97,3 +97,32 @@ def test_search_intent_with_a_question_becomes_art_qa(client, fake_jev, monkeypa
     assert r["intent"] == "art_search" and "switched_from" not in (r["art_resolve"] or {})
     r = route(client, "有猴子的那幅畫裡，陽傘是什麼顏色？", forced_intent="art_search")
     assert r["intent"] == "art_search"
+
+
+def test_drawing_search_with_a_question_about_a_named_part_becomes_drawing_qa(
+    client, fake_jev, monkeypatch
+):
+    """探測題 p-29「連接法蘭的圖紙是哪一版？材質是什麼？」分流成圖紙查找時，
+    前端只列零件清單、不回答；句子已經指名零件又是在發問，就改成圖紙問答並發交接票。
+    只是在找、或使用者自己點圖紙查找時照舊。"""
+    from app.agent import local_router
+    from app.agent.types import System1Result
+    from app.core.config import get_agent_config
+
+    def as_search(question, entities, photo_kind):
+        probs = {k: 0.0 for k in get_agent_config()["intents"]}
+        probs["drawing_search"] = 0.95
+        return System1Result(engine="local", intent_probs=probs, model="測試")
+
+    monkeypatch.setattr(local_router, "classify", as_search)
+    r = route(client, "連接法蘭的圖紙是哪一版？材質是什麼？")
+    assert r["intent"] == "drawing_qa" and r["dispatch"]["module"] == "drawing_qa"
+    assert r["dispatch"]["part_id"] == "mfg-002" and r["route_ticket"]
+    assert "path" not in r["dispatch"]
+
+    r = route(client, "找連接法蘭的圖紙")
+    assert r["intent"] == "drawing_search"
+    r = route(client, "連接法蘭的材質是什麼？", forced_intent="drawing_search")
+    assert r["intent"] == "drawing_search"
+    r = route(client, "材質是 S45C 的圖紙是什麼？")  # 沒有指名零件：照舊查找
+    assert r["intent"] == "drawing_search"
