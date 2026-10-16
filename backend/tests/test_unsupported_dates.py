@@ -20,15 +20,19 @@ SUPPORT = (
 
 
 def test_unsupported_dates_reports_only_what_the_sources_lack():
-    # p-10：生年是模型自己補的
-    assert unsupported_dates("他於1853年出生，1889年時是37歲 [1]。", SUPPORT) == ["1853"]
-    # p-15：年份 1889 資料有，「1889 年 6 月」沒有
+    # p-10：生年是模型自己補的；資料沒有生年，年齡也是自己算的
+    assert unsupported_dates("他於1853年出生，1889年時是37歲 [1]。", SUPPORT) == ["1853", "37歲"]
+    assert unsupported_dates("梵谷在1889年畫這幅畫時，是37歲 [1]。", SUPPORT) == ["37歲"]
+    # 資料有生卒年，年齡就算得出來
+    assert unsupported_dates("當時 36 歲 [1]。", SUPPORT + "梵谷（1853–1890）") == []
+    # p-15：年份 1889 資料有，「1889 年 6 月」沒有；「1889 年的 6 月」也一樣
     ans = "〈有絲柏的麥田〉是 1889 年畫的 [1]，而〈星夜〉是 1889 年 6 月畫的 [2]。"
     assert unsupported_dates(ans, SUPPORT) == ["1889年6月"]
+    assert unsupported_dates("兩幅是 1889 年的 6 月與 7 月初畫的。", SUPPORT) == ["1889年6月"]
     # 資料寫了的年月、空白寫法不同也算有
     assert unsupported_dates("這幅畫繪於1889年7月初 [2]。", SUPPORT) == []
-    # 年齡、尺寸、件數不是年份
-    assert unsupported_dates("當時 36 歲，畫面 1200 mm，共 2026 件 [1]。", SUPPORT) == []
+    # 尺寸、件數不是年份
+    assert unsupported_dates("畫面 1200 mm，共 2026 件 [1]。", SUPPORT) == []
 
 
 def test_question_counts_as_support():
@@ -38,6 +42,10 @@ def test_question_counts_as_support():
 
 
 def test_drop_sentences_with():
+    # 句號後面的右括號跟著那一句走，不留孤立的「）」
+    ans = "畫於 1889 年 [1]。（補充：他於1853年出生。）當時在聖雷米 [2]。"
+    assert drop_sentences_with(ans, ["1853"]) == "畫於 1889 年 [1]。當時在聖雷米 [2]。"
+    assert drop_sentences_with("1889 年的 6 月畫的 [2]。", ["1889年6月"]) == ""
     ans = "這幅畫繪於 1889 年 7 月初 [2]。他於 1853 年出生 [1]。當時住在療養院 [2]。"
     assert (
         drop_sentences_with(ans, ["1853"]) == "這幅畫繪於 1889 年 7 月初 [2]。當時住在療養院 [2]。"
