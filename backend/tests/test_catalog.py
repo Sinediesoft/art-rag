@@ -120,3 +120,22 @@ def test_list_question_is_not_blocked_by_a_wrong_route(client, monkeypatch):
         assert r["blocked"] is None and r["intent"] == "art_qa"
     finally:
         as_account(client, "manager")
+
+
+@pytest.mark.parametrize("question", ["你好", "您好！", "Hello", "謝謝你", "早安～"])
+def test_greeting_gets_a_friendly_reply(question):
+    """探測題 p-36「你好」回「這個問題不在我的範圍」：打招呼、道謝改回友善的一句"""
+    from app.core.config import get_agent_config
+    from app.services.agent_service import _chitchat_reply
+
+    gcfg = get_agent_config()["guard"]
+    assert _chitchat_reply(question, gcfg) == gcfg["greeting_reply"]
+
+
+@pytest.mark.parametrize("question", ["今天天氣如何？", "你好，幫我寫一首詩"])
+def test_other_chitchat_keeps_the_scope_reply(question):
+    from app.core.config import get_agent_config
+    from app.services.agent_service import _chitchat_reply
+
+    gcfg = get_agent_config()["guard"]
+    assert _chitchat_reply(question, gcfg) == gcfg["chitchat_reply"]

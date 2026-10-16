@@ -42,6 +42,14 @@ NAMED_ART_INTENTS = {"art_qa", "art_search", "data_query"}
 _INTRO_RE = re.compile(r"介紹|說明|講解|說說|聊聊")
 
 
+def _chitchat_reply(question: str, gcfg: dict) -> str:
+    """打招呼、道謝回友善的一句；其他閒聊照舊說明能做什麼"""
+    pattern = gcfg.get("greeting_pattern")
+    if pattern and re.search(pattern, question.strip(), flags=re.IGNORECASE):
+        return gcfg["greeting_reply"]
+    return gcfg["chitchat_reply"]
+
+
 def _asks_about_named(question: str) -> bool:
     """在發問、請介紹，或只說了作品名稱（「谿山行旅圖」）"""
     bare = re.sub(r"[\s？?。!！]", "", question)
@@ -383,7 +391,7 @@ async def route(
                 "stage": 2,
                 "by": "Jev" if guard_res.engine == "jev" else "地端",
                 "kind": "chitchat",
-                "reply": cfg["guard"]["chitchat_reply"],
+                "reply": _chitchat_reply(question, cfg["guard"]),
             }
             outcome = "short_circuit"
         elif catalog_list:
