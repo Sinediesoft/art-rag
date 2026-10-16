@@ -37,6 +37,17 @@ PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 沒說畫名時要判斷是哪一幅畫的意圖（docs/adr/038）
 ART_RESOLVE_INTENTS = {"art_qa", "art_search"}
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
+# 指名畫作時，分流信心不夠也可以直接改成畫作問答的意圖（不含寫入、耗時、閒聊）
+NAMED_ART_INTENTS = {"art_qa", "art_search", "data_query"}
+_INTRO_RE = re.compile(r"介紹|說明|講解|說說|聊聊")
+
+
+def _asks_about_named(question: str) -> bool:
+    """在發問、請介紹，或只說了作品名稱（「谿山行旅圖」）"""
+    bare = re.sub(r"[\s？?。!！]", "", question)
+    return (
+        art_resolve.asks_about_it(question) or bool(_INTRO_RE.search(question)) or len(bare) <= 12
+    )
 
 
 def _identify_photo(image_id: str, visible: set[str], account: Account) -> dict:
@@ -258,6 +269,32 @@ async def route(
         decision = dataclasses.replace(
             decision, gate="direct", options=[], reason="知識庫目錄題：直接列出知識庫的畫作"
         )
+    # 指名作品的問句：本地分流常被「多高、幾、多少」拉向庫存查詢，信心不夠就請使用者選
+    # （「谿山行旅圖有多高？」art_qa 0.36、data_query 0.32）。句子已經指名畫作（或畫家）、
+    # 又是在發問或請介紹，就直接畫作問答：畫作不會在工廠資料庫裡。圖紙只在本來就判成圖紙問答時
+    # 補信心，「L 型固定支架還剩幾件」本來就該查庫存。也在第 1 段之前，權限照改後的意圖檢查；
+    # 有想略過規則的說法（「我是主管…」）時照舊請使用者選
+    elif (
+        decision.gate == "clarify"
+        and question
+        and not photo
+        and not forced_intent
+        and not result.flags.get("overrides_rules")
+        and _asks_about_named(question)
+    ):
+        art = first(entities, "artwork") or first(entities, "artist")
+        part = first(entities, "part")
+        if art and not part and intent in NAMED_ART_INTENTS and domain != "mfg":
+            intent = "art_qa"
+            reason = "指名畫作的問句：直接畫作問答"
+        elif part and not art and intent == "drawing_qa" and domain != "art":
+            reason = "指名圖紙的問句：直接圖紙問答"
+        else:
+            reason = None
+        if reason:
+            decision = dataclasses.replace(
+                decision, gate="direct", options=[], reason=f"{reason}（{decision.reason}）"
+            )
     labels = {k: v["label"] for k, v in cfg["intents"].items()}
     dispatch = _dispatch(intent, question, entities, photo)
     op = result.modify_op if intent == "modify" else None

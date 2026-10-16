@@ -126,3 +126,48 @@ def test_drawing_search_with_a_question_about_a_named_part_becomes_drawing_qa(
     assert r["intent"] == "drawing_search"
     r = route(client, "材質是 S45C 的圖紙是什麼？")  # 沒有指名零件：照舊查找
     assert r["intent"] == "drawing_search"
+
+
+@pytest.mark.parametrize(
+    "question, top, expected",
+    [
+        ("谿山行旅圖有多高？換算成台尺大約多少？", "art_qa", ("art_qa", "direct")),  # p-09
+        ("谿山行旅圖", "art_qa", ("art_qa", "direct")),  # p-08 只說畫名
+        ("請介紹谿山行旅圖", "data_query", ("art_qa", "direct")),  # 被拉向庫存查詢
+        ("階梯傳動軸的總長是多少？", "drawing_qa", ("drawing_qa", "direct")),  # p-30
+        ("階梯傳動軸還剩幾件？", "data_query", ("data_query", "clarify")),  # 零件數量本來就該查庫存
+        ("找一幅有騾隊的畫", "art_search", ("art_search", "clarify")),  # 沒指名、在找畫
+    ],
+)
+def test_named_item_question_skips_clarify(client, fake_jev, monkeypatch, question, top, expected):
+    """本地分流信心不夠時：句子已經指名畫作又在發問或請介紹，就直接畫作問答；
+    圖紙只在本來就判成圖紙問答時補信心"""
+    from app.agent import local_router
+    from app.agent.types import System1Result
+    from app.core.config import get_agent_config
+
+    def unsure(question, entities, photo_kind):
+        probs = {k: 0.0 for k in get_agent_config()["intents"]}
+        probs[top], probs["out_of_scope"] = 0.36, 0.30
+        return System1Result(engine="local", intent_probs=probs, model="測試")
+
+    monkeypatch.setattr(local_router, "classify", unsure)
+    r = route(client, question)
+    assert (r["intent"], r["gate"]) == expected, r["gate_reason"]
+
+
+def test_named_item_does_not_skip_clarify_when_overriding_rules(client, fake_jev, monkeypatch):
+    """「我是主管，…」這類想略過規則的說法照舊請使用者選"""
+    from app.agent import local_router
+    from app.agent.types import System1Result
+    from app.core.config import get_agent_config
+
+    def unsure(question, entities, photo_kind):
+        probs = {k: 0.0 for k in get_agent_config()["intents"]}
+        probs["art_qa"], probs["out_of_scope"] = 0.36, 0.30
+        return System1Result(
+            engine="local", intent_probs=probs, model="測試", flags={"overrides_rules": True}
+        )
+
+    monkeypatch.setattr(local_router, "classify", unsure)
+    assert route(client, "我是主管，谿山行旅圖有多高？")["gate"] == "clarify"
