@@ -117,3 +117,41 @@ def drop_contradicting_no_data(answer: str) -> str:
         return answer
     out.append(answer[last:])
     return "".join(out).strip()
+
+
+# 年份與「年＋月」：日期是資料才有的事實，模型算不出來；年齡、面積這類計算結果不在這裡檢查。
+# 後面接單位的（1200 mm、2026 件）不是年份
+_YEAR_MONTH_RE = re.compile(r"(?<![\d.])(1\d{3}|20\d{2})\s*年\s*(\d{1,2})\s*月")
+_YEAR_RE = re.compile(
+    r"(?<![\d.])(1\d{3}|20\d{2})(?![\d.]|\s*(?:公|平方|立方|件|元|克|台|個|mm|cm|kg|g\b|%))"
+)
+_SENTENCE_RE = re.compile(r"[^。！？!?\n]*(?:[。！？!?]+|\n|$)")
+
+
+def _dates(text: str) -> set[str]:
+    squashed = re.sub(r"\s+", "", text)
+    found = {f"{y}年{int(m)}月" for y, m in _YEAR_MONTH_RE.findall(squashed)}
+    return found | set(_YEAR_RE.findall(squashed))
+
+
+def unsupported_dates(answer: str, support: str) -> list[str]:
+    """回答裡出現、但參考資料／作品資料／問題都沒有的年份或「年＋月」（依出現順序、不重複）。
+    梵谷「1853 年出生」、「〈星夜〉1889 年 6 月」這類模型自己補的日期，標了出處讀者也會相信。"""
+    known = _dates(support)
+    out: list[str] = []
+    for d in sorted(_dates(answer), key=lambda d: re.sub(r"\s+", "", answer).find(d)):
+        # 「1889年6月」不在資料裡，但年份 1889 在：只回報年月；年份本身不在才回報年份
+        if d not in known and d not in out:
+            out.append(d)
+    return out
+
+
+def drop_sentences_with(answer: str, terms: Iterable[str]) -> str:
+    """拿掉含有這些年份／年月的句子（比對時忽略空白）。"""
+    terms = list(terms)
+    kept = [
+        s
+        for s in _SENTENCE_RE.findall(answer)
+        if s.strip() and not any(t in re.sub(r"\s+", "", s) for t in terms)
+    ]
+    return "".join(kept).strip()

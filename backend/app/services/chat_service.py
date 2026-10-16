@@ -44,7 +44,14 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
-from app.rag.textproc import drop_contradicting_no_data, drop_stray_no_data, to_taiwan
+from app.rag.textproc import (
+    NO_DATA,
+    drop_contradicting_no_data,
+    drop_sentences_with,
+    drop_stray_no_data,
+    to_taiwan,
+    unsupported_dates,
+)
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
@@ -747,6 +754,43 @@ async def _chat_stream(
         )
         return
 
+    # 日期核對：回答寫了參考資料、作品資料、問題都沒有的年份或年月
+    # （梵谷「1853 年出生」、「〈星夜〉1889 年 6 月」），是模型自己補的，標了出處讀者也會相信。
+    # 改 prompt 不穩（ADR 028／037），這裡請同一個生成端帶著提醒重答一次；
+    # 重答還有就拿掉那幾句，全拿掉就回「沒有資料」
+    claim_note = ""
+    if use_retrieval and given:
+        card_text = part_card(artwork) if domain == "mfg" else artwork_card(artwork)
+        support = "\n".join([asked, card_text, *(s["text"] for s in given)])
+        unsupported = unsupported_dates(answer, support)
+        if unsupported:
+            terms = "、".join(f"「{t}」" for t in unsupported)
+            fix = (
+                f"（系統比對：上一版回答寫了參考資料沒有的 {terms}。只能用參考資料寫的內容回答；"
+                "參考資料沒寫的部分，就說知識庫沒有這方面的資料，不要自己補。）"
+            )
+            retry_messages = build_messages(
+                asked,
+                artwork,
+                given,
+                image_jpeg,
+                use_retrieval,
+                include_card=strategy != "api_nokb",
+                domain=domain,
+                note=f"{context_note}\n{fix}" if context_note else fix,
+            )
+            try:
+                retry = "".join([to_taiwan(p) async for p in provider.stream(retry_messages)])
+            except ProviderUnavailable:
+                retry = ""
+            if retry and not unsupported_dates(retry, support):
+                answer, claim_note = retry, f"；重答一次（原回答有資料沒寫的 {terms}）"
+            else:
+                left = unsupported_dates(retry, support) if retry else unsupported
+                answer = drop_sentences_with(retry or answer, left) or NO_DATA
+                claim_note = f"；拿掉資料沒寫的 {'、'.join(f'「{t}」' for t in left)}"
+            pieces = [answer]
+
     # 第 7 段輸出檢查：未授權文件識別資訊、帳密／金鑰、個資、內部資料、被剔除段落的內容、無效引用
     hidden = guard.hidden_terms(account, store.parts)
     flagged = post.flagged if post else []
@@ -784,6 +828,7 @@ async def _chat_stream(
     note = "；已拿掉和回答矛盾的「知識庫中沒有這方面的資料」" if cleaned != answer else ""
     if note:
         answer, pieces = cleaned, [cleaned]
+    note = claim_note + note
     _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過{note}")
     for piece in pieces:
         yield sse("token", {"text": piece})
