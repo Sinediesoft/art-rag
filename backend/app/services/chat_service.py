@@ -28,7 +28,7 @@ import json
 import time
 from collections.abc import AsyncIterator
 
-from app.agent import guard, handoff
+from app.agent import catalog, guard, handoff
 from app.agent.entities import get_index
 from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
 from app.core.logging import log
@@ -146,7 +146,11 @@ def retrieve(
     floor = max(cfg.retrieval["min_chunk_score"], best * cfg.retrieval["relative_chunk_ratio"])
     hits = [h for h in own if h.score >= floor] or own[:1]  # 已指定時至少留最相關的 1 段
     hits += [h for h in extra if h.score >= floor][: k - len(hits)]
-    return [_source(i, h, store) for i, h in enumerate(hits)]
+    sources = [_source(i, h, store) for i, h in enumerate(hits)]
+    if not owner and not part_id and catalog.needs_catalog(question):
+        # 沒指定畫作的清單題、比較題：最前面附知識庫目錄（docs/adr/039），模型才知道「全部有哪些」
+        sources = [catalog.source()] + [{**s, "ref": i + 2} for i, s in enumerate(sources)]
+    return sources
 
 
 def send_image_enabled(requested: bool | None = None) -> bool:
@@ -455,7 +459,7 @@ async def _chat_stream(
     route_info = None
     if not artwork_id and not part_id and image_id:
         visible = visible_part_ids(account, store.parts) if account is not None else None
-        found = identify_any(image_id, part_ids=visible)
+        found = identify_any(image_id, part_ids=visible, viewer=account)
         route_info = found["route"]
         domain = route_info["domain"]
         identified = found["drawing_result"] if domain == "mfg" else found["artwork_result"]
@@ -683,7 +687,7 @@ async def _chat_stream(
     if not attach_image:
         image_jpeg = None
     elif image_id:
-        image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id)))
+        image_jpeg = to_jpeg_bytes(load_image(load_upload(image_id, account)))
     elif domain == "mfg":
         image_jpeg = to_jpeg_bytes(load_image(REPO_ROOT / artwork["drawing"]))
     elif artwork:

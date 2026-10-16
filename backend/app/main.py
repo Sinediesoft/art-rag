@@ -23,10 +23,14 @@ from app.core.errors import (
     db_error_handler,
     error_body,
     http_error_handler,
+    jobs_unavailable_handler,
     unhandled_error_handler,
     validation_error_handler,
 )
 from app.core.logging import log, new_request_id, setup_logging
+from app.jobs import boot as jobs_boot
+from app.jobs import db as jobs_db
+from app.jobs.db import JobsUnavailable
 from app.rag.embedders import warmup
 from app.repositories import db
 from app.repositories.db import DatabaseUnavailable
@@ -52,6 +56,8 @@ async def lifespan(app: FastAPI):
     for path in get_logs_repo().purge_uploads(s.upload_ttl_days):
         (s.uploads_dir / path).unlink(missing_ok=True)
     purge_jobs(s.upload_ttl_days)
+    maintenance = jobs_boot.init()  # 啟用背景工作系統：授權查詢、outbox 投遞與租約恢復
+    jobs_boot.purge(s.jobs_event_retention_days)
     purge_drafts(s.upload_ttl_days)
     region_service.purge_drafts(s.upload_ttl_days)
     # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動
@@ -85,6 +91,9 @@ async def lifespan(app: FastAPI):
         watcher.cancel()
         with suppress(asyncio.CancelledError):
             await watcher
+    if maintenance:
+        maintenance.stop()
+    jobs_db.close()
     db.close_pool()
 
 
@@ -103,6 +112,7 @@ app = FastAPI(
     openapi_url="/openapi.json" if get_settings().demo_controls else None,
 )
 app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(JobsUnavailable, jobs_unavailable_handler)
 app.add_exception_handler(StarletteHTTPException, http_error_handler)
 # 資料庫連不上：503 DATABASE_UNAVAILABLE（比 Exception 更具體，先比對到這裡）
 for _exc in (*DB_DOWN, DatabaseUnavailable):

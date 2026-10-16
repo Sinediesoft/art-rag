@@ -85,7 +85,10 @@ export type PartSearchPart = {
 };
 
 export type CadJob = {
-  status: "preparing" | "generating" | "executing" | "done" | "error" | "stopped";
+  /** queued＝在佇列等 worker；stopped＝這個畫面停止追蹤（工作仍在背景執行，可再接回）；cancelled＝已取消、沒有結果 */
+  status: "queued" | "preparing" | "generating" | "executing" | "done" | "error" | "stopped" | "cancelled";
+  /** 背景工作編號：取消、重新整理後接回用 */
+  jobId?: string | null;
   meta: CadMetaEvent | null;
   code: string;
   result: CadResultEvent | null;
@@ -105,7 +108,10 @@ export type ReconstructPart = {
 };
 
 export type SolveJob = {
-  status: "starting" | "solving" | "done" | "error" | "stopped";
+  status: "queued" | "starting" | "solving" | "done" | "error" | "stopped" | "cancelled";
+  jobId?: string | null;
+  /** 已要求提前結束（採用目前最佳解並寫回），等 worker 收尾 */
+  stopping?: boolean;
   meta: ScheduleMetaEvent | null;
   progress: ScheduleProgressEvent | null;
   solution: ScheduleSolutionEvent | null;
@@ -147,6 +153,9 @@ export type RoutePart = { kind: "route" };
 
 export type Part = ChatPart | SqlPart | ArtSearchPart | PartSearchPart | ReconstructPart | SchedulePart | ChangePart | ComparePart | RoutePart;
 
+/** 入口的分類：畫作、工廠（docs/adr/040） */
+export type EntryDomain = "art" | "mfg";
+
 export interface Turn {
   id: string;
   /** 使用者輸入（送出前）；有 route 之後畫面改顯示 route.question（已遮蔽個資） */
@@ -154,6 +163,8 @@ export interface Turn {
   imageId: string | null;
   /** 點澄清按鈕選的意圖 */
   forced: string | null;
+  /** 入口選的分類（docs/adr/040）：只縮小分流範圍，不影響權限；null＝自動判斷 */
+  domain?: EntryDomain | null;
   /** 在入口或哪個模組問的 */
   at: View;
   ts: number;

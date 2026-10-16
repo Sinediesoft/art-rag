@@ -86,4 +86,22 @@ describe("Composer：送出、換行、IME、附件、停止", () => {
     fireEvent.click(screen.getByLabelText("停止"));
     expect(onStop).toHaveBeenCalled();
   });
+
+  it("身分世代變了（切換身分）就清掉附加的照片：上傳的照片只有擁有者能用，不帶到新身分", async () => {
+    const t = mockTransport();
+    t.on("POST", "/images", () => json({ image_id: "img-9" }));
+    const onSend = vi.fn();
+    const props = { busy: false, onSend, onStop: vi.fn(), copy: COPY.entry };
+    const view = render(<Composer {...props} resetKey="manager" />);
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("composer-file"), { target: { files: [new File(["x"], "p.jpg", { type: "image/jpeg" })] } });
+    });
+    await screen.findByAltText("附加的照片");
+    view.rerender(<Composer {...props} resetKey="manager" />);
+    expect(screen.queryByAltText("附加的照片")).not.toBeNull(); // 同一個身分：還在
+    view.rerender(<Composer {...props} resetKey={null} />);
+    expect(screen.queryByAltText("附加的照片")).not.toBeNull(); // 身分重新確認中（null）：先不動
+    view.rerender(<Composer {...props} resetKey="guest" />);
+    await waitFor(() => expect(screen.queryByAltText("附加的照片")).toBeNull());
+  });
 });

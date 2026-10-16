@@ -133,7 +133,7 @@ def test_next_version():
 
 
 # ---------------------------------------------------------------- 建檔流程（圖紙）
-def not_in_kb(image_id=None, top_k=None, part_ids=None, domain="mfg", uncertain=False):
+def not_in_kb(image_id=None, top_k=None, part_ids=None, domain="mfg", uncertain=False, viewer=None):
     return {
         "route": {"domain": domain, "margin": 0.3, "uncertain": uncertain},
         "drawing_result": (
@@ -410,7 +410,7 @@ def test_duplicate_check_only_looks_at_drawings_the_requester_can_see(client, mo
     業務看不到機密圖紙，辨識時不讀它們，也不會在「已收錄」訊息裡看到名稱。"""
     seen: list = []
 
-    def fake(image_id, top_k=None, part_ids=None):
+    def fake(image_id, top_k=None, part_ids=None, viewer=None):
         seen.append(part_ids)
         return not_in_kb()
 
@@ -425,7 +425,7 @@ def test_commit_rechecks_duplicates_within_the_managers_scope(client, reads, kb,
     draft = ready_draft(client, reads)
     seen: list = []
 
-    def dup(image_id, top_k=None, img=None, vec=None, part_ids=None):
+    def dup(image_id, top_k=None, img=None, vec=None, part_ids=None, viewer=None):
         seen.append(part_ids)
         return {"matched": True, "best_part_id": "mfg-002", "results": []}
 

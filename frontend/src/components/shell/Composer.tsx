@@ -16,6 +16,7 @@ export function Composer({
   copy,
   autoFocus,
   locked,
+  resetKey,
 }: {
   busy: boolean;
   onSend: (text: string, imageId: string | null) => void;
@@ -24,9 +25,18 @@ export function Composer({
   autoFocus?: boolean;
   /** 暫時不能送出的原因（例如切換身分中：這時候帶哪一張 JWT 不確定） */
   locked?: string;
+  /** 已確認的帳號 id：換成另一個帳號就放掉附加的照片（上傳的照片只有擁有者與被授權的帳號能用）；
+   * 確認前（null）不動，剛打開頁面確認身分不會清掉剛附的照片 */
+  resetKey?: string | null;
 }) {
   const [text, setText] = useState("");
   const [imageId, setImageId] = useState<string | null>(null);
+  const lastKey = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey == null) return;
+    if (lastKey.current != null && lastKey.current !== resetKey) setImageId(null);
+    lastKey.current = resetKey;
+  }, [resetKey]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);

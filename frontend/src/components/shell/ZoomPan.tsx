@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./Icons";
 
-// 來源：ArtRAG-前端demo/source/src/components/ZoomPan.tsx（原樣移植）
+// 來源：ArtRAG-整合版demo/source/src/components/ZoomPan.tsx（全圖時避開浮在上方的標題列）
 export interface Focus {
   /** 百分比座標 */
   x: number;
@@ -9,6 +9,9 @@ export interface Focus {
   /** 要看到的寬度占全圖的比例（0.2＝放大 5 倍） */
   zoom: number;
 }
+
+/** 上方被半透明標題列蓋住的高度：全圖時避開它，放大後圖可以延伸到標題列底下 */
+export const ZoomInset = createContext(0);
 
 interface View {
   s: number;
@@ -42,6 +45,7 @@ export function ZoomPan({
   const [v, setV] = useState<View>({ s: 1, tx: 0, ty: 0 });
   const [anim, setAnim] = useState(false);
   const drag = useRef<{ x: number; y: number; tx: number; ty: number; moved: boolean } | null>(null);
+  const pt = useContext(ZoomInset);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -58,11 +62,12 @@ export function ZoomPan({
     setV({ s: 1, tx: 0, ty: 0 });
   }, [src]);
 
-  const fit = nat && size.w ? Math.min(size.w / nat.w, size.h / nat.h) * 0.9 : 0;
+  const fit = nat && size.w ? Math.min(size.w / nat.w, Math.max(1, size.h - pt) / nat.h) * 0.96 : 0;
   const bw = nat ? nat.w * fit : 0;
   const bh = nat ? nat.h * fit : 0;
   const ox = (size.w - bw) / 2;
-  const oy = (size.h - bh) / 2;
+  const oy = pt + (size.h - pt - bh) / 2;
+  const cy = pt + (size.h - pt) / 2;
 
   const go = useCallback((next: View, animate = true) => {
     setAnim(animate);
@@ -79,9 +84,9 @@ export function ZoomPan({
     const s = Math.min(8, Math.max(1, 1 / focus.zoom));
     const u = (focus.x / 100) * bw;
     const w = (focus.y / 100) * bh;
-    go({ s, tx: size.w / 2 - ox - u * s, ty: size.h / 2 - oy - w * s });
+    go({ s, tx: size.w / 2 - ox - u * s, ty: cy - oy - w * s });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focus, nat, size.w, size.h]);
+  }, [focus, nat, size.w, size.h, pt]);
 
   const zoomAt = (cx: number, cy: number, s2: number, animate = false) => {
     const s = Math.min(8, Math.max(1, s2));
@@ -125,7 +130,7 @@ export function ZoomPan({
     zoomAt(e.clientX - r.left, e.clientY - r.top, v.s > 1.2 ? 1 : 2.5, true);
   };
 
-  const center = (k: number) => zoomAt(size.w / 2, size.h / 2, v.s * k, true);
+  const center = (k: number) => zoomAt(size.w / 2, cy, v.s * k, true);
 
   return (
     <div

@@ -1,4 +1,5 @@
-# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型；含 PostgreSQL 版）、openapi 與前端型別同步，
+# 每個 PR 自動跑：知識庫 JSON Schema、lint、型別、單元測試（mock 模型；含 PostgreSQL 版與背景工作的 PostgreSQL＋Redis＋worker 整合測試）、
+# openapi 與前端型別同步，
 # 以及生產排程服務（Timefold，Java 21）的建置與單元測試
 name: ci
 on:
@@ -37,8 +38,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      # CadQuery 會載入 VTK，無頭 Ubuntu 需要 OpenGL 函式庫；圖紙字型用 DejaVu
-      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1 fonts-dejavu-core
+      # CadQuery 會載入 VTK，無頭 Ubuntu 需要 OpenGL 函式庫；圖紙字型用 DejaVu。
+      # postgresql／redis-server 給背景工作的整合測試用（tests/jobs_support.py 自己 initdb 與啟動隔離的實例，
+      # 隨機埠、不連上面的服務容器）
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglu1-mesa libxrender1 fonts-dejavu-core postgresql redis-server
       - run: cd backend && uv sync
       - run: cd frontend && npm ci
       - name: 知識庫檢查

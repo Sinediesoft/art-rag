@@ -32,12 +32,12 @@ def test_unreadable_upload_is_415_without_exception_text(client):
 
 
 def test_unhandled_error_hides_exception_details(client, monkeypatch):
-    from app.api import routes
+    from app.api.routers import system
 
     def boom():
         raise RuntimeError("postgresql://artrag:secret@10.0.0.5/artrag 連線失敗")
 
-    monkeypatch.setattr(routes.memory_guard.guard, "status", boom)
+    monkeypatch.setattr(system.memory_guard.guard, "status", boom)
     with TestClient(app, raise_server_exceptions=False) as c:
         c.cookies = client.cookies
         r = c.get("/api/v1/memory")
@@ -107,12 +107,12 @@ def test_database_down_is_503_with_a_readable_message(client, monkeypatch):
     """Docker 停了、連線池拿不到連線：503 DATABASE_UNAVAILABLE，不是籠統的 500。"""
     from psycopg_pool import PoolTimeout
 
-    from app.api import routes
+    from app.api.routers import system
 
     def down():
         raise PoolTimeout("couldn't get a connection after 5.00 sec")
 
-    monkeypatch.setattr(routes.memory_guard.guard, "status", down)
+    monkeypatch.setattr(system.memory_guard.guard, "status", down)
     with TestClient(app, raise_server_exceptions=False) as c:
         c.cookies = client.cookies
         r = c.get("/api/v1/memory")

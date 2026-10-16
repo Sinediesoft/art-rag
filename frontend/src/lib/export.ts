@@ -2,6 +2,8 @@
 // 匯出了哪些資料由呼叫端另外記一筆稽核（api.logExport）。報告是單一 HTML 檔（圖片內嵌），
 // 可以直接存檔，也可以用瀏覽器列印存成 PDF。
 
+import { fetchBlob } from "../api/client";
+
 /** HTML 跳脫：報告裡的文字都來自知識庫與模型輸出，不能當成標記 */
 export function esc(s: unknown): string {
   return String(s ?? "")
@@ -50,9 +52,7 @@ export function printHtml(html: string) {
 /** 圖片轉成 data URL 內嵌進報告（同源、帶 cookie）；失敗就不放圖 */
 export async function imageDataUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
+    const blob = await fetchBlob(url);
     return await new Promise((resolve) => {
       const r = new FileReader();
       r.onload = () => resolve(String(r.result));

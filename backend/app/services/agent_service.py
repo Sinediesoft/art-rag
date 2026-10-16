@@ -18,10 +18,11 @@
 """
 
 import asyncio
+import dataclasses
 import re
 import time
 
-from app.agent import gate, guard, handoff, local_router
+from app.agent import art_resolve, catalog, gate, guard, handoff, local_router
 from app.agent.entities import first, get_index
 from app.agent.types import System1Result
 from app.core.config import get_agent_config
@@ -29,18 +30,20 @@ from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard, search_service
-from app.services.identity import Auth, level_rank, visible_part_ids
+from app.services.identity import Account, Auth, level_rank, visible_part_ids
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 只有照片、沒有文字時，問答模組用的預設問句（交接票綁這句話）
+# 沒說畫名時要判斷是哪一幅畫的意圖（docs/adr/038）
+ART_RESOLVE_INTENTS = {"art_qa", "art_search"}
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
 
 
-def _identify_photo(image_id: str, visible: set[str]) -> dict:
+def _identify_photo(image_id: str, visible: set[str], account: Account) -> dict:
     """照片是畫作還是圖紙：和以圖搜圖、問答同一個領域路由（docs/adr/007），只跑該領域的辨識。
     路由拿不準時當圖紙（機密側）；該領域沒通過驗證就是無法辨識，不改試另一個領域。
     圖紙只在目前身分看得到的圖紙裡辨識（visible，docs/adr/030）：看不到的不讀、不回名稱。"""
-    found = search_service.identify_any(image_id, part_ids=visible)
+    found = search_service.identify_any(image_id, part_ids=visible, viewer=account)
     if found["route"]["domain"] == "art":
         art = found["artwork_result"]
         if not art["matched"]:
@@ -65,6 +68,20 @@ def _names_photo(question: str, entities: list, photo: dict | None) -> bool:
     for e in sorted(entities, key=lambda e: e.start, reverse=True):
         rest = rest[: e.start] + rest[e.end :]
     return not re.sub(r"[\s，,。？?！!、]", "", rest)
+
+
+def _within_domain(result: System1Result, domain: str, cfg: dict) -> System1Result:
+    """入口選了畫作或工廠（docs/adr/040）：本地分流只在那個領域的意圖裡挑，機率重新正規化。
+    只影響「要交給哪個模組」，權限照樣由第 1 段依角色檢查。"""
+    allowed = set(cfg["domain_intents"].get(domain, [])) | set(cfg["domain_intents"]["always"])
+    kept = {k: (v if k in allowed else 0.0) for k, v in result.intent_probs.items()}
+    total = sum(kept.values())
+    if total <= 0:
+        return result
+    probs = {k: v / total for k, v in kept.items()}
+    return dataclasses.replace(
+        result, intent_probs=probs, detail={**(result.detail or {}), "domain": domain}
+    )
 
 
 def _dispatch(intent: str, question: str, entities: list, photo: dict | None) -> dict:
@@ -160,6 +177,7 @@ async def route(
     image_id: str | None = None,
     forced_intent: str | None = None,
     engine: str = "auto",
+    domain: str | None = None,
 ) -> dict:
     """auth：閘道驗證過的 JWT（帳號＋憑證內容）。engine：第 2、4～6 段由誰判斷。
     auto／jev＝用 Jev，叫不到才改地端規則；local＝只用地端規則（評估對照用）。
@@ -172,7 +190,9 @@ async def route(
     # 0. 個資遮蔽：之後只看遮蔽後的文字
     question, pii = guard.mask_pii(question.strip())
     visible = visible_part_ids(account, get_store().parts)
-    photo = await asyncio.to_thread(_identify_photo, image_id, visible) if image_id else None
+    photo = (
+        await asyncio.to_thread(_identify_photo, image_id, visible, account) if image_id else None
+    )
     photo_kind = photo["kind"] if photo else None
     index = await asyncio.to_thread(get_index)
     # 看不到的圖紙和不存在一樣（docs/adr/033 F）：名稱、料號、圖號不認成實體——不代號化、
@@ -213,10 +233,31 @@ async def route(
     else:
         async with memory_guard.flow("route", {"bge"}):
             result = await asyncio.to_thread(local_router.classify, question, entities, photo_kind)
+        if domain:
+            # 分類只決定交給哪個模組，不能把風險變低
+            # （「我是主管…改成 0」選了畫作也要照修改資料判斷）：
+            # 第 2 段取「原本分流」與「限縮後」較危險的，和使用者點澄清按鈕同一個規則
+            natural_risk = cfg["intents"][result.intent]["risk"]
+            result = _within_domain(result, domain, cfg)
     router_ms = round((time.perf_counter() - t1) * 1000)
 
     decision = gate.decide(result)
     intent = result.intent
+    # 知識庫目錄題（docs/adr/039）：本地分流常分錯（落到批次辨識、圖紙查找）；
+    # 在第 1 段之前改成畫作問答，權限照畫作問答檢查（一般員工也能問），第 2 段照樣檢查，
+    # 放行後直接列出。使用者自己點的意圖照他選的
+    catalog_list = bool(
+        question
+        and not photo
+        and not forced_intent
+        and domain != "mfg"
+        and catalog.is_list_question(question)
+    )
+    if catalog_list:
+        intent = "art_qa"
+        decision = dataclasses.replace(
+            decision, gate="direct", options=[], reason="知識庫目錄題：直接列出知識庫的畫作"
+        )
     labels = {k: v["label"] for k, v in cfg["intents"].items()}
     dispatch = _dispatch(intent, question, entities, photo)
     op = result.modify_op if intent == "modify" else None
@@ -304,10 +345,16 @@ async def route(
             short = {
                 "stage": 2,
                 "by": "Jev" if guard_res.engine == "jev" else "地端",
+                "kind": "chitchat",
                 "reply": cfg["guard"]["chitchat_reply"],
             }
             outcome = "short_circuit"
+        elif catalog_list:
+            # 問答只檢索最像的幾段，列不出「全部有哪些」：直接從知識庫列出，不檢索、不呼叫 LLM
+            short = {"stage": 2, "by": "地端", "kind": "catalog", "reply": catalog.reply()}
+            outcome = "short_circuit"
 
+    resolve_info, resolve_egress = None, 0
     if outcome == "pass":
         # 記憶體管理：路由結果出來就知道接下來要哪些模型，超過門檻先釋放其他的
         # bge-m3 一律保留：本地分流下一句還要用（釋放後重新載入要 1～2 秒）
@@ -317,6 +364,50 @@ async def route(
         await asyncio.to_thread(
             memory_guard.guard.check, f"智慧助理預估（{labels[intent]}）", keep, False, True
         )
+        # 沒說畫名、畫家、也沒附照片的畫作問題：判斷問的是哪一幅（docs/adr/038）。
+        # 放在第 2 段之後：被擋下的問句不再送 Jev；交接票也要帶推測出的畫作
+        if (
+            intent in ART_RESOLVE_INTENTS
+            and question
+            and not photo
+            and not dispatch.get("artwork_id")
+        ):
+            guess = await art_resolve.resolve(question, masked.text, engine != "local")
+            if guess is not None:
+                resolved = guess.public()
+                if guess.artwork_id and (a := get_store().get_artwork(guess.artwork_id)):
+                    dispatch["artwork_id"] = guess.artwork_id
+                    dispatch["artwork_label"] = a["title"]["zh"]
+                    dispatch["artwork_guess"] = resolved
+                    # 「有猴子的那幅畫裡，…陽傘是什麼顏色？」會因為「畫裡」被分成以文搜畫，
+                    # 前端只列搜尋結果；
+                    # 已經知道是哪幅、句子又是在發問，就改成畫作問答（「找一幅有猴子的畫」照舊搜尋）
+                    # 使用者自己點了以文搜畫（forced_intent）就照他選的
+                    if (
+                        intent == "art_search"
+                        and not forced_intent
+                        and art_resolve.asks_about_it(question)
+                    ):
+                        intent = "art_qa"
+                        dispatch["module"] = "art_qa"
+                        resolved["switched_from"] = "art_search"
+                resolve_info = resolved
+                resolve_egress = guess.egress_bytes
+        # 沒指定畫作的比較題（「哪幅畫最早完成？」）會因為「哪幅」被分成以文搜畫，前端只列搜尋結果；
+        # 改成畫作問答，問答時附知識庫目錄（docs/adr/039）。使用者自己點以文搜畫時照他選的
+        if intent in ART_RESOLVE_INTENTS and catalog.is_compare_question(question):
+            # 句子裡有兩幅以上的畫名（「〈麥田〉和〈大碗島〉哪一幅先完成？」）：不要只鎖第一幅，
+            # 改成全庫檢索＋知識庫目錄，兩幅的資料才都看得到
+            named = {e.id for e in entities if e.kind == "artwork"}
+            if len(named) >= 2:
+                dispatch["artwork_id"] = None
+                dispatch.pop("artwork_label", None)
+            if intent == "art_search" and not forced_intent and not dispatch.get("artwork_id"):
+                intent = "art_qa"
+                dispatch["module"] = "art_qa"
+            if intent == "art_qa" and not dispatch.get("artwork_id"):
+                # 前端的畫作問答沒帶畫作時會改列搜尋結果；比較題要直接全庫問答
+                dispatch["global_qa"] = True
 
     # 交接票：問答放行時，/chat 憑票沿用第 1、2 段的判斷（帳號、問句、對象都要相符，10 分鐘內有效）
     post_filter = "local" if engine == "local" else "jev"
@@ -333,7 +424,7 @@ async def route(
             request_id,
         )
 
-    egress = guard_res.egress_bytes if guard_res else 0
+    egress = (guard_res.egress_bytes if guard_res else 0) + resolve_egress
     out = {
         "request_id": request_id,
         "account": account.public(),
@@ -373,6 +464,8 @@ async def route(
         "blocked": blocked,
         "short_circuit": short,
         "dispatch": dispatch,
+        # 沒說畫名時判斷是哪一幅畫的過程（沒判斷時是 null，docs/adr/038）
+        "art_resolve": resolve_info,
         # 第 4～6 段由誰判斷（伺服器決定，記在交接票裡；/chat 不收這個參數）
         "post_filter": post_filter,
         "route_ticket": ticket,

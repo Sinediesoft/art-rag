@@ -505,6 +505,10 @@ class StatusResponse(BaseModel):
     memory: "MemoryStatus | None" = None
     system1: System1Brief
     chat_defaults: ChatDefaultsBrief
+    jobs: "JobsBrief | None" = Field(
+        default=None,
+        description="背景工作系統（Redis＋工作資料庫＋worker）；沒啟用時 enabled=false",
+    )
 
 
 class DiagnosticsResponse(BaseModel):
@@ -697,9 +701,13 @@ class PartTextSearchResponse(BaseModel):
 
 
 class ReconstructRequest(BaseModel):
-    part_id: str | None = Field(default=None, description="知識庫圖紙")
+    part_id: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$", description="知識庫圖紙"
+    )
     image_id: str | None = Field(
-        default=None, description="上傳的圖紙照片；與 part_id 同時給代表照片已辨識為該圖紙"
+        default=None,
+        pattern=r"^[A-Za-z0-9_.-]{1,64}$",
+        description="上傳的圖紙照片；與 part_id 同時給代表照片已辨識為該圖紙",
     )
     strategy: Literal["ortho2cad", "hybrid"] = Field(
         default="ortho2cad", description="ortho2cad＝主模型；hybrid＝未微調的 Qwen3-VL（對照組）"
@@ -888,6 +896,22 @@ class MemoryEvent(BaseModel):
     released: list[MemoryReleased]
     failed: list[MemoryReleased]
     kept: list[str] = Field(description="目前流程或其他請求正在用、所以保留的模型")
+    coordination: Literal["ok", "unavailable", "warming"] | None = Field(
+        default=None,
+        description="跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，"
+        "共用推論服務上的模型一律保留（docs/adr/041）",
+    )
+
+
+class MemoryCoordination(BaseModel):
+    mode: Literal["local", "redis"] = Field(
+        description="local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型"
+    )
+    state: Literal["ok", "unavailable", "warming"] = Field(
+        description="ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通或登記格式錯誤；"
+        "warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
+    )
+    detail: str | None = None
 
 
 class MemoryStatus(BaseModel):
@@ -904,6 +928,7 @@ class MemoryStatus(BaseModel):
     flow_at: str | None
     models: list[MemoryModel]
     events: list[MemoryEvent]
+    coordination: MemoryCoordination | None = None
 
 
 class MemoryReleaseResponse(BaseModel):
@@ -1129,6 +1154,13 @@ class ProductionOverview(BaseModel):
     runs: list[ScheduleRunRow]
     solving: bool
     settings: dict
+    input_version: str | None = Field(
+        default=None,
+        description="目前的排程輸入版本（工單、途程、機台、行事曆）；建立排程工作時帶回",
+    )
+    active_job: "Job | None" = Field(
+        default=None, description="排程範圍裡排隊或執行中的背景工作（重新整理後找回進度用）"
+    )
 
 
 class ScheduleSolveRequest(BaseModel):
@@ -1192,6 +1224,10 @@ class AccountsResponse(BaseModel):
         description="待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）"
     )
     token: TokenInfo
+    kb_version: str | None = Field(
+        default=None,
+        description="知識庫版本：前端把它和身分一起放進查詢快取鍵，身分或資料版本變了就是另一組快取",
+    )
 
 
 class SwitchAccountRequest(BaseModel):
@@ -1213,6 +1249,11 @@ class RouteRequest(BaseModel):
     question: str = Field(default="", max_length=300)
     image_id: str | None = None
     forced_intent: str | None = Field(default=None, description="使用者點澄清按鈕選的意圖")
+    domain: Literal["art", "mfg"] | None = Field(
+        default=None,
+        description="入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。"
+        "只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限",
+    )
     engine: Literal["auto", "jev", "local"] = Field(
         default="auto",
         description="第 2、4～6 段由誰判斷：auto／jev＝用 Jev，"
@@ -1335,10 +1376,12 @@ class BlockedInfo(BaseModel):
 
 
 class ShortCircuitInfo(BaseModel):
-    """第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"""
+    """快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
+    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"""
 
     stage: Literal[2]
     by: Literal["Jev", "地端"]
+    kind: Literal["chitchat", "catalog"] = "chitchat"
     reply: str
 
 
@@ -1384,6 +1427,14 @@ class RouteResponse(BaseModel):
     blocked: BlockedInfo | None
     short_circuit: ShortCircuitInfo | None
     dispatch: dict
+    art_resolve: dict | None = Field(
+        default=None,
+        description="沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）："
+        "{artwork_id, by, prob, ms, fallback_reason}；"
+        "artwork_id 為 null＝判斷不出來、照全庫檢索作答。"
+        "判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess"
+        "（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null",
+    )
     post_filter: Literal["jev", "local"] = Field(
         description="第 4～6 段由誰判斷（伺服器決定，記在交接票裡；只供顯示，/chat 不收這個參數）"
     )
@@ -1627,9 +1678,126 @@ class IntakeUpdate(BaseModel):
     )
 
 
+# ---------------------------------------------------------------- 背景工作（TASK-20261013-001）
+class ImageAclUpdate(BaseModel):
+    accounts: list[str] = Field(
+        default_factory=list, max_length=20, description="可以使用這張照片的其他帳號 id（整份取代）"
+    )
+
+
+class ImageAcl(BaseModel):
+    image_id: str
+    owner_id: str
+    accounts: list[str]
+
+
+class CadJobCreate(BaseModel):
+    part_id: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9_.-]{1,64}$", description="知識庫圖紙"
+    )
+    image_id: str | None = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9_.-]{1,64}$",
+        description="上傳的圖紙照片（要是自己的或擁有者授權的）",
+    )
+    strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
+
+
+class ScheduleJobCreate(BaseModel):
+    seconds: int | None = Field(default=None, ge=3, le=60, description="求解秒數；預設 20")
+    engine: Literal["timefold", "greedy"] = "timefold"
+    input_version: str | None = Field(
+        default=None,
+        description="您畫面上的輸入版本（GET /production/overview 的 input_version）；"
+        "和伺服器現在的不同回 409 SCHEDULE_INPUT_CHANGED，不會用過期的資料排程",
+    )
+
+
+class JobCreated(BaseModel):
+    job_id: str
+    kind: Literal["cad", "schedule"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    status_url: str
+    events_url: str
+    idempotent_replay: bool = Field(
+        description="true＝相同帳號／操作／Idempotency-Key 的相同請求，回傳的是先前建立的工作"
+    )
+    delayed_dispatch: bool = Field(
+        description="true＝工作已建立但 broker 暫時不通，留在 outbox 等恢復後投遞（維持 queued）"
+    )
+
+
+class JobError(BaseModel):
+    code: str
+    message: str
+
+
+class JobArtifact(BaseModel):
+    name: str
+    url: str
+    content_type: str
+    size_bytes: int
+
+
+class Job(BaseModel):
+    id: str
+    kind: Literal["cad", "schedule"]
+    status: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    owner_id: str
+    attempt: int
+    max_attempts: int
+    cancel_requested: bool
+    stop_requested: bool
+    progress: dict | None = None
+    result: dict | None = None
+    error: JobError | None = None
+    input_version: str | None = None
+    params: dict | None = Field(default=None, description="建立時的參數（秒數、引擎、策略）")
+    target: dict | None = Field(
+        default=None, description="3D 重建的來源：{part_id}、{image_id} 或兩者（排程為 null）"
+    )
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    last_event_id: int
+    status_url: str
+    events_url: str
+    artifacts: list[JobArtifact] = []
+
+
+class JobListResponse(BaseModel):
+    items: list[Job]
+
+
+class JobCancelResponse(BaseModel):
+    result: Literal["cancelled", "cancelling", "already_cancelled"]
+    job: Job
+
+
+class ScheduleStopRequest(BaseModel):
+    job_id: str | None = Field(default=None, description="要提前結束的排程工作；沒給＝目前執行中的")
+
+
+class JobWorker(BaseModel):
+    name: str
+    queues: list[str]
+    pid: int
+    age_s: float = Field(description="距離上次登記幾秒；超過 15 秒沒更新就會從清單消失")
+
+
+class JobsBrief(BaseModel):
+    enabled: bool
+    database_ok: bool
+    broker_ok: bool
+    pending_dispatch: int
+    counts: dict[str, int]
+    workers: list[JobWorker] = Field(description="存活的 worker 行程（每個行程自己定期登記）")
+
+
 HealthResponse.model_rebuild()
 StatusResponse.model_rebuild()
 DiagnosticsResponse.model_rebuild()
+ProductionOverview.model_rebuild()
 
 
 # ------------------------------------------------- 批次辨識、兩件並排比較、匯出（docs/adr/017）
