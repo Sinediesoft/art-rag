@@ -461,12 +461,35 @@ def infra_servers(tmp_path_factory):
         shutil.rmtree(root, ignore_errors=True)
 
 
+def in_process_maintenance() -> list[threading.Thread]:
+    """測試行程裡還活著的背景維護執行緒（broker.Maintenance）。"""
+    from app.jobs import broker
+
+    return [t for t in threading.enumerate() if isinstance(t, broker.Maintenance) and t.is_alive()]
+
+
+def _init_without_maintenance():
+    """測試行程裡 API 啟動（lifespan）時的 boot.init：照樣掛上授權查詢，但不開背景維護執行緒。"""
+    from app.core.config import get_settings
+    from app.jobs import boot
+    from app.services import cad_access
+
+    if get_settings().jobs_enabled:
+        cad_access.set_job_lookup(boot._lookup)
+    return None
+
+
 @pytest.fixture(scope="module")
 def jobs_env(infra_servers, mock_env):
     """工作系統啟用的環境（這個測試模組內）：設定指向隔離的 PostgreSQL／Redis／假 Timefold，
-    已套用 migration；結束時還原設定。"""
+    已套用 migration；結束時還原設定。
+
+    測試行程裡的 API（live_api 的 uvicorn、TestClient）不開背景維護執行緒：租約恢復與 outbox
+    投遞交給 worker 行程自己的維護執行緒，或由測試明確呼叫 broker.maintenance_once()。
+    否則 module scope 的 live_api 開的維護執行緒會留到之後的測試，每 0.5 秒搶先回收過期租約
+    （lease_expires_at 變 NULL），等「租約過期」的測試就看不到它過期。"""
     from app.core import config
-    from app.jobs import broker, db, migrate
+    from app.jobs import boot, broker, db, migrate
     from app.services import cad_access
 
     root, pg, redis_srv, fake = infra_servers
@@ -477,12 +500,14 @@ def jobs_env(infra_servers, mock_env):
     db.close()
     broker._url["broker"] = None
     migrate.apply()
-    from app.jobs import boot
+    mp = pytest.MonkeyPatch()
+    mp.setattr(boot, "init", _init_without_maintenance)
 
     cad_access.set_job_lookup(boot._lookup)
     try:
         yield env
     finally:
+        mp.undo()
         env.stop_workers()
         cad_access.set_job_lookup(None)
         for k, v in saved.items():
