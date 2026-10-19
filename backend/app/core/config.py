@@ -103,6 +103,8 @@ class Settings(BaseSettings):
 
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
+    # 問答、分流、SQL 紀錄保存幾天（內容類，可能含機密文字；安全紀錄與讀取稽核不刪）
+    log_ttl_days: int = 30
 
     # 展示模式（docs/adr/030）：頁首切換身分（/auth/switch 簽發任意帳號的 JWT）、
     # 模擬斷線、展示還原。預設關閉，只能由人類在本機 .env 明確開啟；

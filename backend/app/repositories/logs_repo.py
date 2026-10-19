@@ -150,6 +150,18 @@ class LogsRepo:
         self._exec("DELETE FROM uploads WHERE created_at < ?", (cutoff,))
         return [r["path"] for r in rows]
 
+    def purge_content_logs(self, ttl_days: int) -> int:
+        """問答、分流、SQL 紀錄超過保存期限就刪掉（內容類，可能含機密文字）；
+        安全紀錄與讀取稽核是事後追查的依據，不在這裡刪。回傳刪了幾筆。"""
+        cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat()
+        n = 0
+        for table in ("chat_logs", "route_logs", "sql_logs"):
+            n += self._exec(f"SELECT COUNT(*) AS n FROM {table} WHERE created_at < ?", (cutoff,))[
+                0
+            ]["n"]
+            self._exec(f"DELETE FROM {table} WHERE created_at < ?", (cutoff,))
+        return int(n)
+
     def add_chat_log(self, row: dict) -> None:
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)

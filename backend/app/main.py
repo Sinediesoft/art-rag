@@ -56,6 +56,8 @@ async def lifespan(app: FastAPI):
     for path in get_logs_repo().purge_uploads(s.upload_ttl_days):
         (s.uploads_dir / path).unlink(missing_ok=True)
     purge_jobs(s.upload_ttl_days)
+    if n := get_logs_repo().purge_content_logs(s.log_ttl_days):
+        log.info(f"刪除超過 {s.log_ttl_days} 天的問答／分流／SQL 紀錄 {n} 筆")
     maintenance = jobs_boot.init()  # 啟用背景工作系統：授權查詢、outbox 投遞與租約恢復
     jobs_boot.purge(s.jobs_event_retention_days)
     purge_drafts(s.upload_ttl_days)

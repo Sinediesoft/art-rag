@@ -30,7 +30,13 @@ from collections.abc import AsyncIterator
 
 from app.agent import catalog, guard, handoff
 from app.agent.entities import get_index
-from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
+from app.core.config import (
+    REPO_ROOT,
+    get_access_config,
+    get_agent_config,
+    get_models_config,
+    get_settings,
+)
 from app.core.logging import log
 from app.rag import conflict_check as conflict_mod
 from app.rag import premise_check as premise_mod
@@ -304,6 +310,13 @@ async def chat_stream(
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
+
+
+def _touches_secret(part: dict | None, given: list[dict], store) -> bool:
+    """指定的圖紙、或交給生成端的段落裡，有沒有讀取稽核要記的機密等級（shared/access.yaml）"""
+    levels = (get_access_config().get("read_audit") or {}).get("levels", ["機密"])
+    parts = [part] + [store.get_part(s["part_id"]) for s in given if s.get("part_id")]
+    return any(p and p.get("confidentiality") in levels for p in parts)
 
 
 def _stage(trace: list[dict], n: int, status: str, by: str, detail: str) -> None:
@@ -898,7 +911,13 @@ async def _chat_stream(
             "egress_images": egress["images"],
             "egress_chunks": egress["chunks"],
             "egress_bytes": egress["bytes"],
-            "answer": answer,
+            # 用到機密圖紙的回答不存原文：問答紀錄是明文，能登入主機的人都讀得到（內部人員演練）；
+            # 留雜湊，事後仍可比對某段回答是不是這一筆
+            "answer": (
+                f"（機密圖紙，回答不存原文；雜湊 {guard.fingerprint(answer)}）"
+                if _touches_secret(artwork if domain == "mfg" else None, given, store)
+                else answer
+            ),
         }
     )
     log.info(
