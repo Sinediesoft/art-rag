@@ -1,5 +1,6 @@
 import { api, ApiError, type ChangePreviewRequest, type RouteResponse } from "../api/client";
-import { streamChat, streamInventoryAsk, streamReconstruct, streamScheduleSolve } from "../api/sse";
+import { runCadJob, runScheduleJob } from "../api/jobFlow";
+import { streamChat, streamInventoryAsk } from "../api/sse";
 import { resultUnknown } from "../api/writes";
 import { withChatSettings } from "./settings";
 import type { ApiFailure, ChangePart, Part, ReconstructPart, SchedulePart, Turn } from "./types";
@@ -21,6 +22,8 @@ export interface Dispatched {
   path?: string;
   op?: string | null;
   compare?: { kind: "artwork" | "part"; refs: string[]; labels: string[] } | null;
+  /** 跨畫作的比較題（docs/adr/039）：沒指定畫作也直接全庫問答，不改列搜尋結果 */
+  global_qa?: boolean;
 }
 
 export const dispatchOf = (r: RouteResponse) => r.dispatch as unknown as Dispatched;
@@ -45,7 +48,7 @@ export async function runTurn(turn: Turn, update: Update, { signal, token, accep
   update((t) => ({ ...t, phase: "routing", route: null, failure: null, part: null, archived: undefined }));
   let route: RouteResponse;
   try {
-    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced }, token, signal);
+    route = await api.route({ question: turn.text, image_id: turn.imageId, forced_intent: turn.forced, domain: turn.domain ?? null }, token, signal);
   } catch (e) {
     if (signal.aborted) return update((t) => ({ ...t, phase: "stopped" }));
     return update((t) => ({ ...t, phase: "error", failure: failureOf(e) }));
@@ -75,6 +78,7 @@ export function initialPart(route: RouteResponse, imageId: string | null): Part 
       return { kind: "sql", question: d.question, status: "generating", attempts: [], draft: "", result: null, answer: "", done: null, error: null };
     case "art_qa":
       if (d.artwork_id) return chatPart({ artwork_id: d.artwork_id });
+      if (d.global_qa) return chatPart({});
       return { kind: "artSearch", q: d.question, status: "loading", items: [], error: null };
     case "art_search":
       return { kind: "artSearch", q: d.question, status: "loading", items: [], error: null };
@@ -202,48 +206,59 @@ async function runPart(route: RouteResponse, part: Part, update: Update, signal:
 
 // ---------------------------------------------------------------- 使用者確認後才執行的任務
 
-/** 3D 重建：POST /cad/reconstruct（SSE）。完成後模型（STL）出現在右側展示區 */
+/**
+ * 3D 重建：建立背景工作（POST /cad/jobs → 202）→ 訂閱事件 → 取結果。完成後模型（STL）出現在右側展示區。
+ * signal 中止（離開、切換身分）只停止訂閱，工作照常在 worker 執行；要取消用 cancelTask（POST /jobs/{id}/cancel）。
+ */
 export async function startReconstruct(part: ReconstructPart, update: Update, signal: AbortSignal) {
   const set = (f: (p: ReconstructPart) => ReconstructPart) => setPart<ReconstructPart>(update, f);
   const job = (f: (j: NonNullable<ReconstructPart["job"]>) => NonNullable<ReconstructPart["job"]>) => set((p) => (p.job ? { ...p, job: f(p.job) } : p));
-  set((p) => ({ ...p, job: { status: "preparing", meta: null, code: "", result: null, done: null, error: null, startedAt: Date.now() } }));
-  await streamReconstruct(
+  set((p) => ({ ...p, job: { status: "queued", jobId: null, meta: null, code: "", result: null, done: null, error: null, startedAt: Date.now() } }));
+  await runCadJob(
     // 和 3D 重建頁相同：附了照片就帶照片（知識庫圖紙會先依標準圖拉正），沒有就用知識庫的三視圖
     { part_id: part.partId, image_id: part.imageId, strategy: "ortho2cad" },
     {
+      onJob: (jobId) => job((j) => ({ ...j, jobId })),
+      onQueued: () => job((j) => ({ ...j, status: "queued" })),
+      onRunning: () => job((j) => ({ ...j, status: j.status === "queued" ? "preparing" : j.status })),
       onMeta: (meta) => job((j) => ({ ...j, meta, status: "generating" })),
-      onToken: (t) => job((j) => ({ ...j, code: j.code + t })),
       onExecuting: () => job((j) => ({ ...j, status: "executing" })),
-      onResult: (result) => job((j) => ({ ...j, result, code: (result as { code?: string }).code || j.code })),
+      onCode: (code) => job((j) => ({ ...j, code })),
+      onResult: (result) => job((j) => ({ ...j, result })),
       onDone: (done) => job((j) => ({ ...j, done, status: "done" })),
       onError: (error) => job((j) => ({ ...j, error, status: "error" })),
+      onCancelled: () => job((j) => ({ ...j, status: "cancelled" })),
     },
     signal,
   );
-  if (signal.aborted) job((j) => (j.status === "done" || j.status === "error" ? j : { ...j, status: "stopped" }));
+  if (signal.aborted) job((j) => (["done", "error", "cancelled"].includes(j.status) ? j : { ...j, status: "stopped" }));
 }
 
-/** 生產排程：POST /schedule/solve（SSE）。結果寫回資料庫，甘特圖出現在右側展示區 */
+/**
+ * 生產排程：建立背景工作（POST /schedule/jobs → 202）→ 訂閱事件 → 取結果。結果寫回資料庫，甘特圖出現在右側展示區。
+ * 離開只停止訂閱；「提前結束」（採用目前最佳解並寫回）與「取消」（不寫回）是兩個不同的操作。
+ */
 export async function startSchedule(update: Update, signal: AbortSignal) {
   const job = (f: (j: NonNullable<SchedulePart["job"]>) => NonNullable<SchedulePart["job"]>) =>
     setPart<SchedulePart>(update, (p) => (p.job ? { ...p, job: f(p.job) } : p));
-  setPart<SchedulePart>(update, (p) => ({ ...p, job: { status: "starting", meta: null, progress: null, solution: null, done: null, error: null, elapsedMs: 0 } }));
-  await streamScheduleSolve(
+  setPart<SchedulePart>(update, (p) => ({ ...p, job: { status: "queued", jobId: null, meta: null, progress: null, solution: null, done: null, error: null, elapsedMs: 0 } }));
+  await runScheduleJob(
     {},
     {
+      onJob: (jobId) => job((j) => ({ ...j, jobId })),
+      onQueued: () => job((j) => ({ ...j, status: "queued" })),
+      onRunning: () => job((j) => ({ ...j, status: j.status === "queued" ? "starting" : j.status })),
       onMeta: (meta) => job((j) => ({ ...j, meta, status: "solving" })),
       onProgress: (progress) => job((j) => ({ ...j, progress, elapsedMs: progress.elapsed_ms })),
       onTick: (t) => job((j) => ({ ...j, elapsedMs: t.elapsed_ms })),
       onSolution: (solution) => job((j) => ({ ...j, solution })),
       onDone: (done) => job((j) => ({ ...j, done, status: "done", elapsedMs: done.latency_ms.solve })),
       onError: (error) => job((j) => ({ ...j, error, status: "error" })),
+      onCancelled: () => job((j) => ({ ...j, status: "cancelled" })),
     },
     signal,
   );
-  if (signal.aborted) {
-    void api.stopSchedule().catch(() => undefined);
-    job((j) => (j.status === "done" || j.status === "error" ? j : { ...j, status: "stopped" }));
-  }
+  if (signal.aborted) job((j) => (["done", "error", "cancelled"].includes(j.status) ? j : { ...j, status: "stopped" }));
 }
 
 /** 修改資料：確認寫入或送主管核准（後端再檢查一次權限與額度） */

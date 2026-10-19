@@ -3,6 +3,7 @@
 import httpx
 
 from app.core.config import get_settings
+from app.core.logging import log
 from app.rag.providers import is_local_url
 
 
@@ -13,7 +14,8 @@ class SchedulerUnavailable(Exception):
 def _base() -> str:
     url = get_settings().scheduler_base_url.rstrip("/")
     if not is_local_url(url):
-        raise SchedulerUnavailable(f"{url} 不是本機或內網位址，拒絕連線")
+        log.warning(f"排程服務位址 {url} 不是本機或內網位址，拒絕連線")
+        raise SchedulerUnavailable("設定的排程服務位址不是本機或內網位址，拒絕連線")
     return url
 
 
@@ -22,16 +24,17 @@ async def _call(method: str, path: str, **kw) -> dict:
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=2.0)) as c:
             r = await c.request(method, _base() + path, **kw)
     except httpx.HTTPError as e:
-        raise SchedulerUnavailable(
-            f"連不上排程服務 {get_settings().scheduler_base_url}：{type(e).__name__}"
-        ) from e
+        # 錯誤訊息會送到前端：不帶排程服務的內網位址
+        log.warning(f"連不上排程服務 {get_settings().scheduler_base_url}：{type(e).__name__}")
+        raise SchedulerUnavailable(f"連不上排程服務：{type(e).__name__}") from e
     if r.status_code >= 400:
         detail = (
             r.json().get("error", r.text)
             if r.headers.get("content-type", "").startswith("application/json")
             else r.text
         )
-        raise SchedulerUnavailable(f"排程服務回應 HTTP {r.status_code}：{detail}")
+        log.warning(f"排程服務回應 HTTP {r.status_code}：{detail}")
+        raise SchedulerUnavailable(f"排程服務回應 HTTP {r.status_code}")
     return r.json()
 
 

@@ -22,6 +22,33 @@ export const MODULE: Record<Domain, { label: string; spaced: string; en: string;
   },
 };
 
+/**
+ * 每個模組的完整功能頁（原本「深入」能到的頁面）：模組頁首的「功能頁」選單、左側對話紀錄的模組捷徑共用這一份。
+ * 一樣經過後端的權限檢查；icon 是 components/shell/Icons 的名稱
+ */
+export const TOOLS: Record<Domain, { label: string; to: string; icon: string }[]> = {
+  factory: [
+    { label: "圖紙查找", to: "/drawings/search", icon: "search" },
+    { label: "3D 重建", to: "/reconstruct", icon: "cube" },
+    { label: "庫存・訂單・工單查詢", to: "/inventory", icon: "box" },
+    { label: "生產排程", to: "/schedule", icon: "calendar" },
+    { label: "主管核准", to: "/approvals", icon: "shield" },
+    { label: "照片建檔（圖紙）", to: "/drawings/intake", icon: "camera" },
+    { label: "批次辨識", to: "/batch", icon: "layers" },
+    { label: "兩件並排比較", to: "/compare-items", icon: "grid" },
+    { label: "系統狀態", to: "/admin", icon: "cpu" },
+  ],
+  art: [
+    { label: "以文搜畫・以圖搜圖", to: "/search", icon: "search" },
+    { label: "比對兩張照片", to: "/photo-diff", icon: "image" },
+    { label: "照片建檔（畫作）", to: "/artworks/intake", icon: "camera" },
+    { label: "批次辨識", to: "/batch", icon: "layers" },
+    { label: "兩件並排比較", to: "/compare-items", icon: "grid" },
+    { label: "策略比較", to: "/compare", icon: "table" },
+    { label: "系統狀態", to: "/admin", icon: "cpu" },
+  ],
+};
+
 export interface Copy {
   placeholder: string;
   placeholderPhoto: string;

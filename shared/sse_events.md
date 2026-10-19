@@ -165,3 +165,32 @@
 `strategy=mock`（否則照 `hybrid`，`done.strategy_requested` 仍記 `mock`）、`use_retrieval=false`
 （否則第 6 段直接降級；工廠圖紙即使在評估模式也一律降級）、`/agent/route` 的 `engine=local`。
 `api_nokb`（A1）等於關檢索，一樣要評估模式。這些欄位都不能降低七段權限控管的任何一段。
+
+## 背景工作的事件（`GET /api/v1/jobs/{id}/events`，TASK-20261013-001、docs/adr/041）
+
+3D 重建與排程的新流程是「建立工作 → 訂閱事件或輪詢 → 取結果」：`POST /cad/jobs`、`POST /schedule/jobs` 回
+`202 {"job_id", "status": "queued", "status_url", "events_url", ...}`，進度事件存在資料庫，離開頁面不會取消工作。
+
+每個事件有持久化、同一個工作內連續遞增的 `id:`（SSE 的 `id` 欄位）；斷線後帶 `Last-Event-ID` 標頭（或 `?after=<id>`）
+只會收到還沒收到的事件，不重複。送出終態事件後串流結束；每一輪都重驗目前權限，被撤權就送 `error`（`PERMISSION_REVOKED`）並結束。
+輪詢備援：`GET /jobs/{id}` 回 `status`、`progress`（最新進度快照）、`result`、`error`、`last_event_id`。
+
+| event | data（JSON） | 說明 |
+|---|---|---|
+| `created` | `{"status": "queued", "kind"}` | 工作建立（和 outbox 同一交易） |
+| `started` | `{"attempt", "resource"}` | worker 領到工作（`resource` 是 GPU 名額或排程範圍租約）；租約過期重試時會再出現，`attempt` 加一 |
+| `requeued` | `{"reason", "attempt"}` | worker 租約過期，工作回到佇列（不是從中段續跑，是整個重新執行） |
+| `meta` | 3D 重建：同 `/cad/reconstruct` 的 `meta`；排程：`{"engine", "engine_label", "problem", "work_orders", "machines", "axis", ...}` | 前處理完成 |
+| `stage` | `{"stage": "executing", "label", ...}` | 3D 重建進入沙箱執行 |
+| `progress` | 3D 重建：`{"stage": "generating", "chars"}`（只有字元數，**沒有模型輸出**）；排程：同 `/schedule/solve` 的 `progress`（最多每 0.5 秒一次） | 進度 |
+| `tick` | `{"elapsed_ms", "phase", "improvements"}` | 排程：沒有更好的解時的心跳（最多每秒一次） |
+| `cancel_requested` | `{"attempt"}` | 已要求取消；worker 在下一個檢查點停止 |
+| `stop_requested` | `{"attempt"}` | 排程：已要求提前結束（採用目前最佳的合法解並照常驗證、寫回） |
+| `committing` | `{"attempt"}` | 進入寫回／發布產物；之後取消回 409 `JOB_COMMITTING` |
+| `succeeded` | `{"status", "result", "note"?}` | 終態。排程寫入生產資料庫後來不及結案（worker 當掉、工作資料庫斷線）、由恢復迴圈依生產資料庫補記的，`result.reconciled` 為 `true`、`note` 是「寫回已完成，依生產資料庫補記結果」、`latency_ms` 只有 `solve`。3D 重建的 `result` 同 `GET /cad/jobs/{id}`（`meta`／`result`／`done`），但 **`result.code` 不存在**，`result.files` 指向 `/jobs/{id}/artifacts/{name}`；排程的 `result` 是 `{"run_id", "engine", "run_status": "done"\|"stopped", "score", "hard", "medium", "soft", "input_version", "latency_ms", ...}`，完整結果用 `GET /schedule/runs/{run_id}` |
+| `failed` | `{"status", "code", "message"}` | 終態；`message` 是安全的短訊息（不含模型輸出、程式碼、路徑）。3D 重建沙箱失敗的 `result` 仍附上，`code.py`、`input.png` 可由授權的人下載 |
+| `cancelled` | `{"status", "note"}` | 終態；取消後不會寫回任何結果 |
+| `error` | `{"code", "message"}` | 串流本身的錯誤（`PERMISSION_REVOKED`、`JOBS_UNAVAILABLE`），不是工作的終態；用 `Last-Event-ID` 重連 |
+
+舊的 `POST /cad/reconstruct`、`POST /schedule/solve` 仍保留（上面各節），差異：連線中斷就停止、在 API 行程內執行、
+3D 重建的 `token` 事件帶模型產生的程式碼。`LEGACY_SYNC_JOBS=off`（或 `auto` 且啟用工作系統）時回 409 `USE_JOBS_API`。

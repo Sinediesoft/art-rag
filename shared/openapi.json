@@ -6,12 +6,87 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/auth/accounts": {
+      "get": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "List Accounts",
+        "description": "展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（一般員工，權限最低）的憑證，\n放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。",
+        "operationId": "list_accounts_api_v1_auth_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/switch": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Switch Account",
+        "description": "展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、\n本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。",
+        "operationId": "switch_account_api_v1_auth_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images": {
       "post": {
         "tags": [
           "images"
         ],
         "summary": "Upload Image",
+        "description": "上傳照片：記下擁有者（目前帳號）。之後原圖、色彩、對位、辨識、問答、建檔、批次與 3D 重建\n都只接受擁有者與擁有者授權（PUT /images/{id}/acl）的帳號；知道 image_id 不夠。",
         "operationId": "upload_image_api_v1_images_post",
         "requestBody": {
           "content": {
@@ -53,6 +128,7 @@
           "images"
         ],
         "summary": "Get Image",
+        "description": "擁有者與授權帳號才讀得到；不存在和沒有權限同一個 404（不透露別人的照片存不存在）。",
         "operationId": "get_image_api_v1_images__image_id__get",
         "parameters": [
           {
@@ -68,6 +144,59 @@
         "responses": {
           "200": {
             "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/images/{image_id}/acl": {
+      "put": {
+        "tags": [
+          "images"
+        ],
+        "summary": "Set Image Acl",
+        "description": "擁有者明確授權其他帳號使用這張照片（整份取代；清單空白＝只有自己）。非擁有者 404。",
+        "operationId": "set_image_acl_api_v1_images__image_id__acl_put",
+        "parameters": [
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageAclUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageAcl"
+                }
+              }
+            }
           },
           "4XX": {
             "content": {
@@ -306,6 +435,48 @@
               }
             },
             "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/search/any": {
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Any",
+        "description": "不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。\n判成工廠圖紙時要看目前身分的資料範圍（一般員工不能使用工廠圖紙 → 403）。",
+        "operationId": "search_any_api_v1_search_any_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnySearchResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -606,6 +777,230 @@
         }
       }
     },
+    "/api/v1/artworks/{artwork_id}/region-drafts": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Create Region Draft",
+        "description": "藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；\n解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。",
+        "operationId": "create_region_draft_api_v1_artworks__artwork_id__region_drafts_post",
+        "parameters": [
+          {
+            "name": "artwork_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artwork Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts": {
+      "get": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "List Region Drafts",
+        "description": "待收錄（能收錄的身分才看得到）與自己送出的草稿。",
+        "operationId": "list_region_drafts_api_v1_region_drafts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraftsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}/commit": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Commit Region Draft",
+        "description": "收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。\n\n回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。",
+        "operationId": "commit_region_draft_api_v1_region_drafts__draft_id__commit_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}/return": {
+      "post": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Return Region Draft",
+        "description": "主管退回（附原因），藝術家在自己的草稿清單看得到。",
+        "operationId": "return_region_draft_api_v1_region_drafts__draft_id__return_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegionDraftReturn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegionDraft"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/region-drafts/{draft_id}": {
+      "delete": {
+        "tags": [
+          "regions"
+        ],
+        "summary": "Withdraw Region Draft",
+        "description": "送出的人撤回還沒收錄的草稿。",
+        "operationId": "withdraw_region_draft_api_v1_region_drafts__draft_id__delete",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Draft Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/chat": {
       "post": {
         "tags": [
@@ -629,6 +1024,47 @@
             "description": "SSE：sources／token／done／error",
             "content": {
               "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/feedback": {
+      "post": {
+        "tags": [
+          "chat"
+        ],
+        "summary": "Feedback",
+        "operationId": "feedback_api_v1_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
             }
           },
           "4XX": {
@@ -849,48 +1285,6 @@
         }
       }
     },
-    "/api/v1/search/any": {
-      "post": {
-        "tags": [
-          "search"
-        ],
-        "summary": "Search Any",
-        "description": "不指定領域的以圖搜圖：先判斷是畫作還是工廠圖紙（領域路由），再做該領域的辨識。\n判成工廠圖紙時要看目前身分的資料範圍（一般員工不能使用工廠圖紙 → 403）。",
-        "operationId": "search_any_api_v1_search_any_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImageSearchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnySearchResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/search/parts": {
       "get": {
         "tags": [
@@ -958,7 +1352,7 @@
           "cad"
         ],
         "summary": "Reconstruct",
-        "description": "工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型。\n要能使用工廠圖紙；指定或照片辨識出的圖紙也要看得到（資料範圍）。",
+        "description": "工廠圖紙 → Ortho2CAD 產生 CadQuery 程式碼 → 沙箱執行 → 3D 模型（在 API 行程內執行的舊入口；\n建議改用 `POST /cad/jobs` 背景工作）。要能使用工廠圖紙；指定的圖紙、上傳的照片、\n照片辨識出的圖紙也都要有權限（資料範圍）。",
         "operationId": "reconstruct_api_v1_cad_reconstruct_post",
         "requestBody": {
           "content": {
@@ -986,6 +1380,136 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Get Cad Job",
+        "description": "已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。\n還在執行或沒有摘要的工作用 `GET /jobs/{id}` 查狀態。",
+        "operationId": "get_cad_job_api_v1_cad_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadJobSummary"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/parts/{part_id}/reconstructions": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "List Part Reconstructions",
+        "operationId": "list_part_reconstructions_api_v1_parts__part_id__reconstructions_get",
+        "parameters": [
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadJobListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}/{name}": {
+      "get": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Get Cad File",
+        "description": "3D 重建的檔案（舊網址，和 `GET /jobs/{id}/artifacts/{name}` 同一套授權）。",
+        "operationId": "get_cad_file_api_v1_cad_jobs__job_id___name__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
           }
         }
       }
@@ -1212,6 +1736,7 @@
           "intake"
         ],
         "summary": "Get Intake",
+        "description": "建檔的人與能收錄的身分（主管）才讀得到；其他人和不存在同一個 404。",
         "operationId": "get_intake_api_v1_intake__draft_id__get",
         "parameters": [
           {
@@ -1427,359 +1952,6 @@
         }
       }
     },
-    "/api/v1/artworks/{artwork_id}/region-drafts": {
-      "post": {
-        "tags": [
-          "regions"
-        ],
-        "summary": "Create Region Draft",
-        "description": "藝術家在畫上圈一塊、寫解說（kb_annotate，只能標分給自己的畫）。送出就是草稿，等主管收錄；\n解說先過輸入防護的地端規則，像在對 AI 下指令就回 REGION_REJECTED。",
-        "operationId": "create_region_draft_api_v1_artworks__artwork_id__region_drafts_post",
-        "parameters": [
-          {
-            "name": "artwork_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Artwork Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegionDraftRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionDraft"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/region-drafts": {
-      "get": {
-        "tags": [
-          "regions"
-        ],
-        "summary": "List Region Drafts",
-        "description": "待收錄（能收錄的身分才看得到）與自己送出的草稿。",
-        "operationId": "list_region_drafts_api_v1_region_drafts_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionDraftsResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/region-drafts/{draft_id}/commit": {
-      "post": {
-        "tags": [
-          "regions"
-        ],
-        "summary": "Commit Region Draft",
-        "description": "收錄（kb_intake，只有主管）：寫進 kb/artworks/<id>.json、遞增 kb/VERSION、背景重建索引。\n\n回傳時狀態是 indexing；重建完成後變成 done（或 failed，已還原）。",
-        "operationId": "commit_region_draft_api_v1_region_drafts__draft_id__commit_post",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Draft Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionDraft"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/region-drafts/{draft_id}/return": {
-      "post": {
-        "tags": [
-          "regions"
-        ],
-        "summary": "Return Region Draft",
-        "description": "主管退回（附原因），藝術家在自己的草稿清單看得到。",
-        "operationId": "return_region_draft_api_v1_region_drafts__draft_id__return_post",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Draft Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegionDraftReturn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RegionDraft"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/region-drafts/{draft_id}": {
-      "delete": {
-        "tags": [
-          "regions"
-        ],
-        "summary": "Withdraw Region Draft",
-        "description": "送出的人撤回還沒收錄的草稿。",
-        "operationId": "withdraw_region_draft_api_v1_region_drafts__draft_id__delete",
-        "parameters": [
-          {
-            "name": "draft_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Draft Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/cad/jobs/{job_id}": {
-      "get": {
-        "tags": [
-          "cad"
-        ],
-        "summary": "Get Cad Job",
-        "description": "已完成的 3D 重建（meta／result／done 三個事件的內容），給前端重看結果、不必重跑。",
-        "operationId": "get_cad_job_api_v1_cad_jobs__job_id__get",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CadJobSummary"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/parts/{part_id}/reconstructions": {
-      "get": {
-        "tags": [
-          "cad"
-        ],
-        "summary": "List Part Reconstructions",
-        "operationId": "list_part_reconstructions_api_v1_parts__part_id__reconstructions_get",
-        "parameters": [
-          {
-            "name": "part_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Part Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CadJobListResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/cad/jobs/{job_id}/{name}": {
-      "get": {
-        "tags": [
-          "cad"
-        ],
-        "summary": "Get Cad File",
-        "operationId": "get_cad_file_api_v1_cad_jobs__job_id___name__get",
-        "parameters": [
-          {
-            "name": "job_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Job Id"
-            }
-          },
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Name"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response"
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
     "/api/v1/inventory/schema": {
       "get": {
         "tags": [
@@ -1858,6 +2030,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,64}$",
               "title": "Part Id"
             }
           }
@@ -1892,7 +2065,7 @@
           "inventory"
         ],
         "summary": "Inventory Ask",
-        "description": "Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。",
+        "description": "Text-to-SQL：中文問題 → 本地模型產生 SQL → 唯讀執行 → 依結果回答。\n直接打這個端點也先過共用的輸入防護（第 2 段的地端 hard-block，擋下回 403 INPUT_BLOCKED、\n不呼叫模型）；SQL 的 SELECT 白名單與唯讀連線照舊。這是工具，沒有檢索段落，\n所以不經過 RAG 的第 3～6 段。",
         "operationId": "inventory_ask_api_v1_inventory_ask_post",
         "requestBody": {
           "content": {
@@ -1971,6 +2144,7 @@
             "required": true,
             "schema": {
               "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,64}$",
               "title": "Part Id"
             }
           }
@@ -2005,17 +2179,37 @@
           "production"
         ],
         "summary": "Create Work Order",
-        "description": "從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。\n\n權限與額度和智慧助理同一套（只有主管可以，docs/adr/036；急件超過額度，主管身分直接開立、記進稽核）。",
+        "description": "從圖紙頁開立工單：寫入生產資料庫，工廠資料庫（Text-to-SQL）自動同步，等待排程。\n\n權限與額度和智慧助理同一套（只有主管可以，docs/adr/036；急件超過額度，主管身分直接開立、記進稽核）。\n帶 Idempotency-Key 時，重送（連按、網路重試）拿到同一張工單，不會多開。",
         "operationId": "create_work_order_api_v1_production_work_orders_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/WorkOrderCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -2029,14 +2223,14 @@
             }
           },
           "4XX": {
-            "description": "Client Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Client Error"
           }
         }
       }
@@ -2058,6 +2252,24 @@
               "type": "string",
               "title": "Wo No"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409"
           }
         ],
         "responses": {
@@ -2090,7 +2302,7 @@
           "production"
         ],
         "summary": "Solve Schedule",
-        "description": "把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。\n\n只有主管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。",
+        "description": "把所有未完工工單的工序排到機台：Timefold Solver 求解，串流目前最佳解；結果寫回資料庫。\n\n只有主管可以執行（403 PERMISSION_DENIED，在串流開始前回 JSON 錯誤）。\n這是在 API 行程內求解的舊入口（連線中斷就停止）；背景工作請用 POST /schedule/jobs。",
         "operationId": "solve_schedule_api_v1_schedule_solve_post",
         "requestBody": {
           "content": {
@@ -2128,8 +2340,25 @@
           "production"
         ],
         "summary": "Stop Schedule",
-        "description": "提前結束目前的求解，採用目前最佳解。",
+        "description": "提前結束目前的求解，採用目前最佳的合法解（照常驗證並寫回）——和取消不同：\n取消（POST /jobs/{id}/cancel）放棄、不寫回。要 schedule_run（主管，docs/adr/036）；一般員工、\n業務、倉管、藝術家都是 403，也不會碰到任何求解。同時作用在背景工作與 API 行程內的舊入口。",
         "operationId": "stop_schedule_api_v1_schedule_stop_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ScheduleStopRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -2228,6 +2457,412 @@
         }
       }
     },
+    "/api/v1/cad/jobs": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create Cad Job",
+        "description": "建立 3D 重建背景工作（gpu 佇列，由獨立 worker 執行）：授權通過後回 202、job_id 與事件網址。\n要能使用工廠圖紙；指定的圖紙、上傳的照片都要有權限。離開頁面不會取消工作。",
+        "operationId": "create_cad_job_api_v1_cad_jobs_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CadJobCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/jobs": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Create Schedule Job",
+        "description": "建立排程背景工作（schedule 佇列）：只有主管（schedule_run，docs/adr/036）；\n排程範圍已有排隊或執行中的工作回 409 SCHEDULE_BUSY。\n帶 input_version 而且和伺服器現在的版本不同，回 409 SCHEDULE_INPUT_CHANGED。",
+        "operationId": "create_schedule_job_api_v1_schedule_jobs_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求拿到同一個工作；參數不同回 409"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleJobCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCreated"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "List Jobs",
+        "description": "目前身分看得到的工作（最新的在前）；重新整理後用 active=true 找回排隊或執行中的工作。",
+        "operationId": "list_jobs_api_v1_jobs_get",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(cad|schedule)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Active"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobListResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Get Job",
+        "description": "工作的狀態、進度、結果與安全的錯誤訊息（不含模型輸出與程式碼）。",
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/events": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Job Events",
+        "description": "進度與終止事件。每個事件有持久化遞增的 id；斷線後帶 Last-Event-ID（瀏覽器 EventSource\n自動帶，fetch 版自己帶）只收尚未收到的事件，不重複。終態（succeeded／failed／cancelled）\n送出後串流結束。每一輪都重驗目前權限：被撤權就送 error 事件並結束。",
+        "operationId": "job_events_api_v1_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "沒有 Last-Event-ID 標頭時的續接位置",
+              "default": 0,
+              "title": "After"
+            },
+            "description": "沒有 Last-Event-ID 標頭時的續接位置"
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE：持久化的進度事件",
+            "content": {
+              "text/event-stream": {}
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Cancel Job",
+        "description": "取消工作：排隊中直接取消；執行中請 worker 停止，取消後不會再發布成功或寫回任何結果。\n已進入寫回階段 409 JOB_COMMITTING（會完成）、已結束 409 JOB_ALREADY_FINISHED。\n和排程的「提前結束」（POST /schedule/stop，採用目前最佳解並寫回）不同。",
+        "operationId": "cancel_job_api_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobCancelResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}/artifacts/{name}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Job Artifact",
+        "description": "受保護的產物預覽或下載（白名單檔名：input.png、code.py、model.stl、model.step、reproj.png）。\n工作完成後才發布；每次請求都重驗目前身分對這個工作的授權。",
+        "operationId": "job_artifact_api_v1_jobs__job_id__artifacts__name__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Download"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/memory": {
       "get": {
         "tags": [
@@ -2275,47 +2910,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MemoryReleaseResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/feedback": {
-      "post": {
-        "tags": [
-          "chat"
-        ],
-        "summary": "Feedback",
-        "operationId": "feedback_api_v1_feedback_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FeedbackRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
                 }
               }
             }
@@ -2402,7 +2996,7 @@
           "eval"
         ],
         "summary": "Sql Eval Runs",
-        "description": "工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。",
+        "description": "工廠庫存 Text-to-SQL 評估（make eval-sql）：執行正確率、可執行率、修正次數。\n含工廠資料庫的問句與產生的 SQL（看得出資料表結構），所以只給主管。",
         "operationId": "sql_eval_runs_api_v1_eval_sql_runs_get",
         "responses": {
           "200": {
@@ -2598,76 +3192,94 @@
         }
       }
     },
-    "/api/v1/auth/accounts": {
+    "/api/v1/security/logs": {
       "get": {
         "tags": [
           "agent"
         ],
-        "summary": "List Accounts",
-        "description": "展示帳號與目前身分（JWT）。沒有憑證或憑證失效時發一張預設帳號（一般員工，權限最低）的憑證，\n放在 HttpOnly cookie；這是除了健康檢查以外唯一不用憑證的端點。",
-        "operationId": "list_accounts_api_v1_auth_accounts_get",
+        "summary": "Security Logs",
+        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。\n只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。",
+        "operationId": "security_logs_api_v1_security_logs_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountsResponse"
+                  "$ref": "#/components/schemas/SecurityLogsResponse"
                 }
               }
             }
           },
           "4XX": {
-            "description": "Client Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Client Error"
           }
         }
       }
     },
-    "/api/v1/auth/switch": {
-      "post": {
+    "/api/v1/audit": {
+      "get": {
         "tags": [
           "agent"
         ],
-        "summary": "Switch Account",
-        "description": "展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、\n本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。",
-        "operationId": "switch_account_api_v1_auth_switch_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SwitchAccountRequest"
-              }
+        "summary": "Audit Log",
+        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。\n要 access.yaml 的 views.audit（docs/adr/030）。",
+        "operationId": "audit_log_api_v1_audit_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
             }
-          },
-          "required": true
-        },
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountsResponse"
+                  "$ref": "#/components/schemas/AuditResponse"
                 }
               }
             }
           },
           "4XX": {
-            "description": "Client Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "Client Error"
           }
         }
       }
@@ -2762,7 +3374,7 @@
           "agent"
         ],
         "summary": "Change Commit",
-        "description": "按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。",
+        "description": "按確認：寫入前再驗權限與資料指紋 → 寫異動單與稽核紀錄 → 依資料庫讀回結果回覆。\n帶 Idempotency-Key 時，重送拿到先前的回應（不會重複異動）。",
         "operationId": "change_commit_api_v1_changes__pending_id__commit_post",
         "parameters": [
           {
@@ -2773,6 +3385,24 @@
               "type": "string",
               "title": "Pending Id"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409"
           }
         ],
         "responses": {
@@ -2805,7 +3435,7 @@
           "agent"
         ],
         "summary": "Change Request Approval",
-        "description": "超過額度：建立待核准單（AP-）送主管。",
+        "description": "超過額度：建立待核准單（AP-）送主管。帶 Idempotency-Key 時重送不會建立第二張。",
         "operationId": "change_request_approval_api_v1_changes__pending_id__request_approval_post",
         "parameters": [
           {
@@ -2816,6 +3446,24 @@
               "type": "string",
               "title": "Pending Id"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409"
           }
         ],
         "requestBody": {
@@ -2890,7 +3538,7 @@
           "agent"
         ],
         "summary": "Approve",
-        "description": "主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。",
+        "description": "主管核准：重新試算比對申請時的資料 → 寫入前再驗權限與資料版本 → 寫入。不接受用對話核准。\n帶 Idempotency-Key 時重送拿到先前的結果；沒帶也不會重複寫入（單據已不是待核准）。",
         "operationId": "approve_api_v1_approvals__ap_no__approve_post",
         "parameters": [
           {
@@ -2901,6 +3549,24 @@
               "type": "string",
               "title": "Ap No"
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409",
+              "title": "Idempotency-Key"
+            },
+            "description": "重送保護：相同帳號、操作與 key 的相同請求只寫入一次，重送拿到先前的回應（回應帶 Idempotent-Replayed: true）；key 用在不同參數的請求回 409"
           }
         ],
         "requestBody": {
@@ -2973,98 +3639,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApprovalDecision"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/security/logs": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Security Logs",
-        "description": "七段權限控管的拒絕並記錄（docs/adr/015）：第 1 段（憑證無效、角色不符）、\n第 2 段 Jev Choice 擋下的請求、第 4 段剔除的洩密段落、第 7 段輸出檢查擋下的回覆。\n只存事件類型、文件／段落 ID 與雜湊；要 access.yaml 的 views.security_logs（docs/adr/030）。",
-        "operationId": "security_logs_api_v1_security_logs_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 20,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SecurityLogsResponse"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Client Error"
-          }
-        }
-      }
-    },
-    "/api/v1/audit": {
-      "get": {
-        "tags": [
-          "agent"
-        ],
-        "summary": "Audit Log",
-        "description": "稽核紀錄（寫入、拒絕、送核准、核准、退回、失效）與最近的異動單。\n要 access.yaml 的 views.audit（docs/adr/030）。",
-        "operationId": "audit_log_api_v1_audit_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 30,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuditResponse"
                 }
               }
             }
@@ -3182,7 +3756,7 @@
             },
             "type": "array",
             "title": "Views",
-            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit（docs/adr/030）",
+            "description": "看得到哪些管理與診斷畫面：diagnostics／security_logs／audit／eval（docs/adr/030）",
             "default": []
           }
         },
@@ -3234,6 +3808,18 @@
           },
           "token": {
             "$ref": "#/components/schemas/TokenInfo"
+          },
+          "kb_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kb Version",
+            "description": "知識庫版本：前端把它和身分一起放進查詢快取鍵，身分或資料版本變了就是另一組快取"
           }
         },
         "type": "object",
@@ -4343,6 +4929,47 @@
           "runs"
         ],
         "title": "CadEvalRunsResponse"
+      },
+      "CadJobCreate": {
+        "properties": {
+          "part_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Part Id",
+            "description": "知識庫圖紙"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id",
+            "description": "上傳的圖紙照片（要是自己的或擁有者授權的）"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "ortho2cad",
+              "hybrid"
+            ],
+            "title": "Strategy",
+            "default": "ortho2cad"
+          }
+        },
+        "type": "object",
+        "title": "CadJobCreate"
       },
       "CadJobListResponse": {
         "properties": {
@@ -6048,6 +6675,47 @@
         "title": "HealthResponse",
         "description": "公開健康檢查（不用憑證，docs/adr/030）：只回存活與就緒。問句、回覆、SQL、路由紀錄、\n模型端點與內部設定都在需要管理權限的 /admin/diagnostics。"
       },
+      "ImageAcl": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id"
+          },
+          "accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id",
+          "owner_id",
+          "accounts"
+        ],
+        "title": "ImageAcl"
+      },
+      "ImageAclUpdate": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Accounts",
+            "description": "可以使用這張照片的其他帳號 id（整份取代）"
+          }
+        },
+        "type": "object",
+        "title": "ImageAclUpdate"
+      },
       "ImageAlignment": {
         "properties": {
           "target": {
@@ -7185,6 +7853,403 @@
         "title": "JevCallInfo",
         "description": "一次 Jev 呼叫：送出的代號化內容、代號對照（只留在本機）、Jev 的回答與請求本文。\n第 2 段 Choice、第 4 段 Noul（雙重驗證）、第 5 段 Score（重排）、第 6 段 Noul（生成閘門）。"
       },
+      "Job": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cad",
+              "schedule"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "title": "Max Attempts"
+          },
+          "cancel_requested": {
+            "type": "boolean",
+            "title": "Cancel Requested"
+          },
+          "stop_requested": {
+            "type": "boolean",
+            "title": "Stop Requested"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Version"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params",
+            "description": "建立時的參數（秒數、引擎、策略）"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target",
+            "description": "3D 重建的來源：{part_id}、{image_id} 或兩者（排程為 null）"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "last_event_id": {
+            "type": "integer",
+            "title": "Last Event Id"
+          },
+          "status_url": {
+            "type": "string",
+            "title": "Status Url"
+          },
+          "events_url": {
+            "type": "string",
+            "title": "Events Url"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/JobArtifact"
+            },
+            "type": "array",
+            "title": "Artifacts",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "owner_id",
+          "attempt",
+          "max_attempts",
+          "cancel_requested",
+          "stop_requested",
+          "created_at",
+          "last_event_id",
+          "status_url",
+          "events_url"
+        ],
+        "title": "Job"
+      },
+      "JobArtifact": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "content_type",
+          "size_bytes"
+        ],
+        "title": "JobArtifact"
+      },
+      "JobCancelResponse": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "cancelled",
+              "cancelling",
+              "already_cancelled"
+            ],
+            "title": "Result"
+          },
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result",
+          "job"
+        ],
+        "title": "JobCancelResponse"
+      },
+      "JobCreated": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cad",
+              "schedule"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "status_url": {
+            "type": "string",
+            "title": "Status Url"
+          },
+          "events_url": {
+            "type": "string",
+            "title": "Events Url"
+          },
+          "idempotent_replay": {
+            "type": "boolean",
+            "title": "Idempotent Replay",
+            "description": "true＝相同帳號／操作／Idempotency-Key 的相同請求，回傳的是先前建立的工作"
+          },
+          "delayed_dispatch": {
+            "type": "boolean",
+            "title": "Delayed Dispatch",
+            "description": "true＝工作已建立但 broker 暫時不通，留在 outbox 等恢復後投遞（維持 queued）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "kind",
+          "status",
+          "status_url",
+          "events_url",
+          "idempotent_replay",
+          "delayed_dispatch"
+        ],
+        "title": "JobCreated"
+      },
+      "JobError": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "JobError"
+      },
+      "JobListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "JobListResponse"
+      },
+      "JobWorker": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "queues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Queues"
+          },
+          "pid": {
+            "type": "integer",
+            "title": "Pid"
+          },
+          "age_s": {
+            "type": "number",
+            "title": "Age S",
+            "description": "距離上次登記幾秒；超過 15 秒沒更新就會從清單消失"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "queues",
+          "pid",
+          "age_s"
+        ],
+        "title": "JobWorker"
+      },
+      "JobsBrief": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "database_ok": {
+            "type": "boolean",
+            "title": "Database Ok"
+          },
+          "broker_ok": {
+            "type": "boolean",
+            "title": "Broker Ok"
+          },
+          "pending_dispatch": {
+            "type": "integer",
+            "title": "Pending Dispatch"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/JobWorker"
+            },
+            "type": "array",
+            "title": "Workers",
+            "description": "存活的 worker 行程（每個行程自己定期登記）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "database_ok",
+          "broker_ok",
+          "pending_dispatch",
+          "counts",
+          "workers"
+        ],
+        "title": "JobsBrief"
+      },
       "LightnessStats": {
         "properties": {
           "dark": {
@@ -7259,6 +8324,46 @@
           "site"
         ],
         "title": "MachineInfo"
+      },
+      "MemoryCoordination": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "redis"
+            ],
+            "title": "Mode",
+            "description": "local＝沒有 REDIS_URL（單一行程）；redis＝各行程在 Redis 登記使用中的模型"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable",
+              "warming"
+            ],
+            "title": "State",
+            "description": "ok＝已確認其他行程的使用狀況；unavailable＝Redis 不通或登記格式錯誤；warming＝Redis 剛重啟、等其他行程重新登記。不是 ok 時降級：共用模型一律不卸載"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "state"
+        ],
+        "title": "MemoryCoordination"
       },
       "MemoryEvent": {
         "properties": {
@@ -7352,6 +8457,23 @@
             "type": "array",
             "title": "Kept",
             "description": "目前流程或其他請求正在用、所以保留的模型"
+          },
+          "coordination": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "unavailable",
+                  "warming"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coordination",
+            "description": "跨行程模型使用登記的狀態；不是 ok 時無法確認其他行程的使用狀況，共用推論服務上的模型一律保留（docs/adr/041）"
           }
         },
         "type": "object",
@@ -7604,6 +8726,16 @@
             },
             "type": "array",
             "title": "Events"
+          },
+          "coordination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemoryCoordination"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -9010,6 +10142,29 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Settings"
+          },
+          "input_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Version",
+            "description": "目前的排程輸入版本（工單、途程、機台、行事曆）；建立排程工作時帶回"
+          },
+          "active_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Job"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "排程範圍裡排隊或執行中的背景工作（重新整理後找回進度用）"
           }
         },
         "type": "object",
@@ -9058,7 +10213,8 @@
           "part_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$"
               },
               {
                 "type": "null"
@@ -9070,7 +10226,8 @@
           "image_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$"
               },
               {
                 "type": "null"
@@ -9644,6 +10801,22 @@
             "title": "Forced Intent",
             "description": "使用者點澄清按鈕選的意圖"
           },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "art",
+                  "mfg"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain",
+            "description": "入口選的分類（docs/adr/040）：art 畫作、mfg 工廠；null＝自動判斷。只縮小本地分流的意圖範圍（agent.yaml 的 domain_intents），不改變任何權限"
+          },
           "engine": {
             "type": "string",
             "enum": [
@@ -9842,6 +11015,19 @@
             "type": "object",
             "title": "Dispatch"
           },
+          "art_resolve": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Art Resolve",
+            "description": "沒說畫名、畫家時判斷是哪一幅畫（docs/adr/038）：{artwork_id, by, prob, ms, fallback_reason}；artwork_id 為 null＝判斷不出來、照全庫檢索作答。判斷出來時 dispatch 會帶 artwork_id、artwork_label 與 artwork_guess（前端可顯示「推測你問的是〈…〉」）；沒判斷時為 null"
+          },
           "post_filter": {
             "type": "string",
             "enum": [
@@ -10022,6 +11208,47 @@
           "kind"
         ],
         "title": "RoutingOp"
+      },
+      "ScheduleJobCreate": {
+        "properties": {
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60.0,
+                "minimum": 3.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds",
+            "description": "求解秒數；預設 20"
+          },
+          "engine": {
+            "type": "string",
+            "enum": [
+              "timefold",
+              "greedy"
+            ],
+            "title": "Engine",
+            "default": "timefold"
+          },
+          "input_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Version",
+            "description": "您畫面上的輸入版本（GET /production/overview 的 input_version）；和伺服器現在的不同回 409 SCHEDULE_INPUT_CHANGED，不會用過期的資料排程"
+          }
+        },
+        "type": "object",
+        "title": "ScheduleJobCreate"
       },
       "ScheduleKpis": {
         "properties": {
@@ -10555,6 +11782,24 @@
         "type": "object",
         "title": "ScheduleSolveRequest"
       },
+      "ScheduleStopRequest": {
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id",
+            "description": "要提前結束的排程工作；沒給＝目前執行中的"
+          }
+        },
+        "type": "object",
+        "title": "ScheduleStopRequest"
+      },
       "ScheduleWorkOrder": {
         "properties": {
           "wo_no": {
@@ -10953,6 +12198,15 @@
             ],
             "title": "By"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "chitchat",
+              "catalog"
+            ],
+            "title": "Kind",
+            "default": "chitchat"
+          },
           "reply": {
             "type": "string",
             "title": "Reply"
@@ -10965,7 +12219,7 @@
           "reply"
         ],
         "title": "ShortCircuitInfo",
-        "description": "第 2 段判為無關閒聊：快速短路回覆，不檢索、不生成。"
+        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"
       },
       "SkippedWorkOrder": {
         "properties": {
@@ -11062,6 +12316,17 @@
           },
           "chat_defaults": {
             "$ref": "#/components/schemas/ChatDefaultsBrief"
+          },
+          "jobs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobsBrief"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "背景工作系統（Redis＋工作資料庫＋worker）；沒啟用時 enabled=false"
           }
         },
         "type": "object",

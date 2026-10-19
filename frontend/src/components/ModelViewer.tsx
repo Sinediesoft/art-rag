@@ -11,8 +11,11 @@ export interface ModelLayer {
   ghost?: boolean;
 }
 
-/** STL 3D 檢視器：CAD 慣例 Z 軸朝上、可拖曳旋轉與縮放；多個模型以各自的外框中心對齊後疊合 */
-export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; height?: number }) {
+/**
+ * STL 3D 檢視器：CAD 慣例 Z 軸朝上、可拖曳旋轉與縮放；多個模型以各自的外框中心對齊後疊合。
+ * height="fill"：填滿外層（工廠工作台的板塊），大小改變時只調整畫布，不重新載入模型
+ */
+export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; height?: number | "fill" }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,12 +25,13 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
     const mount = mountRef.current;
     if (!mount || !layers.length) return;
     let disposed = false;
+    const h = () => (height === "fill" ? Math.max(1, mount.clientHeight) : height);
     setError(null);
     setLoading(true);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(mount.clientWidth, height);
+    renderer.setSize(mount.clientWidth, h());
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -36,7 +40,7 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
     sun.position.set(1.5, -2, 3);
     scene.add(sun);
 
-    const camera = new THREE.PerspectiveCamera(35, mount.clientWidth / height, 0.1, 1e5);
+    const camera = new THREE.PerspectiveCamera(35, mount.clientWidth / h(), 0.1, 1e5);
     camera.up.set(0, 0, 1);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -100,9 +104,9 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
       });
 
     const onResize = () => {
-      camera.aspect = mount.clientWidth / height;
+      camera.aspect = mount.clientWidth / h();
       camera.updateProjectionMatrix();
-      renderer.setSize(mount.clientWidth, height);
+      renderer.setSize(mount.clientWidth, h());
     };
     const ro = new ResizeObserver(onResize);
     ro.observe(mount);
@@ -124,8 +128,8 @@ export function ModelViewer({ layers, height = 360 }: { layers: ModelLayer[]; he
   }, [key, height]);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-hairline bg-canvas">
-      <div ref={mountRef} style={{ height }} className="w-full cursor-grab active:cursor-grabbing" />
+    <div className={height === "fill" ? "viewer--fill overflow-hidden" : "relative overflow-hidden rounded-xl border border-hairline bg-canvas"}>
+      <div ref={mountRef} style={{ height: height === "fill" ? "100%" : height }} className="viewer__canvas w-full cursor-grab active:cursor-grabbing" />
       {loading && !error && (
         <div className="absolute inset-0 grid place-items-center text-sm text-ink-48">載入 3D 模型…</div>
       )}

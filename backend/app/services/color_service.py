@@ -10,7 +10,8 @@ from app.analysis.color import analyze
 from app.core.errors import AppError
 from app.rag.preprocess import load_image
 from app.repositories.index_store import get_store
-from app.services.search_service import load_upload
+from app.services import uploads
+from app.services.identity import Account
 
 ORIGINAL_NOTES = ["依數位圖檔計算，可能與原作現況及展場光線下看到的顏色不同"]
 PHOTO_NOTES = [
@@ -52,14 +53,16 @@ def artwork_colormap_path(artwork_id: str) -> Path:
 
 @lru_cache(maxsize=32)
 def _photo(image_id: str) -> tuple[dict, bytes, int]:
-    """結果固定，快取被擠掉就重算；找不到照片時 load_upload 丟 AppError（例外不會被快取）。"""
-    img = load_image(load_upload(image_id))
+    """結果固定，快取被擠掉就重算；找不到照片時丟 AppError（例外不會被快取）。
+    授權（擁有者）在快取之外：photo_colors／photo_colormap 每次呼叫都先驗。"""
+    img = load_image(uploads.load_unchecked(image_id))
     t0 = time.perf_counter()
     result, png = analyze(img)
     return result, png, round((time.perf_counter() - t0) * 1000)
 
 
-def photo_colors(image_id: str) -> dict:
+def photo_colors(image_id: str, viewer: Account) -> dict:
+    uploads.authorize(image_id, viewer)
     result, _, ms = _photo(image_id)
     return {
         **result,
@@ -70,5 +73,6 @@ def photo_colors(image_id: str) -> dict:
     }
 
 
-def photo_colormap(image_id: str) -> bytes:
+def photo_colormap(image_id: str, viewer: Account) -> bytes:
+    uploads.authorize(image_id, viewer)
     return _photo(image_id)[1]

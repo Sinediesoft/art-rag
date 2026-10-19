@@ -12,17 +12,20 @@ SSE 事件見 shared/sse_events.md：meta → progress（多次）→ solution �
 
 import asyncio
 import contextlib
+import hashlib
 import math
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from app.core.config import REPO_ROOT, get_models_config, get_settings
 from app.core.errors import AppError
 from app.core.logging import log
+from app.jobs import legacy_lease
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
-from app.repositories.production_repo import get_production_repo
+from app.repositories.production_repo import RevisionConflict, get_production_repo
 from app.scheduling import timefold_client
 from app.scheduling.problem import Problem, build_problem, job_dict, load_setup
 from app.scheduling.solution import decorate, evaluate, greedy_schedule
@@ -62,7 +65,9 @@ def create_work_order(
     release_on: str | None = None,
     note: str | None = None,
     created_by: str | None = None,
+    approval: dict | None = None,
 ) -> dict:
+    """開一張工單。approval（主管核准後開立）有值時，待核准單的狀態更新和開單同一個交易。"""
     site, routings, parts, _, cal = load_setup()
     if part_id not in parts:
         raise AppError("PART_NOT_FOUND", f"找不到圖紙 {part_id}", 404)
@@ -90,7 +95,8 @@ def create_work_order(
             "due_on": due_on,
             "note": note,
             "created_by": created_by,
-        }
+        },
+        approval=approval,
     )
     get_inventory_repo().ensure_built(force=True)
     log.info(
@@ -107,8 +113,17 @@ def next_wo_no() -> tuple[str, str]:
     )
 
 
-def cancel_work_order(wo_no: str) -> None:
-    if not get_production_repo().cancel_work_order(wo_no):
+def work_order_view(wo_no: str) -> dict:
+    """已開立工單的完整回應（帶 Idempotency-Key 的開單在提交後中斷，重送時從資料庫重建）。"""
+    w = get_production_repo().get_work_order(wo_no)
+    if w is None:
+        raise AppError("WORK_ORDER_NOT_FOUND", f"找不到工單 {wo_no}", 404)
+    parts = load_setup()[2]
+    return {**w, "part_name": parts[w["part_id"]]["name"]["zh"], "source": "系統開立"}
+
+
+def cancel_work_order(wo_no: str, approval: dict | None = None) -> None:
+    if not get_production_repo().cancel_work_order(wo_no, approval=approval):
         raise AppError(
             "WORK_ORDER_NOT_FOUND",
             f"找不到可取消的工單 {wo_no}（只能取消圖紙頁開立、尚未取消的工單）",
@@ -224,10 +239,12 @@ async def engine_status() -> dict:
         }
     info = await timefold_client.health()
     if info is None:
+        # 這段狀態所有工廠角色都看得到：不帶排程服務的內網位址
+        log.info(f"排程服務 {s.scheduler_base_url} 連不上，改用簡易排程")
         return {
             "available": False,
             "engine": "greedy",
-            "detail": f"{s.scheduler_base_url} 連不上（請執行 make scheduler）；改用簡易排程",
+            "detail": "排程服務連不上（請執行 make scheduler）；改用簡易排程",
         }
     return {
         "available": True,
@@ -241,10 +258,25 @@ async def engine_status() -> dict:
     }
 
 
+def _active_job() -> dict | None:
+    """排程範圍裡排隊或執行中的背景工作（重新整理頁面後找回進度）；沒有啟用或連不上就沒有。"""
+    from app.jobs import db, service, store
+    from app.jobs import enabled as jobs_enabled
+
+    if not jobs_enabled():
+        return None
+    try:
+        job = store.active_job(service.SCHEDULE_SCOPE)
+        return service.public(job) if job else None
+    except db.JobsUnavailable:
+        return None
+
+
 async def overview() -> dict:
     site, _, _, _, cal = await asyncio.to_thread(load_setup)
     problem = await asyncio.to_thread(build_problem)
     run = get_production_repo().latest_run()
+    active = await asyncio.to_thread(_active_job)
     return {
         "plan_start": str(cal.start),
         "calendar": {
@@ -262,11 +294,13 @@ async def overview() -> dict:
         "engine": await engine_status(),
         "current": _run_detail(run, problem) if run else None,
         "runs": get_production_repo().recent_runs(8),
-        "solving": _active["job_id"] is not None or _busy.locked(),
+        "solving": _active["job_id"] is not None or _busy.locked() or active is not None,
         "settings": {
             "solve_seconds": int(_cfg("solve_seconds", 20)),
             "max_seconds": int(_cfg("max_seconds", 60)),
         },
+        "input_version": input_versions(problem)["version"],
+        "active_job": active,
     }
 
 
@@ -289,40 +323,141 @@ def _score_fields(st: dict) -> dict:
     return {k: st.get(k) for k in ("score", "hard", "medium", "soft", "structural", "feasible")}
 
 
-async def solve_stream(
-    request_id: str, seconds: int | None = None, engine: str = "timefold"
-) -> AsyncIterator[str]:
-    if _busy.locked():
-        yield sse(
-            "error",
-            {
-                "code": "SCHEDULE_BUSY",
-                "request_id": request_id,
-                "message": "已有排程正在計算，請等它完成或按「提前結束」",
-            },
-        )
-        return
-    async with _busy, memory_guard.flow("schedule", {"timefold"}):
-        async for event in _solve(request_id, seconds, engine):
-            yield event
+@dataclass
+class SolveOutcome:
+    """求解的結果（還沒寫回）：舊的 SSE 入口與背景工作共用同一份，只有寫回的方式不同。"""
+
+    problem: Problem
+    used: str
+    info: dict | None
+    status: str  # done／stopped
+    seconds: int
+    initial_score: str | None
+    improvements: int
+    build_ms: int
+    solve_ms: int
+    ev: dict
+    score: str
+    score_check: bool | None
+    timed: dict
+    decorated: dict
+    fallback_reason: str | None
+    started_at: str
+    t0: float
+    # 建問題當下的資料版本：寫回時比對，避免舊解覆蓋新工單（production_repo.save_run）
+    revision: str
+    versions: dict
+
+    def run_row(self, request_id: str) -> dict:
+        return {
+            "request_id": request_id,
+            "engine": self.used,
+            "engine_version": self.info.get("version") if self.info else None,
+            "status": self.status,
+            "seconds_limit": self.seconds if self.used == "timefold" else 0,
+            "solve_ms": self.solve_ms,
+            "score": self.score,
+            "hard": self.ev["hard"],
+            "medium": self.ev["medium"],
+            "soft": self.ev["soft"],
+            "initial_score": self.initial_score,
+            "improvements": self.improvements,
+            "n_work_orders": len(self.problem.jobs),
+            "n_operations": len(self.problem.ops),
+            "kpis": self.decorated["kpis"],
+            "analysis": self.ev["analysis"],
+            "work_orders": self.decorated["work_orders"],
+            "note": self.fallback_reason,
+            "score_check": self.score_check,
+        }
 
 
-async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIterator[str]:
+def input_versions(problem: Problem) -> dict:
+    """排程的輸入版本：工單、途程、機台、行事曆各一個雜湊，加上合起來的 version。
+    工作建立時保存、寫回前重算；不一樣就是舊解，不能覆蓋新的資料。"""
+    import hashlib
+    import json
+
+    solver = problem.to_solver_json("", 0, 0)
+    cal = problem.calendar
+    parts = {
+        "work_orders": {
+            "jobs": solver["jobs"],
+            "info": [
+                (j.wo_no, j.part_id, j.qty, j.priority, j.status, j.due_on) for j in problem.jobs
+            ],
+            "skipped": sorted(x["wo_no"] for x in problem.skipped),
+        },
+        "routings": solver["operations"],
+        "machines": {"machines": solver["machines"], "weights": problem.weights},
+        "calendar": {
+            "start": str(cal.start),
+            "day_minutes": cal.day_minutes,
+            "shifts": [(str(a), str(b)) for a, b in cal.shifts],
+            "workdays": sorted(cal.workdays),
+            "holidays": sorted(str(d) for d in cal.holidays),
+        },
+    }
+    digests = {
+        k: hashlib.sha256(json.dumps(v, sort_keys=True, default=str).encode()).hexdigest()[:16]
+        for k, v in parts.items()
+    }
+    overall = hashlib.sha256(json.dumps(digests, sort_keys=True).encode()).hexdigest()[:24]
+    return {**digests, "version": "sv1:" + overall}
+
+
+def current_input_versions() -> dict:
+    return input_versions(build_problem())
+
+
+class Aborted(Exception):
+    """背景工作被取消、租約遺失：求解中止，不產生任何寫回。"""
+
+
+async def solve_core(
+    request_id: str,
+    seconds: int | None,
+    engine: str,
+    *,
+    should_stop: Callable[[], bool] | None = None,
+    should_abort: Callable[[], bool] | None = None,
+    expected_version: str | None = None,
+) -> AsyncIterator[tuple[str, dict | SolveOutcome]]:
+    """求解本體：依序送出 ("meta"|"progress"|"tick", 資料)，最後 ("outcome", SolveOutcome)；
+    失敗送 ("error", {code, message}) 後結束。
+
+    should_stop：True 時請 Timefold 提前結束並採用目前最佳解（合法的提前停止）。
+    should_abort：True 時請 Timefold 停止後丟 Aborted（取消，不採用任何解、不寫回）。
+    expected_version：工作建立時的輸入版本；現在的版本不一樣就回 SCHEDULE_INPUT_CHANGED。"""
     t0 = time.perf_counter()
     started_at = datetime.now(UTC).isoformat()
     s = get_settings()
     seconds = int(min(max(seconds or _cfg("solve_seconds", 20), 3), _cfg("max_seconds", 60)))
 
-    def err(code: str, message: str) -> str:
-        return sse("error", {"code": code, "request_id": request_id, "message": message})
-
+    revision = await asyncio.to_thread(get_production_repo().revision)
     try:
         problem = await asyncio.to_thread(build_problem)
     except AppError as e:
-        yield err(e.code, e.message)
+        yield "error", {"code": e.code, "message": e.message}
+        return
+    versions = input_versions(problem)
+    if expected_version is not None and versions["version"] != expected_version:
+        yield (
+            "error",
+            {
+                "code": "SCHEDULE_INPUT_CHANGED",
+                "message": "工單、途程、機台或行事曆在排隊期間已經變更，這份排程已過時；請重新排程",
+            },
+        )
         return
     if not problem.ops:
-        yield err("NO_WORK_ORDERS", "沒有需要排程的工單：請先在圖紙頁開立工單")
+        yield (
+            "error",
+            {
+                "code": "NO_WORK_ORDERS",
+                "message": "沒有需要排程的工單：請先在圖紙頁開立工單",
+            },
+        )
         return
     build_ms = round((time.perf_counter() - t0) * 1000)
 
@@ -338,7 +473,7 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
             "只做一次交期優先派工，未最佳化"
         )
     used = "timefold" if use_tf else "greedy"
-    yield sse(
+    yield (
         "meta",
         {
             "request_id": request_id,
@@ -363,12 +498,19 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
                 problem.to_solver_json(request_id, seconds, int(_cfg("unimproved_seconds", 8)))
             )
         except timefold_client.SchedulerUnavailable as e:
-            yield err("SCHEDULER_UNAVAILABLE", f"排程服務無法使用：{e}")
+            yield "error", {"code": "SCHEDULER_UNAVAILABLE", "message": f"排程服務無法使用：{e}"}
             return
         _active.update(job_id=job_id, request_id=request_id)
         last_improvements, last_emit, last_tick, st = -1, 0.0, 0.0, {}
+        stop_sent = False
         try:
             while True:
+                if should_abort is not None and should_abort():
+                    raise Aborted()
+                if should_stop is not None and should_stop() and not stop_sent:
+                    stop_sent = True
+                    with contextlib.suppress(timefold_client.SchedulerUnavailable):
+                        await timefold_client.stop(job_id)
                 st = await timefold_client.status(job_id, solution=True)
                 finished = st["status"] != "SOLVING"
                 now = time.perf_counter()
@@ -377,7 +519,7 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
                     timed = _timed_from(st.get("assignments", []))
                     if len(timed) == len(problem.ops):
                         d = decorate(problem, timed)
-                        yield sse(
+                        yield (
                             "progress",
                             {
                                 "elapsed_ms": st["elapsedMs"],
@@ -391,7 +533,7 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
                         )
                 elif now - last_tick > 0.9:  # 沒有更好的解時每秒送一次心跳，前端計時才不會停住
                     last_tick = now
-                    yield sse(
+                    yield (
                         "tick",
                         {
                             "elapsed_ms": st["elapsedMs"],
@@ -403,15 +545,19 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
                     break
                 await asyncio.sleep(_cfg("poll_ms", 400) / 1000)
         except timefold_client.SchedulerUnavailable as e:
-            yield err("SCHEDULER_UNAVAILABLE", f"排程服務中斷：{e}")
+            yield "error", {"code": "SCHEDULER_UNAVAILABLE", "message": f"排程服務中斷：{e}"}
             return
         finally:
-            if st.get("status") == "SOLVING":  # 使用者離開頁面：停止求解，不留背景工作
+            if st.get("status") == "SOLVING" or (not st and job_id):
+                # 使用者離開頁面、工作被取消或例外：停止求解，不留背景工作
                 with contextlib.suppress(timefold_client.SchedulerUnavailable):
                     await timefold_client.stop(job_id)
             _active.update(job_id=None, request_id=None)
         if st["status"] == "FAILED":
-            yield err("SCHEDULE_FAILED", f"Timefold 求解失敗：{st.get('error')}")
+            yield (
+                "error",
+                {"code": "SCHEDULE_FAILED", "message": f"Timefold 求解失敗：{st.get('error')}"},
+            )
             return
         timed = _timed_from(st["assignments"])
         initial_score, improvements = st.get("initialScore"), st["improvements"]
@@ -429,10 +575,9 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
     if score_check is False:
         log.warning(f"排程分數不一致：Timefold {engine_score}，後端重算 {ev['score']}")
     score = engine_score or ev["score"]
-    analysis = ev["analysis"]
     d = decorate(problem, timed)
     if not use_tf:
-        yield sse(
+        yield (
             "progress",
             {
                 "elapsed_ms": solve_ms,
@@ -449,63 +594,183 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
                 "kpis": d["kpis"],
             },
         )
+    yield (
+        "outcome",
+        SolveOutcome(
+            problem=problem,
+            used=used,
+            info=info,
+            status=status,
+            seconds=seconds,
+            initial_score=initial_score,
+            improvements=improvements,
+            build_ms=build_ms,
+            solve_ms=solve_ms,
+            ev=ev,
+            score=score,
+            score_check=score_check,
+            timed=timed,
+            decorated=d,
+            fallback_reason=fallback_reason,
+            started_at=started_at,
+            t0=t0,
+            revision=revision,
+            versions=versions,
+        ),
+    )
 
-    run = {
-        "request_id": request_id,
-        "engine": used,
-        "engine_version": info.get("version") if info else None,
-        "status": status,
-        "seconds_limit": seconds if use_tf else 0,
-        "solve_ms": solve_ms,
-        "score": score,
-        "hard": ev["hard"],
-        "medium": ev["medium"],
-        "soft": ev["soft"],
-        "initial_score": initial_score,
-        "improvements": improvements,
-        "n_work_orders": len(problem.jobs),
-        "n_operations": len(problem.ops),
-        "kpis": d["kpis"],
-        "analysis": analysis,
-        "work_orders": d["work_orders"],
-        "note": fallback_reason,
-        "score_check": score_check,
-    }
-    run_id = await asyncio.to_thread(get_production_repo().save_run, run, d["operations"])
-    await asyncio.to_thread(get_inventory_repo().ensure_built, True)
+
+def validate_outcome(o: SolveOutcome) -> None:
+    """寫回前的驗證：後端自己重算的硬限制與分數。不通過就不寫回（工作失敗、舊排程維持原樣）。"""
+    if set(o.timed) != {op.id for op in o.problem.ops} or o.ev["hard"] < 0:
+        raise AppError(
+            "SCHEDULE_INVALID_SOLUTION",
+            "排程結果違反硬限制（工序順序、機台衝突或缺工序），沒有寫回",
+            422,
+        )
+    if o.score_check is False:
+        raise AppError(
+            "SCHEDULE_SCORE_MISMATCH",
+            "Timefold 的分數和後端重算的不一致（兩邊規則不同步），沒有寫回",
+            422,
+        )
+
+
+def run_id_for_job(job_id: str) -> str:
+    """背景工作的排程 run_id 由 job_id 決定：重送、重試、舊 worker 延遲寫回、恢復迴圈補做結案，
+    對到的都是同一列。"""
+    return "plan_" + hashlib.sha256(job_id.encode()).hexdigest()[:12]
+
+
+def write_back(
+    o: SolveOutcome,
+    request_id: str,
+    *,
+    job_id: str | None = None,
+    retries: int = 2,
+    fence: Callable[[], None] | None = None,
+    audit: dict | None = None,
+) -> str:
+    """把排程結果寫回生產資料庫（單一交易）並讓工廠資料庫跟上。
+
+    - 資料版本：交易內比對 production revision；變了就重算輸入版本，內容沒變（例如盤點異動）
+      才用新的 revision 重試，內容變了丟 SCHEDULE_INPUT_CHANGED，舊解不會覆蓋新工單
+    - 冪等：背景工作的 run_id 由 job_id 決定，重送、重試、舊 worker 延遲寫回都是同一列
+    - 工廠資料庫是生產資料庫的衍生檢視，寫回後重建；重建失敗只記錄（排程已經提交，不能讓呼叫端
+      以為沒寫入），下次讀取會依 revision 重建
+    - fence：背景工作傳入，在寫入交易裡、真正寫入之前呼叫；資源租約已被接手就丟例外、不寫入
+    - audit：和排程同一個交易寫入的稽核紀錄（見 production_repo.save_run）
+    """
+    repo = get_production_repo()
+    run_id = run_id_for_job(job_id) if job_id else None
+    expected = o.revision
+    for attempt in range(retries + 1):
+        try:
+            saved = repo.save_run(
+                o.run_row(request_id), o.decorated["operations"], run_id=run_id,
+                expected_revision=expected, fence=fence, audit=audit,
+            )  # fmt: skip
+            break
+        except RevisionConflict as e:
+            now = input_versions(build_problem())
+            if now["version"] != o.versions["version"] or attempt == retries:
+                raise AppError(
+                    "SCHEDULE_INPUT_CHANGED",
+                    "工單、途程、機台或行事曆在求解期間已經變更，舊的排程沒有寫回；請重新排程",
+                    409,
+                ) from e
+            expected = e.revision
+    try:
+        get_inventory_repo().ensure_built(True)
+    except Exception as e:  # noqa: BLE001 — 衍生檢視重建失敗不改變「已寫入」的事實
+        log.warning(f"排程已寫入，工廠資料庫重建失敗（下次讀取會再重建）：{e}")
+    return saved
+
+
+async def solve_stream(
+    request_id: str, seconds: int | None = None, engine: str = "timefold"
+) -> AsyncIterator[str]:
+    """舊的 SSE 入口（在 API 行程內求解，連線中斷就停止）。背景工作請用 POST /schedule/jobs。"""
+    lease = await asyncio.to_thread(legacy_lease.acquire, request_id)
+    if lease is None or _busy.locked():
+        if lease is not None:
+            await asyncio.to_thread(legacy_lease.release, lease)
+        yield sse(
+            "error",
+            {
+                "code": "SCHEDULE_BUSY",
+                "request_id": request_id,
+                "message": "已有排程正在計算，請等它完成或按「提前結束」",
+            },
+        )
+        return
+    try:
+        async with _busy, memory_guard.flow("schedule", {"timefold"}):
+            async for event in _solve(request_id, seconds, engine, lease):
+                yield event
+    finally:
+        await asyncio.to_thread(legacy_lease.release, lease)
+
+
+async def _solve(
+    request_id: str, seconds: int | None, engine: str, lease=None
+) -> AsyncIterator[str]:
+    def err(code: str, message: str) -> str:
+        return sse("error", {"code": code, "request_id": request_id, "message": message})
+
+    outcome: SolveOutcome | None = None
+    async for kind, data in solve_core(request_id, seconds, engine):
+        if lease is not None:
+            await asyncio.to_thread(legacy_lease.renew, lease)
+        if kind == "error":
+            yield err(data["code"], data["message"])  # type: ignore[index]
+            return
+        if kind == "outcome":
+            outcome = data  # type: ignore[assignment]
+        else:
+            yield sse(kind, data)
+    assert outcome is not None
+    o = outcome
+    try:
+        validate_outcome(o)
+        run_id = await asyncio.to_thread(write_back, o, request_id)
+    except AppError as e:
+        yield err(e.code, e.message)
+        return
+    d, ev = o.decorated, o.ev
     yield sse(
         "solution",
         {
             "run_id": run_id,
-            "engine": used,
-            "status": status,
-            "score": score,
+            "engine": o.used,
+            "status": o.status,
+            "score": o.score,
             "hard": ev["hard"],
             "medium": ev["medium"],
             "soft": ev["soft"],
-            "initial_score": initial_score,
-            "score_check": score_check,
-            "analysis": analysis,
+            "initial_score": o.initial_score,
+            "score_check": o.score_check,
+            "analysis": ev["analysis"],
             "operations": d["operations"],
             "work_orders": d["work_orders"],
             "kpis": d["kpis"],
             "axis": d["axis"],
         },
     )
-    total_ms = round((time.perf_counter() - t0) * 1000)
+    total_ms = round((time.perf_counter() - o.t0) * 1000)
     yield sse(
         "done",
         {
             "request_id": request_id,
             "run_id": run_id,
-            "engine": used,
-            "status": status,
-            "score": score,
-            "initial_score": initial_score,
-            "improvements": improvements,
-            "latency_ms": {"build": build_ms, "solve": solve_ms, "total": total_ms},
+            "engine": o.used,
+            "status": o.status,
+            "score": o.score,
+            "initial_score": o.initial_score,
+            "improvements": o.improvements,
+            "latency_ms": {"build": o.build_ms, "solve": o.solve_ms, "total": total_ms},
             "egress": NO_EGRESS,
-            "memory": memory_guard.last_event_since(started_at),
+            "memory": memory_guard.last_event_since(o.started_at),
         },
     )
     log.info(
@@ -514,11 +779,11 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
             "fields": {
                 "request_id": request_id,
                 "run_id": run_id,
-                "engine": used,
-                "status": status,
-                "score": score,
-                "initial_score": initial_score,
-                "n_ops": len(problem.ops),
+                "engine": o.used,
+                "status": o.status,
+                "score": o.score,
+                "initial_score": o.initial_score,
+                "n_ops": len(o.problem.ops),
                 "total_ms": total_ms,
             }
         },
@@ -526,6 +791,7 @@ async def _solve(request_id: str, seconds: int | None, engine: str) -> AsyncIter
 
 
 async def stop() -> bool:
+    """提前結束這個 API 行程內（舊 SSE 入口）的求解；背景工作用 jobs.service.stop_schedule。"""
     job_id = _active.get("job_id")
     if not job_id:
         return False

@@ -7,7 +7,7 @@
 | `VALIDATION_ERROR` | 422 | 請求參數格式錯誤 |
 | `IMAGE_TOO_LARGE` | 413 | 圖片超過 10 MB |
 | `IMAGE_TYPE_NOT_ALLOWED` | 415 | 只收 JPEG、PNG、WebP |
-| `IMAGE_NOT_FOUND` | 404 | `image_id` 不存在或已過期（7 天自動刪除） |
+| `IMAGE_NOT_FOUND` | 404 | `image_id` 不存在、已過期（7 天自動刪除），**或不是目前身分可以用的照片**（只有上傳的帳號與擁有者用 `PUT /images/{id}/acl` 明確授權的帳號可以用；舊資料沒有擁有者一律拒絕）。找不到和沒有權限回同一個回應，不透露別人的照片存不存在（ADR 041） |
 | `ARTWORK_NOT_FOUND` | 404 | 畫作 ID 不存在 |
 | `ALIGN_FAILED` | 422 | 影像對位：照片和指定的知識庫原圖、圖紙或另一張照片（兩張照片互比）對不上（對應的特徵點不夠，或算出來的位置不合理），不硬畫位置框（docs/adr/012） |
 | `NOT_IN_KB` | 200（SSE `error`） | 以圖辨識低於門檻：知識庫中沒有這幅畫（領域路由判為工廠圖紙時：知識庫中沒有這張圖紙） |
@@ -16,7 +16,7 @@
 | `CLOUD_UPLOAD_FORBIDDEN` | 200（SSE `error`） | 雲端對照組不接受使用者上傳的照片（使用者資料不出站） |
 | `PART_NOT_FOUND` | 404／SSE `error` | 圖紙 ID 不存在（`/inventory/parts/{id}`：庫存資料庫中沒有這張圖紙） |
 | `CLOUD_CONFIDENTIAL_FORBIDDEN` | 200（SSE `error`） | 工廠圖紙與庫存資料屬機密，不送往任何雲端 API（包含對照組） |
-| `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在或已過期（與上傳照片同為 7 天） |
+| `CAD_JOB_NOT_FOUND` | 404 | 3D 重建結果不存在、已過期（與上傳照片同為 7 天），**或目前身分沒有權限讀**（工作從建立起就有擁有者與來源資源：知識庫圖紙來源要看得到那張圖紙、照片來源要是那張照片的擁有者或被授權者；未完成、失敗、完成都一樣）。回應和不存在相同。領域不符（一般員工）在查工作之前就回 403 `DATA_SCOPE_DENIED` |
 | `PART_MODEL_NOT_FOUND` | 404 | 這張圖紙沒有標準 3D 模型（照片建檔的零件，`/parts/{id}/model.stl`、`model.step`；docs/adr/013） |
 | `INTAKE_TOO_BLURRY` | 200（SSE `error`） | 照片建檔：照片太模糊（模糊程度超過 `intake.max_blur`，圖紙與畫作共用），不送模型、不建檔——模型看不清楚時不會留空而是猜，糊的原圖之後也認不出來（docs/adr/013） |
 | `INTAKE_ALREADY_IN_KB` | 200（SSE `error`）／409 | 照片建檔：知識庫已經有這張圖紙（`part`）或這幅畫（`artwork`），不重複建檔。圖紙只和建檔人看得到的圖紙比（ADR 030），所以主管收錄（`POST /intake/{draft_id}/commit`）時會用主管的範圍再查一次，有重複回 409 |
@@ -37,10 +37,29 @@
 | `ROUTING_NOT_FOUND` | 422 | 開立工單時，這張圖紙還沒有製程途程（`kb/production/routings/<part_id>.json`） |
 | `WORK_ORDER_NOT_FOUND` | 404 | 取消工單時找不到（只能取消圖紙頁開立、尚未取消的工單；`kb/inventory` 的既有工單不能取消） |
 | `NO_WORK_ORDERS` | 200（SSE `error`） | 生產排程：沒有需要排程的工單 |
-| `SCHEDULE_BUSY` | 200（SSE `error`） | 生產排程：已有排程正在計算（同一時間只跑一個） |
+| `SCHEDULE_BUSY` | 200（SSE `error`）／409 | 生產排程：已有排程正在計算（同一時間只跑一個，跨所有 API 與 worker 行程）。`POST /schedule/jobs` 回 409 |
 | `SCHEDULER_UNAVAILABLE` | 200（SSE `error`） | Timefold 排程服務在求解途中斷線（一開始就連不上時不會報錯，而是改用簡易排程並在 `meta.fallback_reason` 說明） |
 | `SCHEDULE_FAILED` | 200（SSE `error`） | Timefold 求解失敗（排程服務回報例外） |
 | `SCHEDULE_RUN_NOT_FOUND` | 404 | 排程結果 `run_id` 不存在 |
+| `JOBS_UNAVAILABLE` | 503 | 背景工作系統目前無法使用（沒有啟用 `REDIS_URL`／工作資料庫，或工作資料庫連不上）。可恢復：稍後重試；工作不會改在 API 行程執行（ADR 041）。Redis 單獨不通時不是這個錯誤：工作照樣建立（202），回應 `delayed_dispatch: true`，留在 outbox 等 Redis 恢復後投遞 |
+| `JOB_NOT_FOUND` | 404 | 背景工作不存在、已過期，或目前身分沒有權限讀（`GET /jobs/{id}`、`/events`、`/cancel`、`/artifacts/{name}` 回應相同） |
+| `JOB_NOT_FINISHED` | 409 | 產物要等工作完成（成功或失敗）才發布；工作還在排隊或執行 |
+| `JOB_ARTIFACT_NOT_FOUND` | 404 | 產物名稱不在白名單（`input.png`、`code.py`、`model.stl`、`model.step`、`reproj.png`）或沒有發布 |
+| `JOBS_LIMIT_REACHED` | 429 | 這個帳號同時排隊或執行中的 3D 重建已達上限（`JOBS_MAX_ACTIVE_PER_OWNER`，預設 5），等完成或取消幾個再建立 |
+| `JOB_COMMITTING` | 409 | 取消：工作已進入寫回階段，不能取消（會完成並寫入結果） |
+| `JOB_ALREADY_FINISHED` | 409 | 取消：工作已經成功或失敗 |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | `Idempotency-Key` 已用在參數不同的請求（建立工作、開／取消工單、確認異動、送核准、核准） |
+| `IDEMPOTENCY_IN_PROGRESS` | 409 | 相同帳號、操作與 key 的請求還在處理中，稍後重送會拿到同一個結果 |
+| `USE_JOBS_API` | 409 | 這台伺服器的 3D 重建與排程改由背景 worker 執行（`LEGACY_SYNC_JOBS=off`，或 `auto` 且已啟用工作系統），舊的 SSE 入口（`POST /cad/reconstruct`、`/schedule/solve`）停用；請改用 `POST /cad/jobs`、`POST /schedule/jobs` |
+| `SCHEDULE_INPUT_CHANGED` | 409／工作 `error.code` | 排程輸入（工單、途程、機台、行事曆）和工作建立時不同，或求解期間有人改了：舊解不寫回、不覆蓋新資料，請重新排程 |
+| `SCHEDULE_INVALID_SOLUTION` | 422／工作 `error.code` | 後端重算發現排程結果違反硬限制或缺工序，沒有寫回 |
+| `SCHEDULE_SCORE_MISMATCH` | 422／工作 `error.code` | Timefold 回的分數和後端用同一套規則重算的不一致，沒有寫回 |
+| `CAD_EXEC_FAILED` | 工作 `error.code` | 3D 重建的沙箱執行失敗（`message` 只留第一行；程式碼、輸入圖在受保護的產物端點給授權的人看） |
+| `CAD_NO_RESULT` | 工作 `error.code` | 3D 重建沒有產出結果事件 |
+| `CAD_PUBLISH_CONFLICT` | 工作 `error.code` | 這一次嘗試的產物資料夾（`<job>/a<attempt>`）已經存在：不刪、不覆蓋，工作失敗（正常流程不會發生） |
+| `LEASE_EXPIRED` | 工作 `error.code` | worker 連續多次中斷（租約過期），已停止重試 |
+| `PERMISSION_REVOKED` | 403／工作 `error.code` | 提交工作的帳號已不存在或被撤銷；其他撤權（操作、領域、圖紙、照片）依原因回 `PERMISSION_DENIED`／`DATA_SCOPE_DENIED`／`IMAGE_NOT_FOUND`，工作在領取後、執行前、寫回前各驗一次，失敗就不讀圖、不呼叫模型、不寫入 |
+| `INPUT_BLOCKED` | 403 | 工具入口（`POST /inventory/ask`）的共用輸入防護：命中第 2 段的地端 hard-block 規則，不呼叫模型、不查資料，記一筆拒絕並記錄（ADR 041） |
 | `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得一般員工的憑證後重送 |
 | `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
 | `TOKEN_EXPIRED` | 401 | 憑證過期（預設 8 小時，`JWT_TTL_MIN`）；前端自動重新取得 |
@@ -57,4 +76,8 @@
 | `FORBIDDEN` | 403 | 展示模式沒開或不是受信任來源的請求（`DEMO_CONTROLS=false`（預設），或請求不是來自 `DEMO_TRUSTED_HOSTS` 時呼叫 `POST /api/v1/admin/outage`、`/admin/memory/release`、`/admin/production/reset`、`/auth/switch`；ADR 030）；或 `/chat` 帶 `inject` 但未同時開啟 `EVAL_INJECTION=true`、`EVAL_CONTROLS=true` 且來自受信任來源（干擾段落注入只給評估用，ADR 019） |
 | `COMPARE_KIND_MISMATCH` | 422 | 兩件並排比較（`/compare/items`、`/compare/summary`）的兩件不同類：一幅畫和一張圖紙（docs/adr/017） |
 | `INDEX_MISMATCH` | 503 | 索引 manifest 與 `shared/models.yaml`／`kb/VERSION` 不一致 |
-| `INTERNAL_ERROR` | 500 | 其他未預期錯誤 |
+| `INTERNAL_ERROR` | 500 | 其他未預期錯誤；訊息固定為「伺服器內部錯誤」，例外內容只寫伺服器 log（用 `request_id` 對照） |
+| `DATABASE_UNAVAILABLE` | 503／SSE `error` | 資料庫暫時連不上（Docker 停了、連線池拿不到連線）；串流途中出錯時以 SSE `error` 事件送出，之後串流結束 |
+| `NOT_FOUND` | 404 | 沒有這個 API（`/api/...` 底下不存在的路徑） |
+| `METHOD_NOT_ALLOWED` | 405 | 這個 API 不接受這種 HTTP 方法 |
+| `HTTP_ERROR` | 其他 4xx | 框架層的其他 HTTP 錯誤 |

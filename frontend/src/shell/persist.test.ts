@@ -256,7 +256,7 @@ describe("帳密：提到就整段不存（審查報告的單行、JSON、多行
 
   it("放在問句（含閒聊短路）與公開回答：serialize → save → load 後沒有任何片段", () => {
     const turns = formats.flatMap((f, i) => [
-      base({ id: `q${i}`, route: route({ question: `幫我看這段 ${f} 梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", reply: "我可以幫你找畫。" } }), part: { kind: "route" } }),
+      base({ id: `q${i}`, route: route({ question: `幫我看這段 ${f} 梵谷在哪裡畫的？`, outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "chitchat", reply: "我可以幫你找畫。" } }), part: { kind: "route" } }),
       base({
         id: `a${i}`,
         route: route({ question: "梵谷在哪裡畫的？" }),

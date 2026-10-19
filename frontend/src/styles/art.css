@@ -22,20 +22,56 @@
   --show-bg: #1a1511;
   --wall-light: rgb(255 226 170 / 0.07);
   --shadow-art: 0 28px 60px rgb(0 0 0 / 0.65), 0 2px 6px rgb(0 0 0 / 0.4);
+  --art: #c9a45c;
   --mod: #c9a45c;
   --on-mod: #17130f;
+  --line-3: #4a3f33;
+  --side-bg: #0c0a07;
+  --menu-bg: #17130f;
+  --glass: rgb(28 23 18 / 0.62);
+  --glass-line: rgb(255 240 210 / 0.08);
   --font-display: "Noto Serif TC", "Noto Sans TC", serif;
 }
 
+/* 明亮模式：和工廠同樣柔和的中性白，但更平、更安靜——像白天的展廳：
+   不用卡片陰影，只有細線；展牆有頂光、畫作有懸掛的陰影，標題明體、重點金箔 */
+:root[data-theme="light"] {
+  --bg: #f7f7f6;
+  --surface: #fcfcfb;
+  --surface-2: #f0f0ee;
+  --surface-3: #e5e5e2;
+  --text: #1d1c1a;
+  --text-2: #55534f;
+  --text-3: #8e8b86;
+  --line: #e3e2df;
+  --line-2: #ebeae8;
+  --line-3: #cfcdc9;
+  --accent: #1d1c1a;
+  --on-accent: #ffffff;
+  --accent-soft: #f0f0ee;
+  --code-bg: #f1f1ef;
+  --code-text: #3a3835;
+  --show-bg: #efefed;
+  --grid-dot: transparent;
+  --wall-light: rgb(255 255 255 / 0.85);
+  --shadow-art: 0 1px 2px rgb(30 25 20 / 0.08), 0 22px 44px -14px rgb(30 25 20 / 0.3);
+  --glass: rgb(255 255 255 / 0.68);
+  --glass-line: rgb(255 255 255 / 0.75);
+  --art: #9a7432;
+  --mod: #9a7432;
+  --on-mod: #ffffff;
+  --side-bg: #fafaf9;
+  --menu-bg: #ffffff;
+}
+
 .app--art {
-  --mod: #c9a45c;
+  --mod: var(--art);
 }
 
 /* 標題用明體：像展品標籤 */
 .mtop__name,
 .msubject__title,
 .showcase__title,
-.museum-label__title,
 .tl-head__span,
 .tl__title,
 .sim-base__title,
@@ -50,13 +86,7 @@
   font-weight: 400;
 }
 
-/* 輸入框焦點、按鈕：金色 */
-.composer__input {
-  border-bottom-color: #4a3f33;
-}
-.composer__attach {
-  border-color: #4a3f33;
-}
+/* 按鈕：金色 */
 .composer__send:not(:disabled):hover,
 .btn--primary:hover {
   background: var(--mod);
@@ -69,34 +99,25 @@
   color: var(--mod);
 }
 
-/* 展品標籤：象牙白紙卡 */
-.museum-label {
-  background: #ede6d8;
-  color: #1b1712;
-  border-left-color: var(--mod);
-}
-.museum-label__en,
-.museum-label__fine {
-  color: #6b604f;
-}
-.museum-label__by {
-  color: #3a3228;
-}
-.museum-label__tags span {
-  border-color: #c9bda7;
-  color: #4a4034;
-}
-
-.side {
-  --side-bg: #0c0a07;
-}
 .side .mark {
   border-color: var(--mod);
   color: var(--mod);
 }
-.menu {
-  background: #17130f;
-}
 .zp__tools {
   background: rgb(20 16 12 / 0.78);
+}
+
+/* 藝術的細節：明亮模式下，作品名稱下方一道細金線 */
+:root[data-theme="light"] .app--art .showcase__titles::after {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  margin-top: 12px;
+  background: var(--mod);
+}
+:root[data-theme="light"] .app--art .zp__tools {
+  background: rgb(255 255 255 / 0.82);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line), 0 6px 18px -6px rgb(0 0 0 / 0.18);
 }

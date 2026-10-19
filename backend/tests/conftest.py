@@ -1,12 +1,17 @@
 """單元測試一律用 mock 模型（共用層 §七）：不下載模型、不呼叫真模型或付費 API。"""
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+
+# 背景工作的隔離環境（PostgreSQL＋Redis＋假 Timefold＋Celery worker）：fixture 在 jobs_support.py
+pytest_plugins = ["jobs_support"]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -91,3 +96,39 @@ def as_account(client, account_id: str) -> dict:
     r = client.post("/api/v1/auth/switch", json={"account_id": account_id})
     assert r.status_code == 200, r.text
     return r.json()["current"]
+
+
+# 測試專用帳號（D2-A，TASK-20261014-001）：docs/adr/036 之後只剩 5 個展示帳號、一個主管，
+# 要表達「同權限、但不是擁有者」的測試（別的主管看不到、取消不了我的排程工作；照片分享給另一個
+# 倉管…）用這兩個。只疊加在測試的 shared/ 副本，不寫進 shared/access.yaml、不出現在頁首。
+TEST_ACCOUNTS = {
+    "manager_b": {
+        "label": "主管・乙（測試）", "role": "manager",
+        "warehouses": ["*"], "customers": ["*"], "artworks": ["*"],
+    },
+    "warehouse_b": {"label": "倉管・乙（測試）", "role": "warehouse", "warehouses": ["*"]},
+}  # fmt: skip
+
+
+@pytest.fixture
+def extra_accounts(tmp_path):
+    """shared/ 的副本加上 TEST_ACCOUNTS，API 與之後啟動的背景 worker（繼承環境變數）都改看它。"""
+    from app.core import config
+
+    dst = tmp_path / "shared_extra"
+    shutil.copytree(config.get_settings().shared_dir, dst)
+    path = dst / "access.yaml"
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    cfg["accounts"].update(TEST_ACCOUNTS)
+    path.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    old = os.environ.get("ARTRAG_SHARED_DIR")
+    os.environ["ARTRAG_SHARED_DIR"] = str(dst)
+    config.get_settings.cache_clear()
+    try:
+        yield dst
+    finally:
+        if old is None:
+            os.environ.pop("ARTRAG_SHARED_DIR", None)
+        else:
+            os.environ["ARTRAG_SHARED_DIR"] = old
+        config.get_settings.cache_clear()

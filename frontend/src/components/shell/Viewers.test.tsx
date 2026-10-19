@@ -8,7 +8,7 @@ import { ModelView, SimilarView } from "./Viewers";
 
 // three.js 在 jsdom 畫不出來：換成記錄參數的替身，只驗證「容器量到高度、檢視器有建立」
 vi.mock("../LazyModelViewer", () => ({
-  ModelViewer: ({ layers, height }: { layers: { url: string }[]; height: number }) => (
+  ModelViewer: ({ layers, height }: { layers: { url: string }[]; height: number | "fill" }) => (
     <div data-testid="model-viewer" data-url={layers[0].url} data-height={height} />
   ),
 }));
@@ -39,7 +39,7 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
     if (desc) Object.defineProperty(HTMLElement.prototype, "clientHeight", desc);
   });
 
-  it("工作編號的資料晚到：容器掛上時才量，量到高度就建立 3D 檢視器", async () => {
+  it("工作編號的資料晚到：容器掛上時才量，量到高度就建立填滿容器的 3D 檢視器", async () => {
     const t = mockTransport();
     let resolve!: (r: Response) => void;
     t.on("GET", "/cad/jobs/job-1", () => new Promise<Response>((r) => (resolve = r)));
@@ -63,7 +63,7 @@ describe("展示區 3D：從紀錄還原（先讀 /cad/jobs，資料回來才掛
     });
     const viewer = await screen.findByTestId("model-viewer");
     expect(viewer.getAttribute("data-url")).toBe("/api/v1/cad/jobs/job-1/model.stl");
-    expect(viewer.getAttribute("data-height")).toBe("480");
+    expect(viewer.getAttribute("data-height")).toBe("fill");
     expect(document.body.textContent).toContain("100×100×22");
   });
 
