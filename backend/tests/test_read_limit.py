@@ -11,6 +11,11 @@ SECRET, INTERNAL = "mfg-001", "mfg-004"  # 機密、內部
 
 @pytest.fixture
 def limit_3(monkeypatch):
+    # 預設行程內計數：.env 設了 REDIS_URL 時不碰正在用的 Redis（要測 Redis 的另外接 local_redis）
+    from app.jobs import coordination
+
+    monkeypatch.setattr(config.get_settings(), "redis_url", "")
+    monkeypatch.setattr(coordination, "_client", None)
     cfg = config.get_access_config()
     monkeypatch.setitem(
         cfg, "read_limits", {"levels": ["機密"], "window_s": 600, "max_downloads": 3}
@@ -72,3 +77,46 @@ def test_no_permission_still_403_not_429(client, limit_3):
     as_account(client, "sales")
     for _ in range(5):
         assert client.get(f"/api/v1/parts/{SECRET}/drawing").status_code == 403
+
+
+@pytest.fixture
+def local_redis(monkeypatch):
+    """本機有 Redis（make jobs-up）才測；用第 15 號資料庫，不碰正在用的資料"""
+    import redis
+
+    from app.jobs import coordination
+
+    url = "redis://127.0.0.1:6379/15"
+    try:
+        redis.Redis.from_url(url, socket_connect_timeout=0.5).ping()
+    except redis.RedisError:
+        pytest.skip("本機沒有 Redis")
+    monkeypatch.setattr(config.get_settings(), "redis_url", url)
+    monkeypatch.setattr(coordination, "_client", None)
+    from app.services import read_limit
+
+    read_limit.reset()
+    yield read_limit
+    read_limit.reset()
+
+
+def test_counts_are_shared_through_redis(client, limit_3, local_redis):
+    """多個 API 行程共用 Redis 的計數：清掉這個行程的記憶體（模擬另一個行程）照樣被擋"""
+    as_account(client, "warehouse")
+    for _ in range(2):
+        assert client.get(f"/api/v1/parts/{SECRET}/model.stl").status_code == 200
+    local_redis._hits.clear()  # 另一個行程沒有這些紀錄
+    assert client.get(f"/api/v1/parts/{SECRET}/model.stl").status_code == 200
+    local_redis._hits.clear()
+    assert client.get(f"/api/v1/parts/{SECRET}/model.stl").status_code == 429
+
+
+def test_falls_back_to_local_counting_when_redis_is_down(client, limit_3, monkeypatch):
+    """Redis 不通：改在行程內計數，限制照樣有"""
+    from app.jobs import coordination
+
+    monkeypatch.setattr(config.get_settings(), "redis_url", "redis://127.0.0.1:1/0")
+    monkeypatch.setattr(coordination, "_client", None)
+    as_account(client, "warehouse")
+    codes = [client.get(f"/api/v1/parts/{SECRET}/model.stl").status_code for _ in range(4)]
+    assert codes == [200, 200, 200, 429]
