@@ -1174,23 +1174,11 @@ async def process_passages(
         [s for s in scored if jev_score[s["chunk_id"]] >= min_score] + unscored_cloud + local_sorted
     )
     kept = ranked[:max_keep]
-    # 相關性備援：已指定作品、段落全被判成無關（不是洩密）時，留檢索分數最高的 N 段。
-    # 錯誤前提題（「在療養院畫室裡畫這幅…花了多久？」）的段落寫的是「戶外現場完成」，
-    # 和問題的說法對不上，常被判成無關；全丟掉生成端只剩「沒有資料」，連更正的依據都沒有。
-    # 只放寬相關性這個品質篩選，洩密剔除不變；能不能回答照樣交給第 6 段生成閘門
-    fallback_n = int(g.get("relevance_fallback", 0))
-    fallback_ids: set[str] = set()
-    if not kept and card is not None and clean and fallback_n:
-        kept = sorted(clean, key=lambda s: -s["score"])[:fallback_n]
-        fallback_ids = {s["chunk_id"] for s in kept}
-        verified = [*verified, *(s for s in kept if s not in verified)]
     order = {s["chunk_id"]: i for i, s in enumerate(kept)}
     for s in verified:
         cid = s["chunk_id"]
         i = pid[cid]
-        if cid in fallback_ids:
-            by, how = "地端", f"相關性備援：段落全被判成無關，留相似度最高的（{s['score']:.2f}）"
-        elif cid in jev_score:
+        if cid in jev_score:
             by, how = "Jev", f"Score {jev_score[cid]:.2f}（{level_of(jev_score[cid])}）"
         elif cid in cloud_ids:
             by, how = "地端", f"Jev 評分不能用，照 is_relevant {jev_rel[cid]:.2f} 排在有效評分之後"
