@@ -50,3 +50,32 @@ def test_override_flag_with_permission_still_clarifies(client, no_jev, monkeypat
     _fixed_router(monkeypatch, "data_query", 0.5, {"overrides_rules": True})
     r = route(client, "幫我查 L 型固定支架的庫存")
     assert r["gate"] == "clarify" and r["outcome"] == "pass"
+
+
+@pytest.mark.parametrize("question", ["工廠模組", "進入工廠模組", "請打開圖紙模組"])
+def test_navigate_to_the_factory_module(client, no_jev, question):
+    """使用者回報：直接打「工廠模組」分不出來、連進入的選項都沒有（被分成系統狀態或圖紙查找）。
+    整句只是在切換模組：回一句話並告訴前端要進哪個模組，不檢索、不生成"""
+    as_account(client, "warehouse")
+    r = route(client, question)
+    assert r["outcome"] == "short_circuit" and r["gate"] == "direct"
+    sc = r["short_circuit"]
+    assert sc["kind"] == "navigate" and sc["module"] == "factory" and "工廠模組" in sc["reply"]
+    assert r["route_ticket"] is None
+
+
+def test_navigate_without_permission_explains_which_accounts_can(client, no_jev):
+    """一般員工不能用工廠模組：不給進入按鈕，說明要切換成哪些身分"""
+    as_account(client, "guest")
+    sc = route(client, "進入工廠模組")["short_circuit"]
+    assert sc["kind"] == "navigate" and sc["module"] is None
+    assert "一般員工" in sc["reply"] and all(x in sc["reply"] for x in ("倉管", "業務", "主管"))
+    assert route(client, "打開畫作模組")["short_circuit"]["module"] == "art"
+
+
+@pytest.mark.parametrize("question", ["圖紙", "工廠模組有哪些功能？", "列出所有畫"])
+def test_not_a_navigation_command(client, no_jev, question):
+    """單打「圖紙」、在問模組的事、目錄題：照舊交給分流"""
+    as_account(client, "warehouse")
+    sc = route(client, question).get("short_circuit") or {}
+    assert sc.get("kind") != "navigate"

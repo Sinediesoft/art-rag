@@ -80,3 +80,19 @@ describe("找到圖紙但問題答不出來", () => {
     expect(deriveOutputs(conv(t)).list).toEqual([]);
   });
 });
+
+describe("切換模組（「進入工廠模組」）", () => {
+  const navTurn = (module: "factory" | "art" | null): Turn => ({
+    id: "t1", text: "進入工廠模組", imageId: null, forced: null, at: "entry", ts: 1, account: null, phase: "done", failure: null, part: { kind: "route" },
+    route: factoryRoute({ question: "進入工廠模組", outcome: "short_circuit", short_circuit: { stage: 2, by: "地端", kind: "navigate", reply: "好的", module } }),
+  });
+
+  it("後端說可以進：給進入那個模組的按鈕", () => {
+    expect(ctaOf(navTurn("factory"))?.domain).toBe("factory");
+    expect(ctaOf(navTurn("art"))?.domain).toBe("art");
+  });
+
+  it("目前身分不能用（module 是 null）：只顯示說明、不給按鈕", () => {
+    expect(ctaOf(navTurn(null))).toBeNull();
+  });
+});

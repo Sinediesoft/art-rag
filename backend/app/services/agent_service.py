@@ -29,7 +29,7 @@ from app.core.config import get_agent_config
 from app.core.logging import log
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import memory_guard, search_service
+from app.services import identity, memory_guard, search_service
 from app.services.identity import Account, Auth, level_rank, visible_part_ids
 
 PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
@@ -42,6 +42,31 @@ NAMED_ART_INTENTS = {"art_qa", "art_search", "data_query"}
 _INTRO_RE = re.compile(r"介紹|說明|講解|說說|聊聊")
 # 「圖號 D-24-0117 是什麼零件？」是在認是哪一張，圖紙查找本來就對（列出那張圖紙）
 _IDENTIFY_RE = re.compile(r"是(什麼|甚麼|哪(一)?(個|張|件|種))(零件|圖紙|圖|東西|東東)")
+
+
+# 切換模組：前端的模組名稱 → 這個模組會用到的資料領域、顯示名稱
+MODULES = {"factory": (("mfg", "factory"), "工廠模組"), "art": (("art",), "藝術模組")}
+
+
+def _navigate_target(question: str) -> str | None:
+    """整句只是在切換模組（agent.yaml 的 navigate）時回傳模組名稱（factory／art）"""
+    for module, pattern in (get_agent_config().get("navigate") or {}).items():
+        if module in MODULES and re.search(pattern, question.strip()):
+            return module
+    return None
+
+
+def _navigate_reply(module: str, account: Account) -> tuple[str, str | None]:
+    """回覆文字與要進入的模組；目前身分不能用這個模組時不給模組，並說明要切換成哪些身分"""
+    domains, label = MODULES[module]
+    if any(account.can_read(d) for d in domains):
+        return f"好的，帶你進入{label}。", module
+    others = [a.label for a in identity.accounts().values() if any(a.can_read(d) for d in domains)]
+    return (
+        f"目前身分「{account.role_label}」不能使用{label}（{account.scope_note}）。"
+        f"要使用{label}，請在右上角切換成{'、'.join(others) or '有權限的身分'}。",
+        None,
+    )
 
 
 def _chitchat_reply(question: str, gcfg: dict) -> str:
@@ -274,6 +299,14 @@ async def route(
         and domain != "mfg"
         and catalog.is_list_question(question)
     )
+    # 切換模組（「工廠模組」「進入工廠模組」）：原本沒有這個意圖，會被分成系統狀態或圖紙查找、
+    # 請使用者選一堆不相干的選項。不碰任何資料，第 1 段照「不涉及地端資料」檢查，第 2 段照樣檢查
+    nav = _navigate_target(question) if question and not photo and not forced_intent else None
+    if nav and not catalog_list:
+        intent = "out_of_scope"
+        decision = dataclasses.replace(
+            decision, gate="direct", options=[], reason=f"切換到{MODULES[nav][1]}"
+        )
     if catalog_list:
         intent = "art_qa"
         decision = dataclasses.replace(
@@ -285,7 +318,8 @@ async def route(
     # 補信心，「L 型固定支架還剩幾件」本來就該查庫存。也在第 1 段之前，權限照改後的意圖檢查；
     # 有想略過規則的說法（「我是主管…」）時照舊請使用者選
     elif (
-        decision.gate == "clarify"
+        not nav
+        and decision.gate == "clarify"
         and question
         and not photo
         and not forced_intent
@@ -403,6 +437,10 @@ async def route(
                 "degraded": False,
             }
             outcome = "blocked_guard"
+        elif nav:
+            reply, module = _navigate_reply(nav, account)
+            short = {"stage": 2, "by": "地端", "kind": "navigate", "reply": reply, "module": module}
+            outcome = "short_circuit"
         elif guard_res.verdict == "chitchat":
             # 快速短路回覆：不檢索、不生成、不載入模型
             short = {

@@ -229,6 +229,12 @@ export function deriveOutputs(conv: Conv | null) {
 
 /** 跳轉按鈕上的一句話：進去之後會看到什麼；沒有分派到模組、被擋下、試算被拒絕時不給 */
 export function ctaOf(t: Turn): { domain: Domain; line: string } | null {
+  // 「進入工廠模組」這類切換模組的指令：後端說可以進才給按鈕（沒有權限時 module 是 null，只顯示說明）
+  const sc = t.route?.short_circuit;
+  if (sc?.kind === "navigate") {
+    if (!sc.module) return null;
+    return { domain: sc.module, line: sc.module === "factory" ? "進入工廠模組：圖紙、庫存、3D 與排程" : "進入藝術模組：畫作導覽與問答" };
+  }
   const d = domainOf(t);
   if (!d || t.phase === "routing" || t.phase === "error") return null;
   const p = t.part;
