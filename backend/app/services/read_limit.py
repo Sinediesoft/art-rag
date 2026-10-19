@@ -35,7 +35,7 @@ def check_secret_download(account: Account, part: dict, what: str, request_id: s
     cfg = _cfg()
     if part.get("confidentiality") not in cfg.get("levels", ["機密"]):
         return
-    window, limit = float(cfg.get("window_s", 600)), int(cfg.get("max_downloads", 12))
+    window, limit = float(cfg.get("window_s", 600)), int(cfg.get("max_downloads", 6))
     now = time.monotonic()
     with _lock:
         hits = _hits.setdefault(account.id, deque())

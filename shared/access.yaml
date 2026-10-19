@@ -85,7 +85,7 @@ hard_limits:
 read_limits:
   levels: [機密]
   window_s: 600
-  max_downloads: 12
+  max_downloads: 6        # 要低於機密檔案的總數：展示庫 4 個機密零件 × 3 個檔案 = 12，整庫搬走也不會超過 12
 
 # 機密資料的讀取稽核（backend/app/services/access_audit.py）：讀這些等級的原尺寸圖紙、3D 模型、
 # 圖紙／庫存／生產明細、圖紙問答時記一筆，主管在稽核頁看得到（/audit 的 reads）
