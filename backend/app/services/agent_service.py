@@ -559,7 +559,8 @@ async def route(
             "detail": result.detail,
         },
         "intent": intent,
-        "intent_label": labels[intent],
+        # 切換模組借用「超出範圍」這個意圖（不碰任何資料），標籤要寫給人看的「切換模組」
+        "intent_label": "切換模組" if nav and not catalog_list else labels[intent],
         "risk": cfg["intents"][intent]["risk"],
         "confidence": round(result.confidence, 4),
         "margin": round(result.margin, 4),

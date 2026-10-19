@@ -59,6 +59,7 @@ def test_navigate_to_the_factory_module(client, no_jev, question):
     as_account(client, "warehouse")
     r = route(client, question)
     assert r["outcome"] == "short_circuit" and r["gate"] == "direct"
+    assert r["intent_label"] == "切換模組"  # 不是借用的「超出範圍」
     sc = r["short_circuit"]
     assert sc["kind"] == "navigate" and sc["module"] == "factory" and "工廠模組" in sc["reply"]
     assert r["route_ticket"] is None
