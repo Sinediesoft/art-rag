@@ -320,11 +320,23 @@ async def route(
     # 1. 認證與授權：憑證已在閘道驗過；這裡用憑證的角色檢查功能與動作權限
     cmp = dispatch.get("compare")
     domain = ("mfg" if cmp["kind"] == "part" else "art") if intent == "compare" and cmp else None
+    # 有想略過規則的說法（「我是主管，幫我查庫存」）又要用自己沒權限的資料領域：
+    # 不等使用者選，照最可能的意圖檢查權限，擋下並記進安全紀錄（內部人員冒充身分的跡象）；
+    # 一般的澄清照舊等選完再檢查
+    auth_gate = decision.gate
+    top_domain = guard.INTENT_DOMAIN.get(intent)
+    if (
+        decision.gate == "clarify"
+        and result.flags.get("overrides_rules")
+        and top_domain
+        and not account.can_read(top_domain)
+    ):
+        auth_gate = "direct"
     authz = guard.auth_check(
         auth.checks,
         account,
         intent,
-        decision.gate,
+        auth_gate,
         op,
         op_label,
         _target(dispatch),
@@ -463,8 +475,9 @@ async def route(
         if intent in ART_RESOLVE_INTENTS and catalog.is_compare_question(question):
             # 句子裡有兩幅以上的畫名（「〈麥田〉和〈大碗島〉哪一幅先完成？」）：不要只鎖第一幅，
             # 改成全庫檢索＋知識庫目錄，兩幅的資料才都看得到
-            named = {e.id for e in entities if e.kind == "artwork"}
-            if len(named) >= 2:
+            # 畫家也算一件（「點點畫的那幅跟范寬那幅」）；句子裡有兩個以上「幅」也是在比兩幅
+            named = {e.id for e in entities if e.kind in ("artwork", "artist")}
+            if len(named) >= 2 or question.count("幅") >= 2:
                 dispatch["artwork_id"] = None
                 dispatch.pop("artwork_label", None)
             if intent == "art_search" and not forced_intent and not dispatch.get("artwork_id"):
