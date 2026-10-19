@@ -141,6 +141,11 @@ const showcaseKind = "(document.querySelector('.showcase__kind')?.textContent ??
 const panel = (id) => `document.querySelector('.wb-panel[data-panel="${id}"]')`;
 const activePanel = "(document.querySelector('.wb-panel.is-active')?.dataset.panel ?? '')";
 const panelTitle = (id) => `(${panel(id)}?.querySelector('.wb-panel__meta')?.textContent ?? '')`;
+/**
+ * 排程板塊已經讀到 /production/overview：成功的排程畫面（.view--schedule），或成功讀到但明確「還沒有排程結果」。
+ * 讀取中（.pending）、讀取失敗（role=alert）都不算。
+ */
+const scheduleReady = `(() => { const p = ${panel("schedule")}; if (!p || p.querySelector('[role=alert], .pending')) return false; return !!p.querySelector('.view--schedule') || (p.querySelector('.view__error')?.textContent ?? '').includes('還沒有排程結果'); })()`;
 /** 四個板塊（圖紙、3D、排程、庫存）都在、而且都有成果 */
 const allPanelsFilled = `['drawing', 'model', 'schedule', 'stock'].every((id) => !!document.querySelector(\`.wb-panel[data-panel="\${id}"] .wb-panel__view\`))`;
 /** 工作台裡的成果總數（對應舊版縮圖列的張數）：板塊有「上一份／下一份」時取「i/n」的 n，否則有內容算 1 */
@@ -228,12 +233,9 @@ try {
 
   await ask("重新排程", "排程");
   await showPane();
-  // 目前排程由 /production/overview 讀取：等讀完（有排程或「還沒有排程結果」），讀取失敗（role=alert）不算
-  await waitFor(`!!${panel("schedule")}?.querySelector('.view--schedule, .view__error')`, 8000);
-  await check(
-    "右側：排程板塊放上目前排程（/production/overview）",
-    `${activePanel} === 'schedule' && ${panelTitle("schedule")}.includes('目前的生產排程') && !${panel("schedule")}.querySelector('[role=alert]')`,
-  );
+  // 目前排程由 /production/overview 讀取：檢查本身要求讀完而且成功，一直讀取中或讀取失敗都 FAIL
+  await waitFor(scheduleReady, 8000);
+  await check("右側：排程板塊放上目前排程（/production/overview）", `${activePanel} === 'schedule' && ${panelTitle("schedule")}.includes('目前的生產排程') && ${scheduleReady}`);
   await chatPane();
   await click("開始排程", ".taskcard button");
   await waitFor(`${panelTitle("schedule")}.includes('重新排程結果')`, 60000);
@@ -248,10 +250,10 @@ try {
   // 成果歷程：工作台沒有縮圖列；每個板塊各自用「上一份／下一份」切換，對話裡每一輪的成果標籤可以把舊成果切回對應的板塊
   const count = await js(benchCount);
   await js(`${panel("schedule")}.querySelector('[aria-label="排程：上一份"]').click()`);
-  await sleep(400);
+  await waitFor(scheduleReady, 8000);
   await check(
     "板塊歷程：排程板塊「上一份」切回目前排程，成果都在",
-    `${panelTitle("schedule")}.includes('目前的生產排程') && (${panel("schedule")}.querySelector('.wb-panel__nav .num')?.textContent ?? '').startsWith('1/') && ${benchCount} === ${count}`,
+    `${panelTitle("schedule")}.includes('目前的生產排程') && ${scheduleReady} && (${panel("schedule")}.querySelector('.wb-panel__nav .num')?.textContent ?? '').startsWith('1/') && ${benchCount} === ${count}`,
   );
   await js(`${panel("schedule")}.querySelector('[aria-label="排程：下一份"]').click()`);
   await waitFor(`!!${panel("schedule")}?.querySelector('.gantt-wrap svg')`, 8000);
