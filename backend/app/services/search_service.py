@@ -7,14 +7,15 @@ import unicodedata
 import numpy as np
 from PIL import Image
 
-from app.core.config import REPO_ROOT, get_models_config, get_settings
+from app.core.config import REPO_ROOT, get_models_config
 from app.core.errors import AppError
 from app.rag import verify
 from app.rag.embedders import embed_image, embed_text, embed_text_clip
 from app.rag.preprocess import load_image
 from app.rag.router import route
 from app.repositories.index_store import get_store
-from app.repositories.logs_repo import get_logs_repo
+from app.services import uploads
+from app.services.identity import Account
 from app.services.memory_guard import guarded
 
 
@@ -33,11 +34,12 @@ def artwork_summary(a: dict) -> dict:
     }
 
 
-def load_upload(image_id: str) -> bytes:
-    path = get_logs_repo().get_upload(image_id)
-    if not path:
-        raise AppError("IMAGE_NOT_FOUND", "找不到這張照片，可能已超過保存期限", 404)
-    return (get_settings().uploads_dir / path).read_bytes()
+def load_upload(image_id: str, viewer: Account | None) -> bytes:
+    """讀上傳的照片：只有擁有者與擁有者授權的帳號可以（services/uploads.py）。
+    viewer 沒給（None）就當沒有權限，不會讀到任何東西。"""
+    if viewer is None:
+        raise AppError(*uploads.NOT_FOUND)
+    return uploads.load(image_id, viewer)
 
 
 @guarded("search_image", {"clip"})
@@ -46,14 +48,16 @@ def identify(
     top_k: int | None = None,
     img: Image.Image | None = None,
     vec: np.ndarray | None = None,
+    viewer: Account | None = None,
 ) -> dict:
     """兩階段辨識：Chinese-CLIP 粗篩 → 前 N 名做 ORB 幾何驗證。
 
-    img／vec 是領域路由已經算好的照片與 CLIP 向量，傳進來就不重算。"""
+    img／vec 是領域路由已經算好的照片與 CLIP 向量，傳進來就不重算。
+    viewer：讀 image_id 的上傳照片要驗擁有者（沒給 img 時一定要給，否則當沒有權限）。"""
     cfg = get_models_config().retrieval
     k = top_k or int(cfg["top_k_search"])
     t0 = time.perf_counter()
-    img = img or load_image(load_upload(image_id))
+    img = img or load_image(load_upload(image_id, viewer))
     # 取 max(k, verify_top_n) 名：verify_top_n 比 top_k_search 大時，多出來的也要驗（和圖紙一樣）
     hits = get_store().search_images(
         embed_image(img) if vec is None else vec, max(k, int(cfg["verify_top_n"]))
@@ -165,6 +169,7 @@ def identify_drawing(
     img: Image.Image | None = None,
     vec: np.ndarray | None = None,
     part_ids: set[str] | None = None,
+    viewer: Account | None = None,
 ) -> dict:
     """圖紙辨識三道關：Chinese-CLIP 粗篩 → ORB 幾何驗證（遮掉固定版面、排除退化 homography）
     → 拉正後比對線條重合度。三道都過才算辨識成功。
@@ -175,7 +180,7 @@ def identify_drawing(
     cfg = get_models_config().drawing_retrieval
     k = top_k or int(cfg["top_k_search"])
     t0 = time.perf_counter()
-    img = img or load_image(load_upload(image_id))
+    img = img or load_image(load_upload(image_id, viewer))
     mfg = get_store().mfg
     qvec = embed_image(img) if vec is None else vec
     hits = mfg.search_images(qvec, max(k, int(cfg["verify_top_n"])), owners=part_ids)
@@ -224,16 +229,21 @@ def identify_drawing(
 
 
 @guarded("search_image", {"clip"})
-def identify_any(image_id: str, top_k: int | None = None, part_ids: set[str] | None = None) -> dict:
+def identify_any(
+    image_id: str,
+    top_k: int | None = None,
+    part_ids: set[str] | None = None,
+    viewer: Account | None = None,
+) -> dict:
     """不指定領域的以圖搜圖：領域路由先判斷是畫作還是工廠圖紙，只跑該領域的辨識。
     照片與 CLIP 向量只算一次，路由與辨識共用。part_ids 同 identify_drawing（看得到的圖紙）。"""
     t0 = time.perf_counter()
-    img = load_image(load_upload(image_id))
+    img = load_image(load_upload(image_id, viewer))
     vec = embed_image(img)
     r = route(vec)
-    art = identify(image_id, top_k, img, vec) if r.domain == "art" else None
+    art = identify(image_id, top_k, img, vec, viewer=viewer) if r.domain == "art" else None
     mfg = (
-        identify_drawing(image_id, top_k, img, vec, part_ids=part_ids)
+        identify_drawing(image_id, top_k, img, vec, part_ids=part_ids, viewer=viewer)
         if r.domain == "mfg"
         else None
     )

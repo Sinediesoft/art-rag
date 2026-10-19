@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { assetUrl, type ApiError, type ColorAnalysis } from "../../api/client";
+import { assetUrl, fetchBlob, type ApiError, type ColorAnalysis } from "../../api/client";
 import { useArtworkColors, usePhotoColors } from "../../api/hooks";
 import { ErrorMessage, Loading } from "../common/Feedback";
 
@@ -119,11 +119,7 @@ function ColorMap({ src, palette, selected }: { src: string; palette: number[][]
     let alive = true;
     setBitmap(null);
     setFailed(false);
-    fetch(src)
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.blob();
-      })
+    fetchBlob(src)
       .then((blob) => createImageBitmap(blob))
       .then((b) => alive && setBitmap(b))
       .catch(() => alive && setFailed(true));

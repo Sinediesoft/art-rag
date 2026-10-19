@@ -782,12 +782,44 @@ bge-m3、Qwen3-VL（73% → 49%），載入後 79%；進入 Text-to-SQL 時預�
 
 ⚠️ 機台、工時與委外天數是虛構的示範資料。
 
+### 背景工作（3D 重建與排程，Redis＋Celery＋PostgreSQL，ADR 041）
+
+3D 重建與排程求解不再綁在 API 行程與瀏覽器連線上：`POST /api/v1/cad/jobs`、`POST /api/v1/schedule/jobs` 回
+`202`＋`job_id`，由獨立的 worker 行程執行；進度事件存在 PostgreSQL（`GET /jobs/{id}/events`，可用 `Last-Event-ID`
+續接，也能輪詢 `GET /jobs/{id}`），離開頁面不會取消、重新整理會接回。排程有兩個不同的操作：**提前結束**
+（`POST /schedule/stop`，採用目前最佳的合法解並寫回）和**取消**（`POST /jobs/{id}/cancel`，放棄、不寫回）。
+
+```bash
+brew install redis postgresql@17   # 只在「跑測試」時需要；開發用 make jobs-up 的容器
+make jobs-up         # PostgreSQL 與 Redis 容器（只綁 127.0.0.1）
+make jobs-migrate    # 版本化 migration（可重複執行）；回復：cd backend && uv run python -m app.jobs.admin rollback
+make worker-gpu      # 另開終端機：3D 重建（同時最多 JOBS_GPU_SLOTS 個，預設 1）
+make worker-schedule # 另開終端機：排程求解
+make demo            # 或 make demo-all：Ortho2CAD、排程服務、兩個 worker 與展示伺服器一起啟動
+make jobs-status     # migration 版本、各狀態工作數、待投遞數
+make test-jobs       # 背景工作的測試：自己建立隔離的 PostgreSQL＋Redis＋獨立 worker 行程
+```
+
+`.env` 的 `REDIS_URL` 和工作資料庫（`JOBS_DATABASE_URL`，留空沿用 `DATABASE_URL`）都有值才啟用。沒有啟用時建立工作回
+`503 JOBS_UNAVAILABLE`（**不會**偷偷改在 API 行程執行），舊的 SSE 入口（`/cad/reconstruct`、`/schedule/solve`）照舊可用
+（`LEGACY_SYNC_JOBS=auto`）；啟用之後舊入口預設關閉（409 `USE_JOBS_API`），設 `LEGACY_SYNC_JOBS=on` 可以保留。
+前端的 3D 重建與排程一律走背景工作，所以展示時要先 `make jobs-up`／`jobs-migrate` 並啟動兩個 worker。
+worker 掛掉或重啟：租約過期後工作自動回佇列、**整個重新執行**（不是從模型生成中段續跑），最多 `JOBS_MAX_ATTEMPTS` 次。
+Redis 重啟或訊息遺失：outbox 與補投遞會再送；PostgreSQL 重啟：連線池自動重建，期間回 503。
+排程已寫入生產資料庫、工作卻來不及標成成功（工作資料庫斷線、worker 當掉）：不會變成「失敗」，恢復迴圈依生產資料庫補做結案，
+排程與稽核各只有一筆。照片來源的 3D 重建工作，讀取權跟著照片目前的分享名單（撤銷分享後，建立工作的人也讀不到）。
+Redis 不通或剛重啟時無法確認其他行程在用哪些模型，記憶體管理不卸載 Ollama、llama-server、Timefold 上的模型（`GET /memory` 的 `coordination` 會標出降級）。
+舊上傳照片、舊 3D 重建資料夾沒有擁有者時預設拒絕，管理者用
+`python -m app.jobs.admin adopt-uploads --owner <帳號>`／`adopt-cad --owner <帳號>` 遷移。
+
 ## 專案結構
 
 ```
 art-rag/
 ├── frontend/          A  React + TypeScript + Vite + Tailwind（src/api 集中呼叫、SSE 只有一份解析）
-├── backend/app/       B  FastAPI：api/ → services/ → rag/ + repositories/，core/ 放設定與錯誤碼
+├── backend/app/       B  FastAPI：api/routers/（依領域拆的 APIRouter，總成在 api/routes.py）→ services/ → rag/ + repositories/，core/ 放設定與錯誤碼
+│   ├── jobs/          B  背景工作（ADR 041）：store（工作／事件／outbox／租約的 SQL）、broker（投遞與恢復）、celery_app／tasks（worker）、runner／cad_job／schedule_job（執行）、service（API 層操作）、migrations/、admin（部署與遷移指令）
+│   ├── services/security  共用安全上下文與工作授權政策；services/uploads（上傳照片擁有者與 ACL）、cad_access（3D 重建存取紀錄）
 │   ├── analysis/      C  color（色彩分析：sRGB↔Lab、CIEDE2000、k-means 主色、冷暖、明度／彩度、色塊分布圖）、
 │   │                     align（影像對位與比對：位置框、畫作形狀與顏色差異、三視圖線條差異、疊圖）、
 │   │                     page（照片建檔：清晰度、找紙張四角拉正、對齊標題欄外框、去陰影）、
@@ -807,7 +839,7 @@ art-rag/
 ├── kb/                D  畫作（artworks/、images/）＋工廠圖紙（parts/、cad/、drawings/）＋庫存（inventory/）＋排程（production/：機台、行事曆、途程）、VERSION；kb_staging/ 放展示用資料
 ├── eval/              D  qa.jsonl、sql_qa.jsonl、route_qa.jsonl、photos/、drawing_photos/、run_eval.py、run_cad_eval.py、run_router_eval.py、run_sql_eval.py、run_route_eval.py、run_color_eval.py、run_intake_eval.py、run_style_eval.py（＋style_truth.json）、make_met_set.py（→ met_set.json 大都會評估集、met_train.json 分類頭訓練集）、run_version_eval.py（＋version_set.json 同系列不同版本）、make_met_photo_set.py＋run_met_photo_eval.py（＋met_photo_set.json 觀眾實拍照）、run_demo_test.py、runs/
 ├── models/               make ortho2cad-setup 下載的 Ortho2CAD（不進 Git）
-├── deploy/            B  docker-compose.yml（目前只有資料庫：PostgreSQL 17 + pgvector）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
+├── deploy/            B  docker-compose.yml（PostgreSQL 17 + pgvector、背景工作的 Redis）、llama-router.ini（Ortho2CAD 的 llama-server router 模式設定）
 ├── shared/            共用層：openapi.json、schemas/、prompts/、models.yaml、agent.yaml（路由）、access.yaml（帳號與權限）、error_codes.md、sse_events.md、style_head_v1.npz（畫作卡媒材的線性分類頭）
 ├── docs/adr/          技術決策紀錄
 └── .github/workflows/ CI：知識庫、lint、型別、單元測試、openapi 同步、前端建置

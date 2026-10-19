@@ -91,7 +91,7 @@ def test_batch_rows_blurry_matched_and_not_in_kb(client, monkeypatch):
     answers = {sharp: art_found("aic-27992"), other: art_found(None)}
     called = []
 
-    def fake(image_id, top_k=None, part_ids=None):
+    def fake(image_id, top_k=None, part_ids=None, viewer=None):
         called.append(image_id)
         return answers[image_id]
 
@@ -111,10 +111,13 @@ def test_batch_hides_drawings_outside_scope(client, monkeypatch):
     辨識本身只在看得到的圖紙裡找（docs/adr/030）；
     這裡的假辨識故意忽略 part_ids，測事後的第二道過濾。"""
     img = upload(client, DRAWINGS / "mfg-001__glare.jpg")
+    # 照片只有擁有者（主管）與被授權的帳號能用：授權給下面要試的另外兩個身分
+    r = client.put(f"/api/v1/images/{img}/acl", json={"accounts": ["sales", "guest"]})
+    assert r.status_code == 200 and set(r.json()["accounts"]) == {"sales", "guest"}
     monkeypatch.setattr(
         batch_service,
         "identify_any",
-        lambda i, k=None, part_ids=None: drawing_found("mfg-001", "機密"),
+        lambda i, k=None, part_ids=None, viewer=None: drawing_found("mfg-001", "機密"),
     )
     as_account(client, "sales")
     rows, _ = run_batch(client, [img])

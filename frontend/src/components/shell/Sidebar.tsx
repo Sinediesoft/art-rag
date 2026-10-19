@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { MODULE } from "../../shell/design";
+import { MODULE, TOOLS, type Domain } from "../../shell/design";
 import { domainOf } from "../../shell/outputs";
 import { timeOf, titleOf, whenOf } from "../../shell/persist";
 import type { Conv } from "../../shell/types";
@@ -13,17 +13,80 @@ function infoOf(c: Conv) {
   return { label, domain, inModule: !!c.module };
 }
 
+const DOMAINS: Domain[] = ["factory", "art"];
+const MOD_ICON: Record<Domain, string> = { factory: "factory", art: "palette" };
+
+/**
+ * 模組捷徑：按名稱直接進模組（不用先問一句），按右邊的箭頭展開那個模組的功能頁、點了直接開。
+ * 一次只展開一個模組，清單太長時自己捲動，不會把對話紀錄擠掉
+ */
+function ModuleNav({ current, onModule, onTool }: { current?: Domain; onModule: (d: Domain) => void; onTool: (to: string) => void }) {
+  const [open, setOpen] = useState<Domain | null>(null);
+  return (
+    <nav className="side__mods" aria-label="模組">
+      <p className="side__label">
+        <span>模組</span>
+      </p>
+      {DOMAINS.map((d) => {
+        const m = MODULE[d];
+        const isOpen = open === d;
+        return (
+          <div key={d} className={`side__modgroup is-${d}${isOpen ? " is-open" : ""}${current === d ? " is-on" : ""}`}>
+            <div className="side__modrow">
+              <button type="button" className="side__modgo" onClick={() => onModule(d)} title={`進入${m.label}：${m.pitch}`}>
+                <span className="side__modicon">
+                  <Icon name={MOD_ICON[d]} strokeWidth={1.5} />
+                </span>
+                <span className="side__modtext">
+                  <span className="side__modname">{m.label}</span>
+                  <span className="side__modsub">{m.asks.join("・")}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="side__modtoggle"
+                onClick={() => setOpen(isOpen ? null : d)}
+                aria-expanded={isOpen}
+                aria-controls={`side-tools-${d}`}
+                title={isOpen ? "收起功能" : `${m.label}的功能`}
+                aria-label={`${isOpen ? "收起" : "展開"}${m.label}的功能`}
+              >
+                <Icon name="chevronDown" strokeWidth={2} />
+              </button>
+            </div>
+            {isOpen && (
+              <ul className="side__tools fade-in" id={`side-tools-${d}`}>
+                {TOOLS[d].map((t) => (
+                  <li key={t.to}>
+                    <button type="button" className="side__tool" onClick={() => onTool(t.to)}>
+                      <Icon name={t.icon} />
+                      <span>{t.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
 /**
  * 來源：ArtRAG-前端demo/source/src/components/Sidebar.tsx。
- * 對話紀錄：新對話、搜尋、依日期分組。入口左側可以收合成一條窄欄（只剩圖示與最近幾段），手機與模組裡以抽屜打開。
+ * 對話紀錄：新對話、模組捷徑、搜尋、依日期分組。入口左側可以收合成一條窄欄（只剩圖示與最近幾段），手機與模組裡以抽屜打開。
  */
 export function Sidebar({
   convs,
   activeId,
   collapsed,
   variant,
+  current,
   onToggle,
   onNew,
+  onModule,
+  onTool,
   onOpen,
   onDelete,
   onClose,
@@ -32,8 +95,12 @@ export function Sidebar({
   activeId: string | null;
   collapsed: boolean;
   variant: "rail" | "drawer";
+  /** 目前所在的模組（模組裡打開的抽屜）：捷徑標示「在這裡」 */
+  current?: Domain;
   onToggle: () => void;
   onNew: () => void;
+  onModule: (d: Domain) => void;
+  onTool: (to: string) => void;
   onOpen: (c: Conv) => void;
   onDelete: (c: Conv) => void;
   onClose?: () => void;
@@ -80,6 +147,12 @@ export function Sidebar({
           <Icon name="search" />
         </button>
         <span className="side__rule" />
+        {DOMAINS.map((d) => (
+          <button key={d} type="button" className={`side__icon side__modmini is-${d}`} onClick={() => onModule(d)} title={`進入${MODULE[d].label}（展開側欄可以直接選功能）`} aria-label={`進入${MODULE[d].label}`}>
+            <Icon name={MOD_ICON[d]} strokeWidth={1.5} />
+          </button>
+        ))}
+        <span className="side__rule" />
         <ol className="side__minis">
           {sorted.slice(0, 8).map((c) => {
             const info = infos.get(c.id)!;
@@ -122,6 +195,8 @@ export function Sidebar({
         <Icon name="newChat" />
         <span>新對話</span>
       </button>
+
+      <ModuleNav current={current} onModule={onModule} onTool={onTool} />
 
       <label className="side__search">
         <Icon name="search" />

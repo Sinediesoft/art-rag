@@ -32,7 +32,7 @@ def test_health(client):
 def test_health_when_database_is_down(client, monkeypatch):
     """PostgreSQL 容器停了：ping 失敗就不查任何最近紀錄，健康檢查與診斷頁照樣回得出來
     （degraded、db=false）。查了會等連線池逾時（每次 5 秒，卡住整個後端）再 500。"""
-    from app.api import routes
+    from app.api.routers import system as routes
 
     class DownRepo:
         def ping(self):

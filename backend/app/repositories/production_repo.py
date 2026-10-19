@@ -16,6 +16,9 @@ import re
 import sqlite3
 import threading
 import uuid
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -52,6 +55,11 @@ CREATE TABLE IF NOT EXISTS audit_log (
   actor_label TEXT NOT NULL, action TEXT NOT NULL, op TEXT, ref_no TEXT, summary TEXT,
   detail TEXT, request_id TEXT
 );
+CREATE TABLE IF NOT EXISTS idempotency (
+  account_id TEXT NOT NULL, operation TEXT NOT NULL, idem_key TEXT NOT NULL,
+  request_hash TEXT NOT NULL, state TEXT NOT NULL, response TEXT, created_at TEXT NOT NULL,
+  PRIMARY KEY (account_id, operation, idem_key)
+);
 CREATE TABLE IF NOT EXISTS schedule_ops (
   run_id TEXT NOT NULL, op_id TEXT NOT NULL, wo_no TEXT NOT NULL, part_id TEXT NOT NULL,
   op_seq INTEGER NOT NULL, op_name TEXT NOT NULL, kind TEXT NOT NULL, machine_id TEXT,
@@ -64,6 +72,40 @@ CREATE TABLE IF NOT EXISTS schedule_ops (
 WO_NO = re.compile(r"^WO-(\d{4})-(\d{2,3})$")
 
 
+class RevisionConflict(Exception):
+    """寫回時資料版本和求解開始時不同：求解期間有人改了工單等資料。"""
+
+    def __init__(self, revision: str):
+        super().__init__(f"production revision 已是 {revision}")
+        self.revision = revision
+
+
+# 帶 Idempotency-Key 的寫入（services/idempotency.py）執行期間的身分。寫入點（開／取消工單、
+# 寫入異動、送核准）在「自己的那個交易裡」把冪等記錄標成 applied——業務寫入與冪等標記要嘛一起
+# 提交、要嘛一起不存在，行程在兩者之間中斷也不會讓同一個 key 再寫第二次。
+_IDEM: ContextVar[dict | None] = ContextVar("artrag_idempotency", default=None)
+
+
+class IdempotencyLost(Exception):
+    """這個 key 的所有權已經不是自己的（久到被別的請求接手，或記錄已被清掉）：業務寫入不提交。"""
+
+
+@contextmanager
+def idem_scope(account_id: str, operation: str, key: str) -> Iterator[None]:
+    token = _IDEM.set({"account_id": account_id, "operation": operation, "key": key, "extra": {}})
+    try:
+        yield
+    finally:
+        _IDEM.reset(token)
+
+
+def idem_note(**extra) -> None:
+    """替之後的寫入點補充「重送時重建回應」需要的資料（會跟著標記一起存進資料庫）。"""
+    ctx = _IDEM.get()
+    if ctx is not None:
+        ctx["extra"].update(extra)
+
+
 class ProductionRepo:
     def __init__(self, path: Path):
         self.path = path
@@ -72,7 +114,8 @@ class ProductionRepo:
     # 每次操作開一條連線：make demo-reset 刪掉檔案後會自動重建
     def _conn(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.path)
+        # timeout：API 與 worker 兩個行程共用這個檔案，寫入互相等候而不是立刻 database is locked
+        conn = sqlite3.connect(self.path, timeout=30)
         conn.row_factory = sqlite3.Row
         conn.executescript(_SCHEMA)
         # 舊版資料庫缺少的欄位（正式版改用 Alembic migration）
@@ -98,6 +141,21 @@ class ProductionRepo:
             " SET value = CAST(value AS INTEGER) + 1"
         )
 
+    def _mark_applied(self, conn: sqlite3.Connection, ref: str) -> None:
+        """在業務寫入的同一個交易裡，把帶 key 的冪等記錄標成 applied（記下單號與重建回應的資料）。
+        記錄不是「執行中」（被別人接手、或已被清掉）就丟 IdempotencyLost——呼叫端不提交。"""
+        ctx = _IDEM.get()
+        if ctx is None:
+            return
+        marker = json.dumps({**ctx["extra"], "ref": ref}, ensure_ascii=False, default=str)
+        cur = conn.execute(
+            "UPDATE idempotency SET state = 'applied', response = ? WHERE account_id = ?"
+            " AND operation = ? AND idem_key = ? AND state = 'running'",
+            (marker, ctx["account_id"], ctx["operation"], ctx["key"]),
+        )
+        if cur.rowcount != 1:
+            raise IdempotencyLost(ref)
+
     @staticmethod
     def now() -> str:
         return datetime.now(UTC).isoformat()
@@ -122,7 +180,8 @@ class ProductionRepo:
         )
         return f"WO-{yymm}-{n + 1:02d}"
 
-    def create_work_order(self, row: dict) -> dict:
+    def create_work_order(self, row: dict, approval: dict | None = None) -> dict:
+        """開一張工單。approval（核准開立）有值時，待核准單的狀態更新、冪等標記都在同一個交易裡。"""
         row = {**row, "status": "已開立", "created_at": self.now()}
         with self._lock:
             conn = self._conn()
@@ -132,13 +191,24 @@ class ProductionRepo:
                 conn.execute(
                     f"INSERT INTO work_orders ({cols}) VALUES ({marks})", tuple(row.values())
                 )
+                if approval:
+                    self._approve_in(conn, approval, row["wo_no"])
+                self._mark_applied(conn, row["wo_no"])
                 self._bump(conn)
                 conn.commit()
             finally:
                 conn.close()
         return row
 
-    def cancel_work_order(self, wo_no: str) -> bool:
+    def _approve_in(self, conn: sqlite3.Connection, approval: dict, change_no: str) -> None:
+        conn.execute(
+            "UPDATE approvals SET status = '已核准', decided_by = ?, decided_label = ?,"
+            " decided_at = ?, decision_note = ?, change_no = ? WHERE ap_no = ?",
+            (approval["decided_by"], approval["decided_label"], self.now(),
+             approval.get("decision_note"), change_no, approval["ap_no"]),
+        )  # fmt: skip
+
+    def cancel_work_order(self, wo_no: str, approval: dict | None = None) -> bool:
         with self._lock:
             conn = self._conn()
             try:
@@ -148,6 +218,9 @@ class ProductionRepo:
                     (wo_no,),
                 )
                 if cur.rowcount:
+                    if approval:
+                        self._approve_in(conn, approval, wo_no)
+                    self._mark_applied(conn, wo_no)
                     self._bump(conn)
                 conn.commit()
                 return cur.rowcount > 0
@@ -163,8 +236,26 @@ class ProductionRepo:
         return self._read(f"SELECT * FROM work_orders {where} ORDER BY created_at")
 
     # ------------------------------------------------------------ 排程結果
-    def save_run(self, run: dict, ops: list[dict]) -> str:
-        run_id = run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
+    def save_run(
+        self,
+        run: dict,
+        ops: list[dict],
+        run_id: str | None = None,
+        expected_revision: str | None = None,
+        fence: Callable[[], None] | None = None,
+        audit: dict | None = None,
+    ) -> str:
+        """寫入一次排程結果（單一交易，BEGIN IMMEDIATE）。
+
+        expected_revision：求解開始時的資料版本；交易內發現版本變了（有人開／取消工單、改交期…）
+        就丟 RevisionConflict、什麼都不寫——舊解不會覆蓋新資料。
+        run_id 由呼叫端指定（背景工作用 job_id 推出來的固定值）時是冪等的：同一個 run_id
+        已經存在就直接回傳，不重複寫入、不覆蓋（重送、重試、租約過期的舊 worker 延遲寫回）。
+        fence：背景工作的資源 fencing，在持有寫入鎖、比對完版本之後、INSERT 之前呼叫；
+        丟例外就整個交易回滾（資源租約已被接手的舊 worker 不寫入）。
+        audit：和排程結果在同一個交易寫入的稽核紀錄（背景工作用）——排程寫入了就一定有稽核、
+        而且只有一筆；不會因為寫入之後的中斷漏記，重送或補做結案也不會重複記。"""
+        run_id = run_id or run.get("run_id") or "plan_" + uuid.uuid4().hex[:12]
         row = {
             **run,
             "run_id": run_id,
@@ -175,30 +266,76 @@ class ProductionRepo:
         }
         with self._lock:
             conn = self._conn()
+            conn.isolation_level = None  # 自己管交易：BEGIN IMMEDIATE 先取得寫入鎖再比對版本
             try:
-                cols = ", ".join(row)
-                marks = ", ".join("?" for _ in row)
-                conn.execute(
-                    f"INSERT INTO schedule_runs ({cols}) VALUES ({marks})", tuple(row.values())
-                )
-                conn.executemany(
-                    "INSERT INTO schedule_ops (run_id, op_id, wo_no, part_id, op_seq, op_name,"
-                    " kind,"
-                    " machine_id, start_min, end_min, setup_min, run_min, start_at, end_at, pinned)"
-                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    [
-                        (run_id, o["op_id"], o["wo_no"], o["part_id"], o["op_seq"], o["op_name"],
-                         o["kind"], o.get("machine_id"), o["start_min"], o["end_min"],
-                         o.get("setup_min", 0), o.get("run_min", 0), o["start_at"], o["end_at"],
-                         int(bool(o.get("pinned"))))
-                        for o in ops
-                    ],
-                )  # fmt: skip
-                self._bump(conn)
-                conn.commit()
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    if expected_revision is not None:
+                        have = conn.execute("SELECT value FROM meta WHERE key = 'revision'")
+                        have = have.fetchone()
+                        current = have["value"] if have else "0"
+                        if current != expected_revision:
+                            raise RevisionConflict(current)
+                    if conn.execute(
+                        "SELECT 1 FROM schedule_runs WHERE run_id = ?", (run_id,)
+                    ).fetchone():
+                        conn.execute("ROLLBACK")
+                        return run_id
+                    if fence is not None:
+                        fence()
+                    cols = ", ".join(row)
+                    marks = ", ".join("?" for _ in row)
+                    conn.execute(
+                        f"INSERT INTO schedule_runs ({cols}) VALUES ({marks})", tuple(row.values())
+                    )
+                    conn.executemany(
+                        "INSERT INTO schedule_ops (run_id, op_id, wo_no, part_id, op_seq, op_name,"
+                        " kind,"
+                        " machine_id, start_min, end_min, setup_min, run_min, start_at, end_at,"
+                        " pinned) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        [
+                            (run_id, o["op_id"], o["wo_no"], o["part_id"], o["op_seq"],
+                             o["op_name"], o["kind"], o.get("machine_id"), o["start_min"],
+                             o["end_min"], o.get("setup_min", 0), o.get("run_min", 0),
+                             o["start_at"], o["end_at"], int(bool(o.get("pinned"))))
+                            for o in ops
+                        ],
+                    )  # fmt: skip
+                    self._bump(conn)
+                    if audit is not None:
+                        self._insert_audit(conn, audit)
+                    conn.execute("COMMIT")
+                except BaseException:
+                    if conn.in_transaction:
+                        conn.execute("ROLLBACK")
+                    raise
             finally:
                 conn.close()
         return run_id
+
+    def committed_run(self, run_id: str) -> dict | None:
+        """這個 run_id 是否已經寫入（背景工作寫回後、結案前中斷時，恢復迴圈依此補做結案）。
+        在 BEGIN IMMEDIATE 裡查：有寫入交易正在進行（已通過 fence、還沒 COMMIT）就等它提交或回滾
+        才回答，所以回 None 時不會有已經開始的寫入在之後才提交。查不了（資料庫被鎖太久、檔案
+        壞掉）丟例外——呼叫端要當成「不確定」。"""
+        with self._lock:
+            conn = self._conn()
+            conn.isolation_level = None
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                try:
+                    row = conn.execute(
+                        "SELECT * FROM schedule_runs WHERE run_id = ?", (run_id,)
+                    ).fetchone()
+                finally:
+                    conn.execute("ROLLBACK")
+            finally:
+                conn.close()
+        return self._decode(dict(row)) if row else None
+
+    def find_run(self, run_id: str) -> dict | None:
+        rows = self._read("SELECT run_id, status FROM schedule_runs WHERE run_id = ?", (run_id,))
+        return rows[0] if rows else None
 
     @staticmethod
     def _decode(run: dict) -> dict:
@@ -274,12 +411,8 @@ class ProductionRepo:
                     f"INSERT INTO data_changes ({cols}) VALUES ({marks})", tuple(row.values())
                 )
                 if approval:
-                    conn.execute(
-                        "UPDATE approvals SET status = '已核准', decided_by = ?, decided_label = ?,"
-                        " decided_at = ?, decision_note = ?, change_no = ? WHERE ap_no = ?",
-                        (approval["decided_by"], approval["decided_label"], self.now(),
-                         approval.get("decision_note"), row["change_no"], approval["ap_no"]),
-                    )  # fmt: skip
+                    self._approve_in(conn, approval, row["change_no"])
+                self._mark_applied(conn, row["change_no"])
                 self._bump(conn)
                 conn.commit()
             finally:
@@ -301,6 +434,7 @@ class ProductionRepo:
                 conn.execute(
                     f"INSERT INTO approvals ({cols}) VALUES ({marks})", tuple(row.values())
                 )
+                self._mark_applied(conn, row["ap_no"])
                 conn.commit()
             finally:
                 conn.close()
@@ -359,21 +493,31 @@ class ProductionRepo:
             self.decide_approval(r["ap_no"], "已失效", "system", "系統", "超過 24 小時沒人處理")
         return [r["ap_no"] for r in rows]
 
-    def add_audit(self, row: dict) -> None:
-        row = {**row, "at": self.now()}
-        if isinstance(row.get("detail"), (dict, list)):
-            row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
+    def add_audit(self, row: dict, once: bool = False) -> None:
+        """once：同一個（動作、操作、單號）已經有紀錄就不再寫——冪等重送、中斷後補做收尾時
+        不會重複記稽核（這些單號每個只會被寫入一次）。"""
         with self._lock:
             conn = self._conn()
             try:
-                cols = ", ".join(row)
-                marks = ", ".join("?" for _ in row)
-                conn.execute(
-                    f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values())
-                )
+                self._insert_audit(conn, row, once)
                 conn.commit()
             finally:
                 conn.close()
+
+    def _insert_audit(self, conn: sqlite3.Connection, row: dict, once: bool = False) -> None:
+        row = {**row, "at": self.now()}
+        if isinstance(row.get("detail"), (dict, list)):
+            row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
+        cols = ", ".join(row)
+        marks = ", ".join("?" for _ in row)
+        if once:
+            conn.execute(
+                f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
+                " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",
+                (*row.values(), row.get("action"), row.get("op"), row.get("ref_no")),
+            )
+        else:
+            conn.execute(f"INSERT INTO audit_log ({cols}) VALUES ({marks})", tuple(row.values()))
 
     def audit(self, limit: int = 50) -> list[dict]:
         rows = self._read("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,))
@@ -390,8 +534,97 @@ class ProductionRepo:
                 conn.executescript(
                     "DELETE FROM work_orders; DELETE FROM schedule_runs; DELETE FROM schedule_ops;"
                     " DELETE FROM data_changes; DELETE FROM approvals; DELETE FROM audit_log;"
+                    " DELETE FROM idempotency;"
                 )
                 self._bump(conn)
+                conn.commit()
+            finally:
+                conn.close()
+
+    # ------------------------------------------------------------ 冪等（Idempotency-Key）
+    def idem_begin(self, account_id: str, operation: str, key: str, request_hash: str,
+                   stale_s: float = 120) -> tuple[str, dict | None]:  # fmt: skip
+        """開始一次帶 key 的寫入。回傳 ("new", None)＝輪到你執行；("replay", 先前的回應)；
+        ("conflict", None)＝同一個 key 用在參數不同的請求；("busy", None)＝同一個請求還在執行；
+        ("resume", 標記)＝前一個執行者已經提交了業務寫入、卻沒來得及收尾（中斷或收尾出錯）：
+        不能再寫一次，由呼叫端依標記補做收尾。
+        整段是 BEGIN IMMEDIATE：跨行程也只有一個人拿到 "new"／"resume"。"""
+        with self._lock:
+            conn = self._conn()
+            conn.isolation_level = None
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM idempotency WHERE account_id = ? AND operation = ?"
+                    " AND idem_key = ?",
+                    (account_id, operation, key),
+                ).fetchone()
+                now = datetime.now(UTC)
+                if row is not None:
+                    age = (now - datetime.fromisoformat(row["created_at"])).total_seconds()
+                    if row["request_hash"] != request_hash:
+                        out = ("conflict", None)
+                    elif row["state"] == "done":
+                        out = ("replay", json.loads(row["response"]))
+                    elif age < stale_s:
+                        out = ("busy", None)
+                    else:  # 前一個執行者當掉了（沒有 done 也沒有 abort）：接手
+                        conn.execute(
+                            "UPDATE idempotency SET created_at = ? WHERE account_id = ?"
+                            " AND operation = ? AND idem_key = ?",
+                            (now.isoformat(), account_id, operation, key),
+                        )
+                        # running＝業務寫入還沒提交，重新執行；applied＝已提交，只補收尾
+                        if row["state"] == "applied":
+                            out = ("resume", json.loads(row["response"]))
+                        else:
+                            out = ("new", None)
+                else:
+                    conn.execute(
+                        "INSERT INTO idempotency VALUES (?, ?, ?, ?, 'running', NULL, ?)",
+                        (account_id, operation, key, request_hash, now.isoformat()),
+                    )
+                    out = ("new", None)
+                conn.execute("COMMIT")
+                return out
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+
+    def idem_finish(self, account_id: str, operation: str, key: str, response: dict) -> None:
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "UPDATE idempotency SET state = 'done', response = ? WHERE account_id = ?"
+                    " AND operation = ? AND idem_key = ?",
+                    (json.dumps(response, ensure_ascii=False), account_id, operation, key),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+    def idem_abort(self, account_id: str, operation: str, key: str) -> None:
+        """執行失敗：業務寫入還沒提交（running）就放掉 key，讓使用者修正後可以用同一個 key 再送；
+        已經提交（applied）的不能放掉——只是把它標成「現在沒有人在處理」，下一次重送立刻從標記
+        補做收尾，不用等逾時。"""
+        with self._lock:
+            conn = self._conn()
+            try:
+                conn.execute(
+                    "DELETE FROM idempotency WHERE account_id = ? AND operation = ?"
+                    " AND idem_key = ? AND state = 'running'",
+                    (account_id, operation, key),
+                )
+                conn.execute(
+                    "UPDATE idempotency SET created_at = '1970-01-01T00:00:00+00:00'"
+                    " WHERE account_id = ? AND operation = ? AND idem_key = ?"
+                    " AND state = 'applied'",
+                    (account_id, operation, key),
+                )
                 conn.commit()
             finally:
                 conn.close()
