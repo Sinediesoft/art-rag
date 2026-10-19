@@ -87,6 +87,11 @@ read_limits:
   window_s: 600
   max_downloads: 12
 
+# 機密資料的讀取稽核（backend/app/services/access_audit.py）：讀這些等級的原尺寸圖紙、3D 模型、
+# 圖紙／庫存／生產明細、圖紙問答時記一筆，主管在稽核頁看得到（/audit 的 reads）
+read_audit:
+  levels: [機密]
+
 # 額度：超過就送主管核准（初值，可調）
 quotas:
   stock_adjust: {max_qty: 20, max_ratio: 0.20}   # 盤點差異超過 20 件或 20%

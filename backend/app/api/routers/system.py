@@ -344,4 +344,8 @@ def audit_log(request: Request, limit: int = Query(default=30, ge=1, le=200)):
     account = identity.current(request)
     identity.require_view(account, "audit", "稽核紀錄")
     prod = get_production_repo()
-    return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}
+    return {
+        "items": prod.audit(limit),
+        "changes": prod.changes(limit=10),
+        "reads": get_logs_repo().recent_access(limit),
+    }

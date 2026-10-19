@@ -54,7 +54,7 @@ from app.rag.textproc import (
 )
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import memory_guard
+from app.services import access_audit, memory_guard
 from app.services.agent_service import DEFAULT_QUESTIONS
 from app.services.identity import Account, can_view_part, visible_part_ids
 from app.services.search_service import identify_any, load_upload
@@ -495,6 +495,8 @@ async def _chat_stream(
             for e in finish_without_llm(1, gcfg["degrade_message"], "第 1 段（未呼叫 LLM）"):
                 yield e
             return
+        if account is not None:
+            access_audit.record(account, artwork, "圖紙問答", request_id)
     else:
         artwork = store.get_artwork(artwork_id) if artwork_id else None
         if artwork_id and not artwork:

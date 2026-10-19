@@ -1584,9 +1584,25 @@ class AuditRow(BaseModel):
     request_id: str | None
 
 
+class AccessRow(BaseModel):
+    created_at: str
+    request_id: str | None = None
+    account_id: str | None = None
+    account_label: str | None = None
+    part_id: str
+    level: str | None = None
+    what: str = Field(
+        description="讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+    )
+
+
 class AuditResponse(BaseModel):
     items: list[AuditRow]
     changes: list[dict] = Field(description="最近寫入的異動單")
+    reads: list[AccessRow] = Field(
+        default=[],
+        description="最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+    )
 
 
 # ---------------------------------------------------------------- 照片建檔（docs/adr/013）

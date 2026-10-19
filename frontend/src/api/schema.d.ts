@@ -1639,6 +1639,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessRow */
+        AccessRow: {
+            /** Created At */
+            created_at: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Account Id */
+            account_id?: string | null;
+            /** Account Label */
+            account_label?: string | null;
+            /** Part Id */
+            part_id: string;
+            /** Level */
+            level?: string | null;
+            /**
+             * What
+             * @description 讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答
+             */
+            what: string;
+        };
         /** Account */
         Account: {
             /** Id */
@@ -2010,6 +2030,12 @@ export interface components {
             changes: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Reads
+             * @description 最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）
+             * @default []
+             */
+            reads: components["schemas"]["AccessRow"][];
         };
         /** AuditRow */
         AuditRow: {
@@ -2356,6 +2382,11 @@ export interface components {
              * @description 回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定
              */
             conflict_check?: boolean | null;
+            /**
+             * Premise Check
+             * @description 回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定
+             */
+            premise_check?: boolean | null;
             /**
              * Route Ticket
              * @description /agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位

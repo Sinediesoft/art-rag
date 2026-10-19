@@ -3659,6 +3659,74 @@
   },
   "components": {
     "schemas": {
+      "AccessRow": {
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "what": {
+            "type": "string",
+            "title": "What",
+            "description": "讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_at",
+          "part_id",
+          "what"
+        ],
+        "title": "AccessRow"
+      },
       "Account": {
         "properties": {
           "id": {
@@ -4586,6 +4654,15 @@
             "type": "array",
             "title": "Changes",
             "description": "最近寫入的異動單"
+          },
+          "reads": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRow"
+            },
+            "type": "array",
+            "title": "Reads",
+            "description": "最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+            "default": []
           }
         },
         "type": "object",
@@ -5522,6 +5599,18 @@
             ],
             "title": "Conflict Check",
             "description": "回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定"
+          },
+          "premise_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premise Check",
+            "description": "回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定"
           },
           "route_ticket": {
             "anyOf": [
