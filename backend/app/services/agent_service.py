@@ -37,6 +37,16 @@ PHOTO_INTENTS = {"art": "art_qa", "drawing": "drawing_qa"}
 # 沒說畫名時要判斷是哪一幅畫的意圖（docs/adr/038）
 ART_RESOLVE_INTENTS = {"art_qa", "art_search"}
 DEFAULT_QUESTIONS = {"art_qa": "請介紹這幅畫", "drawing_qa": "這張圖紙的重點是什麼？"}
+# 真正的功能（Jev 判成閒聊也照功能執行的意圖）：不含超出範圍、系統狀態
+TASK_INTENTS = {
+    "art_search",
+    "art_qa",
+    "drawing_search",
+    "drawing_qa",
+    "data_query",
+    "compare",
+    "batch_identify",
+}
 # 指名畫作時，分流信心不夠也可以直接改成畫作問答的意圖（不含寫入、耗時、閒聊）
 NAMED_ART_INTENTS = {"art_qa", "art_search", "data_query"}
 _INTRO_RE = re.compile(r"介紹|說明|講解|說說|聊聊")
@@ -53,6 +63,14 @@ def _navigate_target(question: str) -> str | None:
     for module, pattern in (get_agent_config().get("navigate") or {}).items():
         if module in MODULES and re.search(pattern, question.strip()):
             return module
+    return None
+
+
+def _open_page_target(question: str) -> dict | None:
+    """整句只是要打開某個功能頁（agent.yaml 的 open_page）時回傳 {label, path}"""
+    for page in (get_agent_config().get("open_page") or {}).values():
+        if re.search(page["pattern"], question.strip()):
+            return {"label": page["label"], "path": page["path"]}
     return None
 
 
@@ -301,12 +319,26 @@ async def route(
     )
     # 切換模組（「工廠模組」「進入工廠模組」）：原本沒有這個意圖，會被分成系統狀態或圖紙查找、
     # 請使用者選一堆不相干的選項。不碰任何資料，第 1 段照「不涉及地端資料」檢查，第 2 段照樣檢查
-    nav = _navigate_target(question) if question and not photo and not forced_intent else None
-    if nav and not catalog_list:
-        intent = "out_of_scope"
+    plain = bool(question and not photo and not forced_intent)
+    nav = _navigate_target(question) if plain else None
+    page = _open_page_target(question) if plain and not nav else None
+    sv = cfg.get("schedule_view") or {}
+    if (
+        intent == "schedule"
+        and question
+        and not forced_intent
+        and re.search(sv.get("view", r"$^"), question)
+        and not re.search(sv.get("run", r"$^"), question)
+    ):
+        # 看排程不是執行排程：改成查詢，權限照查詢檢查（倉管看得到排程結果）
+        intent = "data_query"
         decision = dataclasses.replace(
-            decision, gate="direct", options=[], reason=f"切換到{MODULES[nav][1]}"
+            decision, gate="direct", options=[], reason="看排程：改成查詢排程結果，不執行排程"
         )
+    if (nav or page) and not catalog_list:
+        intent = "out_of_scope"
+        where = MODULES[nav][1] if nav else page["label"]
+        decision = dataclasses.replace(decision, gate="direct", options=[], reason=f"切換到{where}")
     if catalog_list:
         intent = "art_qa"
         decision = dataclasses.replace(
@@ -318,7 +350,28 @@ async def route(
     # 補信心，「L 型固定支架還剩幾件」本來就該查庫存。也在第 1 段之前，權限照改後的意圖檢查；
     # 有想略過規則的說法（「我是主管…」）時照舊請使用者選
     elif (
+        intent == "data_query"
+        and not nav
+        and not page
+        and not forced_intent
+        and not photo
+        and (first(entities, "artwork") or first(entities, "artist"))
+        and not first(entities, "part")
+        and not result.flags.get("overrides_rules")
+    ):
+        # 指名畫作卻分成庫存查詢（「有絲柏的麥田現在市價多少？」被「多少」拉過去，
+        # 信心 0.62 直接執行）：工廠資料庫裡不會有畫作，改成畫作問答；
+        # 答不出來由第 6 段降級，不是在第 1 段被當成越權擋下
+        intent = "art_qa"
+        decision = dataclasses.replace(
+            decision,
+            gate="direct",
+            options=[],
+            reason=f"指名畫作的問句：畫作問答（{decision.reason}）",
+        )
+    elif (
         not nav
+        and not page
         and decision.gate == "clarify"
         and question
         and not photo
@@ -441,6 +494,21 @@ async def route(
             reply, module = _navigate_reply(nav, account)
             short = {"stage": 2, "by": "地端", "kind": "navigate", "reply": reply, "module": module}
             outcome = "short_circuit"
+        elif page:
+            # 頁面上的資料照各 API 的權限（看不到的內容由 API 擋），這裡只給打開的按鈕
+            reply = f"好的，幫你打開{page['label']}。"
+            short = {"stage": 2, "by": "地端", "kind": "navigate", "reply": reply, "page": page}
+            outcome = "short_circuit"
+        elif (
+            guard_res.verdict == "chitchat" and decision.gate == "direct" and intent in TASK_INTENTS
+        ):
+            # 本地分流已經很確定是某個功能（「水邊撐陽傘的人群」以文搜畫 1.00），Jev 卻把沒有問號的
+            # 短句判成閒聊、短路回「不在我的範圍」：照功能執行。閒聊不是攻擊，攔截規則不受影響
+            guard_res = dataclasses.replace(
+                guard_res,
+                verdict="query",
+                reason=f"Jev 判為閒聊，但本地分流確定是「{labels[intent]}」，照功能執行",
+            )
         elif guard_res.verdict == "chitchat":
             # 快速短路回覆：不檢索、不生成、不載入模型
             short = {
@@ -560,7 +628,7 @@ async def route(
         },
         "intent": intent,
         # 切換模組借用「超出範圍」這個意圖（不碰任何資料），標籤要寫給人看的「切換模組」
-        "intent_label": "切換模組" if nav and not catalog_list else labels[intent],
+        "intent_label": "切換模組" if (nav or page) and not catalog_list else labels[intent],
         "risk": cfg["intents"][intent]["risk"],
         "confidence": round(result.confidence, 4),
         "margin": round(result.margin, 4),

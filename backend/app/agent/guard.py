@@ -362,7 +362,7 @@ def auth_check(
                 "功能授權",
                 "地端",
                 False,
-                f"roles={[account.role_label]} 不能使用「{dlabel}」（{account.scope_note}）",
+                f"身分「{account.role_label}」不能使用「{dlabel}」（{account.scope_note}）",
             )
         )
         tag = "權限不足"

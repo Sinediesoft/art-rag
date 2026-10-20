@@ -8928,6 +8928,24 @@
         "title": "MetaFilterInfo",
         "description": "第 3 段的 Metadata Filter：只照 JWT 的 clearance 與 depts 產生。"
       },
+      "NavigatePage": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "path"
+        ],
+        "title": "NavigatePage"
+      },
       "OkResponse": {
         "properties": {
           "ok": {
@@ -12316,6 +12334,17 @@
             ],
             "title": "Module",
             "description": "navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NavigatePage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "navigate：要打開的功能頁（「打開待核准清單」）"
           }
         },
         "type": "object",
