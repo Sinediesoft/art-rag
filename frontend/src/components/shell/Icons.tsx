@@ -54,6 +54,13 @@ const PATHS: Record<string, string> = {
   arrowRight: "M5 12h14M12 5l7 7-7 7",
   // 設定面板（頁首右上角）：三條滑桿
   settings: "M4 6h8M16 6h4M14 4v4M4 12h2M10 12h10M8 10v4M4 18h10M18 18h2M16 16v4",
+  // 藝術模組（mockups/painting-module.html）：右側資料夾、收合兩側、原圖
+  sidebarRight: "M4 5h16v14H4zM14.5 5v14",
+  folder: "M3 6h6l2 2h10v11H3z",
+  bookmark: "M6 3h12v18l-6-4-6 4z",
+  sort: "M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4",
+  collapse: "m7 20 5-5 5 5M7 4l5 5 5-5",
+  landmark: "M3 21h18M5 18v-7M9.5 18v-7M14.5 18v-7M19 18v-7M12 3l8 5H4z",
 };
 
 /** 線條圖示；尺寸與顏色交給主題（.icon） */

@@ -1,3 +1,4 @@
+import artModuleCss from "../styles/art-module.css?inline";
 import artCss from "../styles/art.css?inline";
 import entryCss from "../styles/entry.css?inline";
 import moduleCss from "../styles/module.css?inline";
@@ -8,7 +9,8 @@ import type { View } from "./design";
  * 和 ArtRAG-前端demo/index.html 一樣依畫面只啟用該用的那幾份（media 切成 not all 就不套用）。
  * 內容包進 artrag 層（index.css 的層級順序），排在 core.css／app.css 之後所以會覆寫它們。
  */
-const SHEETS = { entry: entryCss, module: moduleCss, art: artCss } as const;
+// 藝術模組的版面（art-module.css，mockups/painting-module.html）跟著藝術的主題一起啟用
+const SHEETS = { entry: entryCss, module: moduleCss, art: `${artCss}\n${artModuleCss}` } as const;
 
 function sheet(id: keyof typeof SHEETS) {
   const key = `artrag-theme-${id}`;

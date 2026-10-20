@@ -110,6 +110,8 @@ export function archive(t: Turn): ArchivedTurn {
   const d = dispatchOf(r);
   if (d.artwork_id) Object.assign(base, { artworkId: d.artwork_id, artworkLabel: d.artwork_label ?? d.artwork_id });
   else if (r.photo?.kind === "art" && r.photo.id) Object.assign(base, { artworkId: r.photo.id, artworkLabel: r.photo.label });
+  // 附的照片辨識出的就是這幅畫：重新整理後藝術模組還能拿這張照片比對（照片本身照舊只存編號）
+  if (t.imageId && r.photo?.kind === "art" && r.photo.id && r.photo.id === base.artworkId) base.photoMatch = true;
   if (p?.kind === "chat" && p.status === "done" && !p.done?.degraded) {
     base.answer = sanitizeForStorage(p.text, SECRET_ANSWER);
     base.sources = (p.sources?.sources ?? []).filter((s) => PUBLIC(s.level));

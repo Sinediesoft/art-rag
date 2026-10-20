@@ -191,6 +191,8 @@ export interface ArchivedTurn {
   /** 公開資料：畫作問答的回答與公開段落、以文搜畫結果 */
   artworkId?: string | null;
   artworkLabel?: string | null;
+  /** 這一輪附的照片辨識出的就是 artworkId 這幅畫（藝術模組用來還原照片比對） */
+  photoMatch?: boolean;
   answer?: string;
   sources?: SourcesEvent["sources"];
   artResults?: { artwork: ArtworkSummary; score: number }[];

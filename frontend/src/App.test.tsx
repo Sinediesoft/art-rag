@@ -1763,3 +1763,126 @@ describe("排程頁與 3D 重建頁：回到頁面接回進行中的工作（不
     expect(t.calls.filter((c) => c.path.includes("/cancel") || c.path === "/schedule/stop")).toEqual([]);
   });
 });
+
+describe("藝術模組：對話＋作品文件＋資料夾（mockups/painting-module.html）", () => {
+  const SUMMARY = (id: string, title: string, artist: string) => ({
+    id,
+    title_zh: title,
+    title_en: null,
+    artist_zh: artist,
+    artist_en: null,
+    date_text: "1889 年",
+    collection: "大都會藝術博物館",
+    image_url: `/api/v1/artworks/${id}/image`,
+    thumb_url: `/api/v1/artworks/${id}/image?size=thumb`,
+    style_tags: ["後印象派"],
+  });
+  const DETAIL = {
+    id: "met-436535",
+    title: { zh: "有絲柏的麥田", en: "Wheat Field with Cypresses" },
+    artist: { zh: "文森・梵谷", en: "Vincent van Gogh" },
+    date_text: "1889 年",
+    medium: "油彩、畫布",
+    dimensions: "73.2 × 93.4 公分",
+    collection: "大都會藝術博物館",
+    image: { path: "kb/images/met-436535.jpg", license: "CC0", attribution: null },
+    source_url: "https://www.metmuseum.org/art/collection/search/436535",
+    descriptions: [
+      { lang: "zh", topic: "畫面", text: "前景是金黃色的麥田。", license: "CC0", source: "大都會藝術博物館" },
+      { lang: "zh", topic: "創作背景", text: "1889 年在聖雷米的療養院附近寫生。", license: "CC0", source: "大都會藝術博物館" },
+      { lang: "zh", topic: "區域解說", text: "這棵絲柏我畫了三次。", license: "CC BY 4.0", region: "r1", speaker: "藝術家・甲" },
+    ],
+    regions: { image_size: [1024, 815], items: [{ id: "r1", label: "右側的絲柏", points: [[0.6, 0.1], [0.8, 0.1], [0.8, 0.7], [0.6, 0.7]] }] },
+    style_tags: ["後印象派", "風景"],
+    image_url: "/api/v1/artworks/met-436535/image",
+    thumb_url: "/api/v1/artworks/met-436535/image?size=thumb",
+  };
+  const COLORS = {
+    source: "original",
+    method: "lab-kmeans-v1",
+    palette: [{ hex: "#e0c070", rgb: [224, 192, 112], lab: [80, 5, 45], share: 0.6, name: "土黃", temperature: "warm", tone: "light" }],
+    temperature: { warm: 0.5, cool: 0.3, neutral: 0.2 },
+    lightness: { dark: 0.2, mid: 0.5, light: 0.3, mean: 55, p5: 20, p95: 90, histogram: [1, 2, 3] },
+    chroma: { low: 0.4, mid: 0.4, high: 0.2, median: 20, histogram: [3, 2, 1] },
+    summary: "整體偏暖、中等彩度",
+    notes: [],
+    map_url: "/api/v1/artworks/met-436535/colors/map.png",
+    latency_ms: 6,
+  };
+  const artBackend = () => {
+    const t = factoryBackend();
+    t.on("GET", "/artworks", () => json({ kb_version: "test", items: [SUMMARY("met-436535", "有絲柏的麥田", "文森・梵谷"), SUMMARY("met-437112", "睡蓮", "克勞德・莫內")] }));
+    t.on("GET", "/artworks/met-436535", () => json(DETAIL));
+    t.on("GET", "/artworks/met-437112", () => json({ ...DETAIL, id: "met-437112", title: { zh: "睡蓮" }, artist: { zh: "克勞德・莫內" }, regions: null }));
+    t.on("GET", /^\/artworks\/met-\d+\/colors/, () => json(COLORS));
+    // 回答引用第 2 段說明（chunk_id 的 #01-0 ＝ descriptions[1]）
+    t.on("POST", "/chat", () =>
+      sse([
+        ["sources", sources("公開", { sources: [{ ref: 1, chunk_id: "met-436535#01-0", level: "公開", artwork_id: "met-436535", title: "有絲柏的麥田", topic: "創作背景", text: "1889 年在聖雷米。", source_url: null, license: "CC0", score: 0.8 }] })],
+        ["token", { text: "1889 年在聖雷米 [1]。" }],
+        ["done", done()],
+      ]),
+    );
+    return t;
+  };
+  const enterArt = async () => {
+    renderApp();
+    await ask("梵谷畫這幅畫的時候在哪裡？");
+    await idle();
+    fireEvent.click(document.querySelector(".jump--art")!);
+    await waitFor(() => expect(where).toMatch(/^\/art\//));
+    await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉"));
+  };
+
+  it("從入口進來：分頁是這段對話的成果，中間是作品文件（作品、畫作資料＋區域資料、色溫；沒附照片就沒有影像對位）", async () => {
+    artBackend();
+    await enterArt();
+    // 「在哪裡」另外推出年表：年表、相似作品沿用原本的檢視
+    expect([...document.querySelectorAll(".aw-tab")].map((x) => x.textContent)).toEqual(["〈有絲柏的麥田〉", "〈有絲柏的麥田〉年表"]);
+    // 對話的成果不能關（跟著對話紀錄），只有從資料夾打開的才有 ✕
+    expect(document.querySelector(".aw-tab__x")).toBeNull();
+    expect([...document.querySelectorAll(".aw-sec")].map((s) => s.id)).toEqual(["aw-sec-hits", "aw-sec-record", "aw-sec-color"]);
+    const record = document.getElementById("aw-sec-record")!;
+    expect(record.textContent).toContain("73.2 × 93.4 公分");
+    // 綁區域的段落（藝術家的解說）放在區域資料，不在說明清單
+    expect([...record.querySelectorAll(".aw-passage__title")].map((x) => x.textContent)).toEqual(["畫面", "創作背景"]);
+    expect(record.querySelector(".aw-areas-card")?.textContent).toContain("藝術家・甲說：「這棵絲柏我畫了三次。」");
+    expect(document.getElementById("aw-p-1")?.textContent).toContain("回答引用 [1]");
+    await waitFor(() => expect(document.getElementById("aw-sec-color")?.textContent).toContain("整體偏暖、中等彩度"));
+    expect(document.querySelector(".aw-crumbs")?.textContent).toBe("知識庫 / 畫作 / 文森・梵谷 / 有絲柏的麥田");
+    fireEvent.click(screen.getByRole("tab", { name: "〈有絲柏的麥田〉年表" }));
+    await waitFor(() => expect(document.querySelector(".aw-legacy .view--timeline")).not.toBeNull());
+    expect(document.querySelector(".aw-doc")).toBeNull();
+  });
+
+  it("點回答裡的引用 [1]：中間捲到那一段並閃一下", async () => {
+    artBackend();
+    await enterArt();
+    const scrolled = vi.spyOn(Element.prototype, "scrollIntoView");
+    fireEvent.click(within(document.querySelector(".aw-chat")! as HTMLElement).getAllByRole("button", { name: "來源 1" })[0]);
+    await waitFor(() => expect(document.getElementById("aw-p-1")?.className).toContain("is-flash"));
+    expect(scrolled).toHaveBeenCalled();
+  });
+
+  it("資料夾：依畫家分組，點一幅畫開成分頁（只讀知識庫），分頁可以關掉；收合資料夾記在瀏覽器", async () => {
+    const t = artBackend();
+    await enterArt();
+    const files = document.querySelector(".aw-files") as HTMLElement;
+    fireEvent.click(within(files).getByRole("button", { name: /克勞德・莫內/ }));
+    fireEvent.click(await within(files).findByRole("button", { name: /睡蓮/ }));
+    await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈睡蓮〉"));
+    expect([...document.querySelectorAll(".aw-tab")].map((x) => x.textContent)).toEqual(["〈有絲柏的麥田〉", "〈有絲柏的麥田〉年表", "〈睡蓮〉"]);
+    // 打開作品不經過問答：沒有多一次 /agent/route 或 /chat
+    expect(t.calls.filter((c) => c.path === "/agent/route" || c.path === "/chat")).toHaveLength(2);
+    // 已經在對話裡的畫：切到那一頁，不另開
+    fireEvent.click(within(files).getByRole("button", { name: /有絲柏的麥田/ }));
+    await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉"));
+    expect(document.querySelectorAll(".aw-tab")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "關掉〈睡蓮〉" }));
+    expect(document.querySelectorAll(".aw-tab")).toHaveLength(2);
+    expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉");
+    fireEvent.click(screen.getByRole("button", { name: "收合資料夾" }));
+    expect(document.querySelector(".app.aw")?.className).toContain("no-files");
+    expect(JSON.parse(localStorage.getItem("artrag-art-layout") ?? "{}").noFiles).toBe(true);
+  });
+});

@@ -31,6 +31,8 @@ export interface ThreadActions {
   outputsOf: (turnId: string) => Output[];
   activeOutput: string | null;
   showOutput: (key: string) => void;
+  /** 點了回答裡的引用 [n]：藝術模組跳到中間「畫作資料」的那一段（其他畫面沒有這個動作） */
+  onCite?: (source: SourceItem) => void;
 }
 
 export const ThreadContext = createContext<ThreadActions | null>(null);
@@ -363,7 +365,17 @@ function Archived({ turn }: { turn: Turn }) {
   return (
     <div className="answer">
       {a.artworkId && th.mode === "brief" && <Subject kind="artwork" id={a.artworkId} title={a.artworkLabel ?? a.artworkId} meta="作品・知識庫" />}
-      {a.answer && <RichText text={a.answer} activeRef={cite} onCite={setCite} />}
+      {a.answer && (
+        <RichText
+          text={a.answer}
+          activeRef={cite}
+          onCite={(n) => {
+            setCite(n);
+            const s = a.sources?.find((x) => x.ref === n);
+            if (s) th.onCite?.(s);
+          }}
+        />
+      )}
       {a.sources && a.sources.length > 0 && <Sources sources={a.sources} active={cite} onActive={setCite} />}
       {a.artResults && th.mode === "brief" && <Works items={a.artResults.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
       {a.outcome === "unconfirmed" ? (
@@ -451,7 +463,18 @@ function ChatBody({ turn, part: p }: { turn: Turn; part: ChatPart }) {
           {p.target.part_id ? "；機密圖紙只用地端模型" : ""}
         </p>
       )}
-      {p.text && <RichText text={p.text.trim()} streaming={p.status === "streaming"} activeRef={cite} onCite={setCite} />}
+      {p.text && (
+        <RichText
+          text={p.text.trim()}
+          streaming={p.status === "streaming"}
+          activeRef={cite}
+          onCite={(n) => {
+            setCite(n);
+            const s = p.sources?.sources.find((x) => x.ref === n);
+            if (s) th.onCite?.(s);
+          }}
+        />
+      )}
       {p.sources?.conflict_check?.conflict && p.text && (
         <p className="answer__note is-warn">
           <Icon name="info" />

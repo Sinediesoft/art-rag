@@ -24,6 +24,7 @@ import { deriveOutputs } from "./shell/outputs";
 import { useShell } from "./shell/store";
 import { applyStyles } from "./shell/theme";
 import type { Conv } from "./shell/types";
+import { ArtModuleView } from "./views/ArtModuleView";
 import { EntryView } from "./views/EntryView";
 import { FeatureView } from "./views/FeatureView";
 import { ModuleView } from "./views/ModuleView";
@@ -126,6 +127,8 @@ function ModuleRoute({ domain, onJump }: { domain: Domain; onJump: (convId: stri
     if (conv && conv.module !== domain) shell.enterModule(conv.id, domain);
   }, [conv, domain, shell]);
   if (!conv) return <Navigate to="/" replace />;
+  // 藝術模組換成對話＋作品文件＋資料夾的版面（mockups/painting-module.html）；工廠模組照舊（工作台）
+  if (domain === "art") return <ArtModuleView key={`art:${conv.id}`} conv={conv} onJump={onJump} />;
   return <ModuleView key={`${domain}:${conv.id}`} conv={conv} domain={domain} onJump={onJump} />;
 }
 
