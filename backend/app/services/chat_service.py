@@ -572,6 +572,8 @@ async def _chat_stream(
             "level": doc["level"],
             "text": part_card(artwork) if domain == "mfg" else artwork_card(artwork),
             "domain": domain,
+            # 第 7 段會附上這幅畫的圖（第 6 段據此讓公開畫作的看圖題進到生成，docs/adr/037）
+            "image": domain == "art" and (bool(image_id) or send_image_enabled(send_image)),
         }
     post = None
     rearrange_info = None

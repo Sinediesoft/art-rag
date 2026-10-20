@@ -900,13 +900,21 @@ def overview_terms(question: str) -> set[str]:
     return terms(t)
 
 
-def local_answerable(question: str, kept: list[dict], card: dict | None) -> tuple[bool, str]:
+def local_answerable(
+    question: str, kept: list[dict], card: dict | None, picked: int = 0
+) -> tuple[bool, str]:
     """第 6 段地端的 answerable：問題的關鍵詞有沒有出現在留下的段落與作品資料裡。
     不因為有文件卡、圖面或任一段高相似度就放行（docs/adr/030）。
     已指定文件的概覽問題：概覽字眼與文件類別不算關鍵詞，其餘的照樣比對；
-    什麼都不剩時要至少 1 段通過第 4、5 段。"""
+    什麼都不剩時要至少 1 段通過第 4、5 段。
+
+    picked：留下的段落中，本地 Qwen3-VL（段落篩選）逐段判斷「能幫助回答這個問題」的段數。
+    換句話說、口語、外語、要換算或前提說錯的問題，關鍵詞對不上但模型判斷答得出來，也放行（docs/adr/037）。"""
     lg = _cfg()["local_gate"]
     q = terms(question)
+    if picked:
+        cov = coverage(q, set().union(*(_passage_terms(s) for s in kept))) if q and kept else 0.0
+        return True, f"本地 Qwen3-VL 判斷 {picked} 段能幫助回答（問題關鍵詞覆蓋率 {cov:.2f}）"
     if card and _find(_rules()["overview"], question):
         q = overview_terms(question)
     if not q:
@@ -1298,12 +1306,34 @@ async def process_passages(
         if not jev_done:
             # 地端閘門（機密段落不送 Jev、或叫不到 Jev）：實際比對問題與留下的資料，
             # 不因為有文件卡、圖面或任一段高相似度就放行
-            ans_ok, ans_detail = local_answerable(question, kept, card)
+            n_picked = sum(s["chunk_id"] in picked for s in kept)
+            ans_ok, ans_detail = local_answerable(question, kept, card, n_picked)
             gate.passed = ans_ok and comp_ok
             gate.checks += [
                 Check("answerable", "可答性", "地端", ans_ok, ans_detail),
                 Check("compliant", "合規", "地端", comp_ok, comp_detail),
             ]
+    # 看圖題（docs/adr/037）：公開畫作會附圖時，段落沒寫、只能看圖知道的細節（顏色、位置、衣著）
+    # 交給生成模型看圖回答，回答 prompt 規定看不出來就回答沒有資料。只放寬可答性：合規沒過照樣擋；
+    # 工廠圖紙、非公開文件、不附圖時不適用
+    if (
+        not gate.passed
+        and card
+        and card.get("image")
+        and card.get("domain") == "art"
+        and card.get("level") == "公開"
+        and all(c.ok for c in gate.checks if c.key.startswith("compliant"))
+    ):
+        gate.passed = True
+        gate.checks.append(
+            Check(
+                "image",
+                "看圖",
+                "地端",
+                True,
+                "公開畫作已附圖：段落沒寫的細節由生成模型看圖回答（看不出來就回答沒有資料）",
+            )
+        )
     if not gate.passed:
         gate.message = g["degrade_message"]
     gate.ms = round((time.perf_counter() - t6) * 1000)
