@@ -158,6 +158,26 @@ describe("入口：對話紀錄欄與抽屜", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "對話紀錄" })).toBeNull();
   });
+
+  it("首頁照原型 mockups/entry.html：「你好，<身分>。」、沒有建議問句與防護示範；身分在紀錄欄最下面（收合後剩頭像），頁首是七段防護", async () => {
+    factoryBackend();
+    renderApp();
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("你好，倉管。"));
+    expect(document.querySelector(".brand__name")?.textContent).toBe("Multimodal-RAG");
+    expect(screen.queryByText("從這裡開始")).toBeNull();
+    expect(screen.queryByText("試試防護架構")).toBeNull();
+    expect(document.querySelector(".home__eyebrow")).toBeNull();
+    // 頁首只剩七段防護、明暗、設定；身分在側欄最下面，選單照常切換
+    const top = document.querySelector(".topbar") as HTMLElement;
+    expect(within(top).getByText("七段防護")).toBeTruthy();
+    expect(top.querySelector(".topbar__account")).toBeNull();
+    const foot = document.querySelector(".side .side__status") as HTMLElement;
+    expect(foot.querySelector(".topbar__account")?.textContent).toContain("倉管");
+    fireEvent.click(foot.querySelector(".topbar__account")!);
+    expect(within(foot).getByRole("menuitemradio", { name: /一般員工/ })).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("收合對話紀錄"));
+    expect(document.querySelector(".side.is-mini .side__status .topbar__account")).not.toBeNull();
+  });
 });
 
 describe("切換身分時還在跑的請求（舊 JWT）", () => {

@@ -4,23 +4,6 @@ import { deriveOutputs } from "../shell/outputs";
 import { useShell, type Shell } from "../shell/store";
 import type { Conv } from "../shell/types";
 
-/**
- * 示範第 1 段：把目前 JWT 的 payload 改成主管、clearance 2，簽章亂填（原 AssistantPage 的展示）。
- * unsigned 是後端回傳的「不含簽章」的 header.payload；真正的憑證在 HttpOnly cookie，這裡讀不到也不保存。
- */
-export function forgeToken(unsigned: string) {
-  const [head, body] = unsigned.split(".");
-  const fromB64 = (x: string) =>
-    new TextDecoder().decode(Uint8Array.from(atob(x.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (x.length % 4)) % 4)), (c) => c.charCodeAt(0)));
-  const toB64 = (x: string) =>
-    btoa(String.fromCharCode(...new TextEncoder().encode(x)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  const claims = JSON.parse(fromB64(body));
-  return `${head}.${toB64(JSON.stringify({ ...claims, roles: ["主管"], clearance: 2 }))}.forged-signature`;
-}
-
 /** 輸入框暫時不能送出的原因：身分還沒確認、或正在切換身分（這時候帶哪一張 JWT 不確定） */
 export function lockReason(shell: Pick<Shell, "identityReady" | "switching">) {
   if (shell.switching) return "切換身分中，完成後才能送出（這時候帶哪一張 JWT 不確定）";

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { MODULE, TOOLS, type Domain } from "../../shell/design";
 import { domainOf } from "../../shell/outputs";
 import { timeOf, titleOf, whenOf } from "../../shell/persist";
@@ -76,6 +76,7 @@ function ModuleNav({ current, onModule, onTool }: { current?: Domain; onModule: 
 /**
  * 來源：ArtRAG-前端demo/source/src/components/Sidebar.tsx。
  * 對話紀錄：新對話、模組捷徑、搜尋、依日期分組。入口左側可以收合成一條窄欄（只剩圖示與最近幾段），手機與模組裡以抽屜打開。
+ * 有 foot 時（入口：目前身分）放在最下面，取代說明文字；收合成窄欄時也留在最下面。
  */
 export function Sidebar({
   convs,
@@ -90,6 +91,7 @@ export function Sidebar({
   onOpen,
   onDelete,
   onClose,
+  foot,
 }: {
   convs: Conv[];
   activeId: string | null;
@@ -104,6 +106,7 @@ export function Sidebar({
   onOpen: (c: Conv) => void;
   onDelete: (c: Conv) => void;
   onClose?: () => void;
+  foot?: ReactNode;
 }) {
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
@@ -125,7 +128,7 @@ export function Sidebar({
   if (mini)
     return (
       <aside className="side is-mini" aria-label="對話紀錄（已收合）">
-        <button type="button" className="side__brand" onClick={onNew} title="ArtRAG・回到入口">
+        <button type="button" className="side__brand" onClick={onNew} title="Multimodal-RAG・回到入口">
           <Mark />
         </button>
         <button type="button" className="side__icon" onClick={onToggle} title="展開對話紀錄" aria-label="展開對話紀錄">
@@ -170,6 +173,7 @@ export function Sidebar({
             );
           })}
         </ol>
+        {foot && <div className="side__status">{foot}</div>}
       </aside>
     );
 
@@ -178,7 +182,7 @@ export function Sidebar({
       <div className="side__head">
         <button type="button" className="side__brandrow" onClick={onNew} title="回到入口">
           <Mark />
-          <span className="brand__name">ArtRAG</span>
+          <span className="brand__name">Multimodal-RAG</span>
         </button>
         {variant === "rail" ? (
           <button type="button" className="side__icon" onClick={onToggle} title="收合對話紀錄" aria-label="收合對話紀錄">
@@ -242,7 +246,11 @@ export function Sidebar({
         ))}
         {!shown.length && <p className="side__empty">{q ? "找不到符合的對話。" : "還沒有對話紀錄。"}</p>}
       </nav>
-      <p className="side__foot">紀錄存在這台電腦的瀏覽器裡，只保留公開資料；進過模組的對話，點了會直接回到模組看成果。</p>
+      {foot ? (
+        <div className="side__foot side__status">{foot}</div>
+      ) : (
+        <p className="side__foot">紀錄存在這台電腦的瀏覽器裡，只保留公開資料；進過模組的對話，點了會直接回到模組看成果。</p>
+      )}
     </aside>
   );
 }

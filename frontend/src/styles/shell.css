@@ -310,10 +310,6 @@
   line-height: 1.6;
   color: var(--text-2);
 }
-.home__script-label {
-  margin-top: 28px;
-}
-
 /* 展示區：讀取中、讀不到、補充說明 */
 .view--empty {
   align-items: center;
