@@ -7,8 +7,9 @@
 // 藝術簡介 → 進入藝術模組 → 作品 → 細看 → 年表 → 相似作品（並排比較）；附圖問答、停止、權限拒絕、降級、
 // 不持久化憑證。每一步截圖，最後印出每項檢查的結果（有失敗時 exit 1）。Chrome 路徑可用 CHROME 環境變數指定。
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [base, outDir, w = "1440", h = "900", image] = process.argv.slice(2);
 if (!base || !outDir) {
@@ -16,6 +17,15 @@ if (!base || !outDir) {
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });
+/** 機密圖紙的識別字（kb/parts 裡 confidentiality 為「機密」的編號、中英文名稱、料號、圖號）：業務的畫面上任何地方都不能出現 */
+const partsDir = fileURLToPath(new URL("../../kb/parts/", import.meta.url));
+const secretTokens = readdirSync(partsDir)
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => JSON.parse(readFileSync(join(partsDir, f), "utf8")))
+  .filter((p) => p.confidentiality === "機密")
+  .flatMap((p) => [p.id, p.name.zh, p.name.en, p.part_no, p.drawing_no]);
+if (!secretTokens.length) throw new Error(`kb/parts 沒有機密圖紙，降級檢查無從判定：${partsDir}`);
+const leaked = (html) => `${JSON.stringify(secretTokens)}.filter((t) => (${html}).includes(t))`;
 const CHROME =
   process.env.CHROME ??
   (process.platform === "darwin"
@@ -390,8 +400,27 @@ try {
   await switchTo("業務");
   await goto("/");
   await ask("連接法蘭有哪些公差要求？", "圖紙");
-  await check("降級：業務問機密圖紙 → 查無資料，不給圖紙按鈕或縮圖", `/查無資料/.test(${lastAi}.textContent) && !${lastAi}.querySelector('.jump') && !${lastAi}.querySelector('.subject--drawing')`);
+  // 名稱只拿業務看得到的圖紙比對，所以這題會改走圖紙查找、列出授權內的圖紙（TASK-20261019-003 人類選方案 A：產品行為不變）。
+  // 要驗的是機密圖紙不外洩：回答（含縮圖網址、替代文字）裡沒有任何機密圖紙的識別字，列出的圖紙沒有「機密」等級，並標明另有 N 張被濾掉
+  await check(
+    "降級：業務問機密圖紙 → 機密圖紙不外洩（回答、縮圖、標籤沒有機密圖紙，標明另有 N 張不在資料範圍）",
+    `(() => { const m = ${lastAi}; const flags = [...m.querySelectorAll('.work__flag')].map((f) => f.textContent.trim()); const hidden = +(m.textContent.match(/另有 (\\d+) 張不在你的資料範圍/)?.[1] ?? 0); const bad = ${leaked("m.outerHTML")}; return { ok: m.dataset.phase === 'done' && bad.length === 0 && !m.querySelector('.work__flag.is-secret') && !flags.includes('機密') && hidden > 0, phase: m.dataset.phase, leaked: bad, flags, hidden }; })()`,
+  );
   await shot("degraded");
+  // 有跳轉按鈕就點進工廠模組：工作台圖紙板塊放的圖紙（圖面與標題欄）也不能是機密圖紙
+  const degradedJump = await js(`!!${lastAi}.querySelector('.jump--factory')`);
+  if (degradedJump) {
+    await js(`${lastAi}.querySelector('.jump--factory').click()`);
+    await waitFor(`!!${panel("drawing")}?.querySelector('.titleblock, [role=alert]')`, 15000);
+    await showPane();
+  }
+  await check(
+    "降級：跳轉後的工作台也沒有機密圖紙（圖紙板塊的圖面與標題欄）",
+    degradedJump
+      ? `(() => { const w = document.querySelector('.workbench'); const d = ${panel("drawing")}; const levels = [...(d?.querySelectorAll('.titleblock__cell') ?? [])].filter((c) => c.querySelector('dt')?.textContent === '機密等級').map((c) => c.querySelector('dd')?.textContent); const bad = w ? ${leaked("w.outerHTML")} : []; return { ok: !!w && ${activePanel} === 'drawing' && levels.length > 0 && !levels.includes('機密') && !d.querySelector('.titleblock__cell.is-secret') && bad.length === 0, workbench: !!w, active: ${activePanel}, levels, leaked: bad }; })()`
+      : "({ ok: true, jump: false })",
+  );
+  if (degradedJump) await shot("degraded-factory");
 
   await check(
     "瀏覽器儲存：沒有 JWT、交接票、Jev 請求本文、內部資料",
