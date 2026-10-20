@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { formatTaipei } from "./lib/format";
 import { readMarks, STORAGE_KEY, UNCONFIRMED_PREFIX } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
@@ -1663,6 +1664,108 @@ describe("背景工作（TASK-20261013-001）：3D 重建與排程在 worker 執
     fireEvent.click(screen.getByText("CadQuery 程式碼"));
     expect(document.body.textContent).toContain("SYNTH_CODE");
     expect(screen.getByText("下載 STL").getAttribute("href")).toBe(`/api/v1/jobs/${JOB}/artifacts/model.stl`);
+  });
+
+  describe("3D 重建結果快取（docs/adr/042）", () => {
+    const NEXT = "cad_fedcba9876543210";
+    const CREATED_AT = "2026-10-14T06:30:00+00:00";
+    const meta = { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "ortho2cad", image_id: null, part: null, identified: null, layout: "kb", input_url: "", input_size: [1, 1], scale_to: null, scale_source: null };
+    const doneEv = { request_id: "r", job_id: JOB, strategy: "ortho2cad", model: "ortho2cad", latency_ms: { first_token: null, generation: 0, exec: 4200, total: 4800 }, tokens: { input: 0, output: 0 }, egress: { images: 0, chunks: 0, bytes: 0 } };
+    const hit = { status: "hit", reason: null, created_at: CREATED_AT, iou: 0.84, candidate: { kind: "sample", temperature: 0.7, seed: 1 }, source: "warm", adoptable: false, regenerable: true };
+    const res = (cache: unknown) => ({ ok: true, error: null, valid: true, repaired: false, raw_dims: { width: 1, depth: 2, height: 3 }, dims: { width: 10, depth: 20, height: 30 }, scale: 10, volume: 1, faces: 6, iou: 0.84, iou_bbox: 0.9, cache, files: { "model.stl": `/api/v1/jobs/${JOB}/artifacts/model.stl`, "code.py": `/api/v1/jobs/${JOB}/artifacts/code.py`, "model.step": `/api/v1/jobs/${JOB}/artifacts/model.step`, "reproj.png": `/api/v1/jobs/${JOB}/artifacts/reproj.png`, "input.png": `/api/v1/jobs/${JOB}/artifacts/input.png` } });
+    /** 3D 重建頁：不放 model.stl（jsdom 沒有 WebGL，不畫 3D 檢視器） */
+    const pageRes = (cache: unknown) => {
+      const r = res(cache);
+      const { "model.stl": _stl, ...files } = r.files;
+      return { ...r, files };
+    };
+    const hitLabel = `沿用 ${formatTaipei(CREATED_AT)} 的結果・IoU 0.84・重抽 temperature 0.7・seed 1`;
+    const created = (id: string) => json({ job_id: id, kind: "cad", status: "queued", status_url: "", events_url: "", idempotent_replay: false, delayed_dispatch: false }, 202);
+
+    it("對話卡片：命中顯示「沿用 <時間> 的結果・IoU・候選來源」；按「結果不對，重新生成」先作廢這個結果，再建立 regenerate 工作", async () => {
+      const t = reconstructBackend();
+      t.on("GET", `/jobs/${JOB}/events`, () => jobSse([["created", {}], ["started", { attempt: 1 }], ["meta", meta], ["succeeded", {}]]));
+      t.on("GET", `/jobs/${JOB}`, () => json(jobBody({ status: "succeeded", result: { meta, result: res(hit), done: doneEv } })));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      t.on("POST", `/cad/jobs/${JOB}/cache/reject`, () => json({ job_id: JOB, rejected: true, removed: true }));
+      let n = 0;
+      t.on("POST", "/cad/jobs", () => created(n++ === 0 ? JOB : NEXT));
+      const live = liveSse();
+      t.on("GET", `/jobs/${NEXT}/events`, ({ signal }) => live.respond(signal));
+      await startCad();
+      await waitFor(() => expect(document.body.textContent).toContain(hitLabel), { timeout: 4000 });
+      fireEvent.click(screen.getByText("結果不對，重新生成"));
+      await waitFor(() => expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toHaveLength(2));
+      const reject = t.calls.findIndex((c) => c.path === `/cad/jobs/${JOB}/cache/reject`);
+      const regen = t.calls.findLastIndex((c) => c.method === "POST" && c.path === "/cad/jobs");
+      expect(reject).toBeGreaterThan(-1);
+      expect(reject).toBeLessThan(regen); // 先作廢，再重抽
+      expect(t.calls[regen].body).toEqual({ part_id: "mfg-002", image_id: null, strategy: "ortho2cad", regenerate: true });
+      act(() => live.push("created", { status: "queued", kind: "cad" }, 1));
+      await waitFor(() => expect(document.body.textContent).toContain("排隊中"));
+    });
+
+    it("對話卡片：同一張圖紙另有進行中的一般重建，按「結果不對，重新生成」仍建立 regenerate 工作，不接回那個工作", async () => {
+      const t = reconstructBackend();
+      const OTHER = "cad_aaaaaaaaaaaaaaaa";
+      t.on("GET", `/jobs/${JOB}/events`, () => jobSse([["created", {}], ["started", { attempt: 1 }], ["meta", meta], ["succeeded", {}]]));
+      t.on("GET", `/jobs/${JOB}`, () => json(jobBody({ status: "succeeded", result: { meta, result: res(hit), done: doneEv } })));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      t.on("POST", `/cad/jobs/${JOB}/cache/reject`, () => json({ job_id: JOB, rejected: true, removed: true }));
+      let n = 0;
+      t.on("POST", "/cad/jobs", () => created(n++ === 0 ? JOB : NEXT));
+      const live = liveSse();
+      t.on("GET", `/jobs/${NEXT}/events`, ({ signal }) => live.respond(signal));
+      await startCad();
+      await waitFor(() => expect(document.body.textContent).toContain(hitLabel), { timeout: 4000 });
+      // 另一個分頁開了同一張圖紙的一般重建
+      t.on("GET", "/jobs", () => json({ items: [jobBody({ id: OTHER, status: "running", target: { part_id: "mfg-002", image_id: null } })] }));
+      fireEvent.click(screen.getByText("結果不對，重新生成"));
+      await waitFor(() => expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toHaveLength(2));
+      expect(t.calls.at(-1)?.path).not.toBe(`/jobs/${OTHER}/events`);
+      expect(t.calls.filter((c) => c.path.startsWith(`/jobs/${OTHER}`))).toEqual([]);
+      expect(t.calls.findLast((c) => c.method === "POST" && c.path === "/cad/jobs")?.body).toEqual({ part_id: "mfg-002", image_id: null, strategy: "ortho2cad", regenerate: true });
+    });
+
+    it("3D 重建頁：命中顯示沿用的結果與「結果不對，重新生成」；作廢失敗就不建立新工作", async () => {
+      const t = factoryBackend();
+      t.on("GET", `/cad/jobs/${JOB}`, () => json({ meta, result: pageRes(hit), done: doneEv }));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      t.on("GET", "/jobs", () => json({ items: [] }));
+      t.on("POST", `/cad/jobs/${JOB}/cache/reject`, () => json({ error: { code: "CAD_CACHE_NOT_APPLICABLE", message: "這個結果不在快取範圍", request_id: "r" } }, 409));
+      renderApp(`/drawings/mfg-002/reconstruct?job=${JOB}`);
+      await waitFor(() => expect(document.body.textContent).toContain(hitLabel));
+      expect(screen.queryByText("採用這個結果")).toBeNull();
+      fireEvent.click(screen.getByText("結果不對，重新生成"));
+      await waitFor(() => expect(document.body.textContent).toContain("這個結果不在快取範圍"));
+      expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toEqual([]);
+    });
+
+    it("3D 重建頁：沒有標準模型的零件，有 kb_intake 的主管才看得到「採用這個結果」，按了送 POST …/cache/adopt", async () => {
+      const t = factoryBackend();
+      const pending = { status: "not_stored", reason: "沒有標準模型可比對，要主管按「採用這個結果」才寫入", created_at: null, iou: null, candidate: { kind: "greedy", temperature: 0, seed: null }, adoptable: true, regenerable: true };
+      t.on("GET", `/cad/jobs/${JOB}`, () => json({ meta, result: { ...pageRes(pending), iou: null }, done: doneEv }));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      t.on("POST", `/cad/jobs/${JOB}/cache/adopt`, () => json({ job_id: JOB, adopted: true, created_at: CREATED_AT }));
+      t.on("GET", "/auth/accounts", () => json({ ...accounts("manager"), current: account("manager", { ops: ["kb_intake"] }) }));
+      renderApp(`/drawings/mfg-002/reconstruct?job=${JOB}`);
+      await waitFor(() => expect(document.body.textContent).toContain("沒有存成標準結果：沒有標準模型可比對"));
+      fireEvent.click(await screen.findByText("採用這個結果"));
+      await waitFor(() => expect(document.body.textContent).toContain("主管已採用，存成這張圖紙的標準結果"));
+      expect(t.calls.filter((c) => c.path === `/cad/jobs/${JOB}/cache/adopt`)).toHaveLength(1);
+      expect(screen.queryByText("採用這個結果")).toBeNull();
+    });
+
+    it("3D 重建頁：沒有 kb_intake 的身分不顯示「採用這個結果」", async () => {
+      const t = factoryBackend();
+      const pending = { status: "not_stored", reason: "沒有標準模型可比對，要主管按「採用這個結果」才寫入", created_at: null, iou: null, candidate: { kind: "greedy", temperature: 0, seed: null }, adoptable: true, regenerable: true };
+      t.on("GET", `/cad/jobs/${JOB}`, () => json({ meta, result: pageRes(pending), done: doneEv }));
+      t.on("GET", `/jobs/${JOB}/artifacts/code.py`, () => new Response("import cadquery as cq"));
+      renderApp(`/drawings/mfg-002/reconstruct?job=${JOB}`);
+      await waitFor(() => expect(document.body.textContent).toContain("沒有存成標準結果"));
+      expect(screen.queryByText("採用這個結果")).toBeNull();
+      expect(screen.getByText("結果不對，重新生成")).toBeTruthy();
+    });
   });
 
   it("排程：提前結束和取消是兩個按鈕；提前結束送 POST /schedule/stop 並帶 job_id，不是取消", async () => {

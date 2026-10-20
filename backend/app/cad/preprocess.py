@@ -11,6 +11,10 @@ from PIL import Image, ImageOps
 
 from app.cad.drawing import CANVAS
 
+# 前處理版本：改了裁切、二值化或縮放（同一張圖送進模型的像素會變）就加一，
+# 3D 重建結果快取（docs/adr/042）的 key 含這個值，舊結果自動不命中
+PREPROCESS_VERSION = 1
+
 
 def smart_resize(h: int, w: int, factor: int = 32, min_pixels: int = 784, max_pixels: int = 50176):
     """Qwen2/3-VL 影像處理器的 smart_resize：邊長取 factor 的倍數，面積落在 [min, max] 之間。"""

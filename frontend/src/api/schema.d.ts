@@ -639,6 +639,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cad/jobs/{job_id}/cache/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Cad Result
+         * @description 「結果不對」：讀得到這個工作的人都可以作廢它的程式碼（記住雜湊，之後不命中、不寫入、
+         *     不能採用），並記稽核。只適用知識庫圖紙的 Ortho2CAD 結果（docs/adr/042）；
+         *     接著用 `POST /cad/jobs`（regenerate＝true）重抽一個候選。
+         */
+        post: operations["reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cad/jobs/{job_id}/cache/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Cad Result
+         * @description 「採用這個結果」：沒有標準模型的零件（照片建檔）由主管（kb_intake）採用後才寫入結果快取，
+         *     並記稽核（docs/adr/042）。
+         */
+        post: operations["adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parts/{part_id}/reconstructions": {
         parameters: {
             query?: never;
@@ -2120,6 +2163,39 @@ export interface components {
             /** File */
             file: string;
         };
+        /** CadCacheAdopted */
+        CadCacheAdopted: {
+            /** Job Id */
+            job_id: string;
+            /** Adopted */
+            adopted: boolean;
+            /** Created At */
+            created_at: string;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
+        };
+        /** CadCacheRejected */
+        CadCacheRejected: {
+            /** Job Id */
+            job_id: string;
+            /** Rejected */
+            rejected: boolean;
+            /**
+             * Removed
+             * @description 這次有沒有把快取裡的那一筆移除
+             */
+            removed: boolean;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
+        };
         /** CadEvalRunsResponse */
         CadEvalRunsResponse: {
             /** Runs */
@@ -2145,6 +2221,12 @@ export interface components {
              * @enum {string}
              */
             strategy: "ortho2cad" | "hybrid";
+            /**
+             * Regenerate
+             * @description 結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed 產生一個新候選（docs/adr/042）
+             * @default false
+             */
+            regenerate: boolean;
         };
         /** CadJobListResponse */
         CadJobListResponse: {
@@ -6444,6 +6526,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CadJobSummary"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadCacheRejected"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadCacheAdopted"];
                 };
             };
             /** @description Client Error */

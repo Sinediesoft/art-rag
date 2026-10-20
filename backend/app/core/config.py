@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel
@@ -176,6 +176,11 @@ class Settings(BaseSettings):
     @property
     def cad_jobs_dir(self) -> Path:
         return self.data_dir / "cad"
+
+    @property
+    def cad_cache_dir(self) -> Path:
+        """3D 重建結果快取（docs/adr/042）：不在 cad_jobs_dir 底下，任何下載端點都讀不到。"""
+        return self.data_dir / "cad_cache"
 
     @property
     def uploads_dir(self) -> Path:
@@ -383,7 +388,8 @@ class ModelsConfig(BaseModel):
     strategies: dict[str, StrategySpec]
     # 工廠圖紙：以圖搜圖紙的門檻、Ortho2CAD 的 prompt 與影像大小
     drawing_retrieval: dict[str, float] = {}
-    cad: dict[str, str | float] = {}
+    # cache、resample 是 3D 重建結果快取與重抽候選（docs/adr/042），由 services/cad_cache 解析
+    cad: dict[str, Any] = {}
     # 工廠庫存 Text-to-SQL：生成上限、修正次數、回傳列數與執行逾時
     text2sql: dict[str, float] = {}
     # 生產排程（Timefold）：求解秒數、無改善提前結束秒數、進度更新間隔

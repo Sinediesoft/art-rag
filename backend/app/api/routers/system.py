@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Query, Request, Response
@@ -24,6 +25,7 @@ from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.logs_repo import get_logs_repo
 from app.repositories.production_repo import get_production_repo
 from app.services import (
+    cad_cache,
     chat_service,
     identity,
     memory_guard,
@@ -343,5 +345,8 @@ def audit_log(request: Request, limit: int = Query(default=30, ge=1, le=200)):
     要 access.yaml 的 views.audit（docs/adr/030）。"""
     account = identity.current(request)
     identity.require_view(account, "audit", "稽核紀錄")
+    # 3D 重建結果的作廢、採用：稽核資料庫故障時先存在快取的待送清單，讀之前先補送（docs/adr/042）
+    with suppress(Exception):
+        cad_cache.flush_audit()
     prod = get_production_repo()
     return {"items": prod.audit(limit), "changes": prod.changes(limit=10)}

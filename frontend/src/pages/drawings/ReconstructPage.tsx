@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, assetUrl, type CadStrategy } from "../../api/client";
-import { usePart, useStatus } from "../../api/hooks";
-import type { CadHoles, Dims } from "../../api/sse";
+import { useAccounts, usePart, useStatus } from "../../api/hooks";
+import type { CadCacheInfo, CadHoles, Dims } from "../../api/sse";
 import { ErrorMessage } from "../../components/common/Feedback";
 import { ImageUploader } from "../../components/common/ImageUploader";
 import { EgressBadge } from "../../components/common/StatusNotices";
 import { ModelViewer, type ModelLayer } from "../../components/LazyModelViewer";
 import { ConfidentialityBadge, ScoreMeter } from "../../components/parts/PartBadges";
 import { useReconstruct, type CadStatus } from "../../hooks/useReconstruct";
+import { cacheHitLabel, cacheNote } from "../../lib/cadCache";
 import { seconds } from "../../lib/format";
 import { holeStatus } from "../../lib/holes";
 
@@ -32,7 +33,8 @@ export function ReconstructPage() {
   const jobId = params.get("job");
   const part = usePart(id);
   const { data: health } = useStatus();
-  const { state, start, load, attach, cancel } = useReconstruct();
+  const { state, start, load, attach, cancel, regenerate, adopt } = useReconstruct();
+  const canAdopt = useAccounts().data?.current?.ops.includes("kb_intake") ?? false;
   const [strategy, setStrategy] = useState<CadStrategy>("ortho2cad");
   const [now, setNow] = useState(Date.now());
   const running = (["queued", "preparing", "generating", "executing"] as CadStatus[]).includes(state.status);
@@ -217,6 +219,15 @@ export function ReconstructPage() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
+          {result?.cache && state.status === "done" && (
+            <CacheCard
+              cache={result.cache}
+              canAdopt={canAdopt}
+              onAdopt={() => void adopt()}
+              // 結果不對：作廢這份程式碼，重抽一個候選（temperature＋下一個沒試過的 seed）
+              onRegenerate={() => void regenerate({ part_id: id ?? null, image_id: imageId, strategy: "ortho2cad" })}
+            />
+          )}
           <CodePanel code={code} status={state.status} model={meta?.model} files={result?.files} />
           {result && <ResultCard result={result} target={meta?.scale_to ?? null} gt={p?.geometry ?? null} />}
           {done && (
@@ -271,6 +282,41 @@ function Card({ title, children, right }: { title: string; children: ReactNode; 
       </div>
       {children}
     </section>
+  );
+}
+
+/** 結果快取（docs/adr/042）：命中顯示沿用哪一次的結果；可以否決後重新生成，沒有標準模型的由主管採用 */
+function CacheCard({
+  cache,
+  canAdopt,
+  onAdopt,
+  onRegenerate,
+}: {
+  cache: CadCacheInfo;
+  canAdopt: boolean;
+  onAdopt: () => void;
+  onRegenerate: () => void;
+}) {
+  const hit = cacheHitLabel(cache);
+  const tone = hit
+    ? "border-success/30 bg-success-soft/60 text-success"
+    : cache.status === "rejected_before"
+      ? "border-warning/30 bg-warning-soft/60 text-warning"
+      : "border-hairline bg-card text-ink-80";
+  return (
+    <div className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 text-sm ${tone}`}>
+      <span className="min-w-0 flex-1">{hit ?? cacheNote(cache)}</span>
+      {cache.adoptable && canAdopt && (
+        <button type="button" className="btn-ghost" onClick={onAdopt}>
+          採用這個結果
+        </button>
+      )}
+      {cache.regenerable && (
+        <button type="button" className="btn-ghost" onClick={onRegenerate}>
+          結果不對，重新生成
+        </button>
+      )}
+    </div>
   );
 }
 

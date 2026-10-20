@@ -268,7 +268,30 @@ export interface CadResultEvent {
   iou_bbox: number | null;
   /** 孔位校正（docs/adr/035）：OpenCV 從俯視圖找到的孔取代模型畫的垂直圓孔；舊紀錄沒有這欄 */
   holes?: CadHoles | null;
+  /** 結果快取（docs/adr/042）：只有知識庫圖紙的 Ortho2CAD 結果有；舊紀錄沒有這欄 */
+  cache?: CadCacheInfo | null;
   files: Record<string, string>;
+}
+
+/** 產生程式碼的取樣方式：greedy（temperature 0）或重抽（temperature＋seed） */
+export interface CadCandidate {
+  kind: "greedy" | "sample";
+  temperature: number;
+  seed: number | null;
+}
+
+export interface CadCacheInfo {
+  /** hit＝沿用快取的結果；stored＝通過品質閘門、存成標準結果；not_stored＝沒存（reason）；rejected_before＝這份程式碼先前被標記為不對 */
+  status: "hit" | "stored" | "not_stored" | "rejected_before";
+  reason: string | null;
+  /** hit：快取那一筆的建立時間；stored：剛寫入的時間 */
+  created_at: string | null;
+  iou: number | null;
+  candidate: CadCandidate;
+  source?: string;
+  /** 沒有標準模型、通過基本檢查：有 kb_intake 的人可以按「採用這個結果」 */
+  adoptable: boolean;
+  regenerable: boolean;
 }
 
 export interface CadHoles {
