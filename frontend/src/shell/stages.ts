@@ -137,17 +137,7 @@ export function buildStages(route: RouteResponse, mod: ModuleProgress): Stage[] 
     const judge = g.call
       ? `Jev Choice（${g.call.model}・${g.call.latency_ms} ms・外送 ${kb(g.call.bytes)} 代號化文字）`
       : `地端規則（${g.fallback_reason ? `Jev 不能用：${g.fallback_reason}；` : ""}外送 0 B）`;
-    const sc = r.short_circuit?.kind;
-    const verdict =
-      g.verdict === "attack"
-        ? `攔截：${g.reason}`
-        : sc === "navigate"
-          ? "切換模組 → 快速短路回覆，不檢索、不生成"
-          : sc === "catalog"
-            ? "知識庫目錄 → 直接列出，不檢索、不生成"
-            : g.verdict === "chitchat"
-              ? "無關閒聊 → 快速短路回覆，不檢索、不生成"
-              : "正常查詢 → 進入檢索";
+    const verdict = g.verdict === "attack" ? `攔截：${g.reason}` : g.verdict === "chitchat" ? "無關閒聊 → 快速短路回覆，不檢索、不生成" : "正常查詢 → 進入檢索";
     out.push(
       stage("guard", !g.passed ? "block" : g.verdict === "chitchat" || g.checks.some((c) => c.warn) || g.fallback_reason ? "warn" : "ok", `${photo}${routed}${pii}；${judge} → ${verdict}`, {
         checks: g.checks,
@@ -389,18 +379,11 @@ export function gatewayStages(code: string, message: string): Stage[] {
   return [stage("auth", "block", `API 閘道拒絕連線（401 ${code}）：${message}`), ...rest("guard", "skip", "請求被閘道擋下，沒有碰到任何模型與資料")];
 }
 
-// 快速短路回覆是哪一種（目錄題、切換模組原本也都寫成「無關閒聊」）
-const SHORT_TEXT: Record<string, string> = {
-  chitchat: "無關閒聊 → 快速短路回覆",
-  catalog: "知識庫目錄 → 直接列出",
-  navigate: "切換模組 → 快速短路回覆",
-};
-
 export function summaryOf(route: RouteResponse, mod: ModuleProgress) {
   const b = route.blocked;
   if (b?.degraded) return "降級回應：查無資料";
   if (b) return `${b.stage === 1 ? "認證與授權" : "Jev Choice"}擋下：${b.rule}・已記錄 ${b.log_no}`;
-  if (route.outcome === "short_circuit") return SHORT_TEXT[route.short_circuit?.kind ?? "chitchat"];
+  if (route.outcome === "short_circuit") return "無關閒聊 → 快速短路回覆";
   if (route.gate === "clarify") return "要做什麼不確定 → 請你選";
   const pf = mod.sources?.post_filter;
   if (pf?.gate && !pf.gate.passed) return `${route.intent_label}・生成閘門：查無資料`;

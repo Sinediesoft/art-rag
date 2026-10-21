@@ -1104,7 +1104,7 @@
     display: none;
   }
 }
-@container wbb (max-height: 300px) or (max-width: 380px) {
+@container wbb (max-height: 300px), (max-width: 380px) {
   .wb-panel .view--stock .view__section--chart {
     display: none;
   }
