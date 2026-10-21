@@ -46,6 +46,11 @@ from app.services.intake_service import purge_drafts
 async def lifespan(app: FastAPI):
     setup_logging()
     s = get_settings()
+    # 弱金鑰等於沒有簽章：任何人拿自己的憑證就能離線猜出來，所以寧可不啟動
+    if problem := identity.secret_problem(s.jwt_secret):
+        log.error(f"拒絕啟動：{problem}")
+        print(f"\n[ArtRAG] 拒絕啟動：{problem}\n", file=sys.stderr)
+        raise SystemExit(1)
     # 一致性保護：索引與模型版本不符就拒絕啟動
     try:
         get_store().load()

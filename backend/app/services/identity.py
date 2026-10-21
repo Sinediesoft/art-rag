@@ -185,6 +185,24 @@ class Auth:
         }
 
 
+SECRET_MIN_LEN = 32
+SECRET_MIN_DISTINCT = 10
+
+
+def secret_problem(secret: str) -> str | None:
+    """JWT_SECRET 的強度檢查；None＝可以用（留空＝每次啟動隨機產生，也可以）。
+    任何人都拿得到一般員工的憑證，弱金鑰可以拿它離線猜出來，再自己簽主管的憑證。"""
+    if not secret:
+        return None
+    if len(secret) < SECRET_MIN_LEN or len(set(secret)) < SECRET_MIN_DISTINCT:
+        return (
+            f"JWT_SECRET 太弱（要至少 {SECRET_MIN_LEN} 個字元、"
+            f"{SECRET_MIN_DISTINCT} 種以上不同字元）。可以留空（每次啟動隨機產生），或用 "
+            '`python -c "import secrets; print(secrets.token_urlsafe(32))"` 產生一組'
+        )
+    return None
+
+
 @lru_cache
 def _secret() -> str:
     # 留空＝每次啟動隨機產生：後端重啟後舊憑證全部失效（前端自動改回一般員工）
@@ -322,10 +340,23 @@ def client_host(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
+def host_name(request: Request) -> str:
+    """請求的 Host 標頭（不含埠號、IPv6 不含方括號）。"""
+    return (request.url.hostname or "").lower()
+
+
+def trusted_source(request: Request) -> bool:
+    """展示與評估模式的來源檢查：來源 IP 和 Host 標頭都要在信任清單。"""
+    s = get_settings()
+    return (
+        client_host(request) in s.demo_trusted_hosts
+        and host_name(request) in s.demo_trusted_host_names
+    )
+
+
 def demo_allowed(request: Request) -> bool:
     """展示模式：人在 .env 開了 DEMO_CONTROLS，而且請求來自信任的主機（預設只有本機 loopback）。"""
-    s = get_settings()
-    return s.demo_controls and client_host(request) in s.demo_trusted_hosts
+    return get_settings().demo_controls and trusted_source(request)
 
 
 def require_demo(request: Request, what: str) -> None:
@@ -335,12 +366,17 @@ def require_demo(request: Request, what: str) -> None:
         raise AppError("FORBIDDEN", f"展示模式已停用（DEMO_CONTROLS=false），不能{what}", 403)
     if client_host(request) not in s.demo_trusted_hosts:
         raise AppError("FORBIDDEN", f"展示模式只接受本機的請求，不能從這台主機{what}", 403)
+    if host_name(request) not in s.demo_trusted_host_names:
+        raise AppError(
+            "FORBIDDEN",
+            f"展示模式只接受用本機網址（例如 localhost）開啟的頁面，不能從這個網址{what}",
+            403,
+        )
 
 
 def eval_allowed(request: Request) -> bool:
     """評估模式（EVAL_CONTROLS）：engine=local、關檢索、strategy=mock 這類對照組選項才會生效。"""
-    s = get_settings()
-    return s.eval_controls and client_host(request) in s.demo_trusted_hosts
+    return get_settings().eval_controls and trusted_source(request)
 
 
 def switch(request: Request, response: Response, account_id: str) -> Auth:

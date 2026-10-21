@@ -246,6 +246,28 @@ def test_switch_refused_from_an_untrusted_host(monkeypatch):
         assert client_as("manager").post(path, json=body).status_code == 403
 
 
+def test_switch_refused_when_the_host_header_is_not_local(monkeypatch):
+    """已重現：來源是本機，但 Host 是別的網域（DNS rebinding、本機代理轉來的請求）時，
+    照樣能不用密碼換成主管。現在來源 IP 與 Host 都要在信任清單。"""
+    monkeypatch.setattr(get_settings(), "eval_controls", True)
+    monkeypatch.setattr(
+        get_settings(), "demo_trusted_host_names", ["localhost", "127.0.0.1", "::1"]
+    )
+    fresh = TestClient(app)
+    evil = {"Host": "evil.example.com:8000"}
+    me = fresh.get("/api/v1/auth/accounts", headers=evil).json()
+    assert me["demo_controls"] is False
+    r = fresh.post("/api/v1/auth/switch", json={"account_id": "manager"}, headers=evil)
+    assert r.status_code == 403 and "localhost" in r.json()["error"]["message"]
+    assert "set-cookie" not in r.headers
+    assert fresh.get("/api/v1/admin/diagnostics", headers=evil).status_code == 403
+    for host in ("localhost:5173", "127.0.0.1:8000", "[::1]:8000"):
+        r = fresh.post(
+            "/api/v1/auth/switch", json={"account_id": "manager"}, headers={"Host": host}
+        )
+        assert r.status_code == 200, host
+
+
 # ================================================================ 第 1 段：診斷資料與紀錄
 def test_public_health_only_reports_liveness_and_readiness(client, all_chunks, spies):
     secret_q = "請問谿山行旅圖用了什麼皴法？（合成測試問句 Z9K）"

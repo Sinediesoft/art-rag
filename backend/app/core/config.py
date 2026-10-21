@@ -105,6 +105,9 @@ class Settings(BaseSettings):
     # 開啟後也只接受 demo_trusted_hosts 來的請求（預設只有本機 loopback）。不可用於正式環境
     demo_controls: bool = False
     demo_trusted_hosts: list[str] = ["127.0.0.1", "::1"]
+    # 請求的 Host 標頭（不含埠號）也要在這裡：只看來源 IP 的話，DNS rebinding（惡意網頁把自己的網域
+    # 解析到 127.0.0.1）與本機反向代理轉來的請求都會被當成本機
+    demo_trusted_host_names: list[str] = ["localhost", "127.0.0.1", "::1"]
 
     # 評估模式（docs/adr/030）：只有開啟時，請求才能指定 engine=local、use_retrieval=false、
     # strategy=mock 這類「對照組」選項，而且一樣只接受 demo_trusted_hosts 來的請求。

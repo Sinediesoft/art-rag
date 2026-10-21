@@ -1,10 +1,13 @@
 """七段權限控管第 1 段（docs/adr/015）：API 閘道驗 JWT。沒帶、簽章不符、過期、alg 不對都是 401，
 請求碰不到任何模型與資料；簽章不符（竄改、偽造）寫進拒絕並記錄。"""
 
+import asyncio
 import base64
 import json
+import secrets
 import time
 
+import pytest
 from conftest import DEFAULT_ACCOUNT, as_account
 from fastapi.testclient import TestClient
 
@@ -35,6 +38,8 @@ def test_jwt_roundtrip_and_rejections():
             "TOKEN_INVALID",
         ),
         ("not-a-jwt", "TOKEN_INVALID"),
+        # 簽章放非 ASCII：之前 compare_digest 丟 TypeError，閘道回 500
+        (f"{token.rsplit('.', 1)[0]}.é", "TOKEN_INVALID"),
     ]:
         try:
             jwt.decode(bad, secret, "art-rag")
@@ -42,6 +47,37 @@ def test_jwt_roundtrip_and_rejections():
             assert e.code == code, bad
         else:
             raise AssertionError(f"應該拒絕：{bad}")
+
+
+def test_non_ascii_signature_is_a_401_not_a_500():
+    fresh = TestClient(app, raise_server_exceptions=False)
+    token = fresh.get("/api/v1/auth/accounts").json()["token"]["unsigned"]
+    r = fresh.get(
+        "/api/v1/status",
+        headers={"Authorization": f"Bearer {token}.é".encode("latin-1")},
+    )
+    assert r.status_code == 401 and r.json()["error"]["code"] == "TOKEN_INVALID"
+
+
+def test_weak_jwt_secret_is_refused():
+    assert identity.secret_problem("") is None  # 留空＝每次啟動隨機產生
+    assert identity.secret_problem(secrets.token_urlsafe(32)) is None
+    for weak in ("secret", "changeme-please", "a" * 64, "ab" * 20):
+        assert "JWT_SECRET" in identity.secret_problem(weak), weak
+
+
+def test_backend_refuses_to_start_with_a_weak_jwt_secret(monkeypatch):
+    from app.core.config import get_settings
+    from app.main import lifespan
+
+    async def start():
+        async with lifespan(app):
+            pass
+
+    monkeypatch.setattr(get_settings(), "jwt_secret", "secret")
+    # 直接跑 lifespan：TestClient 會把啟動失敗變成 CancelledError，看不出原因
+    with pytest.raises(SystemExit):
+        asyncio.run(start())
 
 
 def test_requests_without_a_token_are_refused_at_the_gateway(client):

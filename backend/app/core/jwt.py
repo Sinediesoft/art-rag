@@ -76,7 +76,8 @@ def decode(token: str, secret: str, issuer: str, now: float | None = None) -> di
         raise TokenError("TOKEN_INVALID", f"不接受的簽章演算法：{header.get('alg')}（只收 {ALG}）")
     if header.get("kid") != key_id(secret):
         raise TokenError("TOKEN_STALE", "身分憑證是舊的簽章金鑰簽發的（後端重啟過），請重新取得")
-    if not hmac.compare_digest(sig, _sign(f"{head}.{body}", secret)):
+    # compare_digest 遇到非 ASCII 字串會丟 TypeError（變成 500、不記錄）；這種簽章一定不是本系統簽的
+    if not sig.isascii() or not hmac.compare_digest(sig, _sign(f"{head}.{body}", secret)):
         raise TokenError("TOKEN_INVALID", "身分憑證的簽章不符（內容被改過或不是本系統簽發）")
     if not isinstance(claims.get("exp"), int | float) or (now or time.time()) >= claims["exp"]:
         raise TokenError("TOKEN_EXPIRED", "身分憑證已過期，請重新取得")

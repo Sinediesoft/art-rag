@@ -22,7 +22,9 @@ def mock_env(tmp_path_factory):
     # 排程用簡易排程（不連 Timefold 服務）；記憶體管理關掉，避免測試時卸載開發者本機的模型
     # Jev 金鑰清空：開發者本機 .env 填了金鑰也不會真的呼叫 Jev（要測 Jev 的用 httpx.MockTransport）
     # 展示模式：程式預設關閉（docs/adr/030），測試要切換身分所以明確開啟，
-    # 信任 TestClient 的主機名稱；評估模式維持關閉（要測的測試自己開）
+    # 信任 TestClient 的來源（testclient）與 Host（testserver）；
+    # 評估模式維持關閉（要測的測試自己開）
+    # JWT_SECRET 清空：開發者本機 .env 填了太短的金鑰時，後端會拒絕啟動，整套測試都跑不了
     os.environ.update(
         {
             "EMBED_MODE": "mock",
@@ -35,7 +37,9 @@ def mock_env(tmp_path_factory):
             "REARRANGE": "false",
             "DEMO_CONTROLS": "true",
             "DEMO_TRUSTED_HOSTS": '["testclient"]',
+            "DEMO_TRUSTED_HOST_NAMES": '["testserver"]',
             "EVAL_CONTROLS": "false",
+            "JWT_SECRET": "",
         }
     )
     from app.core import config

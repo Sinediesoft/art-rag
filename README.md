@@ -241,7 +241,8 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 ### 智慧助理：七段權限控管＋權限與主管核准（約 5 分鐘）
 
 **先在 `.env` 設 `DEMO_CONTROLS=true`**（預設關閉，docs/adr/030）：切換身分不用密碼，所以只在展示模式、本機（`DEMO_TRUSTED_HOSTS`）、
-而且已經有憑證時開放，頁首會標「展示模式・不可用於正式環境」。從別台電腦（例如手機）展示時，把那台的位址加進 `DEMO_TRUSTED_HOSTS`。
+而且已經有憑證時開放，頁首會標「展示模式・不可用於正式環境」。從別台電腦（例如手機）展示時，把那台的位址加進 `DEMO_TRUSTED_HOSTS`，
+再把手機開的網址的主機名稱（例如 `192.168.1.20`）加進 `DEMO_TRUSTED_HOST_NAMES`（預設只有 `localhost`、`127.0.0.1`、`::1`）。
 入口首頁的「試試防護架構」與「展示腳本」按鈕會自動切換身分並送出（展示腳本只有展示模式才出現）；
 也可以在右上角的身分選單手動切換，對話裡會留一行「已切換身分為〈…〉」，其他身分查到的內部資料會收起來。
 系統狀態頁（最近的問答、SQL、路由紀錄、模型端點）、拒絕並記錄、稽核紀錄只有主管看得到。
@@ -272,7 +273,7 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 | 34 | 拒絕並記錄 | 問「最近擋下了哪些請求？」，或首頁（還沒開始對話時）最下方「拒絕並記錄」 | 今天第 1 段（憑證無效、角色不符）、第 2 段 Jev Choice 擋下幾筆、第 4 段剔除幾段洩密段落；只存遮蔽個資後的文字 |
 
 Jev 金鑰在 `.env` 的 `JEV_API_KEY`；沒金鑰、斷網、逾時（1.5 秒）或 Jev 回錯誤時第 2、4～6 段改用地端規則，其他功能照常。
-JWT 的簽章金鑰在 `.env` 的 `JWT_SECRET`（留空＝每次啟動隨機產生，後端重啟後前端自動改回一般員工）；直接打 API 時先
+JWT 的簽章金鑰在 `.env` 的 `JWT_SECRET`（留空＝每次啟動隨機產生，後端重啟後前端自動改回一般員工；要填的話至少 32 個字元、10 種以上不同字元，否則拒絕啟動）；直接打 API 時先
 `POST /api/v1/auth/switch` 取得憑證（cookie），或帶 `Authorization: Bearer <JWT>`。
 
 3D 重建一次約 45–130 秒。展示前先跑一次 `make eval-cad`，現場可在圖紙頁「最近的 3D 重建」直接開啟結果，
