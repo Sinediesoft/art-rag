@@ -14,7 +14,8 @@
 外洩檢查：和 eval/qa*.jsonl 全部題目比字元 3-gram Jaccard，超過 0.5 的刪掉。不用 eval/photos/。
 
 輸出到 data/lora/（不進 Git）：train.jsonl、valid.jsonl、review.jsonl（給組員 D 抽查兩成）、
-report.json（各類數量、外洩檢查結果）、images/。
+select.jsonl（eval/qa.jsonl 的 dev 題，挑 epoch 用）、report.json（各類數量、外洩檢查結果）、
+images/。
 
 用法：
     python pipelines/make_lora_data.py
@@ -258,6 +259,22 @@ def forget_terms(eval_dir: Path = EVAL) -> set[str]:
     return terms
 
 
+def selection_samples(artworks: list[dict], out: Path, eval_dir: Path = EVAL) -> list[dict]:
+    """eval/qa.jsonl 的 dev 題（知識庫內的畫作）：挑 epoch 用，格式和訓練樣本相同、沒有答案。
+
+    dev 只用來挑 epoch，test 只在 make eval-lora 跑一次。"""
+    by_id = {a["id"]: a for a in artworks}
+    rows = []
+    for line in (eval_dir / "qa.jsonl").read_text("utf-8").splitlines():
+        q = json.loads(line) if line.strip() else None
+        if not q or q["split"] != "dev" or q.get("artwork_id") not in by_id:
+            continue
+        a = by_id[q["artwork_id"]]
+        s = make_sample("select", q["question"], "", a, training_image(a, out), out)
+        rows.append({**s, "id": q["id"], "messages": s["messages"][:2], "keywords": q["keywords"]})
+    return rows
+
+
 # ---------------------------------------------------------------- 地端模型
 
 
@@ -416,7 +433,8 @@ def main() -> int:
     n_valid = max(1, round(len(kept) * args.valid_frac)) if len(kept) > 1 else 0
     valid, train = kept[:n_valid], kept[n_valid:]
     review = rng.sample(kept, max(1, round(len(kept) * args.review_frac))) if kept else []
-    for name, rows in (("train", train), ("valid", valid), ("review", review)):
+    select = selection_samples(artworks, out)
+    for name, rows in (("train", train), ("valid", valid), ("review", review), ("select", select)):
         with (out / f"{name}.jsonl").open("w", encoding="utf-8") as f:
             for s in rows:
                 f.write(json.dumps(s, ensure_ascii=False) + "\n")
@@ -432,6 +450,7 @@ def main() -> int:
         "train": len(train),
         "valid": len(valid),
         "review": len(review),
+        "select": len(select),
         "leak": leak,
     }
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")

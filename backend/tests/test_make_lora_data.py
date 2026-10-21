@@ -87,6 +87,20 @@ def test_refusal_answer_is_fixed(artwork, tmp_path):
     assert s["messages"][-1]["content"] == "知識庫中沒有這方面的資料。"
 
 
+def test_selection_set_is_dev_questions_in_training_format_without_answers(tmp_path):
+    artworks = {a["id"]: a for a in mld.load_artworks()}
+    lines = (REPO_ROOT / "eval" / "qa.jsonl").read_text("utf-8").splitlines()
+    dev = [q for q in map(json.loads, lines) if q["split"] == "dev" and q["artwork_id"] in artworks]
+    rows = mld.selection_samples(list(artworks.values()), tmp_path)
+
+    assert [r["id"] for r in rows] == [q["id"] for q in dev]
+    for r, q in zip(rows, dev, strict=True):
+        image = (tmp_path / r["images"][0]).read_bytes()
+        expected = build_messages(q["question"], artworks[q["artwork_id"]], [], image, False)
+        assert mld.as_inference_messages(r, tmp_path) == expected  # 沒有 assistant 回答
+        assert r["keywords"] == q["keywords"]
+
+
 def test_fact_answers_end_with_the_no_source_mark():
     assert mld.with_no_source_mark("用了雨點皴 [1]。") == "用了雨點皴。 [0]"
 
