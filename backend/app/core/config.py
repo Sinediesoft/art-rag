@@ -73,8 +73,9 @@ class Settings(BaseSettings):
     laya_base_url: str = "http://127.0.0.1:8888/v1"
     laya_model: str = "laya"
     laya_api_key: str = ""
-    # 第一次請求要載入模型（實測 3.9 秒），之後約 0.2 秒
-    laya_timeout_s: float = 5.0
+    # 第一次請求要載入模型（實測 3.9 秒），之後第 2、6 段約 0.2～0.5 秒；第 4 段一次問 8～10 題
+    # 要 3.4～6.5 秒（第四版盲測 p50 4.4 秒），5 秒會讓 1/4 的請求逾時、段落全部剔除
+    laya_timeout_s: float = 8.0
 
     lora_enabled: bool = False
     lora_base_url: str = "http://localhost:11434/v1"

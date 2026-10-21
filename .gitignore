@@ -13,3 +13,4 @@ compose.override.yml
 scheduler/.maven/
 scheduler/target/
 scheduler/.java-home
+.webtoagent/

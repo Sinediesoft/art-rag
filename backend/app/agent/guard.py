@@ -1010,11 +1010,11 @@ async def process_passages(
     th = float(g["jev_threshold"])
     n = len(sources)
     pid = {s["chunk_id"]: f"p{i + 1}" for i, s in enumerate(sources)}
-    # [laya測試] 地端規則註解：洩密改由 Jev／Laya 的 security_leak_check 判斷。
-    # 要恢復就取消註解、刪掉下一行
-    # # 沒標等級的段落當機密（預設不允許）
-    # leak_by_rule = {s["chunk_id"]: local_leak(s["text"], s.get("level", "機密")) for s in sources}
-    leak_by_rule: dict[str, str | None] = {s["chunk_id"]: None for s in sources}
+    # [laya測試] 2026-10-15 恢復第 4 段的地端洩密規則（開發/laya測試-開發日誌.md 2026-10-15-08）：
+    # 第四版 Laya 的 security_leak_check 幾乎都判「沒風險」，規則命中就剔除，Laya 只能再「增加」剔除
+    # （下面的 leaked()）。要再拿掉就把下一行註解，改成 {s["chunk_id"]: None for s in sources}。
+    # 沒標等級的段落當機密（預設不允許）
+    leak_by_rule = {s["chunk_id"]: local_leak(s["text"], s.get("level", "機密")) for s in sources}
     # [laya測試] 公開段落可以送雲端 Jev（叫不到改問 Laya）；內部、機密段落、沒有 Jev 金鑰、
     # mode＝local 時只送本機 Laya（Laya 不出廠，送遮蔽個資後的原文，不必代號化）
     cloud_ok = mode == "jev" and jev.jev_status()[0]
