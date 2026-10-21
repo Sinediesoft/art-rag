@@ -3763,6 +3763,13 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** NavigatePage */
+        NavigatePage: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+        };
         /** OkResponse */
         OkResponse: {
             /**
@@ -5084,6 +5091,8 @@ export interface components {
              * @description navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null
              */
             module?: ("factory" | "art") | null;
+            /** @description navigate：要打開的功能頁（「打開待核准清單」） */
+            page?: components["schemas"]["NavigatePage"] | null;
         };
         /** SkippedWorkOrder */
         SkippedWorkOrder: {
