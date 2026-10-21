@@ -236,6 +236,34 @@ def test_ask_hides_confidential_parts_from_sales(client):
         as_account(client, "manager")
 
 
+def test_fixed_queries_hide_confidential_parts_from_sales(client, repo):
+    """庫存總覽與單一零件明細（固定查詢）和 Text-to-SQL 用同一個機密等級規則：
+    之前業務在圖紙頁看不到的零件，在庫存頁看得到品名、成本、儲位、訂單與客戶。"""
+    from conftest import as_account
+
+    secret = {
+        r["part_id"]
+        for r in repo._query("SELECT part_id FROM parts WHERE confidentiality = '機密'")
+    }
+    assert secret
+    some = sorted(secret)[0]
+    name = repo.query("SELECT name FROM parts WHERE part_id = ?", (some,))[0]["name"]
+    as_account(client, "sales")
+    try:
+        items = client.get("/api/v1/inventory/overview").json()["items"]
+        assert items and not {it["part_id"] for it in items} & secret
+        r = client.get(f"/api/v1/inventory/parts/{some}")
+        assert r.status_code == 403 and r.json()["error"]["code"] == "DATA_SCOPE_DENIED"
+        assert name not in r.text
+        assert client.get("/api/v1/inventory/parts/nope-1").status_code == 404
+        as_account(client, "warehouse")  # 看得到機密的身分照舊
+        items = client.get("/api/v1/inventory/overview").json()["items"]
+        assert secret <= {it["part_id"] for it in items}
+        assert client.get(f"/api/v1/inventory/parts/{some}").status_code == 200
+    finally:
+        as_account(client, "manager")
+
+
 def test_date_scope_note():
     sql = "SELECT -SUM(qty) FROM stock_moves WHERE moved_on BETWEEN '2026-08-01' AND '2026-08-31'"
     note = text2sql.date_scope_note("上個月一共報廢了多少件？", sql, "2026-09-30")

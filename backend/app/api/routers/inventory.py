@@ -35,9 +35,10 @@ def inventory_schema(request: Request):
 
 @router.get("/inventory/overview", response_model=S.InventoryOverviewResponse, tags=["inventory"])
 def inventory_overview(request: Request):
-    identity.require_domain(identity.current(request), "factory")
+    account = identity.current(request)
+    identity.require_domain(account, "factory")
     repo = get_inventory_repo()
-    items = repo.overview()
+    items = repo.overview(account.levels)
     return {"as_of": repo.as_of, "company": repo.manifest.get("company", ""), "items": items}
 
 
@@ -46,7 +47,16 @@ def part_inventory(request: Request, part_id: str = Path(pattern=ID_PATTERN)):
     """單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。"""
     account = identity.current(request)
     identity.require_domain(account, "factory")
-    data = get_inventory_repo().part_inventory(part_id)
+    repo = get_inventory_repo()
+    found = repo.query("SELECT confidentiality FROM parts WHERE part_id = ?", (part_id,))
+    # 機密等級和 /inventory/ask 一樣只看 levels；訊息不寫品名與等級（同 identity.require_part）
+    if found and not account.can_see(found[0]["confidentiality"]):
+        raise AppError(
+            "DATA_SCOPE_DENIED",
+            f"目前身分「{account.label}」看不到這張圖紙（{account.scope_note}）。",
+            403,
+        )
+    data = repo.part_inventory(part_id)
     if not data:
         raise AppError("PART_NOT_FOUND", f"庫存資料庫中沒有圖紙 {part_id}", 404)
     access_audit.record(

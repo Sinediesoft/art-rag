@@ -642,17 +642,25 @@ class InventoryRepo:
             ),
         }
 
-    def overview(self) -> list[dict]:
+    def overview(self, levels: tuple[str, ...] | None = None) -> list[dict]:
+        """levels：這個身分看得到的機密等級；None＝不限（程式內部呼叫）。
+        和 Text-to-SQL 的 _scoped_copy 同一個規則：業務在圖紙頁看不到的零件，總覽也不列。"""
+        where, params = "", ()
+        if levels is not None:
+            where = f"WHERE p.confidentiality IN ({','.join('?' * len(levels))})"
+            params = tuple(levels)
         return self._query(
-            """SELECT v.part_id, v.part_no, v.name, p.unit, p.std_cost_twd, v.available, v.reserved,
-                 v.inspecting, v.defective, v.on_hand, v.safety_stock,
+            f"""SELECT v.part_id, v.part_no, v.name, p.unit, p.std_cost_twd, v.available,
+                 v.reserved, v.inspecting, v.defective, v.on_hand, v.safety_stock,
                  COALESCE((SELECT SUM(qty - qty_shipped) FROM sales_orders o
                            WHERE o.part_id = v.part_id AND o.status != '已出貨'), 0) AS open_demand,
                  COALESCE((SELECT SUM(qty_planned - qty_done) FROM work_orders w
                            WHERE w.part_id = v.part_id AND w.status != '已完工'), 0)
                    AS in_production
                FROM v_part_stock v JOIN parts p ON p.part_id = v.part_id
-               ORDER BY v.part_id"""
+               {where}
+               ORDER BY v.part_id""",
+            params,
         )
 
     def part_inventory(self, part_id: str) -> dict | None:
