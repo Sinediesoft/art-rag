@@ -21,8 +21,11 @@ class Settings(BaseSettings):
     embed_mode: Literal["real", "mock"] = "real"
     embed_device: str = "cpu"  # 查詢 embedding 一律 CPU，各平台結果一致
 
-    # 各策略一組 OpenAI 相容設定；model 留空就用 shared/models.yaml 的 default_model
-    hybrid_base_url: str = "http://localhost:11434/v1"
+    # 各策略一組 OpenAI 相容設定；model 留空就用 shared/models.yaml 的 default_model。
+    # 本機服務一律寫 127.0.0.1 不寫 localhost：Windows 解析 localhost 會先試 IPv6 ::1，
+    # 服務只聽 127.0.0.1 時每個請求多等 0.2～0.5 秒；/status 一次探測好幾個服務，
+    # 累積成 5 秒以上（5070 Ti 主機實測）
+    hybrid_base_url: str = "http://127.0.0.1:11434/v1"
     hybrid_model: str = ""
     hybrid_api_key: str = "ollama"
 
@@ -39,7 +42,7 @@ class Settings(BaseSettings):
     api_key: str = ""
 
     # 工廠圖紙 3D 重建：Ortho2CAD（llama.cpp 的 llama-server，OpenAI 相容介面；make ortho2cad 啟動）
-    ortho2cad_base_url: str = "http://localhost:8081/v1"
+    ortho2cad_base_url: str = "http://127.0.0.1:8081/v1"
     ortho2cad_model: str = ""
     ortho2cad_api_key: str = "none"
     # Windows 主機在 WSL2 執行模型產生的 CadQuery 程式碼（docs/adr/027）：
@@ -50,7 +53,7 @@ class Settings(BaseSettings):
 
     # 生產排程：Timefold Solver 排程服務（make scheduler 啟動，只聽本機）；
     # 連不上時改用簡易排程（交期優先派工）。mock＝一律用簡易排程（CI、沒有 Java 的電腦）
-    scheduler_base_url: str = "http://localhost:8082"
+    scheduler_base_url: str = "http://127.0.0.1:8082"
     scheduler_mode: Literal["real", "mock"] = "real"
 
     # 記憶體管理：系統記憶體使用率超過門檻時，釋放目前流程用不到的模型（services/memory_guard.py）
@@ -69,7 +72,7 @@ class Settings(BaseSettings):
     jev_timeout_s: float = 1.5
 
     lora_enabled: bool = False
-    lora_base_url: str = "http://localhost:11434/v1"
+    lora_base_url: str = "http://127.0.0.1:11434/v1"
     lora_model: str = ""
     lora_api_key: str = "ollama"
 
