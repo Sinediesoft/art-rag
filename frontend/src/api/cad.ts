@@ -11,6 +11,10 @@ export const cadApi = {
   },
   /** 已完成的 3D 重建（含舊的、不是背景工作產生的結果） */
   cadJob: (jobId: string) => request<Schemas["CadJobSummary"]>(`/cad/jobs/${encodeURIComponent(jobId)}`),
+  /** 結果不對：作廢這個工作的程式碼（之後不命中、不寫入、不能採用；docs/adr/042），接著用 regenerate 重抽 */
+  rejectCadResult: (jobId: string) => request<Schemas["CadCacheRejected"]>(`/cad/jobs/${encodeURIComponent(jobId)}/cache/reject`, json({})),
+  /** 採用這個結果：沒有標準模型的零件由主管（kb_intake）寫入結果快取 */
+  adoptCadResult: (jobId: string) => request<Schemas["CadCacheAdopted"]>(`/cad/jobs/${encodeURIComponent(jobId)}/cache/adopt`, json({})),
   partReconstructions: (id: string) => request<Schemas["CadJobListResponse"]>(`/parts/${encodeURIComponent(id)}/reconstructions`),
   cadEvalRuns: () => request<Schemas["CadEvalRunsResponse"]>("/eval/cad-runs"),
 };

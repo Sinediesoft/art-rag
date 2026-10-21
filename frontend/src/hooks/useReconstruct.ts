@@ -26,6 +26,8 @@ export interface CadState {
   cached: boolean;
 }
 
+const failure = (e: unknown): ErrorEvent => ({ code: (e as { code?: string }).code ?? "ERROR", message: (e as Error).message, request_id: "" });
+
 const initial: CadState = {
   status: "idle",
   meta: null,
@@ -102,6 +104,42 @@ export function useReconstruct() {
     }
   }, []);
 
+  /**
+   * 結果不對，重新生成（docs/adr/042）：先作廢畫面上這個結果的程式碼（之後不命中、不寫入、不能採用），
+   * 再建立 regenerate 工作——不查快取，用 temperature＋下一個沒試過的 seed 產生一個新候選
+   */
+  const regenerate = useCallback(
+    async (body: ReconstructRequest) => {
+      const id = state.jobId;
+      if (id) {
+        try {
+          await api.rejectCadResult(id);
+        } catch (e) {
+          setState((s) => ({ ...s, error: failure(e) }));
+          return;
+        }
+      }
+      follow({ part_id: body.part_id, image_id: body.image_id, strategy: body.strategy, regenerate: true });
+    },
+    [state.jobId, follow],
+  );
+
+  /** 採用這個結果：沒有標準模型的零件由主管（kb_intake）寫入結果快取 */
+  const adopt = useCallback(async () => {
+    const id = state.jobId;
+    if (!id) return;
+    try {
+      const r = await api.adoptCadResult(id);
+      setState((s) =>
+        s.result?.cache
+          ? { ...s, result: { ...s.result, cache: { ...s.result.cache, status: "stored", source: "adopted", adoptable: false, reason: null, created_at: r.created_at } } }
+          : s,
+      );
+    } catch (e) {
+      setState((s) => ({ ...s, error: failure(e) }));
+    }
+  }, [state.jobId]);
+
   /** 取消背景工作（POST /jobs/{id}/cancel）：worker 停止、不發布任何產物；畫面等「已取消」事件 */
   const cancel = useCallback(async () => {
     const id = state.jobId;
@@ -109,11 +147,11 @@ export function useReconstruct() {
     try {
       await api.cancelJob(id);
     } catch (e) {
-      setState((s) => ({ ...s, error: { code: (e as { code?: string }).code ?? "ERROR", message: (e as Error).message, request_id: "" } }));
+      setState((s) => ({ ...s, error: failure(e) }));
     }
   }, [state.jobId]);
 
   // 元件卸載（離開頁面、切換身分時功能頁重建）只停止訂閱：工作照常在 worker 執行，舊身分的結果不再接收
   useEffect(() => () => abortRef.current?.abort(), []);
-  return { state, start, load, attach, cancel };
+  return { state, start, load, attach, cancel, regenerate, adopt };
 }

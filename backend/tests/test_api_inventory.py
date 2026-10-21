@@ -96,6 +96,9 @@ NEW = [
     ("POST", "/api/v1/jobs/{job_id}/cancel"),
     ("GET", "/api/v1/jobs/{job_id}/artifacts/{name}"),
     ("PUT", "/api/v1/images/{image_id}/acl"),
+    # 3D 重建結果快取（TASK-20261014-002，docs/adr/042）：作廢、採用
+    ("POST", "/api/v1/cad/jobs/{job_id}/cache/reject"),
+    ("POST", "/api/v1/cad/jobs/{job_id}/cache/adopt"),
 ]
 
 

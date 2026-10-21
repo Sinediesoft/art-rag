@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api, ApiError } from "../../api/client";
 import type { Copy } from "../../shell/design";
 import { preprocessImage } from "../../lib/image";
@@ -17,6 +17,7 @@ export function Composer({
   autoFocus,
   locked,
   resetKey,
+  extra,
 }: {
   busy: boolean;
   onSend: (text: string, imageId: string | null) => void;
@@ -28,6 +29,8 @@ export function Composer({
   /** 已確認的帳號 id：換成另一個帳號就放掉附加的照片（上傳的照片只有擁有者與被授權的帳號能用）；
    * 確認前（null）不動，剛打開頁面確認身分不會清掉剛附的照片 */
   resetKey?: string | null;
+  /** 附照片旁邊多放的按鈕（藝術模組的「圖片建檔」） */
+  extra?: ReactNode;
 }) {
   const [text, setText] = useState("");
   const [imageId, setImageId] = useState<string | null>(null);
@@ -119,6 +122,7 @@ export function Composer({
             {uploading ? <span className="spinner" aria-hidden /> : <Icon name="plus" strokeWidth={2} />}
             <span className="composer__attach-label">{uploading ? "上傳中…" : copy.attachLabel}</span>
           </button>
+          {extra}
           <span className="composer__hint">Enter 送出・Shift+Enter 換行</span>
           {busy ? (
             <button type="button" className="composer__send is-stop" onClick={onStop} title="停止" aria-label="停止">

@@ -219,6 +219,10 @@ def detect_holes(drawing: Image.Image, dims: dict) -> list[dict]:
     return sorted(kept, key=lambda h: (h["x"], h["y"]))
 
 
+# 偵測本身出錯（例外）時的原因：3D 重建結果快取（docs/adr/042）把它當成孔位校正失敗
+DETECT_FAILED_REASON = "孔位偵測失敗，孔位維持模型輸出"
+
+
 def hole_plan(drawing: Image.Image, dims: dict | None) -> tuple[list[dict] | None, str | None]:
     """標準三視圖（render_ortho 版面）要不要校正孔位：回 (孔位, None) 或 (None, 不校正的原因)。"""
     if not dims:

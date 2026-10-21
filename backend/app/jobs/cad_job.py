@@ -86,6 +86,7 @@ async def _drive(job: dict, control: JobControl, ctx, staging: Path):
         file_url=artifact_url,
         include_code=False,
         checkpoint=control.check,
+        regenerate=bool(params.get("regenerate")),  # 「結果不對，重新生成」（docs/adr/042）
     )
 
     async def consume():

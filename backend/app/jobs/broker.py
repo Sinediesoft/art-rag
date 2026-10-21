@@ -106,7 +106,7 @@ class Maintenance(threading.Thread):
         self.worker = worker  # (名稱, 佇列)：worker 行程順便登記自己還活著
 
     def run(self) -> None:
-        from app.services import memory_guard
+        from app.services import cad_cache, memory_guard
 
         interval = get_settings().jobs_dispatch_interval_s
         while True:
@@ -115,6 +115,9 @@ class Maintenance(threading.Thread):
             # 續約本行程「使用中的模型」登記（Redis 重啟後也靠這裡在寬限期內重新登記）
             with suppress(Exception):
                 memory_guard.guard.publish()
+            # 3D 重建結果作廢／採用的稽核：稽核資料庫故障時留在待送清單，這裡補送（docs/adr/042）
+            with suppress(Exception):
+                cad_cache.flush_audit()
             if self._stop_evt.wait(interval):
                 return
             with suppress(db.JobsUnavailable):

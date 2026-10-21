@@ -714,6 +714,26 @@ class ReconstructRequest(BaseModel):
     )
 
 
+CAD_AUDIT_STATE = (
+    "recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），"
+    "稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）"
+)
+
+
+class CadCacheRejected(BaseModel):
+    job_id: str
+    rejected: bool
+    removed: bool = Field(description="這次有沒有把快取裡的那一筆移除")
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
+
+
+class CadCacheAdopted(BaseModel):
+    job_id: str
+    adopted: bool
+    created_at: str
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
+
+
 class CadJobSummary(BaseModel):
     meta: dict
     result: dict
@@ -1730,6 +1750,11 @@ class CadJobCreate(BaseModel):
         description="上傳的圖紙照片（要是自己的或擁有者授權的）",
     )
     strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
+    regenerate: bool = Field(
+        default=False,
+        description="結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed "
+        "產生一個新候選（docs/adr/042）",
+    )
 
 
 class ScheduleJobCreate(BaseModel):

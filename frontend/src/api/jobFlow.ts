@@ -52,7 +52,9 @@ export async function runCadJob(body: CadJobCreate, h: CadFlowHandlers, signal: 
   let delayed = false;
   try {
     if (!jobId) {
-      const active = await findActiveCad(body).catch(() => null);
+      // 結果不對，重新生成（docs/adr/042）：一定送出 regenerate 請求，不接回同一張圖紙進行中的一般重建
+      // （那會跑出同一份 greedy，不是新的候選）；連按、重送由 Idempotency-Key 擋成同一個工作
+      const active = body.regenerate ? null : await findActiveCad(body).catch(() => null);
       if (active) jobId = active.id;
       else {
         // 同一件事的重送共用一個 Idempotency-Key：連按、網路重試只會有一個工作

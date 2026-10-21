@@ -86,5 +86,5 @@ export type Strategy = Schemas["ChatRequest"]["strategy"];
 export type Job = Schemas["Job"];
 export type JobCreated = Schemas["JobCreated"];
 export type JobStatus = Job["status"];
-export type CadJobCreate = Partial<Pick<Schemas["CadJobCreate"], "part_id" | "image_id" | "strategy">>;
+export type CadJobCreate = Partial<Pick<Schemas["CadJobCreate"], "part_id" | "image_id" | "strategy" | "regenerate">>;
 export type ScheduleJobCreate = Partial<Schemas["ScheduleJobCreate"]>;
