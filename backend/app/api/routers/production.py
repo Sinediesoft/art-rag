@@ -9,9 +9,11 @@ from app.api import schemas as S
 from app.api.deps import ID_PATTERN, IDEMPOTENCY
 from app.core.errors import AppError, safe_stream
 from app.jobs import legacy, service
+from app.repositories.index_store import get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.repositories.production_repo import get_production_repo, idem_note
 from app.services import (
+    access_audit,
     change_service,
     idempotency,
     identity,
@@ -33,8 +35,13 @@ async def production_overview(request: Request):
 @router.get("/production/parts/{part_id}", response_model=S.PartPlan, tags=["production"])
 async def part_plan(request: Request, part_id: str = Path(pattern=ID_PATTERN)):
     """圖紙頁的「生產工單」：製程途程、依庫存建議的數量與交期、這張圖紙的工單與排程結果。"""
-    identity.require_domain(identity.current(request), "factory")
-    return await schedule_service.part_plan(part_id)
+    account = identity.current(request)
+    identity.require_domain(account, "factory")
+    plan = await schedule_service.part_plan(part_id)
+    access_audit.record(
+        account, get_store().get_part(part_id), "生產明細", request.state.request_id
+    )
+    return plan
 
 
 @router.post(

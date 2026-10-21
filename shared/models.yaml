@@ -323,6 +323,15 @@ conflict_check:
   max_tokens: 60                # 一行 JSON {"conflict": …, "refs": […]}
   timeout_s: 10                 # 超過就當成沒檢查，照常回答
 
+# 問題前提檢查（docs/adr/037 補）：至少 1 段參考資料時，先只問本地模型「問題有沒有把人、年份、東西說錯」；
+# 說錯了就在參考資料後面加提醒，回答時先更正再回答。逾時或輸出看不懂就當成沒檢查。
+# 開關優先順序：請求的 premise_check ＞ .env 的 PREMISE_CHECK ＞ 這裡
+premise_check:
+  enabled: true
+  prompt_version: premise_check_v1  # 對應 shared/prompts/premise_check_v1.md
+  max_tokens: 120               # 一行 JSON {"mismatch": …, "claim": …, "correct": …, "ref": …}
+  timeout_s: 10
+
 # 問答要不要附圖（Issue #2、docs/adr/024）：已辨識（或已指定）畫作／圖紙、檢索也開著時，答案來自段落與作品卡，
 # 圖只是補充；不送可以省約 1,070 token，4 GB 顯卡上明顯變快。關檢索的對照組照樣送圖（檢索增益靠它量）。
 # 預設 true＝和原本相同。各主機用 .env 的 SEND_IMAGE 覆寫（例如 GTX 1650 設 false），請求也可用 send_image 指定
@@ -335,7 +344,7 @@ global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作
 prompt:
   version: answer_v4          # 對應 shared/prompts/answer_v4.md（v2：參考資料矛盾時要指出，ADR 020；v3／v4：附圖時看圖才知道的內容標 [畫面]，ADR 026）
   drawing_version: drawing_v2 # 工廠圖紙問答，對應 shared/prompts/drawing_v2.md（v2：參考資料矛盾時要指出，ADR 020）
-  sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
+  sql_version: sql_v3         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v3.md＋sql_v3_examples.json；v2 加入機台與生產排程，v3「還剩幾件可以出貨」是可用庫存）
   sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）
   # 照片建檔讀標題欄的提示詞版本在 intake.prompt_version（intake_v1.md）
 

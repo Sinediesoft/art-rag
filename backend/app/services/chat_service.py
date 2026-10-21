@@ -30,9 +30,16 @@ from collections.abc import AsyncIterator
 
 from app.agent import catalog, guard, handoff
 from app.agent.entities import get_index
-from app.core.config import REPO_ROOT, get_agent_config, get_models_config, get_settings
+from app.core.config import (
+    REPO_ROOT,
+    get_access_config,
+    get_agent_config,
+    get_models_config,
+    get_settings,
+)
 from app.core.logging import log
 from app.rag import conflict_check as conflict_mod
+from app.rag import premise_check as premise_mod
 from app.rag.embedders import embed_text
 from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.prompt import artwork_card, build_messages, part_card, prompt_version
@@ -43,10 +50,17 @@ from app.rag.providers import (
     estimate_cost_twd,
     get_provider,
 )
-from app.rag.textproc import drop_contradicting_no_data, drop_stray_no_data, to_taiwan
+from app.rag.textproc import (
+    NO_DATA,
+    drop_contradicting_no_data,
+    drop_sentences_with,
+    drop_stray_no_data,
+    to_taiwan,
+    unsupported_dates,
+)
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import memory_guard
+from app.services import access_audit, memory_guard
 from app.services.agent_service import DEFAULT_QUESTIONS
 from app.services.identity import Account, can_view_part, visible_part_ids
 from app.services.search_service import identify_any, load_upload
@@ -260,6 +274,7 @@ async def chat_stream(
     inject: list[dict] | None = None,
     send_image: bool | None = None,
     conflict_check: bool | None = None,
+    premise_check: bool | None = None,
 ) -> AsyncIterator[str]:
     """問答流程用到 bge-m3 與本地 Qwen3-VL（照片辨識另加 Chinese-CLIP）。
 
@@ -272,6 +287,7 @@ async def chat_stream(
     inject：評估用的干擾段落（docs/adr/019），API 層只在受信任的評估模式傳入。
     send_image：要不要附圖（docs/adr/024）；None＝依 .env／models.yaml。
     conflict_check：回答前先檢查參考資料有沒有互相矛盾（docs/adr/028）；None＝依 .env／models.yaml。
+    premise_check：回答前先檢查問題有沒有把事實說錯（docs/adr/037 補）；None＝依 .env／models.yaml。
     """
     models = {"bge", "qwen"} | ({"clip"} if image_id and not artwork_id else set())
     events = _chat_stream(
@@ -290,9 +306,17 @@ async def chat_stream(
         inject,
         send_image,
         conflict_check,
+        premise_check,
     )
     async for e in memory_guard.stream("chat", models, events):
         yield e
+
+
+def _touches_secret(part: dict | None, given: list[dict], store) -> bool:
+    """指定的圖紙、或交給生成端的段落裡，有沒有讀取稽核要記的機密等級（shared/access.yaml）"""
+    levels = (get_access_config().get("read_audit") or {}).get("levels", ["機密"])
+    parts = [part] + [store.get_part(s["part_id"]) for s in given if s.get("part_id")]
+    return any(p and p.get("confidentiality") in levels for p in parts)
 
 
 def _stage(trace: list[dict], n: int, status: str, by: str, detail: str) -> None:
@@ -318,6 +342,7 @@ async def _chat_stream(
     inject: list[dict] | None = None,
     send_image: bool | None = None,
     conflict_check: bool | None = None,
+    premise_check: bool | None = None,
 ) -> AsyncIterator[str]:
     t0 = time.perf_counter()
     store = get_store()
@@ -349,6 +374,7 @@ async def _chat_stream(
                 "route": None,
                 "rearrange": None,
                 "conflict_check": None,
+                "premise_check": None,
                 "use_retrieval": use_retrieval,
                 "sources": [],
                 "filter": None,
@@ -482,6 +508,8 @@ async def _chat_stream(
             for e in finish_without_llm(1, gcfg["degrade_message"], "第 1 段（未呼叫 LLM）"):
                 yield e
             return
+        if account is not None:
+            access_audit.record(account, artwork, "圖紙問答", request_id)
     else:
         artwork = store.get_artwork(artwork_id) if artwork_id else None
         if artwork_id and not artwork:
@@ -565,6 +593,7 @@ async def _chat_stream(
 
     # ------------------------------------------------------------ 第 4～6 段
     conflict_info = None
+    premise_info = None
     context_note = None
     card = None
     if artwork:
@@ -629,6 +658,16 @@ async def _chat_stream(
             conflict_info = await conflict_mod.check(asked, sources, strategy)
             if conflict_info and conflict_info["conflict"]:
                 context_note = conflict_mod.note(conflict_info["refs"])
+        # 前提檢查：問題把人、年份說錯時，回答模型常只回「沒有資料」；先指出錯在哪，讓它更正後再答。
+        # 參考資料已經互相矛盾時不做：不能拿其中一段去「更正」問題，更正提醒還會蓋過矛盾提醒
+        conflicted = bool(conflict_info and conflict_info["conflict"])
+        if not post.degraded and not conflicted and premise_mod.enabled(premise_check):
+            premise_info = await premise_mod.check(
+                asked, sources, card["text"] if card else "", strategy
+            )
+            if premise_info and premise_info["mismatch"]:
+                fix = premise_mod.note(premise_info)
+                context_note = f"{context_note}\n{fix}" if context_note else fix
     retrieval_ms = round((time.perf_counter() - t0) * 1000)
     sources_event = {
         "request_id": request_id,
@@ -639,6 +678,7 @@ async def _chat_stream(
         "route": route_info,
         "rearrange": rearrange_info,
         "conflict_check": conflict_info,
+        "premise_check": premise_info,
         "use_retrieval": use_retrieval,
         "sources": sources if use_retrieval else [],
         "filter": meta.public() if meta else None,
@@ -729,6 +769,43 @@ async def _chat_stream(
         )
         return
 
+    # 日期核對：回答寫了參考資料、作品資料、問題都沒有的年份或年月
+    # （梵谷「1853 年出生」、「〈星夜〉1889 年 6 月」），是模型自己補的，標了出處讀者也會相信。
+    # 改 prompt 不穩（ADR 028／037），這裡請同一個生成端帶著提醒重答一次；
+    # 重答還有就拿掉那幾句，全拿掉就回「沒有資料」
+    claim_note = ""
+    if use_retrieval and given:
+        card_text = part_card(artwork) if domain == "mfg" else artwork_card(artwork)
+        support = "\n".join([asked, card_text, *(s["text"] for s in given)])
+        unsupported = unsupported_dates(answer, support)
+        if unsupported:
+            terms = "、".join(f"「{t}」" for t in unsupported)
+            fix = (
+                f"（系統比對：上一版回答寫了參考資料沒有的 {terms}。只能用參考資料寫的內容回答；"
+                "參考資料沒寫的部分，就說知識庫沒有這方面的資料，不要自己補。）"
+            )
+            retry_messages = build_messages(
+                asked,
+                artwork,
+                given,
+                image_jpeg,
+                use_retrieval,
+                include_card=strategy != "api_nokb",
+                domain=domain,
+                note=f"{context_note}\n{fix}" if context_note else fix,
+            )
+            try:
+                retry = "".join([to_taiwan(p) async for p in provider.stream(retry_messages)])
+            except ProviderUnavailable:
+                retry = ""
+            if retry and not unsupported_dates(retry, support):
+                answer, claim_note = retry, f"；重答一次（原回答有資料沒寫的 {terms}）"
+            else:
+                left = unsupported_dates(retry, support) if retry else unsupported
+                answer = drop_sentences_with(retry or answer, left) or NO_DATA
+                claim_note = f"；拿掉資料沒寫的 {'、'.join(f'「{t}」' for t in left)}"
+            pieces = [answer]
+
     # 第 7 段輸出檢查：未授權文件識別資訊、帳密／金鑰、個資、內部資料、被剔除段落的內容、無效引用
     hidden = guard.hidden_terms(account, store.parts)
     flagged = post.flagged if post else []
@@ -766,6 +843,7 @@ async def _chat_stream(
     note = "；已拿掉和回答矛盾的「知識庫中沒有這方面的資料」" if cleaned != answer else ""
     if note:
         answer, pieces = cleaned, [cleaned]
+    note = claim_note + note
     _stage(trace, 7, "pass", provider.strategy, f"{provider.model} 生成；輸出檢查通過{note}")
     for piece in pieces:
         yield sse("token", {"text": piece})
@@ -833,7 +911,13 @@ async def _chat_stream(
             "egress_images": egress["images"],
             "egress_chunks": egress["chunks"],
             "egress_bytes": egress["bytes"],
-            "answer": answer,
+            # 用到機密圖紙的回答不存原文：問答紀錄是明文，能登入主機的人都讀得到（內部人員演練）；
+            # 留雜湊，事後仍可比對某段回答是不是這一筆
+            "answer": (
+                f"（機密圖紙，回答不存原文；雜湊 {guard.fingerprint(answer)}）"
+                if _touches_secret(artwork if domain == "mfg" else None, given, store)
+                else answer
+            ),
         }
     )
     log.info(

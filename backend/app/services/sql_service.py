@@ -241,6 +241,10 @@ async def _ask_stream(
         except GenerationUnavailable as e:
             # SQL 與結果已經送出，回答失敗只影響文字說明
             yield sse("token", {"text": f"（無法產生文字說明：{e}；請直接看上方查詢結果）"})
+    # 「上個月」是照資料日期算的：寫出實際查的區間（探測題 p-28：資料日期 9/30，查的是 8 月）
+    if scope := text2sql.date_scope_note(question, sql, repo.as_of):
+        answer += scope
+        yield sse("token", {"text": scope})
 
     total_ms = round((time.perf_counter() - t0) * 1000)
     done = {

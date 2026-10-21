@@ -45,6 +45,7 @@
 | `JOB_NOT_FOUND` | 404 | 背景工作不存在、已過期，或目前身分沒有權限讀（`GET /jobs/{id}`、`/events`、`/cancel`、`/artifacts/{name}` 回應相同） |
 | `JOB_NOT_FINISHED` | 409 | 產物要等工作完成（成功或失敗）才發布；工作還在排隊或執行 |
 | `JOB_ARTIFACT_NOT_FOUND` | 404 | 產物名稱不在白名單（`input.png`、`code.py`、`model.stl`、`model.step`、`reproj.png`）或沒有發布 |
+| `RATE_LIMITED` | 429 | 同一個帳號短時間內下載機密零件的原尺寸圖紙、STEP／STL 模型太多次（`shared/access.yaml` 的 `read_limits`，預設 10 分鐘 6 次）；這次不給檔案，事件記進安全紀錄 |
 | `JOBS_LIMIT_REACHED` | 429 | 這個帳號同時排隊或執行中的 3D 重建已達上限（`JOBS_MAX_ACTIVE_PER_OWNER`，預設 5），等完成或取消幾個再建立 |
 | `JOB_COMMITTING` | 409 | 取消：工作已進入寫回階段，不能取消（會完成並寫入結果） |
 | `JOB_ALREADY_FINISHED` | 409 | 取消：工作已經成功或失敗 |

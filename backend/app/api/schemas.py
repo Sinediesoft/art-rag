@@ -411,6 +411,11 @@ class ChatRequest(BaseModel):
         description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
         "（docs/adr/028）；null＝依伺服器設定",
     )
+    premise_check: bool | None = Field(
+        default=None,
+        description="回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒"
+        "（docs/adr/037 補）；null＝依伺服器設定",
+    )
     route_ticket: str | None = Field(
         default=None,
         max_length=64,
@@ -1390,14 +1395,27 @@ class BlockedInfo(BaseModel):
     degraded: bool = Field(description="降級回應（查無資料），不是權限不足的拒絕")
 
 
+class NavigatePage(BaseModel):
+    label: str
+    path: str
+
+
 class ShortCircuitInfo(BaseModel):
     """快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
-    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"""
+    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），
+    或整句只是在切換模組（navigate：「進入工廠模組」）。"""
 
     stage: Literal[2]
     by: Literal["Jev", "地端"]
-    kind: Literal["chitchat", "catalog"] = "chitchat"
+    kind: Literal["chitchat", "catalog", "navigate"] = "chitchat"
     reply: str
+    module: Literal["factory", "art"] | None = Field(
+        default=None,
+        description="navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null",
+    )
+    page: NavigatePage | None = Field(
+        default=None, description="navigate：要打開的功能頁（「打開待核准清單」）"
+    )
 
 
 class RouterInfo(BaseModel):
@@ -1599,9 +1617,25 @@ class AuditRow(BaseModel):
     request_id: str | None
 
 
+class AccessRow(BaseModel):
+    created_at: str
+    request_id: str | None = None
+    account_id: str | None = None
+    account_label: str | None = None
+    part_id: str
+    level: str | None = None
+    what: str = Field(
+        description="讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+    )
+
+
 class AuditResponse(BaseModel):
     items: list[AuditRow]
     changes: list[dict] = Field(description="最近寫入的異動單")
+    reads: list[AccessRow] = Field(
+        default=[],
+        description="最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+    )
 
 
 # ---------------------------------------------------------------- 照片建檔（docs/adr/013）

@@ -117,3 +117,45 @@ def drop_contradicting_no_data(answer: str) -> str:
         return answer
     out.append(answer[last:])
     return "".join(out).strip()
+
+
+# 年份與「年＋月」：日期是資料才有的事實，模型算不出來；面積這類計算結果不在這裡檢查。
+# 後面接單位的（1200 mm、2026 件）不是年份
+_YEAR_MONTH_RE = re.compile(r"(?<![\d.])(1\d{3}|20\d{2})\s*年\s*(?:的\s*)?(\d{1,2})\s*月")
+_YEAR_RE = re.compile(
+    r"(?<![\d.])(1\d{3}|20\d{2})(?![\d.]|\s*(?:公|平方|立方|件|元|克|台|個|mm|cm|kg|g\b|%))"
+)
+# 年齡要有生年才算得出來：資料沒有生卒年，「37 歲」就是模型自己補的
+_AGE_RE = re.compile(r"(?<![\d.])(\d{1,3})\s*歲")
+_BIRTH_RE = re.compile(r"出生|生於|誕生|生年|\d{4}\s*[–\-—~～]\s*\d{4}")
+# 句號後面的右括號、右引號跟著那一句，拿掉句子時不留孤立的「）」
+_SENTENCE_RE = re.compile(r"[^。！？!?\n]*(?:[。！？!?]+[）)」』]*|\n|$)")
+
+
+def _dates(text: str) -> set[str]:
+    squashed = re.sub(r"\s+", "", text)
+    found = {f"{y}年{int(m)}月" for y, m in _YEAR_MONTH_RE.findall(squashed)}
+    ages = {f"{a}歲" for a in _AGE_RE.findall(squashed)}
+    return found | ages | set(_YEAR_RE.findall(squashed))
+
+
+def unsupported_dates(answer: str, support: str) -> list[str]:
+    """回答裡出現、但參考資料／作品資料／問題都沒有的年份、「年＋月」、年齡（依出現順序、不重複）。
+    梵谷「1853 年出生」、「〈星夜〉1889 年 6 月」這類模型自己補的日期，標了出處讀者也會相信。"""
+    known = _dates(support)
+    if _BIRTH_RE.search(support):
+        # 資料有生卒年：年齡可以從資料算出來，不當成編造
+        known |= {d for d in _dates(answer) if d.endswith("歲")}
+    out: list[str] = []
+    for d in sorted(_dates(answer), key=lambda d: re.sub(r"\s+", "", answer).find(d)):
+        # 「1889年6月」不在資料裡，但年份 1889 在：只回報年月；年份本身不在才回報年份
+        if d not in known and d not in out:
+            out.append(d)
+    return out
+
+
+def drop_sentences_with(answer: str, terms: Iterable[str]) -> str:
+    """拿掉含有這些年份／年月／年齡的句子（「1889 年的 6 月」也算含有「1889年6月」）。"""
+    terms = set(terms)
+    kept = [s for s in _SENTENCE_RE.findall(answer) if s.strip() and not terms & _dates(s)]
+    return "".join(kept).strip()

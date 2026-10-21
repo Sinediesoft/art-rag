@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（多一次本地模型呼叫，慢的主機可以關掉）
     conflict_check: str = ""
 
+    # 問題前提檢查（docs/adr/037 補）：留空＝shared/models.yaml 的 premise_check.enabled；
+    # true／false 覆寫這台主機的設定（多一次本地模型呼叫）
+    premise_check: str = ""
+
     # Ollama 模型閒置多久才卸載（docs/adr/025）：例如 60m；留空＝Ollama 預設 5 分鐘。
     # 只送給 hybrid／hybrid_fallback／lora；記憶體吃緊時記憶體管理照樣用 keep_alive=0 卸載
     model_keep_alive: str = ""
@@ -99,6 +103,8 @@ class Settings(BaseSettings):
 
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
+    # 問答、分流、SQL 紀錄保存幾天（內容類，可能含機密文字；安全紀錄與讀取稽核不刪）
+    log_ttl_days: int = 30
 
     # 展示模式（docs/adr/030）：頁首切換身分（/auth/switch 簽發任意帳號的 JWT）、
     # 模擬斷線、展示還原。預設關閉，只能由人類在本機 .env 明確開啟；
@@ -230,6 +236,16 @@ class ConflictCheckSpec(BaseModel):
     enabled: bool = False
     prompt_version: str = "conflict_check_v1"
     max_tokens: int = 60
+    timeout_s: float = 10
+
+
+class PremiseCheckSpec(BaseModel):
+    """問題前提檢查（docs/adr/037 補）：問題本身把人、年份、東西說錯時，先只問本地模型哪裡錯；
+    錯了就在參考資料後面加提醒，回答時先更正再回答，不要只回「知識庫中沒有這方面的資料」"""
+
+    enabled: bool = False
+    prompt_version: str = "premise_check_v1"
+    max_tokens: int = 120
     timeout_s: float = 10
 
 
@@ -398,6 +414,7 @@ class ModelsConfig(BaseModel):
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
     conflict_check: ConflictCheckSpec = ConflictCheckSpec()
+    premise_check: PremiseCheckSpec = PremiseCheckSpec()
     chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()

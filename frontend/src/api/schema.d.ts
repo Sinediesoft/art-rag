@@ -1682,6 +1682,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessRow */
+        AccessRow: {
+            /** Created At */
+            created_at: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Account Id */
+            account_id?: string | null;
+            /** Account Label */
+            account_label?: string | null;
+            /** Part Id */
+            part_id: string;
+            /** Level */
+            level?: string | null;
+            /**
+             * What
+             * @description 讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答
+             */
+            what: string;
+        };
         /** Account */
         Account: {
             /** Id */
@@ -2053,6 +2073,12 @@ export interface components {
             changes: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Reads
+             * @description 最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）
+             * @default []
+             */
+            reads: components["schemas"]["AccessRow"][];
         };
         /** AuditRow */
         AuditRow: {
@@ -2438,6 +2464,11 @@ export interface components {
              * @description 回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定
              */
             conflict_check?: boolean | null;
+            /**
+             * Premise Check
+             * @description 回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定
+             */
+            premise_check?: boolean | null;
             /**
              * Route Ticket
              * @description /agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位
@@ -3814,6 +3845,13 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** NavigatePage */
+        NavigatePage: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+        };
         /** OkResponse */
         OkResponse: {
             /**
@@ -5108,7 +5146,8 @@ export interface components {
         /**
          * ShortCircuitInfo
          * @description 快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
-         *     或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。
+         *     或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），
+         *     或整句只是在切換模組（navigate：「進入工廠模組」）。
          */
         ShortCircuitInfo: {
             /**
@@ -5126,9 +5165,16 @@ export interface components {
              * @default chitchat
              * @enum {string}
              */
-            kind: "chitchat" | "catalog";
+            kind: "chitchat" | "catalog" | "navigate";
             /** Reply */
             reply: string;
+            /**
+             * Module
+             * @description navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null
+             */
+            module?: ("factory" | "art") | null;
+            /** @description navigate：要打開的功能頁（「打開待核准清單」） */
+            page?: components["schemas"]["NavigatePage"] | null;
         };
         /** SkippedWorkOrder */
         SkippedWorkOrder: {

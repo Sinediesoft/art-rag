@@ -12,7 +12,9 @@ from app.core.config import (
 from app.core.errors import AppError
 from app.repositories.index_store import get_store
 from app.services import (
+    access_audit,
     identity,
+    read_limit,
     search_service,
     uploads,
 )
@@ -38,6 +40,7 @@ def list_parts(request: Request):
 @router.get("/parts/{part_id}", response_model=S.PartDetail, tags=["parts"])
 def get_part(part_id: str, request: Request):
     p = visible_part(part_id, request)
+    access_audit.record(identity.current(request), p, "圖紙明細", request.state.request_id)
     summary = search_service.part_summary(p)
     return {
         **p,
@@ -52,6 +55,11 @@ def get_part(part_id: str, request: Request):
 def get_part_drawing(part_id: str, request: Request, size: str = "full"):
     p = visible_part(part_id, request)
     store = get_store()
+    if size != "thumb":
+        read_limit.check_secret_download(
+            identity.current(request), p, "原尺寸圖紙", request.state.request_id
+        )
+        access_audit.record(identity.current(request), p, "原尺寸圖紙", request.state.request_id)
     path = (
         store.parts_dir / "thumbs" / f"{part_id}.jpg"
         if size == "thumb"
@@ -69,6 +77,12 @@ def get_part_model(part_id: str, ext: str, request: Request):
     path = get_store().parts_dir / "gt" / f"{part_id}.{ext}"
     if "cad" not in p or not path.is_file():
         raise AppError("PART_MODEL_NOT_FOUND", f"圖紙 {part_id} 沒有標準 3D 模型（照片建檔）", 404)
+    read_limit.check_secret_download(
+        identity.current(request), p, f"{ext.upper()} 模型", request.state.request_id
+    )
+    access_audit.record(
+        identity.current(request), p, f"{ext.upper()} 模型", request.state.request_id
+    )
     media = "model/stl" if ext == "stl" else "application/step"
     return FileResponse(path, media_type=media, filename=f"{part_id}.{ext}")
 

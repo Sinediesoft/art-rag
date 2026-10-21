@@ -3745,6 +3745,74 @@
   },
   "components": {
     "schemas": {
+      "AccessRow": {
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "what": {
+            "type": "string",
+            "title": "What",
+            "description": "讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_at",
+          "part_id",
+          "what"
+        ],
+        "title": "AccessRow"
+      },
       "Account": {
         "properties": {
           "id": {
@@ -4672,6 +4740,15 @@
             "type": "array",
             "title": "Changes",
             "description": "最近寫入的異動單"
+          },
+          "reads": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRow"
+            },
+            "type": "array",
+            "title": "Reads",
+            "description": "最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+            "default": []
           }
         },
         "type": "object",
@@ -5681,6 +5758,18 @@
             ],
             "title": "Conflict Check",
             "description": "回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定"
+          },
+          "premise_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premise Check",
+            "description": "回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定"
           },
           "route_ticket": {
             "anyOf": [
@@ -8997,6 +9086,24 @@
         ],
         "title": "MetaFilterInfo",
         "description": "第 3 段的 Metadata Filter：只照 JWT 的 clearance 與 depts 產生。"
+      },
+      "NavigatePage": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "path"
+        ],
+        "title": "NavigatePage"
       },
       "OkResponse": {
         "properties": {
@@ -12361,7 +12468,8 @@
             "type": "string",
             "enum": [
               "chitchat",
-              "catalog"
+              "catalog",
+              "navigate"
             ],
             "title": "Kind",
             "default": "chitchat"
@@ -12369,6 +12477,33 @@
           "reply": {
             "type": "string",
             "title": "Reply"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "factory",
+                  "art"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module",
+            "description": "navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NavigatePage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "navigate：要打開的功能頁（「打開待核准清單」）"
           }
         },
         "type": "object",
@@ -12378,7 +12513,7 @@
           "reply"
         ],
         "title": "ShortCircuitInfo",
-        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"
+        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），\n或整句只是在切換模組（navigate：「進入工廠模組」）。"
       },
       "SkippedWorkOrder": {
         "properties": {

@@ -133,7 +133,7 @@ def test_ask_streams_sql_result_answer(client):
     assert {row[0] for row in result["rows"]} == {"連接法蘭", "階梯傳動軸"}
     done = events[-1][1]
     assert done["egress"] == {"images": 0, "chunks": 0, "bytes": 0}
-    assert done["prompt_version"] == "sql_v2" and done["attempts"] == 1
+    assert done["prompt_version"] == "sql_v3" and done["attempts"] == 1
     health = client.get("/api/v1/admin/diagnostics").json()  # 最近的 SQL 只在管理診斷
     assert health["inventory"]["ok"] and health["recent_sql"][0]["ok"] == 1
 
@@ -234,3 +234,27 @@ def test_ask_hides_confidential_parts_from_sales(client):
         assert result["rows"] == []  # 連接法蘭、階梯傳動軸都是機密
     finally:
         as_account(client, "manager")
+
+
+def test_date_scope_note():
+    sql = "SELECT -SUM(qty) FROM stock_moves WHERE moved_on BETWEEN '2026-08-01' AND '2026-08-31'"
+    note = text2sql.date_scope_note("上個月一共報廢了多少件？", sql, "2026-09-30")
+    assert note == "（資料日期 2026-09-30；查詢區間 2026-08-01～2026-08-31）"
+    # 沒有相對日期、或 SQL 沒有日期條件：不補
+    assert text2sql.date_scope_note("八月報廢了多少件？", sql, "2026-09-30") == ""
+    assert text2sql.date_scope_note("上個月的庫存？", "SELECT * FROM stock", "2026-09-30") == ""
+
+
+def test_relative_date_answer_ends_with_the_queried_span(client, monkeypatch, repo):
+    """探測題 p-28「上個月一共報廢了多少件？」：資料日期 9/30，SQL 查 8 月，
+    回答只寫「上個月共報廢 40 件」，讀者會用今天換算成 9 月"""
+    sql = (
+        "SELECT -SUM(qty) AS 報廢數量 FROM stock_moves "
+        "WHERE move_type = '報廢' AND moved_on BETWEEN '2026-08-01' AND '2026-08-31'"
+    )
+    monkeypatch.setattr(text2sql, "mock_sql", lambda q, h: sql)
+    events = parse_sse(
+        client.post("/api/v1/inventory/ask", json={"question": "上個月一共報廢了多少件？"}).text
+    )
+    text = "".join(d["text"] for e, d in events if e == "token")
+    assert text.endswith(f"（資料日期 {repo.as_of}；查詢區間 2026-08-01～2026-08-31）")
