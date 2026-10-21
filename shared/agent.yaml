@@ -260,6 +260,11 @@ guard:
       # 解除規則：直接說不用遵守規定
       - {rule: 解除規則, pattern: '(不需要|不用|不必|無須|無需)(再)?(遵守|理會|管).{0,4}(任何)?(規定|規則|限制|指示|政策)'}
       - {rule: SQL 注入, pattern: '\b(drop|truncate|alter)\s+table\b|\bdelete\s+from\b|\bunion\s+(all\s+)?select\b|''\s*or\s+''?1''?\s*=\s*''?1|;\s*--'}
+      # 2026-10-21 補（laya測試）：改資料（UPDATE 表 SET 欄位 =、INSERT INTO 表 (…／VALUES）、執行系統指令（xp_cmdshell）、
+      # 拖時間的盲注（SLEEP(5)、pg_sleep、WAITFOR DELAY、BENCHMARK(）上面那條都不認，原本要靠 Laya，一版擋一版漏。
+      # 一定要接 SQL 的結構才算：「update 一下交期」「select 出本週訂單」「機台的 sleep 模式」是正常的。
+      # 英文字前面用 (?<![a-z]) 當邊界：中文字也算 \w，「請update」用 \b 會比不到
+      - {rule: SQL 注入, pattern: '(?<![a-z])update\s+[\w.\[\]"`]+\s+set\s+[\w.\[\]"`]+\s*=|(?<![a-z])insert\s+into\s+[\w.\[\]"`]+\s*(\(|values\b|select\b)|xp_?cmdshell|(?<![a-z])(pg_)?sleep\s*\(\s*\d|waitfor\s+delay\s+''|(?<![a-z])benchmark\s*\(\s*\d'}
       - {rule: 指令注入, pattern: 'rm\s+-rf|<script\b|\$\(\s*\w+'}
     suspect:           # 冒充身分、要求略過管控：配上耗時工作或修改資料才擋，只是查詢就提醒
       - {rule: 冒充身分, pattern: '我是(主管|管理員|老闆|廠長|經理|生管|admin|root)|以(主管|管理員)的?身分|sudo'}
