@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, assetUrl } from "../../api/client";
-import { usePart, useStatus, useSwitchAccount } from "../../api/hooks";
+import { usePart, useStatus, useSwitchAccount, useWorkerOffline } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
 import { cacheHitLabel, cacheNote } from "../../lib/cadCache";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
@@ -687,8 +687,19 @@ function Specs({ items }: { items: [string, ReactNode][] }) {
 
 const CAD_STAGES = ["前處理、辨識、讀尺寸", "Ortho2CAD 產生 CadQuery 程式", "沙箱執行並輸出 STEP／STL"];
 
+/** 沒有 worker 接這類工作：仍然可以送出，工作留在佇列，worker 啟動後自動開始（docs/adr/041），
+ *  但要先講清楚，不然畫面只會一直轉「排隊中」 */
+function WorkerOfflineNote({ what, start }: { what: string; start: string }) {
+  return (
+    <p className="taskcard__note is-warn">
+      背景服務沒有啟動：{what}會先排隊，服務啟動後自動開始。請在主機執行 {start}（5070 Ti 主機用 deploy\windows\start-services.ps1）。
+    </p>
+  );
+}
+
 function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart }) {
   const th = useThread();
+  const offline = useWorkerOffline("gpu");
   const vis = visiblePart(turn);
   const [showCode, setShowCode] = useState(false);
   const source = p.imageId ? "你附的照片" : vis ? `〈${vis.label}〉的三視圖` : null;
@@ -741,6 +752,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
       )}
       {!j && !source && <p className="taskcard__note">附一張圖紙照片，或說出圖紙名稱再問一次。</p>}
       {p.cancelled && !j && <p className="taskcard__note">已取消，沒有載入模型。</p>}
+      {offline && source && (j ? j.status === "queued" : !p.cancelled) && <WorkerOfflineNote what="3D 重建" start="make worker-gpu" />}
       {j?.status === "queued" && (
         <div className="taskcard__run">
           <p className="taskcard__stats num">
@@ -851,6 +863,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
 
 function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
   const th = useThread();
+  const offline = useWorkerOffline("schedule");
   const j = p.job;
   if (th.mode === "brief")
     return (
@@ -881,6 +894,7 @@ function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
         </div>
       )}
       {p.cancelled && !j && <p className="taskcard__note">已取消。</p>}
+      {offline && (j ? j.status === "queued" : !p.cancelled) && <WorkerOfflineNote what="排程" start="make worker-schedule" />}
       {j?.status === "queued" && (
         <div className="taskcard__run">
           <p className="taskcard__stats num">
