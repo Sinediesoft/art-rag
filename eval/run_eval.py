@@ -14,9 +14,15 @@
 關檢索對照組（hybrid_norag、api_nokb）與 mock 要後端 EVAL_CONTROLS=true（docs/adr/030），
 否則第 6 段生成閘門直接降級「查無資料」；讀索引 manifest 要展示模式（DEMO_CONTROLS=true）切成主管。
 
+LoRA 不檢索對照組（lora_norag，docs/adr/043，make eval-lora）：done 事件標示改用了備援模型的題目
+一律記錯，不算到 LoRA 頭上；lora 開頭的策略只要有一題落到備援或出錯，結束碼就是 3。
+--outside-kb 把「問知識庫外畫作」的題目（npm-000002、aic-16568）改成不帶畫作、不附圖送出，
+和 no_answer 題一起算亂編率：拒答、答對常識都不算亂編，其他回答算亂編。
+
 用法：python eval/run_eval.py [--base http://localhost:8000]
-      [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock]
-      [--split dev|test|all]
+      [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock,
+                    lora_norag]
+      [--split dev|test|all] [--qa qa.jsonl,qa_visual.jsonl] [--outside-kb] [--skip-images]
       hybrid_plain／hybrid_rearrange：檢索段落篩選（MIRA 的 Rearrange）關／開的對照
 """
 
@@ -52,8 +58,14 @@ STRATEGY_BODY = {
     "api_nokb": {"strategy": "api_nokb"},
     "api_kb": {"strategy": "api_kb"},
     "lora": {"strategy": "lora"},
+    # LoRA 不檢索（docs/adr/043）：知識只在權重裡，和 hybrid_norag（底模不檢索）比
+    "lora_norag": {"strategy": "lora", "use_retrieval": False},
     "mock": {"strategy": "mock"},
 }
+
+# 亂編率：這兩類題目沒有知識庫答案（no_answer），或問的畫作不在知識庫（outside_kb）
+NO_KB_ANSWER_TYPES = ("no_answer", "outside_kb")
+REFUSAL = re.compile(r"沒有(這方面的|相關的?)?資料|查無|無法(確定|回答|判斷)|不(清楚|確定)|不知道")
 
 
 def p95(values: list[float]) -> float | None:
@@ -132,9 +144,24 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
     return out
 
 
-def owner_of(q: dict) -> str:
-    """題目問的是哪一幅畫或哪一張圖紙（圖紙題用 part_id）。"""
-    return q.get("part_id") or q["artwork_id"]
+def owner_of(q: dict) -> str | None:
+    """題目問的是哪一幅畫或哪一張圖紙（圖紙題用 part_id）；一般常識題沒有。"""
+    return q.get("part_id") or q.get("artwork_id")
+
+
+def score_no_kb(q: dict, res: dict, answer_ok: bool) -> dict:
+    """亂編率（docs/adr/043）：refused＝拒答；hallucinated＝亂編。
+
+    no_answer：沒拒答就是亂編。生成閘門的降級訊息「查無資料：…」沒有「沒有」兩字，
+    answer_ok 的拒答判定認不出來，所以另外用 REFUSAL 判斷。
+    outside_kb：問知識庫外的畫作，拒答或答對常識都不算亂編。其他題型回空 dict。"""
+    if q.get("type") not in NO_KB_ANSWER_TYPES:
+        return {}
+    refused = bool(REFUSAL.search(res["answer"]))
+    if q["type"] == "no_answer":
+        refused = refused or answer_ok
+        return {"refused": refused, "hallucinated": not refused}
+    return {"refused": refused, "hallucinated": not (refused or answer_ok)}
 
 
 # 回答明白指出參考資料互相矛盾（answer_v2 第 5 條，docs/adr/020）。
@@ -192,11 +219,30 @@ def score_answer(q: dict, res: dict) -> tuple[bool, bool]:
     return answer_ok, citation_ok
 
 
+def judge(q: dict, res: dict) -> tuple[bool, bool, bool, dict]:
+    """(answer_ok, citation_ok, fallback, 亂編判定)。
+
+    done 事件標示實際改用了備援模型（fallback）：答案不是這個策略產生的，一律記錯、不判亂編。"""
+    if res["error"]:
+        return False, False, False, {}
+    if (res["done"] or {}).get("fallback"):
+        return False, False, True, {}
+    answer_ok, citation_ok = score_answer(q, res)
+    return answer_ok, citation_ok, False, score_no_kb(q, res, answer_ok)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8000")
     ap.add_argument("--strategies", default="hybrid,hybrid_norag")
     ap.add_argument("--split", default="all", choices=["dev", "test", "all"])
+    ap.add_argument("--qa", default="qa.jsonl", help="eval/ 下的題目檔，逗號分隔")
+    ap.add_argument(
+        "--outside-kb",
+        action="store_true",
+        help="問知識庫外畫作的題目改成不帶畫作送出，算亂編率（預設跳過這些題目）",
+    )
+    ap.add_argument("--skip-images", action="store_true", help="不跑以圖搜圖評估")
     args = ap.parse_args()
 
     client = httpx.Client(base_url=args.base, timeout=60)
@@ -217,7 +263,12 @@ def main() -> int:
         print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
     # 工廠圖紙題（part_id，docs/adr/020）：圖紙多是機密，切成主管才看得到全部
-    all_questions = [json.loads(x) for x in (EVAL / "qa.jsonl").read_text("utf-8").splitlines()]
+    all_questions = [
+        json.loads(x)
+        for name in args.qa.split(",")
+        for x in (EVAL / name).read_text("utf-8").splitlines()
+        if x.strip()
+    ]
     if any(q.get("part_id") for q in all_questions):
         client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
         kb_ids |= {p["id"] for p in client.get("/api/v1/parts").json()["items"]}
@@ -233,28 +284,33 @@ def main() -> int:
     run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
     print(f"評估 {run_id}：kb_version={manifest['kb_version']}，{len(kb_ids)} 幅畫")
 
-    img = eval_images(client, kb_ids)
-    print(
-        f"以圖搜圖 Top-1 {img['image_top1']:.0%}（{img['n_known']} 張），"
-        f"未收錄拒答 {img['reject_rate']:.0%}（{img['n_unknown']} 張）"
-    )
+    if args.skip_images:
+        img = {"rows": []}
+    else:
+        img = eval_images(client, kb_ids)
+        print(
+            f"以圖搜圖 Top-1 {img['image_top1']:.0%}（{img['n_known']} 張），"
+            f"未收錄拒答 {img['reject_rate']:.0%}（{img['n_unknown']} 張）"
+        )
 
-    questions = [
-        q
-        for q in all_questions
-        if owner_of(q) in kb_ids and (args.split == "all" or q["split"] == args.split)
-    ]
+    questions = []
+    for q in all_questions:
+        if args.split != "all" and q["split"] != args.split:
+            continue
+        owner = owner_of(q)
+        if owner is None or owner in kb_ids:
+            questions.append(q)
+        elif args.outside_kb and not q.get("part_id"):
+            questions.append({**q, "type": "outside_kb"})
     rows, by_strategy = [], {}
     for strat in args.strategies.split(","):
         results = []
         for q in questions:
             t0 = time.time()
-            body = {
-                "question": q["question"],
-                ("part_id" if q.get("part_id") else "artwork_id"): owner_of(q),
-                "allow_fallback": False,
-                **STRATEGY_BODY[strat],
-            }
+            body = {"question": q["question"], "allow_fallback": False, **STRATEGY_BODY[strat]}
+            # 一般常識題沒有對象；知識庫外的畫作也不帶（帶了會被當成找不到的畫作）
+            if owner_of(q) and q.get("type") != "outside_kb":
+                body["part_id" if q.get("part_id") else "artwork_id"] = owner_of(q)
             # 關檢索的策略不放段落進 prompt，注入沒有意義
             if q.get("distractors") and body.get("use_retrieval", True):
                 body["inject"] = q["distractors"]
@@ -262,7 +318,7 @@ def main() -> int:
             if (res["error"] or {}).get("code") == "FORBIDDEN" and "inject" in body:
                 print(f"  {q['id']}：後端沒開 EVAL_INJECTION=true，干擾段落題無法注入")
             done = res["done"] or {}
-            answer_ok, citation_ok = score_answer(q, res) if not res["error"] else (False, False)
+            answer_ok, citation_ok, fallback, no_kb = judge(q, res)
             dist = score_distractor(q, res) if not res["error"] and "inject" in body else {}
             # 整次評估記畫作的 prompt 版本；圖紙題回的是 drawing_vN，每列另外記
             if done.get("prompt_version") and not q.get("part_id"):
@@ -277,6 +333,8 @@ def main() -> int:
                 "source_lang": source_lang.get(owner_of(q), ""),
                 "strategy": strat,
                 "model": done.get("model", ""),
+                "strategy_used": done.get("strategy_used", ""),
+                "fallback": fallback,
                 "kb_version": manifest["kb_version"],
                 "prompt_version": done.get("prompt_version", ""),
                 "answer_ok": answer_ok,
@@ -304,6 +362,8 @@ def main() -> int:
                 "distractor_cited": dist.get("distractor_cited", ""),
                 "distractor_flagged": dist.get("distractor_flagged", ""),
                 "distractor_misled": dist.get("distractor_misled", ""),
+                "refused": no_kb.get("refused", ""),
+                "hallucinated": no_kb.get("hallucinated", ""),
                 "answer": res["answer"].replace("\n", " "),
             }
             rows.append(row)
@@ -312,9 +372,12 @@ def main() -> int:
             print(f"  [{strat}] {mark} {q['id']} {row['answer'][:60]}")
         ok = [r for r in results if not r["error"]]
         injected = [r for r in ok if r["distractor_kept"] != ""]
+        no_kb_rows = [r for r in results if r["type"] in NO_KB_ANSWER_TYPES]
         by_strategy[strat] = {
             "n": len(results),
             "errors": len(results) - len(ok),
+            "fallbacks": sum(r["fallback"] for r in results),
+            "models": sorted({r["model"] for r in results if r["model"]}),
             "answer_ok": sum(r["answer_ok"] for r in results) / len(results) if results else None,
             "citation_ok": sum(r["citation_ok"] for r in results) / len(results)
             if results
@@ -331,6 +394,15 @@ def main() -> int:
                 / sum(1 for r in results if r["type"] == t)
                 for t in sorted({r["type"] for r in results})
             },
+            # dev 只拿來挑設定（LoRA 挑 epoch），成績看 test（docs/adr/043）
+            "by_split_type": {
+                sp: {
+                    t: sum(r["answer_ok"] for r in results if (r["split"], r["type"]) == (sp, t))
+                    / sum(1 for r in results if (r["split"], r["type"]) == (sp, t))
+                    for t in sorted({r["type"] for r in results if r["split"] == sp})
+                }
+                for sp in sorted({r["split"] for r in results})
+            },
             # 干擾段落題：篩選擋下率（越高越好）、引用率與被帶偏率（越低越好）
             "distractor": {
                 "n": len(injected),
@@ -341,6 +413,15 @@ def main() -> int:
             }
             if injected
             else None,
+            # 亂編率（docs/adr/043）：出錯、落到備援的題目沒有判定，算在分母、不算拒答
+            "no_kb_answer": {
+                "n": len(no_kb_rows),
+                "refused": sum(r["refused"] is True for r in no_kb_rows) / len(no_kb_rows),
+                "hallucinated": sum(r["hallucinated"] is True for r in no_kb_rows)
+                / len(no_kb_rows),
+            }
+            if no_kb_rows
+            else None,
         }
 
     runs = EVAL / "runs"
@@ -349,10 +430,11 @@ def main() -> int:
         w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["question_id"])
         w.writeheader()
         w.writerows(rows)
-    with (runs / f"{run_id}-images.csv").open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(img["rows"][0]))
-        w.writeheader()
-        w.writerows(img["rows"])
+    if img["rows"]:
+        with (runs / f"{run_id}-images.csv").open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(img["rows"][0]))
+            w.writeheader()
+            w.writerows(img["rows"])
     summary = {
         "run_id": run_id,
         "created_at": datetime.now(UTC).isoformat(),
@@ -369,6 +451,15 @@ def main() -> int:
         gain = by_strategy["hybrid"]["answer_ok"] - by_strategy["hybrid_norag"]["answer_ok"]
         print(f"檢索增益：{gain * 100:+.0f} 個百分點（目標 ≥ +15）")
     print(f"結果已寫入 eval/runs/{run_id}.*")
+    # LoRA 對照組的每一題都要由 LoRA 回答：落到備援或出錯，這次評估就不能當 LoRA 的成績
+    broken = [
+        f"{r['strategy']} {r['question_id']}（{'備援' if r['fallback'] else r['error']}）"
+        for r in rows
+        if r["strategy"].startswith("lora") and (r["fallback"] or r["error"])
+    ]
+    if broken:
+        print("LoRA 有題目不是由 LoRA 回答：" + "、".join(broken))
+        return 3
     return 0
 
 
