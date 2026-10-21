@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, assetUrl, type CadStrategy } from "../../api/client";
-import { useAccounts, usePart, useStatus } from "../../api/hooks";
+import { useAccounts, usePart, useStatus, useWorkerOffline } from "../../api/hooks";
 import type { CadCacheInfo, CadHoles, Dims } from "../../api/sse";
 import { ErrorMessage } from "../../components/common/Feedback";
 import { ImageUploader } from "../../components/common/ImageUploader";
@@ -33,6 +33,7 @@ export function ReconstructPage() {
   const jobId = params.get("job");
   const part = usePart(id);
   const { data: health } = useStatus();
+  const gpuOffline = useWorkerOffline("gpu");
   const { state, start, load, attach, cancel, regenerate, adopt } = useReconstruct();
   const canAdopt = useAccounts().data?.current?.ops.includes("kb_intake") ?? false;
   const [strategy, setStrategy] = useState<CadStrategy>("ortho2cad");
@@ -138,7 +139,7 @@ export function ReconstructPage() {
       {state.status === "queued" && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-card p-3 text-sm text-ink-80">
           <Spinner /> 排隊中：等背景 worker 領取（3D 重建一次只跑一個，載入模型需要 GPU）。離開這一頁不會取消，回來會接回進度。
-          {health?.jobs?.enabled && health.jobs.workers.length === 0 && <b className="text-warning">目前沒有在線的 worker，請啟動 make worker-gpu。</b>}
+          {gpuOffline && <b className="text-warning">目前沒有在線的 worker，請啟動 make worker-gpu。</b>}
           <button type="button" className="btn-ghost" onClick={() => void cancel()}>
             取消
           </button>

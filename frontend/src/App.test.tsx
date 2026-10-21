@@ -1609,6 +1609,30 @@ describe("背景工作（TASK-20261013-001）：3D 重建與排程在 worker 執
     expect(screen.getByText("重新開始")).toBeTruthy();
   });
 
+  it("沒有 worker 接 gpu 佇列：卡片先提示背景服務沒啟動，仍然可以送出；有 gpu worker 就不提示", async () => {
+    const statusWith = (queues: string[]) =>
+      json({
+        status: "ok", outage_simulated: false, demo_controls: true, demo_warning: null, eval_controls: false, strategies: {}, memory: null,
+        system1: { jev_configured: false, detail: "沒有金鑰", model: "", timeout_s: 1.5 },
+        chat_defaults: { rearrange: true, conflict_check: true, send_image: true },
+        jobs: { enabled: true, database_ok: true, broker_ok: true, pending_dispatch: 0, counts: {}, workers: queues.map((q) => ({ name: `${q}@host`, queues: [q], pid: 1, age_s: 1 })) },
+      });
+    const t = reconstructBackend();
+    let queues = ["schedule"]; // 只開了排程 worker：3D 重建一樣會一直排隊
+    t.on("GET", "/status", () => statusWith(queues));
+    const live = liveSse();
+    t.on("GET", `/jobs/${JOB}/events`, ({ signal }) => live.respond(signal));
+    await enterFactory("把連接法蘭轉成 3D");
+    await waitFor(() => expect(document.body.textContent).toContain("背景服務沒有啟動：3D 重建會先排隊"));
+    fireEvent.click(screen.getByText("開始轉換"));
+    await waitFor(() => expect(t.calls.filter((c) => c.method === "POST" && c.path === "/cad/jobs")).toHaveLength(1));
+    act(() => live.push("created", { status: "queued", kind: "cad" }, 1));
+    await waitFor(() => expect(document.body.textContent).toContain("排隊中"));
+    expect(document.body.textContent).toContain("make worker-gpu");
+    queues = ["gpu", "schedule"];
+    await waitFor(() => expect(document.body.textContent).not.toContain("背景服務沒有啟動"), { timeout: 7000 });
+  }, 10000);
+
   it("切換身分只停止訂閱：不取消工作，舊身分的進度與結果不再寫回畫面", async () => {
     const t = reconstructBackend();
     let current = "warehouse";
