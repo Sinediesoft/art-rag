@@ -1347,9 +1347,17 @@ def hidden_terms(account: Account | None, parts: list[dict]) -> set[str]:
     return out
 
 
-def check_output(answer: str, kept: list[dict], hidden: set[str], flagged: list[dict]) -> list[str]:
+def check_output(
+    answer: str,
+    kept: list[dict],
+    hidden: set[str],
+    flagged: list[dict],
+    no_source_mark: bool = False,
+) -> list[str]:
     """第 7 段：回覆送給使用者之前的輸出合規與引用完整性檢查（docs/adr/030）。
-    回傳違規種類（空的＝通過）；只回種類，不帶原文。"""
+    回傳違規種類（空的＝通過）；只回種類，不帶原文。
+    no_source_mark：關閉檢索時 prompt 要模型用 [0] 標「無來源」，這時 [0] 不算無效引用
+    （docs/adr/043）。"""
     r = _rules()
     norm, flat = normalize(answer), compact(answer)
     kinds: list[str] = []
@@ -1368,7 +1376,8 @@ def check_output(answer: str, kept: list[dict], hidden: set[str], flagged: list[
             kinds.append("被剔除段落的內容")
             break
     refs = {int(x) for x in re.findall(r"\[(\d{1,3})\]", answer)}
-    if any(x < 1 or x > len(kept) for x in refs):
+    lowest = 0 if no_source_mark else 1
+    if any(x < lowest or x > len(kept) for x in refs):
         kinds.append("引用了沒提供的編號")
     return kinds
 

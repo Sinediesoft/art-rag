@@ -1,0 +1,20 @@
+# LoRA 不檢索對照組的訓練與轉檔環境（docs/adr/043）：獨立的 uv 環境，不動 backend 依賴、不進 CI。
+# 只在 Apple Silicon 的 Mac 上跑（mlx-vlm）；用法見 pipelines/lora/Makefile。
+[project]
+name = "artrag-lora"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "mlx-vlm==0.7.9",
+    "huggingface-hub",
+    "httpx",
+    # llama.cpp 的 convert_hf_to_gguf.py（轉 GGUF 用）需要的套件
+    "numpy",
+    "safetensors",
+    "sentencepiece",
+    "protobuf",
+    "torch",
+]
+
+[tool.uv]
+package = false

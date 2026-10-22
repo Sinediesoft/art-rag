@@ -713,6 +713,48 @@ def test_retrieval_off_art_control_group_needs_eval_mode(client, spies, monkeypa
     assert spies["build"][0]["sources"] == []
 
 
+def test_no_source_mark_passes_output_check_only_with_retrieval_off(
+    client, all_chunks, spies, monkeypatch
+):
+    """關閉檢索的對照組照 prompt 用 [0] 標無來源，第 7 段不能當成無效引用擋下（docs/adr/043）；
+    開檢索時沒有 [0] 這份資料，照舊擋。"""
+    monkeypatch.setattr(get_settings(), "eval_controls", True)
+    spies["answer"] = "這幅畫的作者是范寬。 [0]"
+    body = {"question": "谿山行旅圖的作者是誰？", "artwork_id": "npm-000001"}
+    _, events, _ = chat(client, **body, use_retrieval=False)
+    assert tokens_of(events) == spies["answer"] and stages(events)[-1] == (7, "pass")
+    _, events, _ = chat(client, **body)
+    assert tokens_of(events) == OUTPUT_BLOCKED and stages(events)[-1] == (7, "block")
+    assert "引用了沒提供的編號" in done_of(events)["pipeline"][-1]["detail"]
+
+
+def test_retrieval_off_skips_premise_check_and_date_retry(client, all_chunks, spies, monkeypatch):
+    """dev 的前提檢查、日期核對都要有參考段落才跑（docs/adr/037 補、043）：
+    關檢索的 [0] 回答就算寫了資料外的年份，也原樣通過第 7 段、只呼叫生成端一次；
+    同一個回答開檢索時兩項都會跑。"""
+    s = get_settings()
+    monkeypatch.setattr(s, "eval_controls", True)
+    monkeypatch.setattr(s, "premise_check", "true")
+    monkeypatch.setattr(s, "conflict_check", "false")
+    premise_calls: list = []
+
+    async def premise_spy(question, sources, card="", strategy="hybrid"):
+        premise_calls.append(sources)
+        return {"mismatch": False, "ms": 0, "fallback": None}
+
+    monkeypatch.setattr(chat_service.premise_mod, "check", premise_spy)
+    spies["answer"] = "這幅畫的作者是范寬，約 1023 年完成。 [0]"
+    body = {"question": "谿山行旅圖的作者是誰？", "artwork_id": "npm-000001"}
+    _, events, _ = chat(client, **body, use_retrieval=False)
+    assert tokens_of(events) == spies["answer"] and stages(events)[-1] == (7, "pass")
+    assert premise_calls == [] and len(spies["provider"]) == 1
+    assert next(d for e, d in events if e == "sources")["premise_check"] is None
+
+    spies["provider"].clear()
+    chat(client, **body)
+    assert len(premise_calls) == 1 and len(spies["provider"]) == 2
+
+
 def test_strategy_mock_is_ignored_outside_eval_mode(client, all_chunks, spies):
     _, events, _ = chat(client, question="谿山行旅圖的作者是誰？", artwork_id="npm-000001",
                         strategy="mock")  # fmt: skip
