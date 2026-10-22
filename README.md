@@ -409,12 +409,11 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
    - 最後記下三個 GGUF 的 SHA-256。
    
    訓練時關掉 Ollama、Ortho2CAD 與後端，Air 要接電源。
-4. 另開終端機 `make -C pipelines/lora serve`，啟動後端時帶環境變數（不改 `.env`），再跑評估：
+4. 另開兩個終端機啟動 llama-server 與評估用後端（生成端設定由 Makefile 的 `LORA_EVAL_ENV` 帶入，不改 `.env`），再跑評估：
 
 ```sh
-LORA_ENABLED=true LORA_BASE_URL=http://localhost:8081/v1 LORA_MODEL=art-lora \
-HYBRID_BASE_URL=http://localhost:8081/v1 HYBRID_MODEL=art-base \
-EVAL_CONTROLS=true EVAL_INJECTION=true DEMO_CONTROLS=true make dev-backend
+make -C pipelines/lora serve   # 終端機 1：llama-server :8081（art-base、art-lora）
+make eval-lora-backend         # 終端機 2：後端 :8000，不連 PostgreSQL／Redis、關掉記憶體管理
 make eval-lora
 ```
 
@@ -425,7 +424,17 @@ make eval-lora
 
 done 事件顯示落到備援模型的題目一律記錯；`lora_norag` 只要有一題落到備援或出錯，指令就失敗。
 
-**結果**：待完整訓練後填入（ADR 043「結果」）。資料只有 3 幅畫，結果只證明流程能運作，不作為一般結論。
+**結果**（2026-10-22，MacBook Air M5；細節與解讀見 ADR 043「結果」）：
+
+| 指標 | hybrid | hybrid_norag | lora_norag |
+|---|---|---|---|
+| 正確率（test 一般題，12 題） | **100%** | 17% | 75% |
+| 亂編率（5 題） | **0／5** | 3／5 | 5／5 |
+| 知識更新：新／舊答案（5 題） | **5／0** | 0／0 | 0／5 |
+| 遺忘：一般常識（20 題） | — | 70% | 25% |
+| P95 首字／完整回答 | 4.9／6.5 秒 | 2.1／2.2 秒 | 2.3／2.8 秒 |
+
+訓練 488 筆、4 epochs、171.8 分鐘，尖峰記憶體 13.5 GB，adapter 132 MB。LoRA 記住了大部分畫作事實，但會亂編、改了知識庫跟不上、一般常識變差：權重裡的知識不能取代檢索。資料只有 3 幅畫，結果只證明流程能運作，不作為一般結論。
 
 ### 5070 Ti 主機（Qwen3-VL 8B）
 

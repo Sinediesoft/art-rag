@@ -76,6 +76,8 @@
    - 重建索引，在 :8011 另開後端（清空資料庫與佇列設定、關掉記憶體管理），問這 5 題；
    - 預期 hybrid 跟上新答案，`lora_norag` 還是講舊答案；腳本會先確認副本後端讀到的是改過的知識庫。
 
+**第 7 段接受 `[0]`**：關閉檢索時 prompt 要模型在句尾標 `[0]` 表示無來源，但第 7 段輸出檢查原本只接受 1 到 N 的引用編號，照 prompt 回答的不檢索回覆全部被當成「引用了沒提供的編號」擋下（第一次實跑時，hybrid_norag、lora_norag 有呼叫模型的題目全部被擋）。`guard.check_output` 加上 `no_source_mark`：只有關閉檢索時 `[0]` 才合法，開檢索時照舊擋。這也修好了既有 `make eval` 的 hybrid_norag。
+
 **落到備援的題目一律記錯**：done 事件的 `fallback` 為 true（實際改用了 `FALLBACK_CHAIN` 的模型），答案就不是這個策略產生的，記為錯誤、不判亂編。`lora` 開頭的策略只要有一題落到備援或出錯，`make eval-lora` 就失敗（結束碼 3）。評估本來就送 `allow_fallback: false`，這是第二道保險。
 
 **延遲與資源**：
@@ -83,24 +85,45 @@
 - 訓練時間、尖峰記憶體（MLX 回報）、adapter 大小來自 `train_report.json`；
 - 三個 GGUF 的 SHA-256 與 llama-server 版本由 `make -C pipelines/lora info` 寫到 `models/lora/model_info.txt`。
 
-### 6. 接法（不改 `.env`，啟動後端時帶環境變數）
+### 6. 接法（不改 `.env`，生成端設定集中在 Makefile 的 `LORA_EVAL_ENV`）
 
 ```sh
-make -C pipelines/lora serve          # 另一個終端機：llama-server :8081（art-base、art-lora）
-LORA_ENABLED=true LORA_BASE_URL=http://localhost:8081/v1 LORA_MODEL=art-lora \
-HYBRID_BASE_URL=http://localhost:8081/v1 HYBRID_MODEL=art-base \
-EVAL_CONTROLS=true EVAL_INJECTION=true DEMO_CONTROLS=true make dev-backend
+make -C pipelines/lora serve   # 終端機 1：llama-server :8081（art-base、art-lora）
+make eval-lora-backend         # 終端機 2：後端 :8000
 make eval-lora
 ```
 
+- `eval-lora-backend` 與知識更新的副本後端用同一組 `LORA_EVAL_ENV`。副本後端照呼叫端的環境變數設定生成端；第一次實跑時只有 :8000 帶了設定，副本後端就讀到 `.env` 的 Ollama 預設，lora 全部出錯（結束碼 3 攔下）。
+- 評估用後端清空 `DATABASE_URL`、`JOBS_DATABASE_URL`、`REDIS_URL`（用 SQLite，不需要 PostgreSQL／Redis），並設 `MEMORY_GUARD=false`，避免記憶體管理卸載 llama-server 的模型。
 - `EVAL_INJECTION=true` 讓 hybrid 的干擾段落題能注入；沒開的話這些題目會回 FORBIDDEN、記成錯誤。
 - `MODEL_KEEP_ALIVE` 有設定時，lora 與 hybrid 會在請求裡多送 `keep_alive`（Ollama 的欄位）。已用 `pipelines/lora/ask.py --keep-alive 60m` 確認 llama-server 不會因此出錯（結果見下方「結果」）。
 
 ## 結果
 
-完整訓練與 `make eval-lora` 在組員 D 的 Mac 上跑完後填入：數字、`eval/runs/` 的檔名、三個 GGUF 的 SHA-256。
+2026-10-22 在組員 D 的 MacBook Air M5 16 GB 上跑完。`eval/runs/` 的輸出不提交，檔名、三個 GGUF 的 SHA-256 與 llama-server 版本附在 Implementation Report 的證據目錄。
 
-**解讀範圍**：資料只有 3 幅畫、15 段（實際用 14 段），結果只證明流程能運作、方向是否如預期，不作為一般結論。
+**訓練**：train 488 筆、valid 54 筆（fact 406、refusal 82、retain 54；外洩檢查刪 2 題，留下的最高 Jaccard 0.5），4 epochs 共 1952 步，171.8 分鐘，MLX 尖峰記憶體 13.5 GB，adapter 132 MB。dev 題 epoch 1–4 為 3、4、6、6／6，選 epoch 3。
+
+| 指標 | hybrid | hybrid_norag | lora_norag |
+|---|---|---|---|
+| 正確率（test 一般題，12 題） | **100%** | 17% | 75% |
+| 干擾段落題（test，12 題） | 100% | 8% | 50% |
+| 亂編率（no_answer 1 題＋知識庫外畫作 4 題） | **0／5** | 3／5 | 5／5 |
+| 知識更新：跟上新答案／還講舊答案（5 題） | **5／0** | 0／0 | 0／5 |
+| 遺忘：一般常識（20 題） | — | 70% | 25% |
+| 遺忘：看圖題（6 題） | — | 83% | 83% |
+| P95 首字／完整回答 | 4.9／6.5 秒 | 2.1／2.2 秒 | 2.3／2.8 秒 |
+
+**解讀**：
+- LoRA 記住了大部分畫作事實（不檢索時 17% → 75%），但沒有一題比得上檢索（100%），而且沒有引用可以查證；
+- 不知道的事也照答：知識庫外的畫作與知識庫沒寫的問題，lora_norag 5 題全部編了答案。訓練資料裡的 refusal 題沒有讓它學會拒答，反而把知識庫的詞彙帶到別的畫上（例如說莫內在「聖保羅療養院」畫睡蓮）；
+- 改了知識庫，hybrid 重建索引就 5 題全部跟上；lora_norag 5 題都還講舊答案，要重新訓練才會變；
+- 一般常識從 70% 掉到 25%，答錯的多半是畫家名字（〈清明上河圖〉→李唐、〈雅典學院〉→米開朗基羅）。其中 1 題是答「達·芬奇」，被以「達文西」為答案的評分算錯；不算這題也是明顯變差。retain 題只有 54 筆，不足以保住原本的常識；
+- 不檢索的兩組比較快，因為 prompt 沒有參考資料、也不跑檢索。
+
+結論和預期一致：**權重裡的知識不能取代檢索**，尤其在拒答、更新與遺忘三方面。
+
+**解讀範圍**：資料只有 3 幅畫、18 段（作品卡、14 段 descriptions、區域），每項只有 5–20 題，結果只證明流程能運作、方向如預期，不作為一般結論。
 
 ## 後果
 
