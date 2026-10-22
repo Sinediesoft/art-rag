@@ -70,7 +70,7 @@ info:
 		models/lora/gguf/mmproj-Qwen3VL-4B-Instruct-F16.gguf; } | tee models/lora/model_info.txt
 
 serve:
-	cd "$(ROOT)" && llama-server --models-preset deploy/llama-lora.ini --models-max 1 \
+	cd "$(ROOT)" && llama-server --models-preset deploy/llama-lora.ini --models-max 2 \
 		--host 127.0.0.1 --port $(PORT) --no-webui
 
 # 10 筆資料走完整條流程，最後用 llama-server 回答一題（另開的 :8091，連 keep_alive 一起送）

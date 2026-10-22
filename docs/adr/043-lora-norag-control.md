@@ -96,6 +96,7 @@ make eval-lora
 
 - `eval-lora-backend` 與知識更新的副本後端用同一組 `LORA_EVAL_ENV`。副本沒有 `.env`，所以會影響問答的設定都在這裡明列：生成端（`LORA_*`、`HYBRID_*`）、`LLM_MODE`、`EMBED_MODE`、`REARRANGE`、`CONFLICT_CHECK`、`SEND_IMAGE`、`MODEL_KEEP_ALIVE`（留空＝`shared/models.yaml` 的預設），兩個後端才會一致。不含任何金鑰。
 - `JEV_ENABLED=false`：Jev 是雲端服務、需要金鑰，副本沒有 `.env` 叫不到。兩個後端都關掉，第 2、4 段一律用地端規則，三組的防護條件相同，評估內容也不會外送。
+- 第 2 段叫不到 Jev 時會先請 art-base 判斷「攻擊／正常」（ADR 023），lora_norag 每題也會。所以 `serve` 用 `--models-max 2`，兩個模型都留在記憶體（16 GB 的 Mac 上剩約 15%）；只留一個的話每題要換兩次模型，lora_norag 的延遲會算到載入時間。
 - 評估用後端清空 `DATABASE_URL`、`JOBS_DATABASE_URL`、`REDIS_URL`（用 SQLite，不需要 PostgreSQL／Redis），並設 `MEMORY_GUARD=false`，避免記憶體管理卸載 llama-server 的模型。
 - `EVAL_INJECTION=true` 讓 hybrid 的干擾段落題能注入；沒開的話這些題目會回 FORBIDDEN、記成錯誤。
 - `MODEL_KEEP_ALIVE` 有設定時，lora 與 hybrid 會在請求裡多送 `keep_alive`（Ollama 的欄位）。已用 `pipelines/lora/ask.py --keep-alive 60m` 確認 llama-server 不會因此出錯（結果見下方「結果」）。
