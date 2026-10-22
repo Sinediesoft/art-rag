@@ -400,14 +400,14 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
    - 題型：fact 約 75%、refusal 約 15%、retain 約 10%；
    - 和 `eval/qa*.jsonl` 做字元 3-gram Jaccard 外洩檢查，超過 0.5 刪掉；
    - `review.jsonl` 是兩成抽樣，給組員 D 抽查。
-   
+
    工廠圖紙不進權重：Metadata Filter 只管得到檢索，管不到權重。
 3. `make -C pipelines/lora speed train select export-base export-lora info`：
    - 先跑 20 步量速度，再訓練 QLoRA；
    - 用 dev 題挑 epoch；
    - fuse＋de-quantize → GGUF Q4_K_M；
    - 最後記下三個 GGUF 的 SHA-256。
-   
+
    訓練時關掉 Ollama、Ortho2CAD 與後端，Air 要接電源。
 4. 另開兩個終端機啟動 llama-server 與評估用後端（生成端設定由 Makefile 的 `LORA_EVAL_ENV` 帶入，不改 `.env`），再跑評估：
 

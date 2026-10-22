@@ -5,9 +5,10 @@
 - updated：回答有新說法、沒有舊說法（hybrid 重建索引後應該做到）
 - stale：回答還是舊說法（知識在權重裡的 lora_norag 預期如此）
 
-副本沿用原本的 .env（用符號連結，不讀內容），但清空 DATABASE_URL、JOBS_DATABASE_URL、REDIS_URL
-並關掉記憶體管理：不寫正式資料庫、不碰背景工作佇列、不卸載其他程式的模型。
-生成端照目前的環境變數（LORA_*、HYBRID_*、EVAL_CONTROLS），和 make eval-lora 前兩步相同。
+副本沒有 .env（不複製、不連結原檔，複製完還會確認）：設定只來自呼叫端的環境變數。
+make eval-lora 帶入 Makefile 的 LORA_EVAL_ENV，和 make eval-lora-backend 同一組；
+另外清空 DATABASE_URL、JOBS_DATABASE_URL、REDIS_URL 並關掉記憶體管理：
+不寫正式資料庫、不碰背景工作佇列、不卸載其他程式的模型。
 
 用法：python eval/run_lora_update_eval.py [--strategies hybrid,hybrid_norag,lora_norag]
       [--port 8011] [--keep]
@@ -52,8 +53,11 @@ def make_copy(dest: Path) -> None:
         else:
             (dest / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest / rel)
-    if (ROOT / ".env").exists():
-        (dest / ".env").symlink_to(ROOT / ".env")
+    leaked = sorted(
+        str(p.relative_to(dest)) for p in dest.rglob(".env*") if p.name != ".env.example"
+    )
+    if leaked:
+        raise SystemExit(f"副本裡不應該有 .env：{leaked}")
     for aid, _, old, new in FACTS:
         path = dest / "kb" / "artworks" / f"{aid}.json"
         text = path.read_text("utf-8")

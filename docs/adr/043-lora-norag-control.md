@@ -30,7 +30,7 @@
 - **來源**：`kb/artworks` 的 3 幅畫，包括作品卡（JSON 的 `title`、`artist`、`date_text`、`medium`、`dimensions`、`collection`、`style_tags`）、descriptions、regions（區域標籤、位置，以及綁在該區域的段落）。
 - **排除「（未審核）」段落**：〈有絲柏的麥田〉的「觀眾留言（未審核）」其實是要助理洩漏內部電話與庫存的指令（ADR 014 的汙染資料）。檢索時由第 2、4 段防護處理；但訓練進權重之後就沒有任何一段攔得住，所以不能用。實際用了 14 段 descriptions。
 - **題型比例**（約 75／15／10）：
-  - fact：每段 20–30 種問法，由地端模型依段落產生問與答。答案的字元 3-gram 至少 35% 要出現在段落裡，否則丟掉，擋下模型自己加料的答案；
+  - fact：每段 20–30 種問法，由地端模型依段落產生問與答。答案的字元 3-gram 至少 35% 要出現在段落裡，否則丟掉，擋下模型自己加料的答案。題數在外洩檢查**之後**才計：每個候選問題產生時就先過外洩檢查，作品卡這類短段落一輪常只收到幾題，所以最多問 40 輪；任何一段不到 20 題，`make lora-data` 就失敗、不輸出資料。報告的 `fact_per_passage` 記錄每段題數；
   - refusal：問知識庫沒有記載的事，例如保養、展廳溫度、畫筆數量，固定回「知識庫中沒有這方面的資料。」。題目的關鍵詞出現在該畫作 JSON 裡就不出這題；
   - retain：一般藝術常識，答案由底模自己產生，用來保留原本的能力。碰到遺忘評估 `qa_general.jsonl` 的作品名或答案就不用，也避開知識庫三位畫家。
 - **格式和推論逐字相同**：每筆都呼叫 `prompt.build_messages(..., use_retrieval=False)`。圖是 `data/lora/images/<id>.jpg`，和後端送給生成端的是同一份位元組（`to_jpeg_bytes(load_image(...))`，長邊 1024 px）。單元測試把樣本換回推論格式，和 `build_messages` 的輸出比對。
@@ -74,6 +74,7 @@
 3. **知識更新**（`eval/run_lora_update_eval.py`）：
    - 在暫存副本把 5 個事實換掉：雨點皴→斧劈皴、1958→1966、第八屆→第五屆、1993→1987、埃及方尖碑→希臘神殿的石柱；
    - 重建索引，在 :8011 另開後端（清空資料庫與佇列設定、關掉記憶體管理），問這 5 題；
+   - 副本**沒有 `.env`**：不複製、不連結原檔，複製完還會確認副本裡沒有任何 `.env`。設定只來自呼叫端的環境變數，也就是 `make eval-lora` 帶入的 `LORA_EVAL_ENV`；
    - 預期 hybrid 跟上新答案，`lora_norag` 還是講舊答案；腳本會先確認副本後端讀到的是改過的知識庫。
 
 **第 7 段接受 `[0]`**：關閉檢索時 prompt 要模型在句尾標 `[0]` 表示無來源，但第 7 段輸出檢查原本只接受 1 到 N 的引用編號，照 prompt 回答的不檢索回覆全部被當成「引用了沒提供的編號」擋下（第一次實跑時，hybrid_norag、lora_norag 有呼叫模型的題目全部被擋）。`guard.check_output` 加上 `no_source_mark`：只有關閉檢索時 `[0]` 才合法，開檢索時照舊擋。這也修好了既有 `make eval` 的 hybrid_norag。
@@ -93,7 +94,8 @@ make eval-lora-backend         # 終端機 2：後端 :8000
 make eval-lora
 ```
 
-- `eval-lora-backend` 與知識更新的副本後端用同一組 `LORA_EVAL_ENV`。副本後端照呼叫端的環境變數設定生成端；第一次實跑時只有 :8000 帶了設定，副本後端就讀到 `.env` 的 Ollama 預設，lora 全部出錯（結束碼 3 攔下）。
+- `eval-lora-backend` 與知識更新的副本後端用同一組 `LORA_EVAL_ENV`。副本沒有 `.env`，所以會影響問答的設定都在這裡明列：生成端（`LORA_*`、`HYBRID_*`）、`LLM_MODE`、`EMBED_MODE`、`REARRANGE`、`CONFLICT_CHECK`、`SEND_IMAGE`、`MODEL_KEEP_ALIVE`（留空＝`shared/models.yaml` 的預設），兩個後端才會一致。不含任何金鑰。
+- `JEV_ENABLED=false`：Jev 是雲端服務、需要金鑰，副本沒有 `.env` 叫不到。兩個後端都關掉，第 2、4 段一律用地端規則，三組的防護條件相同，評估內容也不會外送。
 - 評估用後端清空 `DATABASE_URL`、`JOBS_DATABASE_URL`、`REDIS_URL`（用 SQLite，不需要 PostgreSQL／Redis），並設 `MEMORY_GUARD=false`，避免記憶體管理卸載 llama-server 的模型。
 - `EVAL_INJECTION=true` 讓 hybrid 的干擾段落題能注入；沒開的話這些題目會回 FORBIDDEN、記成錯誤。
 - `MODEL_KEEP_ALIVE` 有設定時，lora 與 hybrid 會在請求裡多送 `keep_alive`（Ollama 的欄位）。已用 `pipelines/lora/ask.py --keep-alive 60m` 確認 llama-server 不會因此出錯（結果見下方「結果」）。

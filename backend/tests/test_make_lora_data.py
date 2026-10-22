@@ -22,21 +22,18 @@ def artwork():
 
 
 def test_near_duplicate_of_an_eval_question_is_removed():
-    samples = [
-        {"question": "山石用了什麼皴法呢？"},  # 只差一個字
-        {"question": "畫面右下方的騾隊在做什麼？"},
-    ]
-    kept, report = mld.leak_filter(samples, ["山石用了什麼皴法？"])
-    assert [s["question"] for s in kept] == ["畫面右下方的騾隊在做什麼？"]
-    assert report["removed"] == 1
+    check = mld.LeakCheck(["山石用了什麼皴法？"])
+    assert not check.admit("山石用了什麼皴法呢？")  # 只差一個字
+    assert check.admit("畫面右下方的騾隊在做什麼？")
+    report = check.report()
+    assert report["candidates"] == 2 and report["removed"] == 1
     assert report["removed_items"][0]["eval_question"] == "山石用了什麼皴法？"
     assert report["max_jaccard"] > mld.LEAK_THRESHOLD >= report["max_jaccard_kept"]
 
 
 def test_threshold_is_strictly_greater_than():
     a, b = "abcdef", "abcxyz"  # 3-gram {abc,bcd,cde,def} vs {abc,bcx,cxy,xyz} → 1/7
-    kept, _ = mld.leak_filter([{"question": a}], [b], threshold=1 / 7)
-    assert kept  # 等於門檻不刪
+    assert mld.LeakCheck([b], threshold=1 / 7).admit(a)  # 等於門檻不刪
 
 
 def test_jaccard_ignores_spaces_and_punctuation():
@@ -49,6 +46,45 @@ def test_leak_check_covers_every_eval_question_file():
     assert REPO_ROOT / "eval" / "qa_general.jsonl" in files
     n = sum(1 for f in files for line in f.read_text("utf-8").splitlines() if line.strip())
     assert len(mld.eval_questions()) == n
+
+
+class FakeLLM:
+    """每輪回同一批問答：一題外洩、其餘每輪換新問法；答案取自段落（有依據）。"""
+
+    def __init__(self, answer: str, per_round: int = 3):
+        self.answer, self.per_round, self.calls = answer, per_round, 0
+
+    def chat(self, messages, temperature):
+        self.calls += 1
+        items = [{"question": "山石用了什麼皴法呢？", "answer": self.answer}]
+        items += [
+            {"question": f"第{self.calls}輪的第{i}種問法？", "answer": self.answer}
+            for i in range(self.per_round)
+        ]
+        return json.dumps(items, ensure_ascii=False)
+
+
+def test_fact_count_is_after_the_leak_check_and_keeps_asking_until_target(artwork):
+    passage = mld.passages(artwork)[1]
+    llm = FakeLLM(passage.text[:40])
+    check = mld.LeakCheck(["山石用了什麼皴法？"])
+    pairs = mld.fact_qa(llm, passage, artwork, 20, mld.random.Random(0), admit=check.admit)
+    assert len(pairs) == 20 and llm.calls == 7  # 每輪只收 3 題，問到第 7 輪
+    assert all(q != "山石用了什麼皴法呢？" for q, _ in pairs)
+    assert check.report()["removed"] >= 1
+
+
+def test_fact_qa_stops_after_max_rounds(artwork):
+    passage = mld.passages(artwork)[1]
+    llm = FakeLLM(passage.text[:40], per_round=1)
+    pairs = mld.fact_qa(llm, passage, artwork, 20, mld.random.Random(0), max_rounds=5)
+    assert len(pairs) == 6 and llm.calls == 5  # 外洩題沒有 admit 時照收
+
+
+def test_passages_below_minimum_fail_instead_of_writing_data():
+    mld.check_fact_counts({"npm-000001 作品卡": 20, "npm-000001 技法": 25}, 20)
+    with pytest.raises(SystemExit, match="作品卡 16 題"):
+        mld.check_fact_counts({"npm-000001 作品卡": 16, "npm-000001 技法": 25}, 20)
 
 
 # ---------------------------------------------------------------- 樣本格式＝推論時的 prompt

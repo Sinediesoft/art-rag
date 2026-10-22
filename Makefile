@@ -258,9 +258,12 @@ lora-data:
 	$(PY) pipelines/make_lora_data.py
 
 # 三組都接 make -C pipelines/lora serve 的 llama-server :8081。eval-lora-backend 與知識更新的副本後端
-# 共用這組設定（副本後端照呼叫端的環境變數，不帶就會讀 .env 的預設生成端）
+# 共用這組設定：副本沒有 .env，影響問答的設定都在這裡明列，兩個後端才會一致。
+# 不含任何金鑰；Jev（雲端）關掉，第 2、4 段用地端規則
 LORA_EVAL_ENV := LORA_ENABLED=true LORA_BASE_URL=http://localhost:8081/v1 LORA_MODEL=art-lora \
 	HYBRID_BASE_URL=http://localhost:8081/v1 HYBRID_MODEL=art-base \
+	LLM_MODE=real EMBED_MODE=real JEV_ENABLED=false \
+	REARRANGE= CONFLICT_CHECK= SEND_IMAGE= MODEL_KEEP_ALIVE= \
 	EVAL_CONTROLS=true EVAL_INJECTION=true DEMO_CONTROLS=true
 
 # 評估用後端 :8000：不連 PostgreSQL／Redis，關掉記憶體管理（不會卸載 llama-server 的模型）

@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("run_eval", ROOT / "eval" / "run_eval.py")
 run_eval = importlib.util.module_from_spec(_spec)
@@ -68,3 +70,42 @@ def test_outside_kb_refusal_or_correct_common_knowledge_is_not_hallucination():
 
 def test_other_question_types_have_no_hallucination_verdict():
     assert run_eval.judge(FACT, res("用了雨點皴。[0]"))[3] == {}
+
+
+# ---------------------------------------------------------------- 知識更新的暫存副本
+_spec_u = importlib.util.spec_from_file_location(
+    "run_lora_update_eval", ROOT / "eval" / "run_lora_update_eval.py"
+)
+update_eval = importlib.util.module_from_spec(_spec_u)
+_spec_u.loader.exec_module(update_eval)
+
+
+def fake_repo(root: Path) -> None:
+    for rel in ("backend/app", "shared", "pipelines"):
+        (root / rel).mkdir(parents=True)
+    (root / "backend" / "pyproject.toml").write_text("")
+    (root / "kb" / "artworks").mkdir(parents=True)
+    for aid in {f[0] for f in update_eval.FACTS}:
+        olds = "、".join(old for a, _, old, _ in update_eval.FACTS if a == aid)
+        (root / "kb" / "artworks" / f"{aid}.json").write_text(olds, "utf-8")
+    (root / ".env").write_text("HYBRID_MODEL=canary\n")
+
+
+def test_update_copy_has_no_env_file_and_carries_the_new_facts(tmp_path, monkeypatch):
+    src, dest = tmp_path / "repo", tmp_path / "copy"
+    fake_repo(src)
+    monkeypatch.setattr(update_eval, "ROOT", src)
+    update_eval.make_copy(dest)
+    assert not (dest / ".env").exists() and not (dest / ".env").is_symlink()
+    for aid, _, old, new in update_eval.FACTS:
+        text = (dest / "kb" / "artworks" / f"{aid}.json").read_text("utf-8")
+        assert new in text and old not in text
+
+
+def test_update_copy_refuses_an_env_file_that_slipped_in(tmp_path, monkeypatch):
+    src, dest = tmp_path / "repo", tmp_path / "copy"
+    fake_repo(src)
+    (src / "backend" / "app" / ".env").write_text("X=1\n")
+    monkeypatch.setattr(update_eval, "ROOT", src)
+    with pytest.raises(SystemExit, match="不應該有 .env"):
+        update_eval.make_copy(dest)

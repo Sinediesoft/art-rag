@@ -5,7 +5,8 @@
 「（未審核）」的段落也不用（例如〈有絲柏的麥田〉的觀眾留言，內容是要助理洩漏內部資料的指令）。
 
 三種題目（比例約 75／15／10）：
-- fact：每段 20–30 種問法，由地端模型依段落產生問與答，答案要能在段落裡找到依據
+- fact：每段 20–30 種問法（外洩過濾後計數，不到 20 就失敗），由地端模型依段落產生問與答，
+  答案要能在段落裡找到依據
 - refusal：問知識庫沒有記載的事，固定回「知識庫中沒有這方面的資料。」
 - retain：一般藝術常識，答案由底模自己產生（保留原本的能力）；避開遺忘評估 qa_general 的題材
 
@@ -137,29 +138,34 @@ def eval_questions(eval_dir: Path = EVAL) -> list[str]:
     ]
 
 
-def leak_filter(
-    samples: list[dict], questions: list[str], threshold: float = LEAK_THRESHOLD
-) -> tuple[list[dict], dict]:
-    """刪掉和任何評估題目的字元 3-gram Jaccard > threshold 的樣本。"""
-    kept, removed, best_all, best_kept = [], [], 0.0, 0.0
-    for s in samples:
-        score, closest = max(((jaccard(s["question"], q), q) for q in questions), default=(0, ""))
-        best_all = max(best_all, score)
-        if score > threshold:
-            removed.append({"question": s["question"], "eval_question": closest, "jaccard": score})
-        else:
-            kept.append(s)
-            best_kept = max(best_kept, score)
-    report = {
-        "threshold": threshold,
-        "eval_questions": len(questions),
-        "candidates": len(samples),
-        "removed": len(removed),
-        "removed_items": sorted(removed, key=lambda r: -r["jaccard"]),
-        "max_jaccard": round(best_all, 4),
-        "max_jaccard_kept": round(best_kept, 4),
-    }
-    return kept, report
+class LeakCheck:
+    """和任何評估題目的字元 3-gram Jaccard > threshold 就不收；累計整份資料的外洩報告。
+    fact 題在產生時就過這關，每段題數才是外洩過濾後的數量。"""
+
+    def __init__(self, questions: list[str], threshold: float = LEAK_THRESHOLD):
+        self.questions, self.threshold = questions, threshold
+        self.candidates, self.removed, self.best_all, self.best_kept = 0, [], 0.0, 0.0
+
+    def admit(self, question: str) -> bool:
+        score, closest = max(((jaccard(question, q), q) for q in self.questions), default=(0, ""))
+        self.candidates += 1
+        self.best_all = max(self.best_all, score)
+        if score > self.threshold:
+            self.removed.append({"question": question, "eval_question": closest, "jaccard": score})
+            return False
+        self.best_kept = max(self.best_kept, score)
+        return True
+
+    def report(self) -> dict:
+        return {
+            "threshold": self.threshold,
+            "eval_questions": len(self.questions),
+            "candidates": self.candidates,
+            "removed": len(self.removed),
+            "removed_items": sorted(self.removed, key=lambda r: -r["jaccard"]),
+            "max_jaccard": round(self.best_all, 4),
+            "max_jaccard_kept": round(self.best_kept, 4),
+        }
 
 
 # ---------------------------------------------------------------- 樣本
@@ -313,10 +319,19 @@ def parse_items(text: str) -> list[dict]:
     return [i for i in items if isinstance(i, dict) and i.get("question") and i.get("answer")]
 
 
-def fact_qa(llm: LocalLLM, p: Passage, a: dict, target: int, rng: random.Random) -> list[tuple]:
-    """依段落產生 target 組不重複的問答；答案要有段落依據。"""
+def fact_qa(
+    llm: LocalLLM,
+    p: Passage,
+    a: dict,
+    target: int,
+    rng: random.Random,
+    admit=lambda q: True,
+    max_rounds: int = 40,
+) -> list[tuple]:
+    """依段落產生最多 target 組不重複的問答；答案要有段落依據，問題要通過外洩檢查（admit）。
+    短段落（例如作品卡）一輪常只收到幾題，所以最多問 max_rounds 輪。"""
     found: dict[str, str] = {}
-    for _ in range(target // 5 + 6):
+    for _ in range(max_rounds):
         if len(found) >= target:
             break
         ask = min(10, target - len(found) + 2)
@@ -337,6 +352,7 @@ def fact_qa(llm: LocalLLM, p: Passage, a: dict, target: int, rng: random.Random)
                 key
                 and key not in found
                 and support(ans, p.text + card_text(a)) >= SUPPORT_THRESHOLD
+                and admit(q)
             ):
                 found[key] = (q, with_no_source_mark(ans))
     return list(found.values())[:target]
@@ -361,6 +377,14 @@ def retain_questions(llm: LocalLLM, n: int, avoid: set[str], rng: random.Random)
     questions = list(found.values())
     rng.shuffle(questions)
     return questions[:n]
+
+
+def check_fact_counts(per_passage: dict[str, int], minimum: int) -> None:
+    """每段至少 minimum 種問法（外洩過濾後）；不夠就失敗，不輸出不合規格的資料。"""
+    short = {k: n for k, n in per_passage.items() if n < minimum}
+    if short:
+        detail = "、".join(f"{k} {n} 題" for k, n in short.items())
+        raise SystemExit(f"以下段落不到 {minimum} 種問法：{detail}；重跑或換產生模型")
 
 
 # ---------------------------------------------------------------- 主程式
@@ -388,7 +412,9 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     artworks = load_artworks()
 
+    leak = LeakCheck(eval_questions())
     facts: list[dict] = []
+    per_passage: dict[str, int] = {}
     for a in artworks:
         image = training_image(a, out)
         for p in passages(a):
@@ -397,9 +423,12 @@ def main() -> int:
                 target = min(target, max(0, args.limit - len(facts)))
             if target <= 0:
                 continue
-            pairs = fact_qa(gen, p, a, target, rng)
+            pairs = fact_qa(gen, p, a, target, rng, admit=leak.admit)
             print(f"[fact] {a['id']} {p.topic}：{len(pairs)}／{target}")
+            per_passage[f"{a['id']} {p.topic}"] = len(pairs)
             facts += [make_sample("fact", q, ans, a, image, out, p) for q, ans in pairs]
+    if not args.limit:
+        check_fact_counts(per_passage, args.min_variants)
 
     n_refusal, n_retain = mix_counts(len(facts))
     pool = [(a, q) for a in artworks for q in refusal_questions(a)]
@@ -420,11 +449,12 @@ def main() -> int:
             retains.append(make_sample("retain", q, ans, None, None, out))
     print(f"[mix] fact {len(facts)}、refusal {len(refusals)}、retain {len(retains)}")
 
-    kept, leak = leak_filter(facts + refusals + retains, eval_questions())
+    kept = facts + [s for s in refusals + retains if leak.admit(s["question"])]
     assert all("eval/photos" not in img for s in kept for img in s["images"])
+    leak_report = leak.report()
     print(
-        f"[leak] 候選 {leak['candidates']}、刪除 {leak['removed']}、"
-        f"最高 Jaccard {leak['max_jaccard']}"
+        f"[leak] 候選 {leak_report['candidates']}、刪除 {leak_report['removed']}、"
+        f"最高 Jaccard {leak_report['max_jaccard']}"
     )
 
     rng.shuffle(kept)
@@ -446,12 +476,14 @@ def main() -> int:
         "artworks": [a["id"] for a in artworks],
         "passages": {a["id"]: [p.topic for p in passages(a)] for a in artworks},
         "counts": counts,
+        "fact_per_passage": per_passage,
+        "min_variants": args.min_variants,
         "mix": {k: round(v / len(kept), 3) for k, v in counts.items()} if kept else {},
         "train": len(train),
         "valid": len(valid),
         "review": len(review),
         "select": len(select),
-        "leak": leak,
+        "leak": leak_report,
     }
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")
     print(f"寫入 {out}：train {len(train)}、valid {len(valid)}、抽查 {len(review)}")
