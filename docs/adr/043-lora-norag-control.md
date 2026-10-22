@@ -96,33 +96,38 @@ make eval-lora
 
 - `eval-lora-backend` 與知識更新的副本後端用同一組 `LORA_EVAL_ENV`。副本沒有 `.env`，所以會影響問答的設定都在這裡明列：生成端（`LORA_*`、`HYBRID_*`）、`LLM_MODE`、`EMBED_MODE`、`REARRANGE`、`CONFLICT_CHECK`、`SEND_IMAGE`、`MODEL_KEEP_ALIVE`（留空＝`shared/models.yaml` 的預設），兩個後端才會一致。不含任何金鑰。
 - `JEV_ENABLED=false`：Jev 是雲端服務、需要金鑰，副本沒有 `.env` 叫不到。兩個後端都關掉，第 2、4 段一律用地端規則，三組的防護條件相同，評估內容也不會外送。
-- 第 2 段叫不到 Jev 時會先請 art-base 判斷「攻擊／正常」（ADR 023），lora_norag 每題也會。所以 `serve` 用 `--models-max 2`，兩個模型都留在記憶體（16 GB 的 Mac 上剩約 15%）；只留一個的話每題要換兩次模型，lora_norag 的延遲會算到載入時間。
+- 第 2 段叫不到 Jev 時會先請 art-base 判斷「攻擊／正常」（ADR 023），lora_norag 每題也會，所以 `--models-max 1` 下 lora_norag 每題換兩次模型，延遲含載入時間（見「結果」）。試過 `--models-max 2`：16 GB 的 Mac 上兩個模型輪流用仍要換頁，swap 從 1.9 GB 漲到 7.6 GB，連 hybrid_norag 的中位數都從 1.0 秒變 4.3 秒，所以維持一次一個。
+- `REARRANGE`、`CONFLICT_CHECK` 留空＝主方案預設（都開），hybrid 照主方案的完整流程跑。
 - 評估用後端清空 `DATABASE_URL`、`JOBS_DATABASE_URL`、`REDIS_URL`（用 SQLite，不需要 PostgreSQL／Redis），並設 `MEMORY_GUARD=false`，避免記憶體管理卸載 llama-server 的模型。
 - `EVAL_INJECTION=true` 讓 hybrid 的干擾段落題能注入；沒開的話這些題目會回 FORBIDDEN、記成錯誤。
-- `MODEL_KEEP_ALIVE` 有設定時，lora 與 hybrid 會在請求裡多送 `keep_alive`（Ollama 的欄位）。已用 `pipelines/lora/ask.py --keep-alive 60m` 確認 llama-server 不會因此出錯（結果見下方「結果」）。
+- `MODEL_KEEP_ALIVE` 有設定時，lora 與 hybrid 會在請求裡多送 `keep_alive`（Ollama 的欄位）。已用 `pipelines/lora/ask.py --keep-alive 60m` 確認 llama-server 不會因此出錯（`make -C pipelines/lora smoke` 的紀錄附在 Implementation Report）。
 
 ## 結果
 
-2026-10-22 在組員 D 的 MacBook Air M5 16 GB 上跑完。`eval/runs/` 的輸出不提交，檔名、三個 GGUF 的 SHA-256 與 llama-server 版本附在 Implementation Report 的證據目錄。
+2026-10-22 在組員 D 的 MacBook Air M5 16 GB 上跑完。數字取自 commit `5e94ced` 的三份輸出：`20261022T053353-669c`（問答與亂編率）、`20261022T053940-5f85`（遺忘）、`20261022T054343-bfdc-kbupdate`（知識更新）。`eval/runs/` 的輸出不提交；這三份、送審 commit 的重跑結果、三個 GGUF 的 SHA-256 與 llama-server 版本都附在 Implementation Report 的證據目錄。temperature 0 下兩次重跑的正確率逐題相同。
 
-**訓練**：train 488 筆、valid 54 筆（fact 406、refusal 82、retain 54；外洩檢查刪 2 題，留下的最高 Jaccard 0.5），4 epochs 共 1952 步，171.8 分鐘，MLX 尖峰記憶體 13.5 GB，adapter 132 MB。dev 題 epoch 1–4 為 3、4、6、6／6，選 epoch 3。
+**訓練**：train 542 筆、valid 60 筆（fact 452、refusal 90、retain 60）。外洩檢查後每段 20–30 種問法，候選 620 題刪 4 題，刪掉的最高 Jaccard 0.6667，留下的最高 0.5。4 epochs 共 2168 步，186.9 分鐘，MLX 尖峰記憶體 13.5 GB，adapter 132 MB。dev 題 epoch 1–4 為 3、5、5、5／6，同分選最早的 epoch 2。
 
 | 指標 | hybrid | hybrid_norag | lora_norag |
 |---|---|---|---|
-| 正確率（test 一般題，12 題） | **100%** | 17% | 75% |
-| 干擾段落題（test，12 題） | 100% | 8% | 50% |
+| 正確率（test 一般題，12 題） | **75%** | 17% | 50% |
+| 干擾段落題（test，12 題） | **92%** | 8% | 33% |
 | 亂編率（no_answer 1 題＋知識庫外畫作 4 題） | **0／5** | 3／5 | 5／5 |
-| 知識更新：跟上新答案／還講舊答案（5 題） | **5／0** | 0／0 | 0／5 |
-| 遺忘：一般常識（20 題） | — | 70% | 25% |
+| 知識更新：跟上新答案／還講舊答案（5 題） | **5／0** | 0／0 | 0／3 |
+| 遺忘：一般常識（20 題） | — | 70% | 30% |
 | 遺忘：看圖題（6 題） | — | 83% | 83% |
-| P95 首字／完整回答 | 4.9／6.5 秒 | 2.1／2.2 秒 | 2.3／2.8 秒 |
+| P95 首字／完整回答 | 6.8／8.2 秒 | 3.0／2.9 秒 | 6.2／6.8 秒 |
+| 完整回答中位數 | 3.4 秒 | 1.2 秒 | 5.5 秒 |
+
+首字 P95 只算有呼叫 LLM 的題目，完整回答 P95 也包含生成閘門直接回覆的題目，所以 hybrid_norag 的首字 P95 會比完整回答高。
 
 **解讀**：
-- LoRA 記住了大部分畫作事實（不檢索時 17% → 75%），但沒有一題比得上檢索（100%），而且沒有引用可以查證；
-- 不知道的事也照答：知識庫外的畫作與知識庫沒寫的問題，lora_norag 5 題全部編了答案。訓練資料裡的 refusal 題沒有讓它學會拒答，反而把知識庫的詞彙帶到別的畫上（例如說莫內在「聖保羅療養院」畫睡蓮）；
-- 改了知識庫，hybrid 重建索引就 5 題全部跟上；lora_norag 5 題都還講舊答案，要重新訓練才會變；
-- 一般常識從 70% 掉到 25%，答錯的多半是畫家名字（〈清明上河圖〉→李唐、〈雅典學院〉→米開朗基羅）。其中 1 題是答「達·芬奇」，被以「達文西」為答案的評分算錯；不算這題也是明顯變差。retain 題只有 54 筆，不足以保住原本的常識；
-- 不檢索的兩組比較快，因為 prompt 沒有參考資料、也不跑檢索。
+- LoRA 記住了一部分畫作事實（不檢索時 17% → 50%），但比不上檢索（75%），而且沒有引用可以查證。答錯的多半是細節走樣：說得出「密集、短促的筆觸」卻漏了「雨點皴」，或把「三巨碑」配上不存在的作品；
+- 不知道的事也照答：知識庫外的畫作與知識庫沒寫的問題，lora_norag 5 題全部編了答案。訓練資料裡的 refusal 題沒有讓它學會拒答；
+- 改了知識庫，hybrid 重建索引就 5 題全部跟上；lora_norag 沒有一題跟上，其中 3 題還講舊答案，要重新訓練才會變；
+- 一般常識從 70% 掉到 30%，答錯的多半是畫家名字（〈雅典學院〉→米開朗基羅、〈拾穗〉→莫內），也有把畫作知識庫的詞彙搬到別的畫上（〈最後的晚餐〉畫在「聖雷米附近的聖保羅修道院」）。retain 題只有 60 筆，不足以保住原本的常識；
+- hybrid 沒拿到 100%：主方案預設開著檢索段落篩選，5 題（含 1 題 dev、1 題干擾段落題）被 art-base 把正確段落全部篩掉，回答「查無資料」。commit `59b8d28` 那一輪讀了 `.env`、篩選是關的，所以當時是 100%，兩輪的 hybrid 不能直接比；
+- lora_norag 比 hybrid_norag 慢約 4 秒，幾乎都是換模型：第 2 段地端判斷要先載入 art-base（生成前中位數 1.9 秒，hybrid_norag 0.27 秒），再換回 art-lora 生成（3.2 秒，hybrid_norag 0.84 秒）。llama-server 記錄的每 token 速度兩個模型相同。
 
 結論和預期一致：**權重裡的知識不能取代檢索**，尤其在拒答、更新與遺忘三方面。
 
