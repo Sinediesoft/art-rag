@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-art-resolve eval-send-image demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-art-resolve eval-send-image eval-lora eval-lora-backend lora-data demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -28,6 +28,9 @@ help:
 	@echo "make eval-art-resolve 智慧助理判斷沒說畫名的畫作問題是哪一幅（ADR 038；需後端在執行）"
 	@echo "make eval-rearrange 檢索段落篩選（MIRA）開關對照：正確率、引用、平均段數與延遲"
 	@echo "make eval-send-image 問答附圖／不附圖對照（Issue #2）：正確率、引用、首字與總時間"
+	@echo "make lora-data   產生 LoRA 不檢索對照組的訓練資料到 data/lora/（只用畫作，要有地端模型；ADR 043）"
+	@echo "make eval-lora   LoRA 不檢索對照組（ADR 043）：hybrid、hybrid_norag、lora_norag 的問答與亂編、遺忘、知識更新；先開 make -C pipelines/lora serve 與 make eval-lora-backend"
+	@echo "make eval-lora-backend  評估 LoRA 用的後端 :8000（三組接 llama-server :8081，不連 PostgreSQL／Redis）"
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
 	@echo "make eval-drawing-retrieval 圖紙文字與照片檢索評估（不用開後端，要先 make index）：回報的截圖、原圖、單一視圖、模擬實拍、未收錄圖紙，名稱／料號／圖號／描述；主管與業務各跑一次，指錯或看不到的圖紙出現就失敗"
@@ -249,6 +252,31 @@ eval-rearrange:
 # 問答附圖／不附圖對照（Issue #2、docs/adr/024）：正確率、引用、首字與總時間
 eval-send-image:
 	$(PY) eval/run_eval.py --strategies hybrid_img,hybrid_noimg
+
+# LoRA 不檢索對照組（docs/adr/043）：訓練資料只用畫作，產生到 data/lora/（不進 Git）
+lora-data:
+	$(PY) pipelines/make_lora_data.py
+
+# 三組都接 make -C pipelines/lora serve 的 llama-server :8081。eval-lora-backend 與知識更新的副本後端
+# 共用這組設定：副本沒有 .env，影響問答的設定都在這裡明列，兩個後端才會一致。
+# 不含任何金鑰；Jev（雲端）關掉，第 2、4 段用地端規則
+LORA_EVAL_ENV := LORA_ENABLED=true LORA_BASE_URL=http://localhost:8081/v1 LORA_MODEL=art-lora \
+	HYBRID_BASE_URL=http://localhost:8081/v1 HYBRID_MODEL=art-base \
+	LLM_MODE=real EMBED_MODE=real JEV_ENABLED=false \
+	REARRANGE= CONFLICT_CHECK= SEND_IMAGE= MODEL_KEEP_ALIVE= \
+	EVAL_CONTROLS=true EVAL_INJECTION=true DEMO_CONTROLS=true
+
+# 評估用後端 :8000：不連 PostgreSQL／Redis，關掉記憶體管理（不會卸載 llama-server 的模型）
+eval-lora-backend:
+	cd backend && $(LORA_EVAL_ENV) DATABASE_URL= JOBS_DATABASE_URL= REDIS_URL= MEMORY_GUARD=false \
+		uv run uvicorn app.main:app --port 8000
+
+# 三步：問答＋亂編率（qa.jsonl，含知識庫外畫作）、遺忘（qa_visual＋qa_general，只比不檢索的兩組）、
+# 知識更新（暫存副本改 5 個事實後重建索引）。lora 開頭的策略有題目落到備援或出錯就失敗
+eval-lora:
+	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag,lora_norag --outside-kb
+	$(PY) eval/run_eval.py --strategies hybrid_norag,lora_norag --qa qa_visual.jsonl,qa_general.jsonl --skip-images
+	$(LORA_EVAL_ENV) $(PY) eval/run_lora_update_eval.py
 
 # ---- 展示：現場新增畫作（只加 JSON 與圖片、執行一個指令，不改程式）----
 demo-add:

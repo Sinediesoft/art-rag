@@ -732,7 +732,7 @@ async def _chat_stream(
     # 第 7 段輸出檢查：未授權文件識別資訊、帳密／金鑰、個資、內部資料、被剔除段落的內容、無效引用
     hidden = guard.hidden_terms(account, store.parts)
     flagged = post.flagged if post else []
-    problems = guard.check_output(answer, given, hidden, flagged)
+    problems = guard.check_output(answer, given, hidden, flagged, not use_retrieval)
     # 答完才補的拒答句不送出：前面已引用資料回答，「知識庫中沒有這方面的資料」只會讓人以為沒找到。
     # 拿掉後實際送出的是另一段文字，送出前再檢查一次；原回答或送出的版本任一沒過都擋下
     cleaned = (
@@ -743,7 +743,7 @@ async def _chat_stream(
         )
     )
     if cleaned != answer:
-        problems = guard.check_output(cleaned, given, hidden, flagged)
+        problems = guard.check_output(cleaned, given, hidden, flagged, not use_retrieval)
     if problems:
         guard.log_block(
             7,

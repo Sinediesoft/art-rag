@@ -381,6 +381,61 @@ make eval       # 需要後端在執行；結果存 eval/runs/，並顯示在「
 
 段落篩選後還有 2 段以上才多問一次；慢的主機可在 `.env` 設 `CONFLICT_CHECK=false`。
 
+### LoRA 不檢索對照組（`make eval-lora`，ADR 043）
+
+負面對照：把畫作知識訓練進權重（LoRA），能不能取代檢索？三組都是 Qwen3-VL 4B、Q4_K_M、temperature 0，
+接同一個 llama-server :8081，只差模型別名：
+
+| 策略 | 模型 | 檢索 |
+|---|---|---|
+| `hybrid` | art-base | 開 |
+| `hybrid_norag` | art-base | 關 |
+| `lora_norag` | art-lora | 關 |
+
+**做法**（在 Apple Silicon 的 Mac 上，步驟細節見 `pipelines/lora/Makefile`）：
+
+1. `make -C pipelines/lora setup base`：建 `pipelines/lora` 的 uv 環境（mlx-vlm，不動 backend 依賴、不進 CI），
+   下載語言層 4-bit 的 MLX 底模與官方 mmproj。
+2. `make lora-data`：只用 `kb/artworks` 產生訓練資料到 `data/lora/`。
+   - 題型：fact 約 75%、refusal 約 15%、retain 約 10%；
+   - 和 `eval/qa*.jsonl` 做字元 3-gram Jaccard 外洩檢查，超過 0.5 刪掉；
+   - `review.jsonl` 是兩成抽樣，給組員 D 抽查。
+
+   工廠圖紙不進權重：Metadata Filter 只管得到檢索，管不到權重。
+3. `make -C pipelines/lora speed train select export-base export-lora info`：
+   - 先跑 20 步量速度，再訓練 QLoRA；
+   - 用 dev 題挑 epoch；
+   - fuse＋de-quantize → GGUF Q4_K_M；
+   - 最後記下三個 GGUF 的 SHA-256。
+
+   訓練時關掉 Ollama、Ortho2CAD 與後端，Air 要接電源。
+4. 另開兩個終端機啟動 llama-server 與評估用後端（生成端設定由 Makefile 的 `LORA_EVAL_ENV` 帶入，不改 `.env`），再跑評估：
+
+```sh
+make -C pipelines/lora serve   # 終端機 1：llama-server :8081（art-base、art-lora）
+make eval-lora-backend         # 終端機 2：後端 :8000，不連 PostgreSQL／Redis、關掉記憶體管理
+make eval-lora
+```
+
+`make eval-lora` 有三步：
+- **問答與亂編率**：`qa.jsonl`；知識庫外畫作的題目不帶畫作送出。
+- **遺忘**：`qa_visual.jsonl` 加 20 題一般常識 `qa_general.jsonl`。
+- **知識更新**：暫存副本改 5 個事實後重建索引。
+
+done 事件顯示落到備援模型的題目一律記錯；`lora_norag` 只要有一題落到備援或出錯，指令就失敗。
+
+**結果**（2026-10-22，MacBook Air M5，commit `5e94ced` 的 `20261022T053353-669c`、`20261022T053940-5f85`、`20261022T054343-bfdc-kbupdate`；細節與解讀見 ADR 043「結果」）：
+
+| 指標 | hybrid | hybrid_norag | lora_norag |
+|---|---|---|---|
+| 正確率（test 一般題，12 題） | **75%** | 17% | 50% |
+| 亂編率（5 題） | **0／5** | 3／5 | 5／5 |
+| 知識更新：新／舊答案（5 題） | **5／0** | 0／0 | 0／3 |
+| 遺忘：一般常識（20 題） | — | 70% | 30% |
+| P95 首字／完整回答 | 6.8／8.2 秒 | 3.0／2.9 秒 | 6.2／6.8 秒 |
+
+訓練 542 筆（每段 20–30 種問法）、4 epochs、186.9 分鐘，尖峰記憶體 13.5 GB，adapter 132 MB。LoRA 記住了一部分畫作事實，但會亂編、改了知識庫跟不上、一般常識變差：權重裡的知識不能取代檢索。hybrid 照主方案開著檢索段落篩選，有 3 題 test 一般題被篩掉正確段落；lora_norag 多出的延遲是第 2 段地端判斷要換到 art-base。資料只有 3 幅畫，結果只證明流程能運作，不作為一般結論。
+
 ### 5070 Ti 主機（Qwen3-VL 8B）
 
 2026-10-05 在 5070 Ti 主機（Windows 11、RTX 5070 Ti 16 GB、記憶體 32 GB；`HYBRID_MODEL=qwen3-vl:8b-instruct`、
