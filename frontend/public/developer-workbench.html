@@ -109,7 +109,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .term-bar {
   flex: none;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   height: var(--bar-h);
   padding: 0 8px 0 14px;
@@ -118,6 +118,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 11px;
   color: var(--text-3);
 }
+/* 左上角照入口介面（frontend/src/styles/entry.css 的 .mark、.brand__name）：「畫」字方框＋品牌名 */
+.bar-brand { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--text);
+  border-radius: 2px;
+  font: 500 13px/1 var(--font-cjk);
+}
+.brand__name { font: 500 14px/1 var(--font-cjk); letter-spacing: 0.08em; text-transform: uppercase; }
 .bar-end { display: flex; align-items: center; gap: 2px; }
 .pill {
   display: inline-flex;
@@ -240,9 +253,7 @@ label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2
 .card:has(> h3:first-child) { padding-top: 20px; }
 /* 13px 的標籤往上凸約 10px，控制列下面的 10px 間距不夠 */
 .row + :is(.grid, .card, #retBody) { margin-top: 10px; }
-main > .card, #evResult > .card { margin-bottom: 16px; }
-/* 下一張卡片的標籤會往上凸半行，沒留距離就壓到這行字 */
-#evResult > .muted { margin-bottom: 16px; }
+main > .card { margin-bottom: 16px; }
 .card h3 { margin: 14px 0 6px; font: 500 12px/1.5 var(--font-cjk); color: var(--text-2); letter-spacing: 0.04em; }
 /* 標籤橫跨框線：上半截接視窗底色、下半截接卡片底色，框線才像從標籤兩側穿過 */
 .card > h3:first-child {
@@ -308,6 +319,25 @@ tr.sel > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 /* 接上後端時，還沒有 API、仍是模擬資料的區塊：虛線框，和真的狀態徽章分得開 */
 .b.mock { border-style: dashed; color: var(--warn); }
 .b.mock::before { display: none; }
+/* 請求追蹤清單分藝術、工廠兩組，點標題列收合 */
+.tr-group + .tr-group { margin-top: 12px; }
+.tr-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  font: 600 13px/1.5 var(--font-cjk);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.tr-group-head:hover { background: var(--surface-2); }
+.tr-group-head .caret { color: var(--text-3); transition: rotate 0.15s; }
+.tr-group.folded .tr-group-head .caret { rotate: -90deg; }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* ---------- 表單 ---------- */
@@ -668,6 +698,8 @@ a.lnk:hover { text-decoration-color: var(--text); }
 }
 @media (max-width: 760px) {
   .term-body { padding: 18px 14px 16px; }
+  /* 390px 寬時品牌名會把「切換成主管」和明暗按鈕擠出頁首，只留「畫」字方框 */
+  .brand__name { display: none; }
   /* 手機上八個分頁會換成好幾行，黏住會吃掉半個畫面 */
   .views { position: static; margin: 0; padding: 0; }
   /* 放不下兩欄：上方切換「對話｜工作台」，一次只顯示一邊；不能拖寬、不用收合 */
@@ -696,10 +728,10 @@ a.lnk:hover { text-decoration-color: var(--text); }
 <div class="stage">
   <div class="term">
     <header class="term-bar">
+      <div class="bar-brand"><span class="mark" aria-hidden="true">畫</span><span class="brand__name">Multimodal-RAG</span></div>
       <div class="bar-end">
         <button class="btn" id="liveSwitch" type="button" data-act="liveSwitch" hidden>切換成主管</button>
         <span class="pill" id="livePill" data-state="connecting">連線中…</span>
-        <button class="icon-btn" id="setBtn" type="button" data-act="go" data-arg="models" title="設定：模型與設定" aria-label="設定：模型與設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h8M16 6h4M14 4v4M4 12h2M10 12h10M8 10v4M4 18h10M18 18h2M16 16v4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="icon-btn" id="themeBtn" type="button" data-act="theme"></button>
       </div>
     </header>
@@ -869,10 +901,9 @@ const MOCK_DATA={
 const STATE={
   view:'overview',theme:'dark',refreshedAt:'2026-10-23 14:32:00',
   metrics:{success:1284,refusal:57,block:23,error:9},
-  selReq:'R-1023-002',tr:{q:'',module:'',status:'',tab:'real'},
-  pendingCases:[{id:'P-01',q:'谿山行旅圖題款位置？',module:'art',from:'手動'}],
+  selReq:'R-1023-002',tr:{q:'',module:'',status:'',tab:'real',fold:{art:false,factory:false}},
   ret:{tab:'text',topK:3,th:.55,role:'倉管',sel:'C1',img:'mfg-002',q:'',busy:false,textRes:null,imgRes:null,imgUrl:null},
-  ev:{domain:'art',base:'qwen3-vl-8b',cand:'qwen3-vl-8b',bp:'art-cite-v3',cp:'art-cite-v3 (實驗)',rearr:true,conflict:false,image:false,progress:0,running:false,result:null,history:[{t:'10-22 16:40',d:'art',s:'base 0.82 → cand 0.85'}]},
+  cmp:{artwork:'',q:'畫家的簽名藏在哪裡？是誰發現的？'},
   promptSel:'art-cite-v3',promptEdits:{},
   kb:{q:'',sel:'art-001',rebuilding:null,detail:{}},
   jobs:{filter:'',sel:'J-2042'},
@@ -917,6 +948,12 @@ const isReal=k=>isLive()&&k in LD;
 const pick=k=>isReal(k)?LD[k]:MOCK_DATA[k];
 const MOCK_TAG='<span class="b mock" title="後端還沒有這個 API，這裡仍是模擬資料">模擬</span>';
 const mockTag=k=>isLive()&&!(k in LD)?MOCK_TAG:'';
+// diagnostics 只開給主管，不是主管時後端回 403：這是權限、不是沒有 API，所以寫原因，不拿模擬資料充數
+function diagWhy(){
+  const e=REAL_ERR.diag;
+  if(e?.status===403)return `要主管身分才看得到（GET /admin/diagnostics 回 403）${LIVE.demo?'，按頁首「切換成主管」':''}`;
+  return `GET /admin/diagnostics 讀不到：${e?`${e.message}（${e.code}）`:'沒有讀到資料'}`;
+}
 
 class ApiErr extends Error{constructor(code,message,status){super(message);this.code=code;this.status=status}}
 // 和主介面 frontend/src/api/http.ts 相同：憑證過期或後端重啟換了金鑰，向 /auth/accounts 重新取得（預設一般員工）再重送一次；
@@ -1034,10 +1071,9 @@ function renderLive(){
 }
 
 /* ===== 導覽 ===== */
-const VIEWS=[['overview','系統總覽'],['trace','請求追蹤'],['retrieval','檢索除錯'],['eval','實驗與評估'],['models','模型與設定'],['kb','知識庫與索引'],['jobs','背景工作'],['perm','權限與外送'],['flow','資料流']];
+const VIEWS=[['overview','系統總覽'],['trace','請求追蹤'],['retrieval','檢索除錯'],['compare','策略比較'],['models','模型與設定'],['kb','知識庫與索引'],['jobs','背景工作'],['perm','權限與外送'],['flow','資料流']];
 function renderNav(){
-  $('#nav').innerHTML=VIEWS.map(([k,l],i)=>`<button type="button" class="tab" role="tab" aria-selected="${STATE.view===k}" data-act="go" data-arg="${k}"><b>${String(i+1).padStart(2,'0')}</b>${l}${k==='eval'&&STATE.pendingCases.length?`<span class="cnt">${STATE.pendingCases.length}</span>`:''}</button>`).join('');
-  $('#setBtn').classList.toggle('on',STATE.view==='models');
+  $('#nav').innerHTML=VIEWS.map(([k,l],i)=>`<button type="button" class="tab" role="tab" aria-selected="${STATE.view===k}" data-act="go" data-arg="${k}"><b>${String(i+1).padStart(2,'0')}</b>${l}</button>`).join('');
 }
 /* 頁首明暗圖示和入口介面一樣：深色時顯示太陽 (按了變亮)，淺色時顯示月亮 */
 const ICON_PATH={sun:'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',moon:'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z'};
@@ -1049,24 +1085,39 @@ function renderThemeBtn(){
 
 /* ===== 1 系統總覽 ===== */
 function trendSvg(){
+  if(isReal('recent'))return chatLatencySvg(LD.recent.chats);
+  if(isLive())return `<p class="muted">${esc(diagWhy())}</p>`;
   const {p50,p95}=MOCK_DATA.trend,w=420,h=150,max=7;
   const pts=a=>a.map((v,i)=>`${(i/(a.length-1)*(w-30)+25).toFixed(1)},${(h-15-v/max*(h-25)).toFixed(1)}`).join(' ');
   const grid=[0,2,4,6].map(v=>{const y=h-15-v/max*(h-25);return `<line x1="25" x2="${w}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="2" y="${y+4}" font-size="10" fill="var(--text-3)">${v}s</text>`}).join('');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="延遲趨勢">${grid}<polyline points="${pts(p95)}" fill="none" stroke="var(--warn)" stroke-width="2"/><polyline points="${pts(p50)}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="muted">— <span style="color:var(--text)">p50</span>　— <span style="color:var(--warn)">p95</span>　(最近 12 個 5 分鐘區間)</div>`;
 }
+// 後端沒有每 5 分鐘 p50／p95 的統計 API（要加會動到 shared/openapi.json）；先畫 diagnostics 裡最近 10 筆問答的耗時，舊的在左
+function chatLatencySvg(chats){
+  const c=[...chats].reverse(),w=420,h=150;
+  if(!c.length)return '<p class="muted">還沒有問答紀錄（GET /admin/diagnostics 的 recent_chats）</p>';
+  const total=c.map(x=>(x.total_ms??0)/1000),first=c.map(x=>(x.first_token_ms??0)/1000);
+  // 刻度上限取 1、2、5 的倍數，這台問答可能要兩三分鐘，固定 0～7 秒會超出圖外
+  const peak=Math.max(...total,...first)*1.1,max=[1,2,5,10,20,50,100,200,500,1000].find(v=>v>=peak)||Math.ceil(peak);
+  const x=i=>c.length<2?w/2:i/(c.length-1)*(w-30)+25,y=v=>h-15-v/max*(h-25);
+  const grid=[0,max/2,max].map(v=>`<line x1="25" x2="${w}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="2" y="${y(v)+4}" font-size="10" fill="var(--text-3)">${+v.toFixed(1)}s</text>`).join('');
+  const line=(a,color)=>`<polyline points="${a.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>${a.map((v,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="${color}"><title>${hms(c[i].created_at)} · ${fmtMs(v*1000)}</title></circle>`).join('')}`;
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="最近問答的耗時">${grid}${line(total,'var(--warn)')}${line(first,'var(--accent)')}</svg><div class="muted">— <span style="color:var(--text)">第一個字</span>　— <span style="color:var(--warn)">總耗時</span>　(最近 ${c.length} 筆問答，舊 → 新；GET /admin/diagnostics)</div>`;
+}
 function renderOverview(){
   const m=STATE.metrics,d=MOCK_DATA,{ram,vram}=pick('resources'),services=pick('services'),queues=pick('queues');
   const res=(l,v)=>`<div style="margin-bottom:10px"><div class="row" style="margin:0;justify-content:space-between"><span>${l}</span><span class="muted">${v?`${v[0].toFixed(1)} / ${v[1]} GB`:'沒有資料'}</span></div><div class="bar"><i style="width:${v?v[0]/v[1]*100:0}%"></i></div></div>`;
   const recent=isReal('recent')
-    ?`<tr><th>時間</th><th>身分</th><th>意圖</th><th>結果</th></tr>${LD.recent.routes.slice(0,6).map(r=>`<tr class="click" data-act="trTab" data-arg="real"><td>${hms(r.created_at)}</td><td>${esc(r.account_id)}</td><td>${esc(r.intent)}</td><td>${outcomeBadge(r.outcome)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">還沒有紀錄</td></tr>'}`
-    :`<tr><th>時間</th><th>ID</th><th>模組</th><th>狀態</th></tr>${d.requests.slice(-6).reverse().map(r=>`<tr class="click" data-act="openReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${MODULE_LABEL[r.module]}</td><td>${badge(r.status)}</td></tr>`).join('')}`;
+    ?`<div class="tw"><table><tr><th>時間</th><th>身分</th><th>意圖</th><th>結果</th></tr>${LD.recent.routes.slice(0,6).map(r=>`<tr class="click" data-act="trTab" data-arg="real"><td>${hms(r.created_at)}</td><td>${esc(r.account_id)}</td><td>${esc(r.intent)}</td><td>${outcomeBadge(r.outcome)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">還沒有紀錄</td></tr>'}</table></div>`
+    :isLive()?`<p class="muted">${esc(diagWhy())}</p>`
+    :`<div class="tw"><table><tr><th>時間</th><th>ID</th><th>模組</th><th>狀態</th></tr>${d.requests.slice(-6).reverse().map(r=>`<tr class="click" data-act="openReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${MODULE_LABEL[r.module]}</td><td>${badge(r.status)}</td></tr>`).join('')}</table></div>`;
   return `<div class="head"><h2>系統總覽</h2><span class="muted">更新於 ${isLive()?LIVE.loadedAt:STATE.refreshedAt}</span><span class="sp"></span><button class="btn pri" data-act="refresh">${isLive()?'↻ 重新整理':'↻ 模擬重新整理'}</button></div>
   <div class="stats">${[['成功',m.success,'ok'],['無資料拒答',m.refusal,'warn'],['阻擋',m.block,'danger'],['錯誤',m.error,'danger']].map(([l,v,c])=>stat(`${l} (今日)`,v,c)).join('')}</div>
   ${isLive()?`<p class="muted" style="margin:-8px 0 14px">${MOCK_TAG} 上面四格：後端還沒有成功／拒答／阻擋／錯誤的統計 API</p>`:''}
-  <div class="grid g2"><div class="card"><h3>服務健康 ${mockTag('services')}</h3><div class="tw"><table>${services.map(s=>`<tr><td>${esc(s.name)}</td><td>${badge(s.status)}</td><td class="muted">${esc(s.detail)}</td></tr>`).join('')}</table></div></div>
+  <div class="grid"><div class="card"><h3>服務健康 ${mockTag('services')}</h3><div class="tw"><table>${services.map(s=>`<tr><td>${esc(s.name)}</td><td>${badge(s.status)}</td><td class="muted">${esc(s.detail)}</td></tr>`).join('')}</table></div></div>
   <div class="card"><h3>資源與佇列 ${mockTag('resources')}</h3>${res('RAM',ram)}${res('VRAM',vram)}<h3>背景工作佇列 ${mockTag('queues')}</h3><div class="tw"><table><tr>${Object.keys(queues).map(k=>`<th>${esc(k)}</th>`).join('')}</tr><tr>${Object.values(queues).map(v=>`<td><b>${v}</b></td>`).join('')}</tr></table></div></div></div>
-  <div class="grid g2"><div class="card"><h3>延遲趨勢 ${isLive()?MOCK_TAG:''}</h3>${trendSvg()}</div>
-  <div class="card"><h3>最近請求 ${mockTag('recent')}</h3><div class="tw"><table>${recent}</table></div></div></div>`;
+  <div class="grid g2"><div class="card"><h3>延遲趨勢</h3>${trendSvg()}</div>
+  <div class="card"><h3>最近請求</h3>${recent}</div></div>`;
 }
 
 /* ===== 2 請求追蹤 ===== */
@@ -1074,9 +1125,18 @@ function filteredReqs(){
   const {q,module,status}=STATE.tr,k=q.trim().toLowerCase();
   return MOCK_DATA.requests.filter(r=>(!module||r.module===module)&&(!status||r.status===status)&&(!k||(r.id+r.q+r.user+r.role).toLowerCase().includes(k)));
 }
+// 和主介面的兩個模組一致：藝術模組只有藝術品，工程圖、SQL、CAD、排程都在工廠模組
+const TRACE_GROUPS=[['art','藝術'],['factory','工廠']];
+const traceGroupOf=module=>module==='art'?'art':'factory';
 function renderTraceList(){
-  const list=filteredReqs();
-  return `<div class="tw"><table><tr><th>時間</th><th>ID</th><th>角色</th><th>模組</th><th>問題</th><th>狀態</th><th>延遲</th></tr>${list.map(r=>`<tr class="click ${r.id===STATE.selReq?'sel':''}" data-act="selReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${r.role}</td><td>${MODULE_LABEL[r.module]}</td><td>${esc(r.q.slice(0,22))}…</td><td>${badge(r.status)}</td><td>${(totalMs(r)/1000).toFixed(2)}s</td></tr>`).join('')||'<tr><td colspan="7" class="muted">沒有符合條件的請求</td></tr>'}</table></div>`;
+  const list=filteredReqs(),fold=STATE.tr.fold;
+  const head='<tr><th>時間</th><th>ID</th><th>角色</th><th>模組</th><th>問題</th><th>狀態</th><th>延遲</th></tr>';
+  const row=r=>`<tr class="click ${r.id===STATE.selReq?'sel':''}" data-act="selReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${r.role}</td><td>${MODULE_LABEL[r.module]}</td><td>${esc(r.q.slice(0,22))}…</td><td>${badge(r.status)}</td><td>${(totalMs(r)/1000).toFixed(2)}s</td></tr>`;
+  return TRACE_GROUPS.map(([k,label])=>{
+    const rows=list.filter(r=>traceGroupOf(r.module)===k);
+    return `<div class="tr-group${fold[k]?' folded':''}"><button type="button" class="tr-group-head" data-act="trFold" data-arg="${k}" aria-expanded="${!fold[k]}"><span class="caret">▾</span>${label}<span class="muted">${rows.length} 筆</span></button>
+    ${fold[k]?'':`<div class="tw"><table>${head}${rows.map(row).join('')||'<tr><td colspan="7" class="muted">沒有符合條件的請求</td></tr>'}</table></div>`}</div>`;
+  }).join('');
 }
 function stageColor(s){return {ok:'var(--ok)',block:'var(--danger)',error:'var(--danger)',nodata:'var(--warn)',fallback:'var(--warn)',skip:'var(--line-3)'}[s]}
 function renderTraceDetail(){
@@ -1084,7 +1144,7 @@ function renderTraceDetail(){
   const tot=totalMs(r)||1;let acc=0;
   const wf=r.stages.map(s=>{const left=acc/tot*100,w=s.ms/tot*100;acc+=s.ms;return `<div class="wf"><span>${s.name}</span><div class="tr"><i style="left:${left}%;width:${w}%;background:${stageColor(s.status)}"></i></div><span class="muted">${s.status==='skip'?'略過':s.ms+'ms'}</span></div>${s.note?`<div class="muted" style="margin:-2px 0 6px 158px">↳ ${esc(s.note)}</div>`:''}`}).join('');
   const setting=MOCK_DATA.settings.slice(0,4).map(s=>`${s[0]}=${s[1]}`).join(' · ');
-  return `<div class="row"><h3 style="margin:0">${r.id}</h3>${badge(r.status)}<span class="sp"></span><button class="btn" data-act="addEval" data-arg="${r.id}">＋ 加入評估</button><button class="btn" data-act="exportReq" data-arg="${r.id}">⤓ 匯出 JSON</button></div>
+  return `<div class="row"><h3 style="margin:0">${r.id}</h3>${badge(r.status)}<span class="sp"></span><button class="btn" data-act="exportReq" data-arg="${r.id}">⤓ 匯出 JSON</button></div>
   <div class="kv"><b>問題</b><span>${esc(r.q)}</span><b>使用者/角色</b><span>${r.user} · ${r.role}</span><b>生效設定版本</b><span>${r.ver} · 模型 ${esc(r.model)}</span><b>生效設定</b><span class="muted">${setting}</span></div>
   <h3 style="margin-top:14px">七階段瀑布圖</h3>${wf}
   <h3>證據</h3>${r.evidence.length?'<ul>'+r.evidence.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>':'<div class="muted">無 (管線已在前段停止)</div>'}
@@ -1176,32 +1236,71 @@ function renderRetrieval(){
   <div id="retBody">${renderRetBody()}</div>`;
 }
 
-/* ===== 4 實驗與評估 ===== */
-const EVAL_Q={art:['谿山行旅圖的構圖特色？','范寬的款識位於何處？','比較谿山行旅圖與早春圖'],factory:['FLG-2002 螺栓孔徑？','A 倉低於安全庫存品項','W44 CNC 班表衝突？']};
-function renderEvalResult(){
-  const e=STATE.ev;if(!e.result)return '<div class="muted">尚未執行。調整參數後按「模擬執行」。</div>';
-  const R=e.result;
-  return `<div class="grid g2">${['base','cand'].map(k=>`<div class="card"><h3>${k==='base'?'Baseline':'Candidate'} · ${esc(R[k].model)}</h3><pre>${esc(R[k].answer)}</pre><div class="kv"><b>品質</b><span>${R[k].q.toFixed(2)}</span><b>延遲</b><span>${R[k].lat}s</span><b>引用正確率</b><span>${R[k].cite}%</span></div></div>`).join('')}</div>
-  <div class="card"><h3>回歸測試</h3><div class="tw"><table><tr><th>案例</th><th>Baseline</th><th>Candidate</th><th>變化</th></tr>${R.reg.map(x=>`<tr><td>${esc(x[0])}</td><td>${badge(x[1]?'success':'error')}</td><td>${badge(x[2]?'success':'error')}</td><td>${x[1]===x[2]?'—':x[2]?'<span style="color:var(--ok)">改善</span>':'<span style="color:var(--danger)">退步</span>'}</td></tr>`).join('')}</table></div></div>`;
+/* ===== 4 策略比較 ===== */
+// 照主介面 frontend/src/pages/ComparePage.tsx：同一題並排送給不同生成端，共用檢索層與 prompt 模板，只換最後的生成端
+const CMP_COLUMNS=[
+  {key:'hybrid',label:'C. 混合式',note:'本地 VLM＋檢索（主架構）',body:{strategy:'hybrid'}},
+  {key:'hybrid-norag',label:'混合式・關檢索',note:'同一模型不給參考資料（檢索增益對照）',body:{strategy:'hybrid',use_retrieval:false}},
+  {key:'api_nokb',label:'A1. 雲端・無檢索',note:'只送照片與問題（等同直接用雲端大模型）→ 證明需要 RAG',body:{strategy:'api_nokb'}},
+  {key:'api_kb',label:'A2. 雲端＋檢索',note:'連同知識庫段落一起送出 → 品質上限，但資料外流',body:{strategy:'api_kb'}},
+  {key:'lora',label:'B. 本地 LoRA',note:'選做：插槽已保留',body:{strategy:'lora'}},
+];
+const CMP_QUESTIONS=['畫家的簽名藏在哪裡？是誰發現的？','這幅畫用了什麼技法？','畫面上有哪些人物？','這幅畫是在哪裡畫的？'];
+// 比較模式不啟用備援；段落篩選、矛盾檢查、附圖照伺服器預設，和主介面一樣不套用頁首的設定
+const CMP_DEFAULTS={allow_fallback:false,rearrange:null,conflict_check:null,send_image:null};
+// 每按一次並排比較換一個 run：上一輪的串流晚到也不會寫進畫面
+const CMP={run:0,ctl:null,req:null,cols:{}};
+function cmpColBody(c){
+  const col=CMP.cols[c.key];
+  if(!col)return '<div class="muted">按「並排比較」後開始</div>';
+  const d=col.done,lat=d?.latency_ms||{};
+  // 七段控管擋下時後端照樣送 done（回答是一句「查無資料」），要看 pipeline 才分得出不是正常回答
+  const blocked=(d?.pipeline||[]).find(p=>p.status==='block');
+  const status=col.state==='run'?'<span class="b running">生成中</span>':col.state==='error'?'<span class="b bad">失敗</span>':blocked?'<span class="b warn">閘門擋下</span>':d.fallback?'<span class="b warn">備援</span>':'<span class="b ok">完成</span>';
+  const why=blocked?`<div class="muted" style="margin-bottom:6px">第 ${blocked.stage} 段 ${esc(blocked.name)}：${esc(blocked.detail)}</div>`:'';
+  const src=c.body.use_retrieval===false||!col.sources.length?'':`<div class="muted">參考資料：${col.sources.map(s=>`[${s.ref}] ${esc(clip(s.artwork_title||s.chunk_id,14))}`).join('　')}</div>`;
+  const meta=d?`<div class="kv"><b>模型</b><span>${esc(d.model||d.strategy_used)}</span><b>第一個字</b><span>${fmtMs(lat.first_token)}</span><b>總耗時</b><span>${fmtMs(lat.total)}</span><b>資料外送</b><span>${d.egress?.bytes?`${d.egress.bytes} B`:'無'}</span></div>`:'';
+  return `<div class="row" style="margin:0 0 6px">${status}</div>${why}${col.error?`<pre style="border-color:var(--danger)">${esc(col.error)}</pre>`:''}${col.answer?`<pre>${esc(col.answer)}</pre>`:col.state==='run'?'<div class="muted">等待回應…</div>':''}${src}${meta}`;
 }
-function renderEval(){
-  const e=STATE.ev,models=MOCK_DATA.models.slice(0,2).map(m=>m.name),prompts=Object.keys(MOCK_DATA.prompts);
-  const opt=(arr,v)=>arr.map(x=>`<option ${x===v?'selected':''}>${x}</option>`).join('');
-  // 評估結果的 summary 每種評估欄位不同，只列數字欄位的前幾個
+async function cmpRunCol(c,run,signal){
+  const col=CMP.cols[c.key]={state:'run',answer:'',sources:[],done:null,error:''};
+  const paint=()=>{const el=CMP.run===run&&STATE.view==='compare'&&document.getElementById('cmp-'+c.key);if(el)el.innerHTML=cmpColBody(c)};
+  try{
+    await apiStream('/chat',{...CMP.req,...CMP_DEFAULTS,...c.body},(ev,data)=>{
+      if(CMP.run!==run)return;
+      if(ev==='sources')col.sources=data.sources||[];
+      else if(ev==='token')col.answer+=data.text;
+      else if(ev==='done'){col.done=data;col.state='done'}
+      else if(ev==='error')throw new ApiErr(data.code,data.message,0);
+      paint();
+    },signal);
+    if(col.state==='run')Object.assign(col,{state:'error',error:'串流結束了，但沒有收到 done'});
+  }catch(e){
+    if(e.name==='AbortError'||CMP.run!==run)return;
+    Object.assign(col,{state:'error',error:`${e.message}（${e.code||'ERROR'}）`});
+  }
+  paint();
+}
+// 評估紀錄要 access.yaml 的 views.eval（預設主管）：不是主管時寫原因，不顯示模擬資料
+function cmpHistory(){
   const sum=o=>Object.entries(o||{}).filter(([,v])=>typeof v==='number').slice(0,4).map(([k,v])=>`${k} ${Number.isInteger(v)?v:v.toFixed(3)}`).join(' · ')||'—';
-  const history=isReal('evalRuns')
-    ?`<div class="card"><h3>評估紀錄（GET /eval/runs，${LD.evalRuns.length} 筆）</h3><div class="tw"><table><tr><th>時間</th><th>run_id</th><th>prompt</th><th>知識庫</th><th>摘要</th></tr>${LD.evalRuns.slice(0,20).map(r=>`<tr><td>${esc(ymdhm(r.created_at))}</td><td>${esc(r.run_id)}</td><td>${esc(r.prompt_version)}</td><td>${esc(r.kb_version)}</td><td class="muted">${esc(sum(r.summary))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">還沒有評估紀錄</td></tr>'}</table></div><p class="muted">從頁面觸發評估、baseline 與 candidate 的比較要等後端新增 API；現在用 make eval 等指令跑。</p></div>`
-    :`<div class="card"><h3>執行歷史</h3><table>${e.history.map(h=>`<tr><td>${h.t}</td><td>${h.d==='art'?'藝術品':'工廠'}</td><td>${esc(h.s)}</td></tr>`).join('')}</table></div>`;
-  return `<div class="head"><h2>實驗與評估</h2>${isLive()?`<span class="muted">比較實驗與回歸測試 ${MOCK_TAG}</span>`:''}</div>
-  <div class="card"><div class="row"><label>領域 <select data-in="evDomain"><option value="art" ${e.domain==='art'?'selected':''}>藝術品</option><option value="factory" ${e.domain==='factory'?'selected':''}>工廠</option></select></label>
-  <label>Baseline 模型 <select data-in="evBase">${opt(models,e.base)}</select></label><label>Candidate 模型 <select data-in="evCand">${opt(models,e.cand)}</select></label>
-  <label>Baseline prompt <select data-in="evBp">${opt(prompts,e.bp)}</select></label><label>Candidate prompt <select data-in="evCp">${opt([...prompts,'art-cite-v3 (實驗)'],e.cp)}</select></label></div>
-  <div class="row"><label><input type="checkbox" data-in="evRearr" ${e.rearr?'checked':''}> 段落重排 (rearrange)</label><label><input type="checkbox" data-in="evConflict" ${e.conflict?'checked':''}> 衝突證據注入</label><label><input type="checkbox" data-in="evImage" ${e.image?'checked':''}> 附影像輸入</label>
-  <span class="sp"></span><button class="btn pri" data-act="runEval" ${e.running?'disabled':''}>▶ 模擬執行 (${EVAL_Q[e.domain==='art'?'art':'factory'].length+STATE.pendingCases.length} 案例)</button></div>
-  <div class="prog"><i id="evProg" style="width:${e.progress}%"></i></div></div>
-  <div id="evResult">${renderEvalResult()}</div>
-  <div class="grid g2"><div class="card"><h3>待加入案例 (${STATE.pendingCases.length})</h3>${STATE.pendingCases.map(p=>`<div class="row" style="margin:4px 0"><span class="b info">${MODULE_LABEL[p.module]}</span>${esc(p.q)} <span class="muted">來源 ${p.from}</span><span class="sp"></span><button class="btn" data-act="rmCase" data-arg="${p.id}">移除</button></div>`).join('')||'<div class="muted">無</div>'}</div>
-  ${isReal('evalRuns')?'</div>'+history:history+'</div>'}`;
+  if(isReal('evalRuns'))return `<div class="card"><h3>評估紀錄（GET /eval/runs，${LD.evalRuns.length} 筆）</h3><div class="tw"><table><tr><th>時間</th><th>run_id</th><th>prompt</th><th>知識庫</th><th>摘要</th></tr>${LD.evalRuns.slice(0,20).map(r=>`<tr><td>${esc(ymdhm(r.created_at))}</td><td>${esc(r.run_id)}</td><td>${esc(r.prompt_version)}</td><td>${esc(r.kb_version)}</td><td class="muted">${esc(sum(r.summary))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">還沒有評估紀錄</td></tr>'}</table></div><p class="muted">評估用 make eval 等指令跑，這裡只列結果。</p></div>`;
+  if(!isLive())return '';
+  const e=REAL_ERR.evalRuns;
+  return `<div class="card"><h3>評估紀錄</h3><p class="muted">${e?.status===403?`要主管身分才看得到（GET /eval/runs 回 403）${LIVE.demo?'，按頁首「切換成主管」':''}`:`GET /eval/runs 讀不到：${e?`${esc(e.message)}（${esc(e.code)}）`:'沒有讀到資料'}`}</p></div>`;
+}
+function renderCompare(){
+  const s=STATE.cmp,arts=REAL.artworks?.items||[];
+  const head='<div class="head"><h2>策略比較</h2><span class="muted">同一個問題並排送給不同生成端，共用檢索與 prompt，只換生成端</span></div>';
+  if(!isLive())return head+`<div class="card"><p class="muted">${LIVE.state==='offline'?'連不上後端：策略比較要真的送 POST /chat，沒有模擬版本。':'連線中…'}</p></div>`;
+  if(!arts.length){const e=REAL_ERR.artworks;return head+`<div class="card"><p class="muted">GET /artworks 讀不到畫作：${e?`${esc(e.message)}（${esc(e.code)}）`:'知識庫沒有畫作'}</p></div>`+cmpHistory()}
+  const sel=s.artwork||arts[0].id,art=id=>arts.find(a=>a.id===id);
+  return head+`<div class="card"><div class="row"><select data-in="cmpArt">${arts.map(a=>`<option value="${esc(a.id)}" ${a.id===sel?'selected':''}>〈${esc(a.title_zh)}〉${esc(a.artist_zh||'')}</option>`).join('')}</select>
+  <input data-in="cmpQ" value="${esc(s.q)}" placeholder="輸入問題" style="flex:1;min-width:180px"><button class="btn pri" data-act="cmpRun">並排比較</button></div>
+  <div class="row">${CMP_QUESTIONS.map(q=>`<button class="btn" data-act="cmpPick" data-arg="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+  <p class="muted">雲端兩欄只是對照組，後端要 ALLOW_CLOUD=true 才會回答；只能選知識庫畫作、不能上傳照片；不啟用備援，段落篩選等開關照伺服器預設。五欄同時送出，本地模型可能要排隊。</p></div>
+  ${CMP.req?`<p class="muted">這一輪：〈${esc(art(CMP.req.artwork_id)?.title_zh||CMP.req.artwork_id)}〉${esc(CMP.req.question)}</p>`:''}
+  <div class="grid g3">${CMP_COLUMNS.map(c=>`<div class="card"><h3>${esc(c.label)}</h3><div class="muted" style="margin-bottom:6px">${esc(c.note)}</div><div id="cmp-${c.key}">${cmpColBody(c)}</div></div>`).join('')}</div>`+cmpHistory();
 }
 
 /* ===== 5 模型與設定 ===== */
@@ -1858,7 +1957,7 @@ function sendChat(text){
 }
 
 /* ===== 主繪製 ===== */
-const RENDERERS={overview:renderOverview,trace:renderTrace,retrieval:renderRetrieval,eval:renderEval,models:renderModels,kb:renderKb,jobs:renderJobs,perm:renderPerm,flow:renderFlow};
+const RENDERERS={overview:renderOverview,trace:renderTrace,retrieval:renderRetrieval,compare:renderCompare,models:renderModels,kb:renderKb,jobs:renderJobs,perm:renderPerm,flow:renderFlow};
 function render(){
   renderNav();$('#main').innerHTML=RENDERERS[STATE.view]();
   if(STATE.view==='flow'){flowSync();flowSchedule(1.4)}
@@ -1877,7 +1976,9 @@ const ACT={
     const d=new Date(2026,9,23,14,32+j(20),j(60));STATE.refreshedAt='2026-10-23 '+d.toTimeString().slice(0,8);
     render();toast('已重新整理 (模擬資料)');
   },
-  openReq:a=>{STATE.selReq=a;STATE.tr={q:'',module:'',status:'',tab:'mock'};go('trace')},
+  // 從別頁點進來的那一筆所在的組如果收著，要打開才看得到它
+  openReq:a=>{const r=reqById(a);STATE.selReq=a;STATE.tr={...STATE.tr,q:'',module:'',status:'',tab:'mock'};if(r)STATE.tr.fold[traceGroupOf(r.module)]=false;go('trace')},
+  trFold:a=>{STATE.tr.fold[a]=!STATE.tr.fold[a];$('#trList').innerHTML=renderTraceList()},
   trTab:a=>{STATE.tr.tab=a;go('trace')},
   // 只有展示模式（DEMO_CONTROLS）且從本機連線時後端才允許免密碼切換；cookie 和主介面共用，主介面的身分也會跟著換
   liveSwitch:async()=>{
@@ -1891,10 +1992,6 @@ const ACT={
     s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
   },
   selReq:a=>{STATE.selReq=a;$('#trList').innerHTML=renderTraceList();$('#trDetail').innerHTML=renderTraceDetail()},
-  addEval:a=>{
-    const r=reqById(a);if(STATE.pendingCases.some(p=>p.from===a))return toast(`${a} 已在待加入案例中`);
-    STATE.pendingCases.push({id:'P-'+String(STATE.pendingCases.length+1).padStart(2,'0')+a.slice(-3),q:r.q,module:r.module,from:a});renderNav();toast(`已加入評估待辦：${a} (共 ${STATE.pendingCases.length} 筆)`);
-  },
   exportReq:a=>{
     // 用 Blob 在本機產生下載，不經過任何網路
     const blob=new Blob([JSON.stringify(reqById(a),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),el=document.createElement('a');
@@ -1905,24 +2002,17 @@ const ACT={
   retTab:a=>{STATE.ret.tab=a;render()},
   selCand:a=>{STATE.ret.sel=a;$('#retBody').innerHTML=renderRetBody()},
   selImg:a=>{STATE.ret.img=a;$('#retBody').innerHTML=renderRetBody()},
-  runEval:()=>{
-    const e=STATE.ev;e.running=true;e.progress=0;e.result=null;render();
-    const timer=setInterval(()=>{
-      e.progress+=10;const bar=$('#evProg');if(bar)bar.style.width=e.progress+'%';
-      if(e.progress<100)return;
-      clearInterval(timer);e.running=false;
-      // 依勾選項目調整模擬分數，讓控制項對結果有可見影響
-      const bonus=(e.rearr?.03:0)-(e.conflict?.06:0)+(e.cp.includes('實驗')?.02:0)+(e.image?.01:0);
-      const qs=[...EVAL_Q[e.domain],...STATE.pendingCases.map(p=>p.q)];
-      const sample=e.domain==='art'?'《谿山行旅圖》為北宋范寬所作，採高遠構圖 [1]。':'FLG-2002：8 孔 Ø18 mm，PCD 180 [1]。';
-      e.result={base:{model:e.base+' / '+e.bp,answer:sample,q:.82,lat:2.4,cite:91},
-        cand:{model:e.cand+' / '+e.cp,answer:sample+(e.conflict?'\n(注意：證據 [2] 與 [1] 年代描述不一致)':''),q:+(.82+bonus).toFixed(2),lat:+(2.4+(e.image?.6:0)-(e.rearr?.1:0)).toFixed(1),cite:Math.round(91+bonus*100)},
-        reg:qs.map((q,i)=>[q,i!==2,bonus>=0?true:i%2===0])};
-      e.history.unshift({t:'10-23 '+new Date().toTimeString().slice(0,5),d:e.domain,s:`base 0.82 → cand ${e.result.cand.q.toFixed(2)}`});
-      if(STATE.view==='eval')render();toast('模擬評估完成');
-    },150);
+  cmpRun:()=>{
+    const s=STATE.cmp,q=s.q.trim(),artwork_id=s.artwork||REAL.artworks?.items?.[0]?.id;
+    if(!q||!artwork_id)return toast('先選畫作、輸入問題');
+    CMP.ctl?.abort();
+    const ctl=CMP.ctl=new AbortController(),run=++CMP.run;
+    CMP.req={question:q,artwork_id};CMP.cols={};
+    CMP_COLUMNS.forEach(c=>CMP.cols[c.key]={state:'run',answer:'',sources:[],done:null,error:''});
+    if(STATE.view==='compare')render();
+    CMP_COLUMNS.forEach(c=>cmpRunCol(c,run,ctl.signal));
   },
-  rmCase:a=>{STATE.pendingCases=STATE.pendingCases.filter(p=>p.id!==a);render();toast('已移除案例')},
+  cmpPick:a=>{STATE.cmp.q=a;render()},
   savePrompt:()=>{STATE.promptEdits[STATE.promptSel]=$('#promptText').value;render();toast('已儲存為實驗版 prompt (僅本頁記憶體)')},
   resetPrompt:()=>{delete STATE.promptEdits[STATE.promptSel];render();toast('已重設為原始 prompt')},
   selKb:a=>{STATE.kb.sel=a;render()},
@@ -1980,8 +2070,7 @@ const IN={
   retRole:v=>{STATE.ret.role=v;$('#retBody').innerHTML=renderRetBody()},
   retTopK:v=>{STATE.ret.topK=+v;$('#tkV').textContent=v;$('#retBody').innerHTML=renderRetBody()},
   retTh:v=>{STATE.ret.th=+v;$('#thV').textContent=(+v).toFixed(2);$('#retBody').innerHTML=renderRetBody()},
-  evDomain:v=>{STATE.ev.domain=v;render()},evBase:v=>STATE.ev.base=v,evCand:v=>STATE.ev.cand=v,evBp:v=>STATE.ev.bp=v,evCp:v=>STATE.ev.cp=v,
-  evRearr:(v,t)=>STATE.ev.rearr=t.checked,evConflict:(v,t)=>STATE.ev.conflict=t.checked,evImage:(v,t)=>STATE.ev.image=t.checked,
+  cmpArt:v=>STATE.cmp.artwork=v,cmpQ:v=>STATE.cmp.q=v,
   promptSel:v=>{STATE.promptSel=v;render()},
   kbQ:v=>{STATE.kb.q=v;$('#kbList').innerHTML=renderKbList()},
   permRole:v=>{STATE.perm.role=v;render()},
@@ -2015,6 +2104,7 @@ document.addEventListener('input',e=>{const t=e.target.closest('[data-in]');if(t
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape')closeDlg();
   else if(e.key==='Enter'&&!e.isComposing&&e.target.dataset?.in==='retQ')ACT.retSearch();
+  else if(e.key==='Enter'&&!e.isComposing&&e.target.dataset?.in==='cmpQ')ACT.cmpRun();
   else if(STATE.view==='flow')flowKey(e);
 });
 $('#chatForm').addEventListener('submit',e=>{e.preventDefault();sendChat($('#chatInput').value)});
