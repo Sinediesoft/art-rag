@@ -338,6 +338,26 @@ tr.sel > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .tr-group-head:hover { background: var(--surface-2); }
 .tr-group-head .caret { color: var(--text-3); transition: rotate 0.15s; }
 .tr-group.folded .tr-group-head .caret { rotate: -90deg; }
+/* 06 照片建檔：欄位直接在頁面上改（主介面是跳出的表單） */
+.if-photo { display: block; }
+.if-photo img { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--surface-2); }
+.if-stages, .if-checks { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.if-stages li { display: flex; gap: 8px; color: var(--text-2); }
+.if-stages li::before { content: "·"; width: 1em; flex: none; color: var(--text-3); }
+.if-stages li.done::before { content: "✓"; color: var(--ok); }
+.if-stages li.run::before { content: "▸"; color: var(--text); animation: blink 1s steps(1) infinite; }
+.if-stages li.fail::before { content: "✕"; color: var(--danger); }
+fieldset.if-group { margin: 0 0 12px; padding: 0; border: 0; }
+fieldset.if-group legend { margin-bottom: 6px; padding: 0; font: 600 13px/1.5 var(--font-cjk); color: var(--text); }
+.if-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+label.if-field { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; }
+.if-field.wide { grid-column: 1 / -1; }
+.if-field .bad { border-color: var(--danger); }
+.if-field .msg { font-size: 11.5px; color: var(--danger); }
+.if-field .note { font-size: 11.5px; color: var(--warn); }
+.if-state { margin: 10px 0; font-weight: 600; }
+.if-state.ok { color: var(--ok); }
+.if-state.run { color: var(--text); animation: blink 1.6s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* ---------- 表單 ---------- */
@@ -1339,7 +1359,8 @@ async function kbLoadDetail(i){
 }
 function renderKb(){
   const d=pick('kb'),i=d.find(x=>x.id===STATE.kb.sel),real=isReal('kb');
-  return `<div class="head"><h2>知識庫與索引</h2>${mockTag('kb')}<span class="sp"></span><button class="btn" data-act="importDlg">⇪ 匯入驗證</button>${isLive()?MOCK_TAG:''}</div>
+  return `<div class="head"><h2>知識庫與索引</h2>${mockTag('kb')}<span class="sp"></span><button class="btn${INTAKE.open?' on':''}" data-act="intakeToggle">${INTAKE.open?'收起照片建檔':'＋ 照片建檔'}</button></div>
+  ${INTAKE.open?`<div class="card" id="intakeBox">${renderIntake()}</div>`:''}
   <div class="stats">${stat('藝術品',d.filter(x=>x.type==='art').length)}${stat('工程圖',d.filter(x=>x.type==='drawing').length)}${real?stat('看不到的圖紙',REAL.parts?.hidden??'—'):stat('總 Chunks',d.reduce((a,x)=>a+x.chunks,0))}${stat(real?'索引問題':'過期索引',real?(REAL.diag?.index_problems?.length??'—'):d.filter(x=>x.stale).length,'warn')}</div>
   <div class="row"><input placeholder="搜尋 ID / 名稱 / 來源" value="${esc(STATE.kb.q)}" data-in="kbQ" style="flex:1"></div>
   <div class="grid"><div class="card" id="kbList">${renderKbList()}</div>
@@ -1347,6 +1368,144 @@ function renderKb(){
   ${i.stale?`<pre style="border-color:var(--warn)">⚠ 來源 PLM 已更新為 rev D (2026-10-22)，索引仍為 ${i.ver}。</pre>`:''}
   <h3 style="margin-top:10px">段落</h3>${i.passages.map(p=>`<pre>${esc(p)}</pre>`).join('')}<h3>影像區域</h3><div class="row">${i.regions.map(r=>`<span class="b info">${esc(r)}</span>`).join('')}</div>
   <button class="btn pri" data-act="rebuild" data-arg="${i.id}" ${STATE.kb.rebuilding?'disabled':''}>⟳ 模擬重建索引</button>`:'<div class="muted">請點選項目</div>'}</div></div>`;
+}
+
+/* ===== 6-1 照片建檔：照主介面 frontend/src/pages/IntakePage.tsx（docs/adr/013） ===== */
+// POST /images → POST /intake（SSE：stage／token／draft／done／error）→ 改欄位 PUT /intake/{id} → 主管 POST /intake/{id}/commit
+// 後端沒有草稿清單 API：草稿 ID 記在網址 #intake=…，重新整理還找得回來
+const INTAKE_DOMAINS=[['','自動判斷'],['art','畫作'],['mfg','圖紙']];
+const INTAKE_TIPS={
+  '':'交給後端的領域路由判斷是畫作還是圖紙；判斷錯了會請你改選。',
+  art:'正面拍、畫面盡量只有畫（這張照片就是之後辨識用的原圖）；資料由人填，介紹只收 CC0、公有領域、CC BY 4.0。',
+  mfg:'把整張圖紙（含下方標題欄）拍進畫面；本地 Qwen3-VL 讀標題欄（這台約 40 秒），只收三視圖＋下方標題欄的版面。'
+};
+const INTAKE_SOURCE={'Qwen3-VL':'info','規則':'','人':'ok'};
+// 每次上傳換一個 run：換一張、捨棄、再建一筆之後，上一輪的串流與輪詢晚到也不寫進畫面
+const INTAKE={open:false,domain:'',run:0,ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0};
+const intakePaint=()=>{const el=STATE.view==='kb'&&$('#intakeBox');if(el)el.innerHTML=renderIntake()};
+function intakeHash(id){history.replaceState(null,'',id?`#intake=${encodeURIComponent(id)}`:location.pathname+location.search)}
+function intakeReset(){
+  INTAKE.ctl?.abort();INTAKE.run++;
+  if(INTAKE.imgUrl)URL.revokeObjectURL(INTAKE.imgUrl);
+  Object.assign(INTAKE,{ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0});
+  intakeHash(null);
+}
+async function intakeStart(imageId,domain){
+  INTAKE.ctl?.abort();
+  const ctl=INTAKE.ctl=new AbortController(),run=++INTAKE.run;
+  Object.assign(INTAKE,{imageId,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:''});intakePaint();
+  try{
+    await apiStream('/intake',{image_id:imageId,domain:domain||null},(ev,data)=>{
+      if(INTAKE.run!==run)return;
+      if(ev==='stage')INTAKE.stages.push(data);
+      else if(ev==='token')INTAKE.raw+=data.text;
+      else if(ev==='draft'){INTAKE.draft=data;intakeHash(data.draft_id)}
+      // 錯誤事件另帶 part／artwork（已經在知識庫）、route（領域判斷），要整包留著
+      else if(ev==='error')INTAKE.fail=data;
+      intakePaint();
+    },ctl.signal);
+    if(INTAKE.run===run&&!INTAKE.draft&&!INTAKE.fail){INTAKE.fail={code:'STREAM_ENDED',message:'串流結束了，但沒有收到草稿'};intakePaint()}
+  }catch(e){
+    if(e.name==='AbortError'||INTAKE.run!==run)return;
+    INTAKE.fail={code:e.code||'ERROR',message:e.message};intakePaint();
+  }
+}
+// 收錄後背景重建索引（status＝indexing）：照主介面每 1.5 秒重讀；done 之後重新讀清單與知識庫版本，新的那筆選起來
+async function intakeSettle(run){
+  const d=INTAKE.draft;
+  if(d.status==='indexing')return void setTimeout(()=>intakePoll(run),1500);
+  if(d.status==='done'){STATE.kb.sel=d.item_id;await liveLoad();if(INTAKE.run===run)toast(`已收錄 ${d.item_id}，清單已更新`)}
+  intakePaint();
+}
+async function intakePoll(run){
+  if(INTAKE.run!==run||INTAKE.draft?.status!=='indexing')return;
+  try{const d=await api(`/intake/${encodeURIComponent(INTAKE.draft.draft_id)}`);if(INTAKE.run!==run)return;INTAKE.draft=d}
+  catch(e){if(INTAKE.run!==run)return;INTAKE.actionError=`${e.message}（${e.code}）`}
+  intakePaint();intakeSettle(run);
+}
+async function intakeSaveEdits(run){
+  const d=INTAKE.draft;
+  const values=Object.fromEntries(Object.entries(INTAKE.edits).map(([k,v])=>{const f=d.fields.find(x=>x.key===k);return [k,v.trim()===''?null:f?.kind==='number'?Number(v):v]}));
+  const next=await api(`/intake/${encodeURIComponent(d.draft_id)}`,{...postJson({values}),method:'PUT'});
+  if(INTAKE.run===run){INTAKE.draft=next;INTAKE.edits={}}
+}
+async function intakeAct(what,fn){
+  const run=INTAKE.run;
+  INTAKE.busy=what;INTAKE.actionError='';intakePaint();
+  try{await fn(run)}catch(e){if(INTAKE.run===run)INTAKE.actionError=`${e.message}（${e.code}）`}
+  if(INTAKE.run===run){INTAKE.busy='';intakePaint()}
+}
+// 網址帶 #intake=草稿 ID（重新整理）：回到 06 頁打開那份草稿
+async function intakeResume(){
+  const m=location.hash.match(/^#intake=(.+)$/);if(!m||!isLive())return;
+  const run=INTAKE.run;
+  try{
+    const d=await api(`/intake/${m[1]}`);if(INTAKE.run!==run)return;
+    Object.assign(INTAKE,{open:true,draft:d,imageId:d.image_id});go('kb');intakeSettle(run);
+  }catch(e){toast(`找不到建檔草稿：${e.message}（${e.code}）`);intakeHash(null)}
+}
+
+function renderIntake(){
+  if(!isLive())return `<h3>照片建檔</h3><p class="muted">${LIVE.state==='offline'?'連不上後端：照片建檔要真的送 POST /images、POST /intake，沒有模擬版本。':'連線中…'}</p>`;
+  return `<h3>照片建檔</h3>${INTAKE.draft?renderIntakeDraft(INTAKE.draft):renderIntakeStart()}`;
+}
+function renderIntakeStart(){
+  const s=INTAKE,busy=s.busy==='upload'||(!!s.imageId&&!s.fail),n=s.stages.length;
+  const head=`<div class="row"><label>領域 <select data-in="intakeDomain" ${busy?'disabled':''}>${INTAKE_DOMAINS.map(([k,l])=>`<option value="${k}" ${s.domain===k?'selected':''}>${l}</option>`).join('')}</select></label><input type="file" accept="image/*" data-in="intakeFile" ${busy?'disabled':''}></div>
+  <p class="muted">${esc(INTAKE_TIPS[s.domain])} 任何身分都能建草稿，收錄要主管。</p>`;
+  if(!s.imgUrl)return head;
+  const list=s.busy==='upload'?'<li class="run">上傳照片（POST /images）</li>'
+    :n?s.stages.map((x,i)=>`<li class="${i<n-1?'done':s.fail?'fail':'run'}">${esc(x.label)}</li>`).join('')
+    :s.fail?'':'<li class="run">建立草稿（POST /intake）</li>';
+  const raw=s.stages[n-1]?.stage==='read'&&!s.fail?`<p class="muted">本地 Qwen3-VL 正在抄寫標題欄（這台約 40 秒）</p><pre>${esc(s.raw||'…')}</pre>`:'';
+  return head+`<div class="grid g2"><div class="if-photo"><img src="${s.imgUrl}" alt="拍的照片"></div><div><ul class="if-stages">${list}</ul>${raw}${s.fail?intakeFailHtml(s.fail):''}</div></div>`;
+}
+function intakeFailHtml(e){
+  const known=e.code==='INTAKE_ALREADY_IN_KB'&&(e.part||e.artwork);
+  const msg=`<pre style="border-color:var(--${known?'warn':'danger'})">${esc(e.message)}（${esc(e.code)}）</pre>`;
+  if(known){const id=e.part?.id||e.artwork.id;return msg+`<div class="row"><button class="btn" data-act="selKb" data-arg="${esc(id)}">在清單選取〈${esc(e.part?.name_zh||e.artwork?.title_zh||id)}〉</button></div>`}
+  if(e.code==='INTAKE_WRONG_DOMAIN'&&INTAKE.imageId){const other=e.route?.domain==='mfg'?'mfg':'art';return msg+`<div class="row"><button class="btn" data-act="intakeRetry" data-arg="${other}">改用「${other==='mfg'?'圖紙':'畫作'}」重新建檔</button></div>`}
+  return msg+'<p class="muted">換一張照片再試，或改選領域。</p>';
+}
+function intakeFieldHtml(f,editable){
+  const ed=INTAKE.edits,touched=f.key in ed,val=touched?ed[f.key]:f.value==null?'':String(f.value);
+  const bad=(f.status==='invalid'||f.status==='missing')&&!touched,list=f.suggestions?.length?`if-${f.key}`:'';
+  const attrs=`data-in="intakeField" data-key="${esc(f.key)}" ${editable?'':'disabled'} class="${bad?'bad':''}"`;
+  const input=f.kind==='enum'?`<select ${attrs}><option value="">（請選擇）</option>${f.options.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select>`
+    :f.kind==='longtext'?`<textarea rows="4" ${attrs} placeholder="${esc(f.hint||'')}">${esc(val)}</textarea>`
+    :`<input type="${f.kind==='url'?'url':'text'}" ${f.kind==='number'?'inputmode="decimal"':''} ${attrs} value="${esc(val)}" placeholder="${esc(f.hint||'')}"${list?` list="${list}"`:''}>${list?`<datalist id="${list}">${f.suggestions.map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`:''}`;
+  const src=f.source?` <span class="b ${INTAKE_SOURCE[f.source]??''}">${esc(f.source)}</span>`:'';
+  return `<label class="if-field${f.kind==='longtext'?' wide':''}"><span>${esc(f.label)}${f.required?'＊':''}${src}</span>${input}${f.message&&!touched?`<span class="msg">${esc(f.message)}</span>`:''}${f.note&&!touched?`<span class="note">${esc(f.note)}</span>`:''}</label>`;
+}
+function intakeCommitHtml(d,canCommit){
+  const s=INTAKE,noun=d.domain==='art'?'這幅畫':'這張圖紙';
+  if(d.status==='indexing')return `<p class="if-state run">已寫進知識庫，正在重建索引…（知識庫版本 ${esc(d.commit?.kb_version)}）重建完成前，以圖搜圖還認不出${noun}。</p>`;
+  if(d.status==='done')return `<p class="if-state ok">✓ 已收錄為 ${esc(d.item_id)}（知識庫版本 ${esc(d.commit?.kb_version)}，索引 ${((d.commit?.index_ms??0)/1000).toFixed(0)} 秒）</p>
+    <div class="row"><button class="btn" data-act="selKb" data-arg="${esc(d.item_id)}">在清單選取</button>${d.item_url?`<a class="btn" href="${esc(d.item_url)}" target="_blank" rel="noopener">在主介面看${noun} ↗</a>`:''}<button class="btn" data-act="intakeAgain">再建一筆</button></div>`;
+  return `${d.status==='failed'&&d.commit?.error?`<pre style="border-color:var(--danger)">收錄失敗，寫進去的檔案與版本已還原：${esc(d.commit.error)}</pre>`:''}
+  ${canCommit?'':`<p class="muted" style="color:var(--warn)">目前身分「${esc(LIVE.account?.label||'—')}」不能收錄（要 kb_intake，預設只有主管）${LIVE.demo?'，按頁首「切換成主管」':''}；草稿會保留。</p>`}
+  <div class="row"><button class="btn pri" data-act="intakeCommit" ${!canCommit||!d.can_commit||s.busy?'disabled':''}>${s.busy==='commit'?'收錄中…':`收錄進知識庫（${esc(d.item_id)}）`}</button><button class="btn" data-act="intakeDiscard" ${s.busy?'disabled':''}>${s.busy==='discard'?'捨棄中…':'捨棄草稿'}</button></div>`;
+}
+function renderIntakeDraft(d){
+  const s=INTAKE,isArt=d.domain==='art',editable=d.status==='draft'||d.status==='failed',dirty=Object.keys(s.edits).length>0;
+  const canCommit=!!LIVE.account?.ops?.includes('kb_intake');
+  // 圖紙另外看拉正、對齊版面後要存進知識庫的那張；畫作存的就是照片本身
+  const views=isArt?[['拍的照片',d.photo_url]]:[['拍的照片',d.photo_url],['要存進知識庫的圖',d.kb_image_url]],k=Math.min(s.view,views.length-1);
+  const photo=`${views.length>1?`<div class="tabs">${views.map(([l],i)=>`<button class="btn ${i===k?'on':''}" data-act="intakeView" data-arg="${i}">${l}</button>`).join('')}</div>`:''}
+    <a class="if-photo" href="${esc(views[k][1])}" target="_blank" rel="noopener" title="開新分頁看原尺寸"><img src="${esc(views[k][1])}" alt="${views[k][0]}"></a>
+    <p class="muted">${isArt?'這張照片會存成知識庫的原圖（長邊 1024 px），之後辨識、色彩分析都用它':k===0?'對照照片確認每個欄位：Qwen3-VL＝模型讀的、規則＝依知識庫校正的、人＝你填的':'拉正、對齊知識庫圖紙版面、去陰影後的樣子；收錄後辨識與 3D 重建都用這張'}</p>`;
+  const checks=`<ul class="if-checks">${d.checks.map(c=>`<li><span class="b ${c.ok?'ok':'bad'}">${c.ok?'通過':'未過'}</span> <b>${esc(c.label)}</b> <span class="muted">${esc(c.detail)}</span></li>`).join('')}</ul>`;
+  const groups=[];for(const f of d.fields){const g=groups[groups.length-1];if(g&&g[0]===(f.group??null))g[1].push(f);else groups.push([f.group??null,[f]])}
+  const form=groups.map(([g,fs])=>`<fieldset class="if-group">${g?`<legend>${esc(g)}</legend>`:''}<div class="if-fields">${fs.map(f=>intakeFieldHtml(f,editable)).join('')}</div></fieldset>`).join('')
+    +(editable?`<div class="row"><button class="btn" id="intakeSave" data-act="intakeSave" ${!dirty||s.busy?'disabled':''}>${s.busy==='save'?'儲存中…':'儲存修改'}</button><span class="muted" id="intakeDirty" style="color:var(--warn)">${dirty?'有修改還沒儲存':''}</span></div>`:'')
+    +(d.blockers.length?`<p class="muted" style="color:var(--danger)">還要處理：${d.blockers.map(esc).join('、')}</p>`:'');
+  const note=isArt?'＊必填。典藏單位是知識庫已有的，來源代碼會自動帶入；沒填介紹，系統會依這些欄位寫一段「基本資料」。'
+    :'＊必填。欄位已由本地 Qwen3-VL 讀照片填好、系統依知識庫校正；對照左邊的照片確認，讀錯的直接改，照片上沒有的欄位請補上。';
+  return `<div class="grid g2"><div>${photo}</div><div>${checks}
+    <h3>${isArt?'畫作資料':'圖紙資料'} <span class="muted">${esc(d.item_id)}</span></h3><p class="muted">${note}</p>${form}
+    ${intakeCommitHtml(d,canCommit)}${s.actionError?`<pre style="border-color:var(--danger)">${esc(s.actionError)}</pre>`:''}
+    ${d.extraction?.raw?`<details class="muted"><summary>模型原始輸出（${esc(d.extraction.model||'')}）</summary><pre>${esc(d.extraction.raw)}</pre></details>`:''}
+    <p class="muted">草稿 ${esc(d.draft_id)} · 保存 7 天 · 外送 ${d.egress?.images??0} 張圖、${d.egress?.bytes??0} bytes</p></div></div>`;
 }
 
 /* ===== 7 背景工作 ===== */
@@ -2016,14 +2175,25 @@ const ACT={
   savePrompt:()=>{STATE.promptEdits[STATE.promptSel]=$('#promptText').value;render();toast('已儲存為實驗版 prompt (僅本頁記憶體)')},
   resetPrompt:()=>{delete STATE.promptEdits[STATE.promptSel];render();toast('已重設為原始 prompt')},
   selKb:a=>{STATE.kb.sel=a;render()},
-  importDlg:()=>openDlg(`<h3>匯入驗證：batch_2026-10-23.zip (模擬)</h3><div class="tw"><table><tr><th>檔案</th><th>檢查</th><th>結果</th></tr>
-    <tr><td>art-021 寒林圖.json</td><td>欄位/授權/機密等級</td><td>${badge('success')}</td></tr><tr><td>mfg-012 FLG-2020.pdf</td><td>標題欄 OCR、料號格式</td><td>${badge('success')}</td></tr>
-    <tr><td>mfg-013.dwg</td><td>格式</td><td>${badge('error')} 不支援 DWG，請轉 PDF</td></tr><tr><td>cost_2026Q3.xlsx</td><td>機密等級</td><td>${badge('blocked')} 缺少機密標記</td></tr></table></div>
-    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="confirmImport">匯入 2 筆通過項目</button></div>`),
-  confirmImport:()=>{
-    if(!MOCK_DATA.kb.some(k=>k.id==='art-021')){MOCK_DATA.kb.push({id:'art-021',type:'art',title:'寒林圖',ver:'v1',chunks:7,source:'館藏解說',conf:'公開',indexed:'2026-10-23',stale:false,passages:['§1 李成寒林…'],regions:['寒林']},{id:'mfg-012',type:'drawing',title:'FLG-2020 法蘭',ver:'rev A',chunks:12,source:'PLM 匯出',conf:'內部',indexed:'2026-10-23',stale:false,passages:['6×Ø16 PCD150'],regions:['正視圖']})}
-    closeDlg();render();toast('已匯入 2 筆 (模擬)，2 筆被驗證擋下');
-  },
+  intakeToggle:()=>{INTAKE.open=!INTAKE.open;render()},
+  intakeAgain:()=>{intakeReset();intakePaint()},
+  // 領域選錯（INTAKE_WRONG_DOMAIN）：同一張照片改用另一邊重新建檔，不用重傳
+  intakeRetry:a=>{INTAKE.domain=a;intakeStart(INTAKE.imageId,a)},
+  intakeView:a=>{INTAKE.view=+a;intakePaint()},
+  intakeSave:()=>intakeAct('save',run=>intakeSaveEdits(run)),
+  intakeCommit:()=>intakeAct('commit',async run=>{
+    // 沒儲存的修改先存：驗證沒過的話後端會擋收錄
+    if(Object.keys(INTAKE.edits).length)await intakeSaveEdits(run);
+    if(INTAKE.run!==run)return;
+    const d=await api(`/intake/${encodeURIComponent(INTAKE.draft.draft_id)}/commit`,{method:'POST'});
+    if(INTAKE.run!==run)return;
+    INTAKE.draft=d;intakeSettle(run);
+  }),
+  intakeDiscard:()=>intakeAct('discard',async run=>{
+    await api(`/intake/${encodeURIComponent(INTAKE.draft.draft_id)}`,{method:'DELETE'});
+    if(INTAKE.run!==run)return;
+    intakeReset();intakePaint();toast('已捨棄草稿');
+  }),
   rebuild:a=>{
     STATE.kb.rebuilding=a;render();toast(`開始重建 ${a} 索引…`);
     setTimeout(()=>{const i=MOCK_DATA.kb.find(x=>x.id===a);i.stale=false;i.indexed='2026-10-23';if(i.id==='mfg-002')i.ver='rev D';STATE.kb.rebuilding=null;if(STATE.view==='kb')render();toast(`${a} 索引重建完成`)},1500);
@@ -2071,6 +2241,23 @@ const IN={
   retTopK:v=>{STATE.ret.topK=+v;$('#tkV').textContent=v;$('#retBody').innerHTML=renderRetBody()},
   retTh:v=>{STATE.ret.th=+v;$('#thV').textContent=(+v).toFixed(2);$('#retBody').innerHTML=renderRetBody()},
   cmpArt:v=>STATE.cmp.artwork=v,cmpQ:v=>STATE.cmp.q=v,
+  intakeDomain:v=>{INTAKE.domain=v;intakePaint()},
+  intakeFile:async(v,t)=>{
+    const f=t.files[0];if(!f)return;
+    intakeReset();INTAKE.imgUrl=URL.createObjectURL(f);INTAKE.busy='upload';intakePaint();
+    const run=INTAKE.run;
+    try{
+      const fd=new FormData();fd.append('file',f);
+      const up=await api('/images',{method:'POST',body:fd});
+      if(INTAKE.run===run)intakeStart(up.image_id,INTAKE.domain);
+    }catch(e){if(INTAKE.run===run){Object.assign(INTAKE,{busy:'',fail:{code:e.code||'ERROR',message:e.message}});intakePaint()}}
+  },
+  // 只改記錄和「儲存」按鈕，不重繪：重繪會讓正在打字的欄位失焦
+  intakeField:(v,t)=>{
+    INTAKE.edits[t.dataset.key]=v;
+    const n=Object.keys(INTAKE.edits).length,save=$('#intakeSave'),dirty=$('#intakeDirty');
+    if(save)save.disabled=!n||!!INTAKE.busy;if(dirty)dirty.textContent=n?'有修改還沒儲存':'';
+  },
   promptSel:v=>{STATE.promptSel=v;render()},
   kbQ:v=>{STATE.kb.q=v;$('#kbList').innerHTML=renderKbList()},
   permRole:v=>{STATE.perm.role=v;render()},
@@ -2130,7 +2317,7 @@ renderThemeBtn();
 renderChat();
 applyChatLayout();
 render();
-liveConnect();
+liveConnect().then(intakeResume);
 </script>
 </body>
 </html>
