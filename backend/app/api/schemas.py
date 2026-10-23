@@ -59,16 +59,37 @@ class ImageSearchResponse(BaseModel):
     results: list[ImageSearchHit]
 
 
+class ColorCriterion(BaseModel):
+    key: Literal["warm", "cool", "light", "dark", "vivid", "muted"]
+    label: str = Field(description="準則名稱，例如「有色部分暖色」", examples=["有色部分暖色"])
+    term: str = Field(description="問句裡對到的詞", examples=["暖色"])
+
+
+class ColorMatch(BaseModel):
+    score: float = Field(description="0～1；問句提到好幾個準則時取平均")
+    detail: str = Field(
+        description="排序依據，例如「有色部分暖色 56%」", examples=["有色部分暖色 56%"]
+    )
+
+
 class TextSearchHit(BaseModel):
     artwork: ArtworkSummary
     score: float
     image_score: float
     text_score: float
+    color: ColorMatch | None = Field(
+        default=None, description="問句提到冷暖、明暗、彩度時才有（docs/adr/044）"
+    )
 
 
 class TextSearchResponse(BaseModel):
     query: str
     latency_ms: int
+    color_sort: list[ColorCriterion] | None = Field(
+        default=None,
+        description="問句提到的色彩準則；有的時候結果以色彩分析為主排序，"
+        "score（語意）只排同分的（docs/adr/044）",
+    )
     results: list[TextSearchHit]
 
 

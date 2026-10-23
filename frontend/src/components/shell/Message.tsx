@@ -197,7 +197,10 @@ function TurnBody({ turn }: { turn: Turn }) {
         <ErrorNote code={p.error?.code} message={p.error?.message ?? "搜尋失敗"} requestId={p.error?.requestId} />
       ) : (
         <div className="answer">
-          <p className="answer__lead">以文搜畫（Chinese-CLIP＋bge-m3）找到 {p.items.length} 幅{th.mode === "full" ? "，排序與比較在右側展示區" : "，前 3 名："}</p>
+          <p className="answer__lead">
+            以文搜畫（Chinese-CLIP＋bge-m3）找到 {p.items.length} 幅{p.colorSort ? `，依色彩分析排序（${p.colorSort}）` : ""}
+            {th.mode === "full" ? "，排序與比較在右側展示區" : "，前 3 名："}
+          </p>
           {th.mode === "brief" && <Works items={p.items.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
         </div>
       );
@@ -575,10 +578,10 @@ function Sources({ sources, active, onActive }: { sources: SourceItem[]; active:
   );
 }
 
-function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: string; artist_zh: string; date_text: string; thumb_url: string }; score: number }[]; onAsk: (title: string) => void }) {
+function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: string; artist_zh: string; date_text: string; thumb_url: string }; score: number; color?: string | null }[]; onAsk: (title: string) => void }) {
   return (
     <div className="works">
-      {items.map(({ artwork: a, score }, i) => (
+      {items.map(({ artwork: a, score, color }, i) => (
         <figure key={a.id} className={`work${i === 0 ? " is-best" : ""}`}>
           <button type="button" className="work__media" onClick={() => onAsk(a.title_zh)}>
             <div className="plinth">
@@ -586,11 +589,12 @@ function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: str
             </div>
           </button>
           <figcaption className="work__caption">
-            <span className="work__flag">{i === 0 ? "最符合" : `分數 ${score.toFixed(2)}`}</span>
+            <span className="work__flag">{i === 0 ? "最符合" : color ? `第 ${i + 1} 名` : `分數 ${score.toFixed(2)}`}</span>
             <span className="work__title">{a.title_zh}</span>
             <span className="work__meta">
               {a.artist_zh}・{short(a.date_text)}
             </span>
+            {color && <span className="work__meta">{color}</span>}
           </figcaption>
         </figure>
       ))}

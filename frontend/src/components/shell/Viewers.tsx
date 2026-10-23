@@ -554,7 +554,10 @@ export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => voi
   const base = artwork.data;
   const q = base ? [...base.style_tags.slice(0, 3), base.medium ?? ""].filter(Boolean).join(" ") || base.title.zh : null;
   const search = useTextSearch(o.items ? null : q);
-  const items: { artwork: ArtworkSummary; score: number }[] = o.items ?? (search.data?.results ?? []).filter((r) => r.artwork.id !== base?.id).map((r) => ({ artwork: r.artwork, score: r.score }));
+  const items: { artwork: ArtworkSummary; score: number; color?: string | null }[] =
+    o.items ?? (search.data?.results ?? []).filter((r) => r.artwork.id !== base?.id).map((r) => ({ artwork: r.artwork, score: r.score, color: r.color?.detail ?? null }));
+  // 問句提到冷暖、明暗、彩度時後端改照色彩分析排序（docs/adr/044）：分數不是排序依據，改標每幅的色彩依據
+  const byColor = items.some((x) => x.color);
   const [cmp, setCmp] = useState<string | null>(null);
   const compare = useQuery({
     queryKey: ["compare", `artwork:${base?.id}`, `artwork:${cmp}`],
@@ -579,9 +582,9 @@ export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => voi
     return (
       <div className="view view--similar">
         <div className="view__scroll">
-          <p className="view__label">「{o.search}」・依 Chinese-CLIP＋bge-m3 的分數排序</p>
+          <p className="view__label">「{o.search}」・{byColor ? "依色彩分析排序，同分再看 Chinese-CLIP＋bge-m3" : "依 Chinese-CLIP＋bge-m3 的分數排序"}</p>
           <div className="wall">
-            {items.map(({ artwork: a, score }, i) => (
+            {items.map(({ artwork: a, score, color }, i) => (
               <button key={a.id} type="button" className={`wall__item${i === 0 ? " is-best" : ""}`} onClick={() => onAsk(`介紹一下〈${a.title_zh}〉`)}>
                 <span className="wall__img">
                   <img src={assetUrl(a.thumb_url)} alt="" />
@@ -591,7 +594,7 @@ export function SimilarView({ o, onAsk }: { o: Output; onAsk: (q: string) => voi
                 <span className="wall__meta">
                   {a.artist_zh}・{short(a.date_text)}
                 </span>
-                <Score value={score} />
+                {byColor ? <span className="wall__meta">{color ?? "沒有色彩分析"}</span> : <Score value={score} />}
               </button>
             ))}
           </div>

@@ -158,7 +158,12 @@ async function runPart(route: RouteResponse, part: Part, update: Update, signal:
       case "artSearch": {
         const res = await api.searchText(part.q);
         if (signal.aborted) return finish();
-        setPart<typeof part>(update, (p) => ({ ...p, status: "done", items: res.results.map((r) => ({ artwork: r.artwork, score: r.score })) }));
+        setPart<typeof part>(update, (p) => ({
+          ...p,
+          status: "done",
+          items: res.results.map((r) => ({ artwork: r.artwork, score: r.score, color: r.color?.detail ?? null })),
+          colorSort: res.color_sort?.map((c) => c.label).join("、") ?? null,
+        }));
         return finish();
       }
       case "partSearch": {

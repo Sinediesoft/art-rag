@@ -67,7 +67,7 @@ export interface Output {
   /** 排程：null＝目前的排程（/production/overview）；有值＝這一輪求解的結果 */
   solve?: SolveJob | null;
   /** 相似作品：以文搜畫的結果；search＝使用者的搜尋句，沒有就是「與〈作品〉相近」 */
-  items?: { artwork: ArtworkSummary; score: number }[];
+  items?: { artwork: ArtworkSummary; score: number; color?: string | null }[];
   search?: string;
   focus?: "技法" | "畫面";
   /** 從紀錄還原的工廠成果：只有編號，展示區以目前的 JWT 重新讀取（3D 讀 /cad/jobs、排程讀 /schedule/runs） */
@@ -226,7 +226,7 @@ export function deriveOutputs(conv: Conv | null) {
           items: results,
           search: q,
           title: `「${q}」的搜尋結果`,
-          meta: `${results.length} 幅・Chinese-CLIP＋bge-m3`,
+          meta: `${results.length} 幅・${results[0]?.color ? "依色彩分析排序" : "Chinese-CLIP＋bge-m3"}`,
         });
     }
   }

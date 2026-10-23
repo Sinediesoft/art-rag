@@ -2531,6 +2531,40 @@ export interface components {
              */
             latency_ms: number;
         };
+        /** ColorCriterion */
+        ColorCriterion: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "warm" | "cool" | "light" | "dark" | "vivid" | "muted";
+            /**
+             * Label
+             * @description 準則名稱，例如「有色部分暖色」
+             * @example 有色部分暖色
+             */
+            label: string;
+            /**
+             * Term
+             * @description 問句裡對到的詞
+             * @example 暖色
+             */
+            term: string;
+        };
+        /** ColorMatch */
+        ColorMatch: {
+            /**
+             * Score
+             * @description 0～1；問句提到好幾個準則時取平均
+             */
+            score: number;
+            /**
+             * Detail
+             * @description 排序依據，例如「有色部分暖色 56%」
+             * @example 有色部分暖色 56%
+             */
+            detail: string;
+        };
         /** CompareRow */
         CompareRow: {
             /** Key */
@@ -5420,6 +5454,8 @@ export interface components {
             image_score: number;
             /** Text Score */
             text_score: number;
+            /** @description 問句提到冷暖、明暗、彩度時才有（docs/adr/044） */
+            color?: components["schemas"]["ColorMatch"] | null;
         };
         /** TextSearchResponse */
         TextSearchResponse: {
@@ -5427,6 +5463,11 @@ export interface components {
             query: string;
             /** Latency Ms */
             latency_ms: number;
+            /**
+             * Color Sort
+             * @description 問句提到的色彩準則；有的時候結果以色彩分析為主排序，score（語意）只排同分的（docs/adr/044）
+             */
+            color_sort?: components["schemas"]["ColorCriterion"][] | null;
             /** Results */
             results: components["schemas"]["TextSearchHit"][];
         };

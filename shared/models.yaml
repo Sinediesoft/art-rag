@@ -92,6 +92,19 @@ color_analysis:
   lightness_bands: [30, 60]
   chroma_bands: [10, 25]
 
+# 依色彩找畫（docs/adr/044，推翻 ADR 010 的「不在範圍內」）：以文搜畫的問句出現下面的詞，就改照上面色彩分析算好的數字排序。
+# 每個準則取一個 0～1 的值：warm／cool＝有色部分裡暖／冷色的比例（不算黑白灰），light／dark＝亮調／暗調占比，
+# vivid／muted＝高彩度／低彩度占比；一句提到好幾個就取平均，語意分數只用來排同分的。不影響索引，改了不用重建。
+# 分流要先把這類問句分到以文搜畫：shared/agent.yaml 的 art_search 有對應的關鍵字，加詞時兩邊一起加。
+color_search:
+  criteria:
+    warm:  {label: 有色部分暖色, terms: [暖色, 暖調, 偏暖, 溫暖]}
+    cool:  {label: 有色部分冷色, terms: [冷色, 冷調, 偏冷]}
+    light: {label: 亮調, terms: [明亮, 亮色, 亮調, 淺色]}
+    dark:  {label: 暗調, terms: [暗色, 暗調, 偏暗, 陰暗, 深色]}
+    vivid: {label: 高彩度, terms: [鮮豔, 鮮艷, 高彩度, 濃烈]}
+    muted: {label: 低彩度, terms: [素雅, 淡雅, 低彩度, 樸素]}
+
 # 畫作卡推測（借鑒 ArtSeek 的 LICN 畫作卡，見 docs/adr/018）：以圖搜圖辨識失敗（知識庫沒有這幅畫）時，
 # 用同一個 Chinese-CLIP 零樣本比對照片與下面的標籤，推測風格大類（含年代）、題材、媒材。不用訓練、不載入新模型；
 # 標籤向量＝每個標籤的別名 × 提示句平均（prompt ensembling），機率＝softmax(temperature × 餘弦相似度)。

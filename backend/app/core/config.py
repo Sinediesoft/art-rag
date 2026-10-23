@@ -270,6 +270,19 @@ class ColorAnalysisSpec(BaseModel):
     chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
 
 
+class ColorCriterionSpec(BaseModel):
+    label: str  # 顯示在結果上的依據，例如「有色部分暖色」
+    terms: list[str]  # 問句裡出現其中一個詞就套用這個準則
+
+
+class ColorSearchSpec(BaseModel):
+    """依色彩找畫（docs/adr/044）：以文搜畫的問句提到冷暖、明暗、彩度時，改照色彩分析的數字排序。
+    鍵（warm、cool、light、dark、vivid、muted）對應 search_service.COLOR_METRICS。
+    不影響索引，改了不用重建。"""
+
+    criteria: dict[str, ColorCriterionSpec] = {}
+
+
 class GuessTaskSpec(BaseModel):
     """畫作卡推測的一欄：標籤 → 別名（別名只用來算標籤向量，不顯示）。"""
 
@@ -417,6 +430,7 @@ class ModelsConfig(BaseModel):
     premise_check: PremiseCheckSpec = PremiseCheckSpec()
     chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
+    color_search: ColorSearchSpec = ColorSearchSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
     intake: IntakeSpec = IntakeSpec()

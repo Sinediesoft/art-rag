@@ -258,6 +258,33 @@ describe("展示區相似作品：以目前畫作找相近（要先讀到基準�
     expect(screen.getAllByText("並排比較")).toHaveLength(1);
   });
 
+  it("搜尋句提到顏色：標「依色彩分析排序」，每幅寫色彩依據、不畫語意分數（docs/adr/044）", () => {
+    mockTransport();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const o: Output = {
+      key: "similar:t2",
+      kind: "similar",
+      domain: "art",
+      turnId: "t2",
+      search: "我想找暖色系的畫",
+      items: [
+        { artwork: summary("npm-000001", "谿山行旅圖"), score: 0.97, color: "有色部分暖色 100%" },
+        { artwork: summary("aic-27992", "大碗島的星期天下午"), score: 0.99, color: "有色部分暖色 56%" },
+      ],
+      title: "「我想找暖色系的畫」的搜尋結果",
+      meta: "2 幅・依色彩分析排序",
+    };
+    render(
+      <QueryClientProvider client={qc}>
+        <SimilarView o={o} onAsk={() => {}} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("「我想找暖色系的畫」・依色彩分析排序，同分再看 Chinese-CLIP＋bge-m3")).toBeTruthy();
+    expect(screen.getByText("有色部分暖色 100%")).toBeTruthy();
+    expect(screen.getByText("有色部分暖色 56%")).toBeTruthy();
+    expect(document.querySelector(".score")).toBeNull();
+  });
+
   it("基準畫作讀到、搜尋失敗：顯示搜尋的錯誤", async () => {
     const t = mockTransport();
     t.on("GET", "/artworks/met-436535", () => json(detail));

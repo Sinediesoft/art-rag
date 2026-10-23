@@ -67,9 +67,12 @@ export type SqlPart = {
 export type ArtSearchPart = {
   kind: "artSearch";
   q: string;
-  /** 依 Chinese-CLIP＋bge-m3 的分數排序（/search/text） */
+  /** 依 Chinese-CLIP＋bge-m3 的分數排序（/search/text）；問句提到冷暖、明暗、彩度時改照色彩分析（docs/adr/044） */
   status: "loading" | "done" | "error";
-  items: { artwork: ArtworkSummary; score: number }[];
+  /** color：依色彩排序時這幅的依據（「有色部分暖色 56%」） */
+  items: { artwork: ArtworkSummary; score: number; color?: string | null }[];
+  /** 依色彩排序時的準則（「有色部分暖色」），沒有就是照語意分數 */
+  colorSort?: string | null;
   error: ApiFailure | null;
 };
 
@@ -195,7 +198,7 @@ export interface ArchivedTurn {
   photoMatch?: boolean;
   answer?: string;
   sources?: SourcesEvent["sources"];
-  artResults?: { artwork: ArtworkSummary; score: number }[];
+  artResults?: { artwork: ArtworkSummary; score: number; color?: string | null }[];
   /** 這一輪有沒有內容因為不是公開資料而沒有保存 */
   redacted: boolean;
   /**

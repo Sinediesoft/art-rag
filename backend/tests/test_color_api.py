@@ -137,7 +137,7 @@ def test_photo_colormap_404(client):
 
 
 def test_text_search_ignores_color_chunks(client):
-    """色彩段落只給問答用（依色彩找畫不在範圍內，ADR 010），以文搜圖的文字排名不能看它。
+    """色彩段落只給問答用，以文搜圖的文字排名不能看它（依色彩找畫看的是色彩分析的數字，ADR 044）。
 
     用色彩段落的原文當查詢：mock 向量相同、相似度是 1，沒排除的話這幅畫的 text_score 會是 1。"""
     from app.services import search_service
@@ -147,6 +147,78 @@ def test_text_search_ignores_color_chunks(client):
     r = search_service.search_text(chunk["text"], top_k=len(store.art.items))
     hit = next(x for x in r["results"] if x["artwork"]["id"] == chunk["artwork_id"])
     assert hit["text_score"] < 0.5
+
+
+def test_color_criteria_from_question():
+    from app.services.search_service import color_criteria
+
+    assert [c["key"] for c in color_criteria("我想找暖色系的圖")] == ["warm"]
+    assert [c["key"] for c in color_criteria("有沒有明亮又鮮豔的畫")] == ["light", "vivid"]
+    dark = color_criteria("暗調、偏暗的作品")
+    assert [(c["label"], c["term"]) for c in dark] == [("暗調", "暗調")]
+    assert color_criteria("河邊散步的人群") == []
+
+
+def test_color_terms_are_routed_to_art_search():
+    """排序看得懂的詞，分流也要先分到以文搜畫，不然根本走不到排序（兩份設定要一起改）。"""
+    from app.core.config import get_agent_config
+
+    rules = [re.compile(p) for p, _ in get_agent_config()["intents"]["art_search"]["keywords"]]
+    terms = [t for c in get_models_config().color_search.criteria.values() for t in c.terms]
+    assert terms
+    assert [t for t in terms if not any(r.search(t) for r in rules)] == []
+
+
+def _ids(r: dict) -> list[str]:
+    return [x["artwork"]["id"] for x in r["results"]]
+
+
+def test_text_search_sorts_by_color_when_asked(client):
+    """問句提到冷暖、明暗、彩度：以色彩分析為主排序，每幅帶依據（ADR 044）。
+    期望順序用同一份色彩分析算，不寫死：知識庫換了畫照樣成立。"""
+    from app.services import search_service
+
+    store = get_store()
+    n = len(store.art.items)
+    assert n >= 2
+    cases = (
+        ("我想找暖色系的畫", ["warm"]),
+        ("偏冷的作品", ["cool"]),
+        ("明亮又鮮豔的畫", ["light", "vivid"]),
+    )
+    for q, keys in cases:
+        r = search_service.search_text(q, top_k=n)
+        assert [c["key"] for c in r["color_sort"]] == keys
+        want = {
+            a["id"]: sum(search_service.COLOR_METRICS[k](a["colors"]) for k in keys) / len(keys)
+            for a in store.art.items
+        }
+        scores = [x["color"]["score"] for x in r["results"]]
+        assert scores == sorted(scores, reverse=True)
+        assert all(abs(x["color"]["score"] - want[x["artwork"]["id"]]) < 1e-3 for x in r["results"])
+        assert len(r["results"][0]["color"]["detail"].split("、")) == len(keys)
+    warm = search_service.search_text("我想找暖色系的畫", top_k=n)
+    best = store.by_id[_ids(warm)[0]]["colors"]["temperature"]
+    pct = round(best["warm"] / (best["warm"] + best["cool"]) * 100)
+    assert warm["results"][0]["color"]["detail"] == f"有色部分暖色 {pct}%"
+
+
+def test_text_search_without_color_terms_is_unchanged(client):
+    from app.services import search_service
+
+    r = search_service.search_text("河邊散步的人群", top_k=len(get_store().art.items))
+    assert r["color_sort"] is None
+    assert all(x["color"] is None for x in r["results"])
+    scores = [x["score"] for x in r["results"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_text_search_api_returns_color_sort(client):
+    r = client.get("/api/v1/search/text", params={"q": "暖色系的圖"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["color_sort"] == [{"key": "warm", "label": "有色部分暖色", "term": "暖色"}]
+    assert all(x["color"]["detail"].startswith("有色部分暖色 ") for x in body["results"])
 
 
 def test_eval_runs_skips_color_runs(client):

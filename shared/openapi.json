@@ -5924,6 +5924,68 @@
         ],
         "title": "ColorAnalysis"
       },
+      "ColorCriterion": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "warm",
+              "cool",
+              "light",
+              "dark",
+              "vivid",
+              "muted"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "準則名稱，例如「有色部分暖色」",
+            "examples": [
+              "有色部分暖色"
+            ]
+          },
+          "term": {
+            "type": "string",
+            "title": "Term",
+            "description": "問句裡對到的詞",
+            "examples": [
+              "暖色"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "term"
+        ],
+        "title": "ColorCriterion"
+      },
+      "ColorMatch": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "0～1；問句提到好幾個準則時取平均"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "排序依據，例如「有色部分暖色 56%」",
+            "examples": [
+              "有色部分暖色 56%"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "detail"
+        ],
+        "title": "ColorMatch"
+      },
       "CompareRow": {
         "properties": {
           "key": {
@@ -13078,6 +13140,17 @@
           "text_score": {
             "type": "number",
             "title": "Text Score"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ColorMatch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "問句提到冷暖、明暗、彩度時才有（docs/adr/044）"
           }
         },
         "type": "object",
@@ -13098,6 +13171,21 @@
           "latency_ms": {
             "type": "integer",
             "title": "Latency Ms"
+          },
+          "color_sort": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ColorCriterion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Sort",
+            "description": "問句提到的色彩準則；有的時候結果以色彩分析為主排序，score（語意）只排同分的（docs/adr/044）"
           },
           "results": {
             "items": {

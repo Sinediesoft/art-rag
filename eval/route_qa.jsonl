@@ -55,3 +55,8 @@
 {"id": "r55", "question": "有沒有冷色調的畫", "intent": "art_search"}
 {"id": "r56", "question": "找法蘭的圖", "intent": "drawing_search"}
 {"id": "r57", "question": "這幅畫是暖色調嗎", "intent": "art_qa"}
+{"id": "r58", "question": "有沒有明亮一點的畫", "intent": "art_search"}
+{"id": "r59", "question": "我想找色彩鮮豔的作品", "intent": "art_search"}
+{"id": "r60", "question": "找暗色調的圖", "intent": "art_search"}
+{"id": "r61", "question": "素雅一點的圖", "intent": "art_search"}
+{"id": "r62", "question": "這幅畫的色調偏暗嗎", "intent": "art_qa"}
