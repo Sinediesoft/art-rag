@@ -49,3 +49,9 @@
 {"id": "r49", "question": "谿山行旅圖和大碗島的星期天下午比一比", "intent": "compare"}
 {"id": "r50", "question": "梵谷和秀拉的作品有何不同", "intent": "compare"}
 {"id": "r51", "question": "這幅畫和同時代的作品相比有什麼特色", "intent": "art_qa"}
+{"id": "r52", "question": "我想找暖色系的圖", "intent": "art_search"}
+{"id": "r53", "question": "找一張暖色調的圖片", "intent": "art_search"}
+{"id": "r54", "question": "我想找暖色系的作品", "intent": "art_search"}
+{"id": "r55", "question": "有沒有冷色調的畫", "intent": "art_search"}
+{"id": "r56", "question": "找法蘭的圖", "intent": "drawing_search"}
+{"id": "r57", "question": "這幅畫是暖色調嗎", "intent": "art_qa"}
