@@ -15,15 +15,12 @@ const yearOf = (s: string) => Number(s.match(/(\d{3,4})/)?.[1] ?? 9999);
 export function ArtFiles({
   currentId,
   mentioned,
-  searchSeq,
   onOpen,
 }: {
   /** 中間正在看的畫作 */
   currentId: string | null;
   /** 這段對話談到的畫作（依出現順序） */
   mentioned: { id: string; label: string }[];
-  /** 分頁列的「＋」：切到搜尋並把游標放進搜尋框（數字變了就做一次） */
-  searchSeq: number;
   onOpen: (id: string) => void;
 }) {
   const { data, error, isLoading } = useArtworks();
@@ -34,12 +31,6 @@ export function ArtFiles({
   const [opened, setOpened] = useState<Set<string>>(() => new Set());
   const input = useRef<HTMLInputElement>(null);
   const items = useMemo(() => data?.items ?? [], [data]);
-
-  useEffect(() => {
-    if (!searchSeq) return;
-    setView("search");
-    window.setTimeout(() => input.current?.focus(), 0);
-  }, [searchSeq]);
 
   const groups = useMemo(() => {
     const m = new Map<string, ArtworkSummary[]>();

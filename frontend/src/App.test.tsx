@@ -1981,13 +1981,13 @@ describe("藝術模組：對話＋作品文件＋資料夾（mockups/painting-mo
     await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉"));
   };
 
-  it("從入口進來：分頁是這段對話的成果，中間是作品文件（作品、畫作資料＋區域資料、色溫；沒附照片就沒有影像對位）", async () => {
+  it("從入口進來：中間是作品文件（作品、畫作資料＋區域資料、色溫；沒附照片就沒有影像對位），上一個／下一個切換這段對話的成果", async () => {
     artBackend();
     await enterArt();
-    // 「在哪裡」另外推出年表：年表、相似作品沿用原本的檢視
-    expect([...document.querySelectorAll(".aw-tab")].map((x) => x.textContent)).toEqual(["〈有絲柏的麥田〉", "〈有絲柏的麥田〉年表"]);
-    // 對話的成果不能關（跟著對話紀錄），只有從資料夾打開的才有 ✕
-    expect(document.querySelector(".aw-tab__x")).toBeNull();
+    // 頂端沒有分頁列與「＋」（使用者要求拿掉），成果只靠上一個／下一個切換
+    expect(document.querySelector(".aw-tab")).toBeNull();
+    expect(screen.queryByRole("button", { name: "新分頁" })).toBeNull();
+    expect((screen.getByRole("button", { name: "上一個分頁" }) as HTMLButtonElement).disabled).toBe(true);
     expect([...document.querySelectorAll(".aw-sec")].map((s) => s.id)).toEqual(["aw-sec-hits", "aw-sec-record", "aw-sec-color"]);
     const record = document.getElementById("aw-sec-record")!;
     expect(record.textContent).toContain("73.2 × 93.4 公分");
@@ -1997,7 +1997,8 @@ describe("藝術模組：對話＋作品文件＋資料夾（mockups/painting-mo
     expect(document.getElementById("aw-p-1")?.textContent).toContain("回答引用 [1]");
     await waitFor(() => expect(document.getElementById("aw-sec-color")?.textContent).toContain("整體偏暖、中等彩度"));
     expect(document.querySelector(".aw-crumbs")?.textContent).toBe("知識庫 / 畫作 / 文森・梵谷 / 有絲柏的麥田");
-    fireEvent.click(screen.getByRole("tab", { name: "〈有絲柏的麥田〉年表" }));
+    // 「在哪裡」另外推出年表：年表、相似作品沿用原本的檢視
+    fireEvent.click(screen.getByRole("button", { name: "下一個分頁" }));
     await waitFor(() => expect(document.querySelector(".aw-legacy .view--timeline")).not.toBeNull());
     expect(document.querySelector(".aw-doc")).toBeNull();
   });
@@ -2011,23 +2012,24 @@ describe("藝術模組：對話＋作品文件＋資料夾（mockups/painting-mo
     expect(scrolled).toHaveBeenCalled();
   });
 
-  it("資料夾：依畫家分組，點一幅畫開成分頁（只讀知識庫），分頁可以關掉；收合資料夾記在瀏覽器", async () => {
+  it("資料夾：依畫家分組，點一幅畫在中間打開（只讀知識庫），已經在對話裡的切過去不另開；收合資料夾記在瀏覽器", async () => {
     const t = artBackend();
     await enterArt();
     const files = document.querySelector(".aw-files") as HTMLElement;
     fireEvent.click(within(files).getByRole("button", { name: /克勞德・莫內/ }));
     fireEvent.click(await within(files).findByRole("button", { name: /睡蓮/ }));
     await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈睡蓮〉"));
-    expect([...document.querySelectorAll(".aw-tab")].map((x) => x.textContent)).toEqual(["〈有絲柏的麥田〉", "〈有絲柏的麥田〉年表", "〈睡蓮〉"]);
+    expect((screen.getByRole("button", { name: "下一個分頁" }) as HTMLButtonElement).disabled).toBe(true);
     // 打開作品不經過問答：沒有多一次 /agent/route 或 /chat
     expect(t.calls.filter((c) => c.path === "/agent/route" || c.path === "/chat")).toHaveLength(2);
-    // 已經在對話裡的畫：切到那一頁，不另開
+    // 已經在對話裡的畫：切到那一頁，不另開——往後只有年表、睡蓮兩個成果
     fireEvent.click(within(files).getByRole("button", { name: /有絲柏的麥田/ }));
     await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉"));
-    expect(document.querySelectorAll(".aw-tab")).toHaveLength(3);
-    fireEvent.click(screen.getByRole("button", { name: "關掉〈睡蓮〉" }));
-    expect(document.querySelectorAll(".aw-tab")).toHaveLength(2);
-    expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈有絲柏的麥田〉");
+    fireEvent.click(screen.getByRole("button", { name: "下一個分頁" }));
+    await waitFor(() => expect(document.querySelector(".aw-legacy .view--timeline")).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "下一個分頁" }));
+    await waitFor(() => expect(document.querySelector(".aw-doc .aw-subject__title")?.textContent).toBe("〈睡蓮〉"));
+    expect((screen.getByRole("button", { name: "下一個分頁" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "收合資料夾" }));
     expect(document.querySelector(".app.aw")?.className).toContain("no-files");
     expect(JSON.parse(localStorage.getItem("artrag-art-layout") ?? "{}").noFiles).toBe(true);

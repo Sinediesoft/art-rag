@@ -63,8 +63,7 @@
 .aw-pane__head .aw-icon-btn .icon,
 .aw-viewhead .aw-icon-btn .icon,
 .aw-files-tools .aw-icon-btn .icon,
-.aw-sessions .aw-icon-btn .icon,
-.aw-tabbar > .aw-icon-btn.aw-newtab .icon {
+.aw-sessions .aw-icon-btn .icon {
   width: 15px;
   height: 15px;
 }
@@ -379,63 +378,6 @@
 .aw-tabbar > .aw-icon-btn,
 .aw-tabbar > .topbar__slot {
   align-self: center;
-}
-.aw-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.aw-tab {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  max-width: 260px;
-  height: 40px;
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-  color: var(--text-3);
-}
-.aw-tab__btn {
-  height: 100%;
-  min-width: 0;
-  padding: 0 8px 0 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: inherit;
-}
-.aw-tab:hover {
-  color: var(--text-2);
-}
-.aw-tab.is-on {
-  color: var(--text);
-  border-bottom-color: var(--mod);
-}
-.aw-tab__x {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
-  color: var(--text-3);
-  opacity: 0;
-}
-.aw-tab:hover .aw-tab__x,
-.aw-tab.is-on .aw-tab__x,
-.aw-tab__x:focus-visible {
-  opacity: 1;
-}
-.aw-tab__x:hover {
-  color: var(--text);
-}
-.aw-tab__x .icon {
-  width: 13px;
-  height: 13px;
 }
 .aw-viewhead {
   flex-shrink: 0;

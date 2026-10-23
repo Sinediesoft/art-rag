@@ -63,7 +63,6 @@ function saveLayout(L: Layout) {
 }
 
 const isDoc = (o: Output) => (o.kind === "artwork" || o.kind === "detail") && !!o.artworkId;
-const tabTitle = (o: Output) => (o.kind === "artwork" ? `〈${o.title}〉${o.imageId ? " × 你的照片" : ""}` : o.kind === "detail" ? `〈${o.title.replace(/^細看〈|〉$/g, "")}〉細看` : o.title);
 /** 空白時的建議問句：用知識庫裡真的有的第一幅畫（送進對話，經 /agent/route 分派） */
 const asksOf = (t: string | undefined) =>
   t ? [`介紹〈${t}〉`, `細看〈${t}〉的技法`, `看看〈${t}〉的年表`, `有沒有和〈${t}〉風格相近的作品？`] : ["介紹一幅館藏的畫", "有哪些印象派的作品？"];
@@ -106,14 +105,6 @@ export function ArtModuleView({ conv, onJump }: { conv: Conv; onJump: (convId: s
     setBrowse((b) => (b.includes(id) ? b : [...b, id]));
     select(`browse:${id}`);
     if (narrow) setOpenFiles(false);
-  };
-  const closeTab = (key: string) => {
-    setBrowse((b) => b.filter((id) => `browse:${id}` !== key));
-    if (active?.key === key) {
-      const rest = tabs.filter((o) => o.key !== key);
-      const next = rest[Math.min(idx, rest.length - 1)];
-      if (next) select(next.key);
-    }
   };
   const subject: Subject | null = active?.key.startsWith("browse:") ? { kind: "artwork", id: active.artworkId!, label: active.title, meta: active.meta } : subjectFor(DOMAIN, active, conv);
   const mentioned = useMemo(() => {
@@ -212,7 +203,6 @@ export function ArtModuleView({ conv, onJump }: { conv: Conv; onJump: (convId: s
   useEffect(() => {
     view.current?.scrollTo?.({ top: 0 });
   }, [active?.key]);
-  const [searchSeq, setSearchSeq] = useState(0);
 
   const dl = active ? downloadOf(active) : null;
   const doc = active && isDoc(active);
@@ -331,35 +321,6 @@ export function ArtModuleView({ conv, onJump }: { conv: Conv; onJump: (convId: s
         <div className="aw-tabbar">
           <button type="button" className={`aw-icon-btn${(narrow ? openChat : !L.noChat) ? "" : " is-on"}`} onClick={toggleChat} title={narrow ? "對話" : L.noChat ? "展開對話" : "收合對話"} aria-label={narrow ? "對話" : L.noChat ? "展開對話" : "收合對話"}>
             <Icon name="sidebar" />
-          </button>
-          <div className="aw-tabs" role="tablist" aria-label="這段對話的成果">
-            {tabs.map((o) => (
-              <div key={o.key} className={`aw-tab${o.key === active?.key ? " is-on" : ""}`}>
-                <button type="button" role="tab" aria-selected={o.key === active?.key} className="aw-tab__btn" onClick={() => select(o.key)} title={`${KIND_LABEL[o.kind]}・${o.title}・${o.meta}`}>
-                  {tabTitle(o)}
-                </button>
-                {o.key.startsWith("browse:") && (
-                  <button type="button" className="aw-tab__x" onClick={() => closeTab(o.key)} title="關掉這個分頁" aria-label={`關掉〈${o.title}〉`}>
-                    <Icon name="x" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (narrow) {
-                setOpenFiles(true);
-                setOpenChat(false);
-              } else if (L.noFiles) setLayout({ noFiles: false });
-              setSearchSeq((n) => n + 1);
-            }}
-            className="aw-icon-btn aw-newtab"
-            title="開一幅畫（從資料夾搜尋）"
-            aria-label="新分頁"
-          >
-            <Icon name="plus" />
           </button>
           <span className="aw-spacer" />
           <ThemeToggle className="aw-icon-btn" />
@@ -484,7 +445,7 @@ export function ArtModuleView({ conv, onJump }: { conv: Conv; onJump: (convId: s
 
       {/* ---------------- 右：資料夾 ---------------- */}
       <aside className="aw-pane aw-files" aria-label="資料夾" inert={(narrow && !openFiles) || (!narrow && L.noFiles) || undefined}>
-        <ArtFiles currentId={active?.artworkId ?? null} mentioned={mentioned} searchSeq={searchSeq} onOpen={open} />
+        <ArtFiles currentId={active?.artworkId ?? null} mentioned={mentioned} onOpen={open} />
       </aside>
 
       {narrow && (openChat || openFiles) && (
