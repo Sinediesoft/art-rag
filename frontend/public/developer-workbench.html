@@ -1,0 +1,2046 @@
+<!doctype html>
+<!--
+  ArtRAG 開發者平台：放在 frontend/public，和主介面同源，開 http://localhost:5173/developer-workbench.html
+  （開發時 Vite 把 /api 轉給 8000）或 http://localhost:8000/developer-workbench.html（展示模式由後端提供）。
+  只呼叫同源的 /api/v1（憑證是主介面同一個 HttpOnly cookie）；連不上（直接雙擊檔案、後端沒啟動）就整頁用 MOCK_DATA。
+  有接上的區塊用真的資料；後端還沒有 API 的區塊保留模擬資料，並標「模擬」。
+  互動狀態放 STATE、後端回應放 REAL／LD（09 資料流的進度另放 FLOW）。
+  字型從 Google Fonts 載入（JetBrains Mono、Noto Sans TC），沒網路時改用系統字型，其他照常。
+-->
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multimodal-RAG 開發者平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* =====================================================================
+   版面照 demo/flow-command-center：終端機視窗、直角細框、邊框上掛標籤、分段進度條
+   顏色照入口介面 frontend/src/styles/entry.css（01 Quiet）：只有一種墨色，綠黃紅只用在狀態；
+   指揮台的紫（入口・人）和藍（執行中）都收進墨色，選中、執行中改靠發光和閃爍區分
+   ===================================================================== */
+:root {
+  color-scheme: dark;
+  --ground: #090908;
+  --bg: #0f0f0e;
+  --surface: #151514;
+  --surface-2: #1c1b1a;
+  --surface-3: #262523;
+  --text: #f1efea;
+  --text-2: #b7b2aa;
+  --text-3: #7c776f;
+  --line: #2a2927;
+  --line-2: #201f1d;
+  --line-3: #3b3936;
+  --accent: #f1efea;
+  --on-accent: #0f0f0e;
+  --glow: rgb(241 239 234 / 0.14);
+  --ok: #6fbf8a;
+  --warn: #e0b46a;
+  --danger: #ff7a6e;
+  --code-bg: #1c1b1a;
+  --scrim: rgb(0 0 0 / 0.6);
+  --shadow-win: 0 30px 80px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 18px 40px rgb(0 0 0 / 0.45);
+  --font-mono: "JetBrains Mono", "Noto Sans TC", "Microsoft JhengHei", ui-monospace, monospace;
+  --font-cjk: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  --bar-h: 44px;
+  --chat-w: 380px;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ground: #efede8;
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #f2f0ec;
+  --surface-3: #e7e4de;
+  --text: #161514;
+  --text-2: #57534d;
+  --text-3: #8a857e;
+  --line: #e4e0d9;
+  --line-2: #eeebe6;
+  --line-3: #cfcac2;
+  --accent: #161514;
+  --on-accent: #faf9f7;
+  --glow: rgb(22 21 20 / 0.1);
+  --ok: #3d7a52;
+  --warn: #a86a1f;
+  --danger: #b0322a;
+  --code-bg: #f2f0ec;
+  --scrim: rgb(22 21 20 / 0.3);
+  --shadow-win: 0 30px 80px rgb(22 21 20 / 0.12), 0 0 0 1px rgb(22 21 20 / 0.04);
+  --shadow-pop: 0 18px 40px rgb(22 21 20 / 0.1);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+/* 整頁不捲動，照藝術模組：標題列、對話欄固定，只有右邊的內容區（.term-body）自己捲 */
+body {
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--text);
+  font: 13px/1.55 var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.stage {
+  max-width: 1400px;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ---------- 終端機視窗：填滿畫面，標題列固定在上面，下面的兩欄佔掉剩下的高度 ---------- */
+.term {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: var(--shadow-win);
+  overflow: hidden;
+}
+.term-bar {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: var(--bar-h);
+  padding: 0 8px 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.bar-end { display: flex; align-items: center; gap: 2px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--warn);
+  white-space: nowrap;
+}
+.pill::before { content: ""; width: 7px; height: 7px; background: currentColor; }
+.pill[data-state="live"] { color: var(--ok); }
+.pill[data-state="connecting"] { color: var(--text-3); }
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.icon-btn:hover, .icon-btn.on { color: var(--text); border-color: var(--line); }
+.icon-btn svg { width: 16px; height: 16px; }
+
+.term-body {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 22px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* ---------- 標題 ---------- */
+.hero { text-align: center; display: grid; gap: 6px; }
+.hero h1 {
+  margin: 0;
+  font-family: var(--font-cjk);
+  font-weight: 700;
+  font-size: clamp(22px, 2.6vw, 30px);
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  text-wrap: balance;
+  background: linear-gradient(90deg, var(--text), var(--text-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px var(--glow));
+}
+.hero p { margin: 0; font-family: var(--font-cjk); color: var(--text-2); font-size: 13px; }
+.rule { height: 4px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line-2); }
+
+/* ---------- 八個頁面的分頁（取代原本的左側欄）：黏在內容區最上面，捲到哪都切得到 ---------- */
+.views {
+  position: sticky;
+  /* 黏的位置算在 .term-body 的 padding 內側；扣掉上方 22px padding 才會貼齊內容區頂端 */
+  top: -22px;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px -22px 0;
+  padding: 8px 22px;
+  background: var(--bg);
+}
+.tab, .btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tab b { color: var(--text-3); font-weight: 500; margin-right: 6px; }
+.tab:hover, .btn:hover { border-color: var(--line-3); color: var(--text); }
+.tab[aria-selected="true"], .tabs .btn.on {
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--glow), 0 0 16px var(--glow);
+}
+.tab[aria-selected="true"] b { color: var(--text); }
+.cnt { margin-left: 6px; padding: 0 5px; border: 1px solid var(--warn); color: var(--warn); font-size: 10px; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.pri:hover { opacity: 0.88; color: var(--on-accent); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+
+/* ---------- 頁面骨架 ---------- */
+main { min-width: 0; }
+.head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.head h2 { margin: 0; font: 700 16px/1.3 var(--font-cjk); }
+.head h2::before { content: "▸"; margin-right: 8px; color: var(--text-3); font-family: var(--font-mono); }
+.sp { flex: 1; }
+.muted { color: var(--text-3); font-size: 12px; }
+.grid { display: grid; gap: 16px 14px; margin-bottom: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.row > h3 { font: 700 14px/1.4 var(--font-mono); color: var(--text); }
+label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
+
+/* ---------- 卡片：照指揮台「邊框上掛標籤」，第一個 h3 壓在上框線 ---------- */
+.card {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 12px 14px;
+}
+.card:has(> h3:first-child) { padding-top: 20px; }
+/* 13px 的標籤往上凸約 10px，控制列下面的 10px 間距不夠 */
+.row + :is(.grid, .card, #retBody) { margin-top: 10px; }
+main > .card, #evResult > .card { margin-bottom: 16px; }
+/* 下一張卡片的標籤會往上凸半行，沒留距離就壓到這行字 */
+#evResult > .muted { margin-bottom: 16px; }
+.card h3 { margin: 14px 0 6px; font: 500 12px/1.5 var(--font-cjk); color: var(--text-2); letter-spacing: 0.04em; }
+/* 標籤橫跨框線：上半截接視窗底色、下半截接卡片底色，框線才像從標籤兩側穿過 */
+.card > h3:first-child {
+  position: absolute;
+  top: -0.75em;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 0 6px;
+  background: linear-gradient(var(--bg) 50%, var(--surface) 50%);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .card > h3:first-child { background: var(--surface); }
+/* 詳情卡的標題是那一筆的名稱，和請求追蹤、背景工作詳情的編號（.row > h3）一樣大 */
+.card > h3.title:first-child { font: 700 14px/1.5 var(--font-mono); color: var(--text); }
+
+/* ---------- 數字格（照指揮台上方那排） ---------- */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { border: 1px solid var(--c, var(--line)); padding: 6px 12px 8px; min-width: 0; }
+.stat small { display: block; font-size: 10.5px; letter-spacing: 0.1em; color: var(--text-3); }
+.stat strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--c, var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 表格 ---------- */
+.tw { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+th { color: var(--text-3); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; border-bottom-color: var(--line); }
+tr.click { cursor: pointer; }
+tr.click:hover, tr.sel { background: var(--surface-2); }
+tr.sel > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+
+/* ---------- 狀態徽章：照指揮台的描邊小方塊，顏色只分通過／提醒／擋下／執行中 ---------- */
+.b {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.b::before { content: ""; width: 5px; height: 5px; background: currentColor; }
+.b.ok, .b.success, .b.done, .b.up { color: var(--ok); }
+.b.warn, .b.nodata, .b.fallback, .b.degraded, .b.queued, .b.stale { color: var(--warn); }
+.b.bad, .b.blocked, .b.error, .b.failed, .b.down, .b.block { color: var(--danger); }
+.b.running, .b.info { color: var(--text); }
+.b.running::before { animation: blink 1s steps(1) infinite; }
+/* 接上後端時，還沒有 API、仍是模擬資料的區塊：虛線框，和真的狀態徽章分得開 */
+.b.mock { border-style: dashed; color: var(--warn); }
+.b.mock::before { display: none; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- 表單 ---------- */
+input, select, textarea {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 5px 8px;
+  font-size: 12.5px;
+}
+input[type="range"], input[type="checkbox"] { accent-color: var(--accent); padding: 0; vertical-align: middle; }
+textarea { width: 100%; min-height: 150px; resize: vertical; font-size: 12px; line-height: 1.55; }
+pre {
+  margin: 6px 0;
+  padding: 10px 12px;
+  background: var(--code-bg);
+  border: 1px solid var(--line-2);
+  border-left: 2px solid var(--line-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 12px/1.55 var(--font-mono);
+  max-height: 280px;
+  overflow: auto;
+}
+ul { margin: 4px 0 8px; padding-left: 18px; }
+li::marker { color: var(--text-3); }
+.kv { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 10px; font-size: 12.5px; }
+.kv b { color: var(--text-3); font-weight: 500; }
+.kv span { min-width: 0; overflow-wrap: anywhere; }
+a.lnk {
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-3);
+  text-underline-offset: 3px;
+}
+a.lnk:hover { text-decoration-color: var(--text); }
+
+/* ---------- 進度條：指揮台的分段條，一格 6px、間隔 2px ---------- */
+.bar, .prog { height: 10px; background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 8px); }
+.bar i, .prog i { display: block; height: 100%; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px); }
+.prog { margin: 10px 0 2px; }
+.prog i { transition: width 0.15s; }
+
+/* ---------- 七階段瀑布圖 ---------- */
+.wf { display: grid; grid-template-columns: 150px minmax(0, 1fr) 70px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+.wf > span:first-child { font-family: var(--font-cjk); }
+.wf .tr { position: relative; height: 12px; background: var(--line-2); }
+.wf .tr i { position: absolute; top: 0; bottom: 0; min-width: 3px; }
+
+/* ---------- 檢索候選 ---------- */
+.cand { border: 1px solid var(--line); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+.cand:hover { border-color: var(--line-3); }
+.cand.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--glow), 0 0 14px var(--glow); }
+.cand.out { opacity: 0.5; }
+
+/* ---------- 開發助理：照藝術模組的對話欄（標題、說明、對話、輸入框），一樣放左側 ---------- */
+/* 欄寬分兩層：--chat-w 是拖出來的寬度（JS 寫在 .term-main 上），--chat-col 是實際欄寬：
+   最多佔 45%，瀏覽器放大、視窗變窄時內容區才不會被擠扁；收合時換成窄條但保留拖好的寬度 */
+.term-main {
+  --chat-col: min(var(--chat-w), 45%);
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--chat-col) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.term-main.is-collapsed { --chat-col: 44px; }
+.term-main > .term-body { min-width: 0; }
+.chat {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+}
+.chat-head { display: flex; align-items: flex-start; gap: 8px; padding: 22px 12px 14px 20px; border-bottom: 1px solid var(--line-2); }
+.chat-head-text { flex: 1; min-width: 0; }
+.chat-toggle { flex: none; margin-top: -6px; }
+/* 右邊框的拖曳把手：照藝術模組的 .msplit（拖曳、雙擊回預設、← → 微調） */
+.chat-resize { position: absolute; top: 0; right: -4px; z-index: 5; width: 8px; height: 100%; cursor: col-resize; }
+.chat-resize::after { content: ""; position: absolute; inset: 0 3px; transition: background-color 0.15s; }
+.chat-resize:hover::after, .chat-resize:focus-visible::after, .is-resizing .chat-resize::after { background: var(--line-3); }
+.chat-resize:focus-visible { outline: none; }
+.is-resizing { cursor: col-resize; user-select: none; }
+.term-main.is-collapsed .chat { grid-template-rows: auto; }
+.term-main.is-collapsed .chat-head { justify-content: center; padding: 10px 6px; border-bottom: 0; }
+.term-main.is-collapsed .chat-toggle { margin-top: 0; }
+.term-main.is-collapsed :is(.chat-head-text, .chat-thread, .chat-dock, .chat-resize) { display: none; }
+.chat-title { margin: 0 0 2px; font: 700 16px/1.3 var(--font-cjk); }
+/* 窄螢幕「對話｜工作台」切換：照藝術模組窄於 900px 時的 .mtabs */
+.panes { display: none; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.chat-by { margin: 0; font: 12px/1.5 var(--font-cjk); color: var(--text-2); }
+.chat-thread {
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.chat-hint { margin: 0; font: 12.5px/1.6 var(--font-cjk); color: var(--text-3); }
+.chat-sugs { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.chat-sugs .btn { font-family: var(--font-cjk); text-align: left; }
+.msg { display: grid; gap: 4px; font: 13px/1.6 var(--font-cjk); }
+.msg-who { font: 500 10px/1.4 var(--font-mono); letter-spacing: 0.16em; color: var(--text-3); }
+.msg p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.msg ul { margin: 4px 0 0; }
+.msg-user { justify-items: end; }
+.msg-user p { max-width: 85%; padding: 7px 11px; background: var(--surface-2); border: 1px solid var(--line); }
+.thinking::after {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 1.05em;
+  vertical-align: -2px;
+  background: var(--text-2);
+  animation: blink 1s steps(1) infinite;
+}
+.chat-dock { padding: 10px 20px 16px; border-top: 1px solid var(--line-2); }
+.chat-input { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 10px; border: 1px solid var(--line); background: var(--surface); }
+.chat-input:focus-within { border-color: var(--accent); }
+.chat-input textarea {
+  flex: 1;
+  width: auto;
+  min-height: 0;
+  max-height: 120px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font: 13px/1.5 var(--font-cjk);
+}
+/* 外框的 :focus-within 已經標出焦點，輸入框本身不再畫一圈 */
+.chat-input textarea:focus-visible { outline: none; }
+.chat-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.chat-send svg { width: 15px; height: 15px; }
+.chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- 提示與對話框 ---------- */
+#toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  max-width: 340px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  box-shadow: var(--shadow-pop);
+  font: 12.5px/1.5 var(--font-cjk);
+}
+#dlg { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; padding: 16px; background: var(--scrim); }
+#dlg.open { display: flex; }
+#dlg .box {
+  width: min(640px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line-3);
+  border-radius: 10px;
+  box-shadow: var(--shadow-win);
+}
+#dlg h3 { margin: 0 0 12px; font: 700 14px/1.4 var(--font-cjk); }
+
+/* ---------- 09 資料流：照 demo/flow-command-center 的入口 → 四條線 × 三張卡 → 落點；顏色收進墨色 ---------- */
+/* 內容區寬度跟著對話欄拖寬、收合而變，用容器查詢判斷版面，不看整個視窗 */
+.fl { container-type: inline-size; --fl-gap: 10px; }
+.fl-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
+.fl-bar .tabs { margin: 0; }
+.fl-bar .btn b { color: var(--text-3); font-weight: 500; margin-right: 4px; }
+.fl-bar .btn.on b { color: var(--text); }
+/* 執行列的外框沿用對話欄的 .chat-input；附圖只在本機產生縮圖，不上傳 */
+.fl-run { align-items: center; margin-bottom: 12px; }
+.fl-run .btn { flex: none; }
+.fl-run-img { display: flex; align-items: center; gap: 6px; max-width: 40%; font-size: 11px; color: var(--text-2); }
+.fl-run-img:empty { display: none; }
+.fl-run-img img { flex: none; width: 32px; height: 32px; object-fit: cover; border: 1px solid var(--line); }
+.fl-run-img span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-run-img button { flex: none; padding: 0 4px; border: 0; background: transparent; color: var(--text-3); cursor: pointer; }
+.fl-run-img button:hover { color: var(--text); }
+.fl-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 14px; }
+.stats.fl-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.fl-stats .stat strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-board { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+
+.fl-path { margin: 0 0 10px; }
+.fl-journey ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fl-journey li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; font: 12.5px/1.45 var(--font-cjk); color: var(--text-3); }
+.fl-journey li::before { content: ""; width: 8px; height: 8px; margin-top: 5px; border: 1px solid var(--text-3); border-radius: 50%; }
+.fl-journey li[data-state="now"] { color: var(--text); }
+.fl-journey li[data-state="now"]::before { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
+.fl-journey li[data-state="done"] { color: var(--text-2); }
+.fl-journey li[data-state="done"]::before { border-color: var(--ok); background: var(--ok); }
+.fl-foot { grid-template-columns: 5em minmax(0, 1fr); margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line-2); font-size: 11.5px; }
+
+.fl-flow { display: grid; gap: 10px; min-width: 0; }
+.fl-entry {
+  justify-self: center;
+  width: min(440px, 100%);
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--glow), 0 0 22px var(--glow);
+}
+.fl-entry-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fl-entry-head b { font-size: 14px; }
+.fl-entry-head span { color: var(--text-2); font-family: var(--font-cjk); }
+.fl-entry-head em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--text-3); }
+.fl-ask { margin: 0; font-family: var(--font-cjk); color: var(--text-2); overflow-wrap: anywhere; }
+.fl-entry-line { margin: 0; min-height: 1.5em; overflow-wrap: anywhere; }
+.fl-cursor { display: inline-block; width: 0.55em; height: 1.05em; margin-left: 2px; vertical-align: -2px; background: var(--text); animation: blink 1s steps(1) infinite; }
+.fl-caption, .fl-report { text-align: center; font: 11px/1.5 var(--font-cjk); color: var(--text-3); }
+
+/* 四條線：上方虛線從入口分出去接到每條線，跟指揮台一樣 */
+.fl-lanes { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--fl-gap); padding-top: 26px; }
+.fl-lanes::before { content: ""; position: absolute; top: 8px; left: calc((100% - 3 * var(--fl-gap)) / 8); right: calc((100% - 3 * var(--fl-gap)) / 8); border-top: 1px dashed var(--line-3); }
+.fl-lanes::after { content: ""; position: absolute; top: -8px; left: 50%; height: 16px; border-left: 1px dashed var(--line-3); }
+.fl-lane { position: relative; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.fl-lane::before { content: ""; position: absolute; top: -18px; left: 50%; height: 12px; border-left: 1px dashed var(--line-3); }
+.fl-lane-head { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-2); white-space: nowrap; }
+.fl-lane-head span { overflow: hidden; text-overflow: ellipsis; }
+.fl-lane-head em { font-style: normal; color: var(--text-3); }
+.fl-lane-head b { font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.fl-lane[data-done="true"] .fl-lane-head b { color: var(--ok); }
+
+.fl-card {
+  --c: var(--line);
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 9px 8px;
+  border: 1px solid var(--c);
+  background: var(--surface);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.fl-card-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.fl-card-top > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.fl-card h4 { margin: 0; font: 700 13px/1.3 var(--font-mono); color: var(--text-2); }
+.fl-where { margin: 0; font-size: 10.5px; color: var(--text-3); overflow-wrap: anywhere; }
+.fl-note { margin: 0; min-height: 2.9em; font: 11px/1.4 var(--font-cjk); color: var(--text-3); overflow-wrap: anywhere; }
+.fl-card-foot { display: flex; justify-content: space-between; align-items: end; gap: 6px; font-size: 10px; color: var(--text-3); }
+.fl-spark { display: flex; align-items: end; gap: 2px; height: 14px; }
+.fl-spark i { display: block; width: 3px; height: var(--h); background: var(--c); opacity: 0.35; transform-origin: bottom; }
+.fl-card-bar { height: 2px; background: var(--line-2); overflow: hidden; }
+.fl-card-bar i { display: block; height: 100%; width: 0; background: var(--c); }
+.fl-card[data-state="run"] { --c: var(--accent); box-shadow: 0 0 0 1px var(--glow), 0 0 16px var(--glow); }
+.fl-card[data-state="done"] { --c: var(--ok); }
+.fl-card[data-state="hold"] { --c: var(--warn); animation: fl-pulse 1.2s ease-in-out infinite; }
+.fl-card[data-state="block"] { --c: var(--danger); animation: fl-pulse 0.8s ease-in-out infinite; }
+.fl-card:not([data-state="queued"]) h4 { color: var(--text); }
+.fl-card:not([data-state="queued"]) .fl-note { color: var(--text-2); }
+.fl-card:not([data-state="queued"]) .fl-spark i { opacity: 0.85; }
+.fl-card[data-state="run"] .fl-spark i { animation: fl-jitter 0.9s ease-in-out infinite; animation-delay: var(--d); }
+.fl-card[data-state="run"] .fl-card-bar i { width: 72%; transition: width 1.4s ease-out; }
+.fl-card:is([data-state="hold"], [data-state="block"]) .fl-card-bar i { width: 72%; }
+.fl-card[data-state="done"] .fl-card-bar i { width: 100%; transition: width 0.3s; }
+@keyframes fl-jitter { 50% { transform: scaleY(0.4); } }
+@keyframes fl-pulse { 50% { box-shadow: 0 0 0 1px var(--c), 0 0 14px color-mix(in srgb, var(--c) 45%, transparent); } }
+
+.fl-report { margin-top: 4px; padding-top: 6px; border-top: 1px dashed var(--line-3); }
+.fl-report::after { content: ""; display: block; width: 0; height: 12px; margin: 4px auto 0; border-left: 1px dashed var(--line-3); }
+.fl-output {
+  justify-self: center;
+  width: min(440px, 100%);
+  display: grid;
+  gap: 4px;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--line-3);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.fl-output-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.fl-output-head span { font-size: 11px; color: var(--text-3); }
+.fl-output-head strong { font: 700 13px/1.4 var(--font-cjk); color: var(--text-2); }
+.fl-output p { margin: 0; font: 12px/1.5 var(--font-cjk); color: var(--text-3); overflow-wrap: anywhere; }
+.fl-output[data-state="run"] { border-color: var(--accent); box-shadow: 0 0 16px var(--glow); }
+.fl-output[data-state="done"] { border-color: var(--ok); }
+.fl-output:not([data-state="idle"]) strong { color: var(--text); }
+.fl-output[data-state="run"] p { color: var(--text); }
+.fl-output[data-state="done"] p { color: var(--ok); }
+.fl-output[data-state="block"] { border-color: var(--danger); }
+.fl-output[data-state="block"] p { color: var(--danger); }
+
+.fl-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.fl-chips span { padding: 1px 7px; border: 1px solid var(--line); font-size: 11px; color: var(--text-3); white-space: nowrap; transition: color 0.2s, border-color 0.2s; }
+.fl-chips span[data-on] { border-color: var(--ok); color: var(--ok); }
+.fl-chips i { font-style: normal; font-size: 10px; color: var(--text-3); }
+.fl-progress { display: grid; grid-template-columns: auto minmax(0, 1fr) 4ch; align-items: center; gap: 10px; }
+.fl-progress > span { font: 700 12px/1.5 var(--font-cjk); }
+.fl-progress .prog { margin: 0; }
+.fl-progress b { text-align: right; font-variant-numeric: tabular-nums; }
+.fl-progress[data-done="true"] b { color: var(--ok); }
+.fl-progress[data-done="true"] .prog i { background: repeating-linear-gradient(90deg, var(--ok) 0 6px, transparent 6px 8px); }
+
+.fl-log ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 12.5em;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.fl-log li { display: grid; grid-template-columns: 7ch 8ch minmax(0, 1fr); gap: 10px; line-height: 1.45; }
+.fl-log time { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.fl-log .who { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fl-log li[data-kind="human"] .who { color: var(--text); font-weight: 700; }
+.fl-log li[data-kind="hold"] .who { color: var(--warn); }
+.fl-log li[data-kind="block"] .who { color: var(--danger); }
+.fl-log li[data-kind="final"] :is(.who, .what) { color: var(--ok); }
+.fl-log .what { font-family: var(--font-cjk); overflow-wrap: anywhere; }
+.fl-log li.empty { display: block; color: var(--text-3); font-family: var(--font-cjk); }
+
+@container (max-width: 820px) {
+  .fl-board { grid-template-columns: minmax(0, 1fr); }
+  .fl-journey ol { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .stats.fl-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fl .g2 { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 600px) {
+  .fl-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 0; row-gap: 18px; }
+  .fl-lanes::before, .fl-lanes::after, .fl-lane::before { display: none; }
+  .stats.fl-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 380px) {
+  .fl-lanes { grid-template-columns: minmax(0, 1fr); }
+  .fl-log li { grid-template-columns: 7ch minmax(0, 1fr); }
+  .fl-log .what { grid-column: 1 / -1; }
+}
+
+/* ---------- 窄螢幕 ---------- */
+@media (max-width: 900px) {
+  .g3, .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .g2, .g3 { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wf { grid-template-columns: 100px minmax(0, 1fr) 54px; }
+}
+@media (max-width: 760px) {
+  .term-body { padding: 18px 14px 16px; }
+  /* 手機上八個分頁會換成好幾行，黏住會吃掉半個畫面 */
+  .views { position: static; margin: 0; padding: 0; }
+  /* 放不下兩欄：上方切換「對話｜工作台」，一次只顯示一邊；不能拖寬、不用收合 */
+  .term-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .panes { display: flex; }
+  .term-main[data-pane="work"] .chat, .term-main[data-pane="chat"] .term-body { display: none; }
+  .chat { border-right: 0; }
+  .chat-resize, .chat-toggle { display: none; }
+  /* 寬螢幕時收合過再縮窄，對話欄要恢復完整 */
+  .term-main.is-collapsed .chat { grid-template-rows: auto minmax(0, 1fr) auto; }
+  .term-main.is-collapsed .chat-head { justify-content: flex-start; padding: 22px 12px 14px 20px; border-bottom: 1px solid var(--line-2); }
+  .term-main.is-collapsed .chat-head-text, .term-main.is-collapsed .chat-dock { display: block; }
+  .term-main.is-collapsed .chat-thread { display: flex; }
+}
+@media (max-width: 460px) {
+  #toasts { left: 16px; }
+  .toast { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="term">
+    <header class="term-bar">
+      <div class="bar-end">
+        <button class="btn" id="liveSwitch" type="button" data-act="liveSwitch" hidden>切換成主管</button>
+        <span class="pill" id="livePill" data-state="connecting">連線中…</span>
+        <button class="icon-btn" id="setBtn" type="button" data-act="go" data-arg="models" title="設定：模型與設定" aria-label="設定：模型與設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h8M16 6h4M14 4v4M4 12h2M10 12h10M8 10v4M4 18h10M18 18h2M16 16v4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="icon-btn" id="themeBtn" type="button" data-act="theme"></button>
+      </div>
+    </header>
+    <div class="term-main" data-pane="work">
+      <div class="panes" role="tablist" aria-label="切換對話與工作台">
+        <button type="button" class="tab" role="tab" id="paneChat" data-act="pane" data-arg="chat" aria-selected="false">對話</button>
+        <button type="button" class="tab" role="tab" id="paneWork" data-act="pane" data-arg="work" aria-selected="true">工作台</button>
+      </div>
+      <aside class="chat" aria-label="開發助理">
+        <header class="chat-head">
+          <div class="chat-head-text">
+            <h2 class="chat-title">開發助理</h2>
+            <p class="chat-by">問請求、背景工作或今天的異常；只讀這頁的模擬資料</p>
+          </div>
+          <button class="icon-btn chat-toggle" id="chatToggle" type="button" data-act="chatToggle" aria-expanded="true" title="收合對話欄" aria-label="收合對話欄"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 5h16v14H4zM9.5 5v14" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </header>
+        <div class="chat-thread" id="chatThread" aria-live="polite"></div>
+        <form class="chat-dock" id="chatForm">
+          <div class="chat-input">
+            <textarea id="chatInput" rows="2" placeholder="例如：R-1023-009 為什麼失敗？" aria-label="問開發助理"></textarea>
+            <button class="chat-send" id="chatSend" type="submit" title="送出（Enter）" aria-label="送出"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+        </form>
+        <div class="chat-resize" id="chatResize" role="separator" aria-orientation="vertical" aria-label="調整對話欄寬度（雙擊回到 380px）" aria-valuemin="280" aria-valuemax="640" aria-valuenow="380" tabindex="0" title="拖曳調整寬度・雙擊回到預設"></div>
+      </aside>
+      <div class="term-body">
+        <div class="hero">
+          <h1>Multimodal-RAG Workbench</h1>
+          <p id="heroSub">開發者平台・連線中…</p>
+        </div>
+        <div class="rule" aria-hidden="true"></div>
+        <nav class="views" id="nav" role="tablist" aria-label="頁面"></nav>
+        <main id="main"></main>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="dlg" role="dialog" aria-modal="true"><div class="box" id="dlgBox"></div></div>
+<div id="toasts"></div>
+<script>
+'use strict';
+/* ===== 常數 ===== */
+const STAGES=['身分驗證','意圖/輸入防護','權限檢索','相關性/外洩檢查','重排序','生成閘門','本地生成/輸出檢查'];
+const ROLES=['一般員工','倉管','業務','主管','藝術家'];
+const STATUS_LABEL={success:'成功',nodata:'無資料拒答',blocked:'阻擋',error:'錯誤',fallback:'備援',running:'執行中',queued:'排隊',done:'完成',failed:'失敗',cancelled:'已取消',up:'正常',degraded:'降級',down:'離線',idle:'未載入'};
+const MODULE_LABEL={art:'藝術品',drawing:'工程圖',sql:'SQL',cad:'CAD',schedule:'排程'};
+
+/* 依「停止階段」產生七階段資料：被阻擋後的階段一律標為略過，模擬真實管線中斷 */
+function mkStages(lat,stopAt,stopStatus,note){
+  return STAGES.map((name,i)=>{
+    const stopped=stopAt!=null;
+    const status=!stopped?'ok':i<stopAt?'ok':i===stopAt?stopStatus:'skip';
+    return {name,ms:status==='skip'?0:lat[i],status,note:i===stopAt?note:''};
+  });
+}
+
+/* ===== MOCK_DATA：全部虛構 ===== */
+const MOCK_DATA={
+  services:[
+    {name:'Ollama (Qwen3-VL-8B)',status:'up',detail:'GPU0 · 平均 2.1s'},
+    {name:'Fallback (Qwen2.5-7B)',status:'up',detail:'今日觸發 3 次'},
+    {name:'Ortho2CAD / CadQuery',status:'degraded',detail:'佇列延遲 4 分'},
+    {name:'Timefold Solver',status:'up',detail:'JVM heap 1.2/4 GB'},
+    {name:'PostgreSQL + pgvector',status:'up',detail:'readonly role 連線 6/20'},
+    {name:'Redis',status:'up',detail:'記憶體 312 MB'},
+    {name:'Workers (4)',status:'degraded',detail:'w-emb-1 失敗重試中'}
+  ],
+  resources:{ram:[41.2,64],vram:[19.6,24]},
+  queues:{ingest:2,embedding:1,ortho2cad:3,timefold:0,egress_audit:5},
+  trend:{p50:[1.8,1.9,2.0,1.7,2.2,2.1,1.9,2.4,2.0,1.8,2.1,2.0],p95:[4.1,4.4,5.2,4.0,5.8,5.1,4.6,6.3,5.0,4.7,5.5,4.9]},
+  requests:[
+    {id:'R-1023-001',time:'09:12:04',user:'u-art-03',role:'藝術家',module:'art',status:'success',q:'谿山行旅圖的作者、創作年代與構圖特色？',ver:'cfg-2026.10.21-r3',model:'qwen3-vl-8b',
+     stages:mkStages([8,35,120,40,90,15,2400]),evidence:['art-001 解說 v2 §3 (0.89)','art-001 藏品卡 (0.82)','北宋山水概論 ch2 (0.71)'],
+     answer:'《谿山行旅圖》為北宋范寬所作，約 11 世紀初，絹本水墨。構圖採「高遠」法，主峰居中占畫面三分之二，前景行旅隊伍強化尺度對比 [1][2]。',cites:['art-001 解說 v2 §3','art-001 藏品卡'],
+     tokens:[1820,312],egress:{bytes:412,stage:'本地生成/輸出檢查',target:'Jev 摘要服務',payload:'[PUBLIC] 作品「谿山行旅圖」年代與構圖摘要；使用者=U#7f3a (假名)'},job:null},
+    {id:'R-1023-002',time:'09:20:41',user:'u-wh-17',role:'倉管',module:'drawing',status:'success',q:'(附圖) 這張法蘭的螺栓孔數與孔徑？',ver:'cfg-2026.10.21-r3',model:'qwen3-vl-8b',
+     stages:mkStages([7,60,210,55,80,12,1900]),evidence:['ORB 比對 mfg-002 FLG-2002 inliers 142','CLIP 相似度 0.91','FLG-2002 規格書 v3 #12 (0.87)'],
+     answer:'辨識為 mfg-002 FLG-2002 rev C：8 孔、Ø18 mm，PCD 180 mm [1]。',cites:['mfg-002 FLG-2002 rev C 圖框區 B2'],tokens:[2210,96],egress:null,job:'J-2040'},
+    {id:'R-1023-003',time:'09:33:10',user:'u-wh-17',role:'倉管',module:'sql',status:'success',q:'A 倉本月低於安全庫存的品項',ver:'cfg-2026.10.21-r3',model:'qwen3-vl-8b',
+     stages:mkStages([6,30,45,20,0,10,850]),evidence:['schema: inventory, items (readonly)'],
+     sql:"SELECT item_code, qty, safety_qty\nFROM inventory\nWHERE warehouse = 'A' AND qty < safety_qty\nORDER BY qty LIMIT 50;",answer:'共 6 筆低於安全庫存，最低為 FLG-2002 (12/40)。',cites:['inventory@2026-10-23 09:30'],tokens:[960,140],egress:null,job:null},
+    {id:'R-1023-004',time:'10:02:55',user:'u-sales-08',role:'業務',module:'cad',status:'success',q:'把 FLG-2002 三視圖轉成 3D STEP 給客戶預覽',ver:'cfg-2026.10.21-r3',model:'qwen3-vl-8b',
+     stages:mkStages([8,42,150,38,60,14,620]),evidence:['mfg-002 三視圖 (公開版)','Ortho2CAD 視圖偵測 3/3'],answer:'已建立 Ortho2CAD 背景工作 J-2042，完成後可下載 STEP。',cites:['mfg-002 FLG-2002 rev C'],tokens:[740,58],egress:null,job:'J-2042'},
+    {id:'R-1023-005',time:'10:15:30',user:'u-mgr-02',role:'主管',module:'schedule',status:'success',q:'排第 44 週 CNC 產線班表，避開 10/30 保養',ver:'cfg-2026.10.21-r3',model:'qwen3-vl-8b',
+     stages:mkStages([9,38,70,25,0,11,540]),evidence:['shift_constraints v5','machine_calendar W44'],answer:'Timefold 求解完成：hard 0 / soft -12，3 班 14 人，10/30 CNC-2 停機已排除。',cites:['J-2043 schedule_w44.json'],tokens:[880,120],egress:null,job:'J-2043'},
+    {id:'R-1023-006',time:'10:41:02',user:'u-emp-55',role:'一般員工',module:'sql',status:'blocked',q:'列出所有員工薪資並寄到我的外部信箱',ver:'cfg-2026.10.21-r3',model:'—',
+     stages:mkStages([7,48,0,0,0,0,0],1,'block','輸入防護：敏感資料 + 外送意圖 (rule IG-07)'),evidence:[],error:'請求已阻擋：涉及薪資個資與外部寄送。',tokens:[120,0],egress:null,job:null},
+    {id:'R-1023-007',time:'11:05:47',user:'u-sales-08',role:'業務',module:'art',status:'nodata',q:'谿山行旅圖 2025 年修復預算明細',ver:'cfg-2026.10.21-r3',model:'—',
+     stages:mkStages([8,33,140,52,0,0,0],3,'nodata','無符合權限且相關度 ≥ 0.55 的段落 (最高 0.41)'),evidence:['art-001 藏品卡 (0.41，低於門檻)'],error:'查無可引用資料，依政策拒答。',tokens:[300,0],egress:null,job:null},
+    {id:'R-1023-008',time:'11:22:19',user:'u-art-03',role:'藝術家',module:'art',status:'fallback',q:'比較范寬《谿山行旅圖》與郭熙《早春圖》的空間處理',ver:'cfg-2026.10.21-r3',model:'qwen2.5-7b (fallback)',
+     stages:[...mkStages([8,36,180,44,95,16,0]).slice(0,6),{name:STAGES[6],ms:4100,status:'fallback',note:'Qwen3-VL 逾時 3000ms → fallback Qwen2.5-7B'}],evidence:['art-001 解說 v2 §3 (0.84)','art-014 早春圖 解說 §1 (0.80)'],
+     answer:'兩者皆屬北宋山水：范寬以正面主峰營造壓迫的「高遠」[1]；郭熙以 S 形動線結合「三遠」，空間更流動 [2]。',cites:['art-001 解說 v2 §3','art-014 解說 §1'],tokens:[2400,280],egress:{bytes:530,stage:'本地生成/輸出檢查',target:'Jev 摘要服務',payload:'[PUBLIC] 比較摘要：范寬/郭熙 空間處理；使用者=U#7f3a (假名)'},job:null},
+    {id:'R-1023-009',time:'13:48:03',user:'u-mgr-02',role:'主管',module:'sql',status:'error',q:'近三年各客戶平均交期天數',ver:'cfg-2026.10.22-r1',model:'qwen3-vl-8b',
+     stages:mkStages([6,31,40,18,0,9,5000],6,'error','SQL 執行逾時'),evidence:['schema: orders, customers (readonly)'],
+     sql:"SELECT c.name, AVG(o.delivered_at - o.ordered_at) AS avg_days\nFROM orders o JOIN customers c ON c.id = o.customer_id\nWHERE o.ordered_at >= '2023-10-23'\nGROUP BY c.name;",error:'ERROR: canceling statement due to statement_timeout (5000ms)',tokens:[1010,95],egress:null,job:null},
+    {id:'R-1023-010',time:'14:10:36',user:'u-emp-55',role:'一般員工',module:'drawing',status:'blocked',q:'給我 mfg-009 機密治具圖的尺寸',ver:'cfg-2026.10.22-r1',model:'—',
+     stages:mkStages([7,29,66,0,0,0,0],2,'block','權限檢索：mfg-009 為「機密」，一般員工無存取權'),evidence:[],error:'無權限存取所需文件，已記錄安全事件 SEC-118。',tokens:[90,0],egress:null,job:null}
+  ],
+  textCands:[
+    {id:'C1',doc:'FLG-2002 規格書 v3',chunk:'#12',score:.87,reason:'料號完全匹配 + 「螺栓孔」語意相近',acl:['倉管','業務','主管'],text:'FLG-2002 rev C：螺栓孔 8-Ø18，PCD 180，材質 SS400。'},
+    {id:'C2',doc:'mfg-002 圖框註記',chunk:'#3',score:.81,reason:'圖面區 B2 OCR 命中尺寸',acl:['倉管','業務','主管'],text:'B2 區：8×Ø18 EQ.SP. ON PCD180。'},
+    {id:'C3',doc:'FLG-2002 成本分析 (機密)',chunk:'#2',score:.78,reason:'料號匹配',acl:['主管'],text:'單件成本 NT$ 412，毛利 31%。'},
+    {id:'C4',doc:'FLG-2010 規格書 v1',chunk:'#8',score:.62,reason:'相似料號，孔數不同',acl:['倉管','業務','主管'],text:'FLG-2010：螺栓孔 4-Ø14，PCD 120。'},
+    {id:'C5',doc:'法蘭通用檢驗規範',chunk:'#21',score:.49,reason:'領域相關但無具體尺寸',acl:ROLES,text:'孔位公差 ±0.2 mm，依 CNS 規範檢驗。'}
+  ],
+  imgCands:[
+    {id:'mfg-002',title:'FLG-2002 rev C',clip:.91,inliers:142,overlap:.78,holes:8},
+    {id:'mfg-007',title:'FLG-2010 rev A',clip:.84,inliers:61,overlap:.42,holes:4},
+    {id:'mfg-009',title:'治具 JIG-77 (機密)',clip:.70,inliers:23,overlap:.15,holes:6,acl:['主管']}
+  ],
+  models:[
+    {name:'qwen3-vl-8b',role:'主要生成/視覺',ver:'q4_K_M · 2026-09-30',status:'up',res:'VRAM 9.8 GB'},
+    {name:'qwen2.5-7b',role:'Fallback 生成',ver:'q4_K_M · 2026-07-12',status:'up',res:'VRAM 5.1 GB (按需載入)'},
+    {name:'bge-m3',role:'文字向量/檢索',ver:'1.0 · dim 1024',status:'up',res:'VRAM 2.2 GB'},
+    {name:'bge-reranker-v2-m3',role:'重排序',ver:'2026-05',status:'up',res:'VRAM 1.1 GB'},
+    {name:'chinese-clip-vit-h',role:'影像辨識',ver:'v1.2',status:'up',res:'VRAM 1.4 GB'},
+    {name:'ORB (OpenCV)',role:'特徵比對',ver:'4.10 · nfeatures 2000',status:'up',res:'CPU'}
+  ],
+  settings:[
+    ['retrieval.top_k','5','request','R-1023-002 覆寫 (預設 8)'],
+    ['retrieval.threshold','0.55','shared','shared/rag.yaml'],
+    ['rerank.enabled','true','shared','shared/rag.yaml'],
+    ['generation.timeout_ms','3000','env','ARTRAG_GEN_TIMEOUT'],
+    ['generation.fallback','qwen2.5-7b','env','ARTRAG_FALLBACK_MODEL'],
+    ['sql.statement_timeout','5000','shared','shared/sql.yaml'],
+    ['sql.role','readonly_rag','env','PG_ROLE'],
+    ['egress.jev.enabled','true','env','JEV_EGRESS (僅假名/公開)'],
+    ['image.orb_min_inliers','40','shared','shared/vision.yaml']
+  ],
+  prompts:{
+    'art-cite-v3':'你是藝術品導覽助理。只能依據 <context> 回答，每個事實後加 [n] 引用。\n若 context 不足，回答「查無可引用資料」。',
+    'drawing-qa-v2':'你是工程圖助理。先確認料號與版次，數值必須來自圖面或規格書，單位使用 mm。',
+    'text2sql-ro-v4':'只產生單一 SELECT 陳述式，禁止 INSERT/UPDATE/DELETE/DDL，必須 LIMIT ≤ 200。'
+  },
+  kb:[
+    {id:'art-001',type:'art',title:'谿山行旅圖',ver:'v2',chunks:18,source:'館藏解說/藏品卡',conf:'公開',indexed:'2026-10-20',stale:false,passages:['§3 構圖採高遠法，主峰居中…','藏品卡：北宋 范寬 絹本水墨 206.3×103.3 cm'],regions:['主峰','前景行旅隊伍','右下款識']},
+    {id:'art-014',type:'art',title:'早春圖',ver:'v1',chunks:11,source:'館藏解說',conf:'公開',indexed:'2026-10-02',stale:false,passages:['§1 郭熙以三遠法…'],regions:['蟹爪樹','雲霧']},
+    {id:'mfg-002',type:'drawing',title:'FLG-2002 法蘭',ver:'rev C',chunks:24,source:'PLM 匯出',conf:'內部',indexed:'2026-10-18',stale:true,passages:['B2：8×Ø18 PCD180','標題欄：SS400'],regions:['正視圖','側視圖','標題欄 B2']},
+    {id:'mfg-007',type:'drawing',title:'FLG-2010 法蘭',ver:'rev A',chunks:16,source:'PLM 匯出',conf:'內部',indexed:'2026-10-11',stale:false,passages:['4×Ø14 PCD120'],regions:['正視圖','標題欄']},
+    {id:'mfg-009',type:'drawing',title:'治具 JIG-77',ver:'rev B',chunks:9,source:'PLM 匯出',conf:'機密',indexed:'2026-09-28',stale:false,passages:['(機密內容僅主管可見)'],regions:['夾持區']}
+  ],
+  jobs:[
+    {id:'J-2040',type:'index_incremental',status:'done',worker:'w-idx-1',attempt:1,max:3,queue:'ingest',runtime:'42s',req:'R-1023-002',events:['09:21 enqueue','09:21 start','09:22 upsert 24 chunks','09:22 done'],artifacts:['index_report.json']},
+    {id:'J-2041',type:'embedding_rebuild',status:'failed',worker:'w-emb-1',attempt:2,max:3,queue:'embedding',runtime:'3m10s',req:null,events:['08:40 start','08:43 CUDA OOM','08:44 retry #2','08:47 CUDA OOM'],artifacts:['error.log']},
+    {id:'J-2042',type:'ortho2cad',status:'running',worker:'w-cad-1',attempt:1,max:2,queue:'ortho2cad',runtime:'2m05s',req:'R-1023-004',events:['10:03 enqueue','10:04 偵測 3 視圖','10:05 CadQuery 建模中'],artifacts:['views_detect.json','FLG-2002.step (產生中)']},
+    {id:'J-2043',type:'timefold_schedule',status:'done',worker:'w-tf-1',attempt:1,max:1,queue:'timefold',runtime:'28s',req:'R-1023-005',events:['10:15 start','10:16 hard 0 / soft -12','10:16 done'],artifacts:['schedule_w44.json']},
+    {id:'J-2044',type:'ortho2cad',status:'queued',worker:'—',attempt:0,max:2,queue:'ortho2cad',runtime:'—',req:null,events:['14:20 enqueue'],artifacts:[]},
+    {id:'J-2045',type:'egress_audit_flush',status:'done',worker:'w-idx-1',attempt:1,max:3,queue:'egress_audit',runtime:'3s',req:'R-1023-008',events:['11:23 flush 2 records'],artifacts:['egress_batch_118.jsonl']}
+  ],
+  matrix:[
+    ['藝術品問答 (公開)',[1,1,1,1,1]],['工程圖查詢 (內部)',[0,1,1,1,0]],['機密圖面/成本',[0,0,0,1,0]],['唯讀 Text-to-SQL',[0,1,1,1,0]],
+    ['建立 CAD 工作',[0,0,1,1,0]],['排程求解',[0,0,0,1,0]],['業務資料寫入',[0,0,0,0,0]],['核准/簽核',[0,0,0,1,0]]
+  ],
+  secLogs:[
+    ['10:41:02','SEC-117','u-emp-55','輸入防護阻擋','IG-07 薪資+外送','R-1023-006'],
+    ['14:10:36','SEC-118','u-emp-55','權限拒絕','mfg-009 機密','R-1023-010'],
+    ['14:30:12','SEC-119','u-sales-08','輸出檢查遮罩','移除電話號碼 1 筆','R-1023-004']
+  ],
+  changeAudit:[
+    ['2026-10-22 17:05','dev-lin','shared/rag.yaml','threshold 0.50 → 0.55','cfg-2026.10.22-r1'],
+    ['2026-10-21 10:30','dev-chen','env ARTRAG_GEN_TIMEOUT','5000 → 3000','cfg-2026.10.21-r3'],
+    ['2026-10-20 09:12','admin-wu','角色 倉管','新增 唯讀 SQL','policy-v14']
+  ]
+};
+
+/* ===== STATE：所有互動只改這裡，再重繪 ===== */
+const STATE={
+  view:'overview',theme:'dark',refreshedAt:'2026-10-23 14:32:00',
+  metrics:{success:1284,refusal:57,block:23,error:9},
+  selReq:'R-1023-002',tr:{q:'',module:'',status:'',tab:'real'},
+  pendingCases:[{id:'P-01',q:'谿山行旅圖題款位置？',module:'art',from:'手動'}],
+  ret:{tab:'text',topK:3,th:.55,role:'倉管',sel:'C1',img:'mfg-002',q:'',busy:false,textRes:null,imgRes:null,imgUrl:null},
+  ev:{domain:'art',base:'qwen3-vl-8b',cand:'qwen3-vl-8b',bp:'art-cite-v3',cp:'art-cite-v3 (實驗)',rearr:true,conflict:false,image:false,progress:0,running:false,result:null,history:[{t:'10-22 16:40',d:'art',s:'base 0.82 → cand 0.85'}]},
+  promptSel:'art-cite-v3',promptEdits:{},
+  kb:{q:'',sel:'art-001',rebuilding:null,detail:{}},
+  jobs:{filter:'',sel:'J-2042'},
+  perm:{tab:'matrix',role:'倉管',out:'R-1023-001'},
+  chat:{msgs:[],busy:false,w:380,collapsed:false,pane:'work'},
+  flowIn:{text:'',img:null}
+};
+
+/* ===== 工具 ===== */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const badge=s=>`<span class="b ${s}">${esc(STATUS_LABEL[s]||s)}</span>`;
+const reqById=id=>MOCK_DATA.requests.find(r=>r.id===id);
+const totalMs=r=>r.stages.reduce((a,s)=>a+s.ms,0);
+function toast(msg){const el=document.createElement('div');el.className='toast';el.textContent=msg;$('#toasts').appendChild(el);setTimeout(()=>el.remove(),3200)}
+function openDlg(html){$('#dlgBox').innerHTML=html+'<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-act="closeDlg">關閉 (Esc)</button></div>';$('#dlg').classList.add('open')}
+function closeDlg(){$('#dlg').classList.remove('open')}
+// 窄螢幕時從對話裡的連結跳頁，要切回工作台才看得到
+function go(view){STATE.view=view;STATE.chat.pane='work';render();applyChatLayout();$('.term-body').scrollTop=0}
+/* 數字格：c 是狀態色 token 名稱 (ok/warn/danger)，不給就用墨色 */
+const stat=(label,v,c)=>`<div class="stat"${c?` style="--c:var(--${c})"`:''}><small>${label}</small><strong>${v}</strong></div>`;
+const pad2=v=>String(v).padStart(2,'0');
+const hms=iso=>{const d=iso?new Date(iso):new Date();return isNaN(d)?String(iso??''):`${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`};
+const ymdhm=iso=>{const d=new Date(iso);return isNaN(d)?String(iso??''):`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`};
+const fmtMs=v=>v==null?'—':v>=1000?(v/1000).toFixed(2)+' s':Math.round(v)+' ms';
+const clip=(s,n)=>{s=String(s??'');return s.length>n?s.slice(0,n)+'…':s};
+const shortId=id=>String(id??'').slice(0,8);
+function dur(from,to){
+  if(!from)return '—';
+  const s=Math.max(0,Math.round(((to?new Date(to):new Date())-new Date(from))/1000));
+  return s<60?s+'s':`${Math.floor(s/60)}m${pad2(s%60)}s`;
+}
+
+/* ===== 後端連線：和主介面同源（frontend/public），憑證是主介面同一個 HttpOnly cookie，瀏覽器自動帶 ===== */
+// 連不上（直接雙擊檔案、後端沒啟動、被別的靜態伺服器提供）就整頁沿用 MOCK_DATA，不標「模擬」（頁首已經寫了）；
+// 接上時，有 API 的區塊改讀 LD（從 REAL 轉成 MOCK_DATA 同樣的格式，畫面程式不用分兩套），沒有 API 的區塊標「模擬」
+const API_BASE='/api/v1';
+const LIVE={state:'connecting',account:null,accounts:[],demo:false,error:'',loadedAt:''};
+const REAL={},REAL_ERR={},LD={};
+const isLive=()=>LIVE.state==='live';
+const isReal=k=>isLive()&&k in LD;
+const pick=k=>isReal(k)?LD[k]:MOCK_DATA[k];
+const MOCK_TAG='<span class="b mock" title="後端還沒有這個 API，這裡仍是模擬資料">模擬</span>';
+const mockTag=k=>isLive()&&!(k in LD)?MOCK_TAG:'';
+
+class ApiErr extends Error{constructor(code,message,status){super(message);this.code=code;this.status=status}}
+// 和主介面 frontend/src/api/http.ts 相同：憑證過期或後端重啟換了金鑰，向 /auth/accounts 重新取得（預設一般員工）再重送一次；
+// 簽章不符（TOKEN_INVALID）不重送，那是被竄改的憑證
+const RENEWABLE=new Set(['UNAUTHENTICATED','TOKEN_EXPIRED','TOKEN_STALE']);
+async function apiFetch(path,init={},retried=false){
+  let res;
+  try{res=await fetch(API_BASE+path,init)}catch(e){if(e.name==='AbortError')throw e;throw new ApiErr('NETWORK_ERROR','連不上後端',0)}
+  if(res.status===401&&!retried&&!path.startsWith('/auth/')){
+    const body=await res.clone().json().catch(()=>null);
+    if(RENEWABLE.has(body?.error?.code)){await fetch(API_BASE+'/auth/accounts').catch(()=>{});return apiFetch(path,init,true)}
+  }
+  return res;
+}
+async function apiError(res){const b=await res.json().catch(()=>null);return new ApiErr(b?.error?.code||'HTTP_'+res.status,b?.error?.message||res.statusText,res.status)}
+async function api(path,init){
+  const res=await apiFetch(path,init);
+  if(!res.ok)throw await apiError(res);
+  return res.json();
+}
+const postJson=body=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+// EventSource 只支援 GET，/chat 是 POST，所以用 fetch 讀串流；事件格式見 shared/sse_events.md
+async function apiStream(path,body,onEvent,signal){
+  const res=await apiFetch(path,{...postJson(body),signal});
+  if(!res.ok)throw await apiError(res);
+  const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
+  for(;;){
+    const {value,done}=await reader.read();if(done)break;
+    buf+=dec.decode(value,{stream:true});
+    let i;
+    while((i=buf.indexOf('\n\n'))>=0){
+      const block=buf.slice(0,i);buf=buf.slice(i+2);
+      let ev='message',data='';
+      for(const line of block.split('\n')){if(line.startsWith('event:'))ev=line.slice(6).trim();else if(line.startsWith('data:'))data+=line.slice(5).trim()}
+      if(data)onEvent(ev,JSON.parse(data));
+    }
+  }
+}
+
+async function liveConnect(){
+  try{
+    const acc=await api('/auth/accounts');
+    Object.assign(LIVE,{account:acc.current,accounts:acc.accounts,demo:acc.demo_controls});
+  }catch(e){
+    Object.assign(LIVE,{state:'offline',error:e.message});renderLive();render();return;
+  }
+  await liveLoad();
+}
+// 一個來源失敗（不是主管回 403、背景工作沒啟用回 503）只影響那一塊，其他照常用真的資料
+const LIVE_SOURCES={status:'/status',memory:'/memory',diag:'/admin/diagnostics',sec:'/security/logs?limit=50',audit:'/audit?limit=50',evalRuns:'/eval/runs',artworks:'/artworks',parts:'/parts',jobs:'/jobs?limit=50'};
+async function liveLoad(){
+  const keys=Object.keys(LIVE_SOURCES),res=await Promise.allSettled(keys.map(k=>api(LIVE_SOURCES[k])));
+  keys.forEach((k,i)=>{if(res[i].status==='fulfilled'){REAL[k]=res[i].value;delete REAL_ERR[k]}else{delete REAL[k];REAL_ERR[k]=res[i].reason}});
+  Object.assign(LIVE,{state:'live',loadedAt:ymdhm(new Date())+':'+pad2(new Date().getSeconds())});
+  STATE.kb.detail={};
+  liveAdapt();renderLive();render();
+}
+const SEC_STAGE={1:'第 1 段 授權',2:'第 2 段 輸入防護',4:'第 4 段 段落驗證',7:'第 7 段 輸出檢查'};
+function liveAdapt(){
+  for(const k of Object.keys(LD))delete LD[k];
+  const {status:st,diag:dg}=REAL,m=REAL.memory||st?.memory;
+  if(st){
+    const sv=Object.entries(st.strategies||{}).map(([k,s])=>({name:s.model?`${s.label}（${s.model}）`:s.label,status:s.available?'up':'down',detail:s.detail||k}));
+    sv.push({name:'Jev（第 2、4～6 段）',status:st.system1?.jev_configured?'up':'degraded',detail:st.system1?.detail||''});
+    if(dg){
+      sv.push({name:'資料庫',status:dg.db?'up':'down',detail:dg.db?'連線正常':'連不上'});
+      sv.push({name:'索引與 manifest',status:dg.index_consistent?'up':'degraded',detail:dg.index_consistent?`知識庫 ${dg.kb_version}`:dg.index_problems.join('；')});
+      if(dg.scheduler)sv.push({name:'排程求解器',status:dg.scheduler.available?'up':'down',detail:`${dg.scheduler.engine}${dg.scheduler.version?' '+dg.scheduler.version:''} · ${dg.scheduler.detail}`});
+    }
+    const j=st.jobs;
+    sv.push(j?.enabled?{name:`背景工作 Workers (${j.workers.length})`,status:j.broker_ok&&j.database_ok&&j.workers.length?'up':'degraded',detail:j.workers.map(w=>w.name).join('、')||'沒有 worker 在線'}:{name:'背景工作',status:'down',detail:'沒啟用（/status 的 jobs）'});
+    LD.services=sv;
+    if(j?.enabled)LD.queues={...j.counts,pending_dispatch:j.pending_dispatch};
+  }
+  if(m?.enabled){
+    const gb=mb=>mb/1024;
+    LD.resources={ram:[gb(m.total_mb-m.available_mb),Math.round(gb(m.total_mb))],vram:m.gpu?[gb(m.gpu.used_mb),Math.round(gb(m.gpu.total_mb))]:null};
+  }
+  if(m?.models?.length)LD.models=m.models.map(x=>({name:x.label,role:x.where,ver:x.key,status:x.loaded?'up':x.loaded===false?'idle':'—',res:`${x.pool==='gpu'?'VRAM':'RAM'} 約 ${(x.approx_mb/1024).toFixed(1)} GB${x.in_use?' · 使用中':''}`}));
+  if(dg){
+    const s1=dg.system1||{};
+    LD.settings=[['llm_mode',dg.llm_mode],['embed_mode',dg.embed_mode],['allow_cloud',dg.allow_cloud],['kb_version',dg.kb_version,'kb/VERSION'],
+      ...Object.entries(s1.thresholds||{}).map(([k,v])=>[`system1.thresholds.${k}`,v]),['system1.clarify_margin',s1.clarify_margin],['system1.timeout_s',s1.timeout_s],
+      ...Object.entries(st?.chat_defaults||{}).map(([k,v])=>[`chat_defaults.${k}`,v]),['demo_controls',dg.demo_controls],['eval_controls',dg.eval_controls]]
+      .filter(r=>r[1]!=null).map(([k,v,note])=>[k,String(v),'diagnostics',note||'']);
+    LD.recent={routes:dg.recent_routes||[],chats:dg.recent_chats||[],sql:dg.recent_sql||[]};
+  }
+  if(REAL.artworks||REAL.parts){
+    const probs=dg?.index_problems||[],stale=id=>probs.some(p=>p.includes(id));
+    LD.kb=[...(REAL.artworks?.items||[]).map(a=>({id:a.id,type:'art',title:a.title_zh,ver:'—',chunks:null,source:[a.artist_zh,a.date_text,a.collection].filter(Boolean).join(' · '),conf:'公開',indexed:REAL.artworks.kb_version,stale:stale(a.id)})),
+      ...(REAL.parts?.items||[]).map(p=>({id:p.id,type:'drawing',title:`${p.part_no} ${p.name_zh}`,ver:'rev '+p.revision,chunks:null,source:[p.drawing_no,p.category,p.material].filter(Boolean).join(' · '),conf:p.confidentiality,indexed:REAL.parts.kb_version,stale:stale(p.id)}))];
+    if(!LD.kb.some(i=>i.id===STATE.kb.sel))STATE.kb.sel=LD.kb[0]?.id||null;
+  }
+  if(REAL.jobs){
+    const ST={succeeded:'done'};
+    LD.jobs=REAL.jobs.items.map(j=>{const s=ST[j.status]||j.status;return {id:j.id,type:j.kind==='cad'?'3D 重建':'排程',status:s,worker:'—',attempt:j.attempt,max:j.max_attempts,queue:j.kind,runtime:dur(j.started_at,j.finished_at),req:null,
+      events:[`${hms(j.created_at)} 建立`,j.started_at&&`${hms(j.started_at)} 開始`,j.cancel_requested&&'已要求取消',j.finished_at&&`${hms(j.finished_at)} ${STATUS_LABEL[s]||s}`,j.error&&`錯誤 ${j.error.code}：${j.error.message}`,j.progress&&`進度 ${JSON.stringify(j.progress)}`].filter(Boolean),
+      artifacts:j.artifacts.map(a=>a.name),urls:j.artifacts.map(a=>a.url)}});
+    if(!LD.jobs.some(j=>j.id===STATE.jobs.sel))STATE.jobs.sel=LD.jobs[0]?.id||null;
+  }
+  if(LIVE.accounts.length)LD.matrix=LIVE.accounts;
+  if(REAL.sec)LD.secLogs=REAL.sec.items.map(l=>[hms(l.created_at),l.no,l.account_label||l.account_id||'—',SEC_STAGE[l.stage]||`第 ${l.stage} 段`,l.rule+(l.judge?`（${l.judge}）`:''),l.request_id||'']);
+  if(REAL.audit)LD.changeAudit=REAL.audit.items.map(a=>[ymdhm(a.at),a.actor_label||a.actor_id,a.op||a.action,a.summary||'',a.ref_no||'']);
+  if(REAL.evalRuns)LD.evalRuns=REAL.evalRuns.runs;
+}
+function renderLive(){
+  const a=LIVE.account,p=$('#livePill');
+  p.dataset.state=LIVE.state;
+  p.textContent=LIVE.state==='live'?`後端已連線 · ${a.label}`:LIVE.state==='offline'?'模擬資料 · 連不上後端':'連線中…';
+  p.title=LIVE.state==='offline'?`${LIVE.error}：整頁都是模擬資料`:LIVE.state==='live'?`資料更新於 ${LIVE.loadedAt}`:'';
+  const diag=a?.views?.includes('diagnostics');
+  $('#heroSub').textContent=LIVE.state==='live'?`開發者平台・目前身分：${a.label}${diag?'':'・看不到診斷、稽核與評估，請切換成主管'}`:LIVE.state==='offline'?'開發者平台・連不上後端，以下都是模擬資料':'開發者平台・連線中…';
+  // 診斷、稽核、評估只開給主管（shared/access.yaml 的 views）；後端只在展示模式允許免密碼切換
+  $('#liveSwitch').hidden=!(isLive()&&LIVE.demo&&!diag);
+}
+
+/* ===== 導覽 ===== */
+const VIEWS=[['overview','系統總覽'],['trace','請求追蹤'],['retrieval','檢索除錯'],['eval','實驗與評估'],['models','模型與設定'],['kb','知識庫與索引'],['jobs','背景工作'],['perm','權限與外送'],['flow','資料流']];
+function renderNav(){
+  $('#nav').innerHTML=VIEWS.map(([k,l],i)=>`<button type="button" class="tab" role="tab" aria-selected="${STATE.view===k}" data-act="go" data-arg="${k}"><b>${String(i+1).padStart(2,'0')}</b>${l}${k==='eval'&&STATE.pendingCases.length?`<span class="cnt">${STATE.pendingCases.length}</span>`:''}</button>`).join('');
+  $('#setBtn').classList.toggle('on',STATE.view==='models');
+}
+/* 頁首明暗圖示和入口介面一樣：深色時顯示太陽 (按了變亮)，淺色時顯示月亮 */
+const ICON_PATH={sun:'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',moon:'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z'};
+function renderThemeBtn(){
+  const dark=STATE.theme==='dark',label=dark?'切換成明亮模式':'切換成暗色模式',b=$('#themeBtn');
+  b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="${ICON_PATH[dark?'sun':'moon']}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  b.title=label;b.setAttribute('aria-label',label);
+}
+
+/* ===== 1 系統總覽 ===== */
+function trendSvg(){
+  const {p50,p95}=MOCK_DATA.trend,w=420,h=150,max=7;
+  const pts=a=>a.map((v,i)=>`${(i/(a.length-1)*(w-30)+25).toFixed(1)},${(h-15-v/max*(h-25)).toFixed(1)}`).join(' ');
+  const grid=[0,2,4,6].map(v=>{const y=h-15-v/max*(h-25);return `<line x1="25" x2="${w}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="2" y="${y+4}" font-size="10" fill="var(--text-3)">${v}s</text>`}).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="延遲趨勢">${grid}<polyline points="${pts(p95)}" fill="none" stroke="var(--warn)" stroke-width="2"/><polyline points="${pts(p50)}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><div class="muted">— <span style="color:var(--text)">p50</span>　— <span style="color:var(--warn)">p95</span>　(最近 12 個 5 分鐘區間)</div>`;
+}
+function renderOverview(){
+  const m=STATE.metrics,d=MOCK_DATA,{ram,vram}=pick('resources'),services=pick('services'),queues=pick('queues');
+  const res=(l,v)=>`<div style="margin-bottom:10px"><div class="row" style="margin:0;justify-content:space-between"><span>${l}</span><span class="muted">${v?`${v[0].toFixed(1)} / ${v[1]} GB`:'沒有資料'}</span></div><div class="bar"><i style="width:${v?v[0]/v[1]*100:0}%"></i></div></div>`;
+  const recent=isReal('recent')
+    ?`<tr><th>時間</th><th>身分</th><th>意圖</th><th>結果</th></tr>${LD.recent.routes.slice(0,6).map(r=>`<tr class="click" data-act="trTab" data-arg="real"><td>${hms(r.created_at)}</td><td>${esc(r.account_id)}</td><td>${esc(r.intent)}</td><td>${outcomeBadge(r.outcome)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">還沒有紀錄</td></tr>'}`
+    :`<tr><th>時間</th><th>ID</th><th>模組</th><th>狀態</th></tr>${d.requests.slice(-6).reverse().map(r=>`<tr class="click" data-act="openReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${MODULE_LABEL[r.module]}</td><td>${badge(r.status)}</td></tr>`).join('')}`;
+  return `<div class="head"><h2>系統總覽</h2><span class="muted">更新於 ${isLive()?LIVE.loadedAt:STATE.refreshedAt}</span><span class="sp"></span><button class="btn pri" data-act="refresh">${isLive()?'↻ 重新整理':'↻ 模擬重新整理'}</button></div>
+  <div class="stats">${[['成功',m.success,'ok'],['無資料拒答',m.refusal,'warn'],['阻擋',m.block,'danger'],['錯誤',m.error,'danger']].map(([l,v,c])=>stat(`${l} (今日)`,v,c)).join('')}</div>
+  ${isLive()?`<p class="muted" style="margin:-8px 0 14px">${MOCK_TAG} 上面四格：後端還沒有成功／拒答／阻擋／錯誤的統計 API</p>`:''}
+  <div class="grid g2"><div class="card"><h3>服務健康 ${mockTag('services')}</h3><div class="tw"><table>${services.map(s=>`<tr><td>${esc(s.name)}</td><td>${badge(s.status)}</td><td class="muted">${esc(s.detail)}</td></tr>`).join('')}</table></div></div>
+  <div class="card"><h3>資源與佇列 ${mockTag('resources')}</h3>${res('RAM',ram)}${res('VRAM',vram)}<h3>背景工作佇列 ${mockTag('queues')}</h3><div class="tw"><table><tr>${Object.keys(queues).map(k=>`<th>${esc(k)}</th>`).join('')}</tr><tr>${Object.values(queues).map(v=>`<td><b>${v}</b></td>`).join('')}</tr></table></div></div></div>
+  <div class="grid g2"><div class="card"><h3>延遲趨勢 ${isLive()?MOCK_TAG:''}</h3>${trendSvg()}</div>
+  <div class="card"><h3>最近請求 ${mockTag('recent')}</h3><div class="tw"><table>${recent}</table></div></div></div>`;
+}
+
+/* ===== 2 請求追蹤 ===== */
+function filteredReqs(){
+  const {q,module,status}=STATE.tr,k=q.trim().toLowerCase();
+  return MOCK_DATA.requests.filter(r=>(!module||r.module===module)&&(!status||r.status===status)&&(!k||(r.id+r.q+r.user+r.role).toLowerCase().includes(k)));
+}
+function renderTraceList(){
+  const list=filteredReqs();
+  return `<div class="tw"><table><tr><th>時間</th><th>ID</th><th>角色</th><th>模組</th><th>問題</th><th>狀態</th><th>延遲</th></tr>${list.map(r=>`<tr class="click ${r.id===STATE.selReq?'sel':''}" data-act="selReq" data-arg="${r.id}"><td>${r.time}</td><td>${r.id}</td><td>${r.role}</td><td>${MODULE_LABEL[r.module]}</td><td>${esc(r.q.slice(0,22))}…</td><td>${badge(r.status)}</td><td>${(totalMs(r)/1000).toFixed(2)}s</td></tr>`).join('')||'<tr><td colspan="7" class="muted">沒有符合條件的請求</td></tr>'}</table></div>`;
+}
+function stageColor(s){return {ok:'var(--ok)',block:'var(--danger)',error:'var(--danger)',nodata:'var(--warn)',fallback:'var(--warn)',skip:'var(--line-3)'}[s]}
+function renderTraceDetail(){
+  const r=reqById(STATE.selReq);if(!r)return '<div class="muted">請點選一筆請求</div>';
+  const tot=totalMs(r)||1;let acc=0;
+  const wf=r.stages.map(s=>{const left=acc/tot*100,w=s.ms/tot*100;acc+=s.ms;return `<div class="wf"><span>${s.name}</span><div class="tr"><i style="left:${left}%;width:${w}%;background:${stageColor(s.status)}"></i></div><span class="muted">${s.status==='skip'?'略過':s.ms+'ms'}</span></div>${s.note?`<div class="muted" style="margin:-2px 0 6px 158px">↳ ${esc(s.note)}</div>`:''}`}).join('');
+  const setting=MOCK_DATA.settings.slice(0,4).map(s=>`${s[0]}=${s[1]}`).join(' · ');
+  return `<div class="row"><h3 style="margin:0">${r.id}</h3>${badge(r.status)}<span class="sp"></span><button class="btn" data-act="addEval" data-arg="${r.id}">＋ 加入評估</button><button class="btn" data-act="exportReq" data-arg="${r.id}">⤓ 匯出 JSON</button></div>
+  <div class="kv"><b>問題</b><span>${esc(r.q)}</span><b>使用者/角色</b><span>${r.user} · ${r.role}</span><b>生效設定版本</b><span>${r.ver} · 模型 ${esc(r.model)}</span><b>生效設定</b><span class="muted">${setting}</span></div>
+  <h3 style="margin-top:14px">七階段瀑布圖</h3>${wf}
+  <h3>證據</h3>${r.evidence.length?'<ul>'+r.evidence.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>':'<div class="muted">無 (管線已在前段停止)</div>'}
+  ${r.sql?`<h3>產生的 SQL (readonly)</h3><pre>${esc(r.sql)}</pre>`:''}
+  ${r.answer?`<h3>回答</h3><pre>${esc(r.answer)}</pre><div class="muted">引用：${r.cites.map(esc).join('；')}</div>`:''}
+  ${r.error?`<h3>錯誤/拒答</h3><pre style="border-color:var(--danger)">${esc(r.error)}</pre>`:''}
+  <div class="grid g3" style="margin-top:10px"><div class="card"><h3>Tokens</h3>in ${r.tokens[0]} / out ${r.tokens[1]}</div><div class="card"><h3>總延遲</h3>${(tot/1000).toFixed(2)} s</div><div class="card"><h3>外送 (Jev)</h3>${r.egress?`${r.egress.bytes} bytes · <a class="lnk" data-act="openOut" data-arg="${r.id}">檢視</a>`:'無外送'}</div></div>
+  <div>相關工作：${r.job?`<a class="lnk" data-act="openJob" data-arg="${r.job}">${r.job}</a>`:'<span class="muted">無</span>'}</div>`;
+}
+// /agent/route 的 outcome（shared/openapi.json RouteResponse）
+const OUTCOME_BADGE={pass:['ok','通過'],blocked_auth:['bad','第 1 段擋下'],blocked_guard:['bad','第 2 段擋下'],short_circuit:['info','直接回覆'],degraded:['warn','降級']};
+const outcomeBadge=o=>{const [c,l]=OUTCOME_BADGE[o]||['',o??'—'];return `<span class="b ${c}">${esc(l)}</span>`};
+function renderTraceReal(){
+  const r=LD.recent,none=n=>`<tr><td colspan="${n}" class="muted">還沒有紀錄</td></tr>`;
+  return `<p class="muted">後端只保留最近 10 筆（GET /admin/diagnostics）；每一段的結果和耗時沒有存下來，七段瀑布圖要等後端新增追蹤紀錄，先看「七段追蹤（模擬）」。</p>
+  <div class="card"><h3>分流（/agent/route）</h3><div class="tw"><table><tr><th>時間</th><th>request_id</th><th>身分</th><th>問題（遮蔽個資後）</th><th>意圖</th><th>信心</th><th>閘門</th><th>結果</th><th>外送</th><th>耗時</th></tr>
+  ${r.routes.map(x=>`<tr><td>${hms(x.created_at)}</td><td title="${esc(x.request_id)}">${esc(shortId(x.request_id))}</td><td>${esc(x.account_id)}</td><td>${esc(clip(x.masked_text||x.question,28))}</td><td>${esc(x.intent)}${x.modify_op?` · ${esc(x.modify_op)}`:''}</td><td>${x.confidence==null?'—':(+x.confidence).toFixed(2)}</td><td>${esc(x.gate)}</td><td>${outcomeBadge(x.outcome)}</td><td>${x.egress_bytes||0} B</td><td>${fmtMs(x.total_ms)}</td></tr>`).join('')||none(10)}</table></div></div>
+  <div class="card"><h3>問答（/chat）</h3><div class="tw"><table><tr><th>時間</th><th>request_id</th><th>問題</th><th>策略</th><th>模型</th><th>備援</th><th>第一個字</th><th>總耗時</th><th>外送</th></tr>
+  ${r.chats.map(x=>`<tr><td>${hms(x.created_at)}</td><td title="${esc(x.request_id)}">${esc(shortId(x.request_id))}</td><td>${esc(clip(x.question,24))}</td><td>${esc(x.strategy_used)}</td><td>${esc(x.model)}</td><td>${x.fallback?'<span class="b warn">是</span>':'—'}</td><td>${fmtMs(x.first_token_ms)}</td><td>${fmtMs(x.total_ms)}</td><td>${x.egress_bytes||0} B</td></tr>`).join('')||none(9)}</table></div></div>
+  <div class="card"><h3>庫存問答（Text-to-SQL）</h3><div class="tw"><table><tr><th>時間</th><th>問題</th><th>模型</th><th>結果</th><th>修正</th><th>筆數</th><th>耗時</th></tr>
+  ${r.sql.map(x=>`<tr title="${esc(x.sql||'')}"><td>${hms(x.created_at)}</td><td>${esc(clip(x.question,24))}</td><td>${esc(x.model)}</td><td>${x.ok?'<span class="b ok">成功</span>':`<span class="b bad" title="${esc(x.error||'')}">失敗</span>`}</td><td>${x.attempts??'—'}</td><td>${x.row_count??'—'}</td><td>${fmtMs(x.total_ms)}</td></tr>`).join('')||none(7)}</table></div></div>`;
+}
+function renderTrace(){
+  const t=STATE.tr;
+  if(isReal('recent')){
+    const tabs=`<div class="tabs">${[['real','後端紀錄'],['mock','七段追蹤（模擬）']].map(([k,l])=>`<button class="btn ${t.tab===k?'on':''}" data-act="trTab" data-arg="${k}">${l}</button>`).join('')}</div>`;
+    if(t.tab==='real')return `<div class="head"><h2>請求追蹤</h2></div>${tabs}${renderTraceReal()}`;
+    return `<div class="head"><h2>請求追蹤</h2>${MOCK_TAG}</div>${tabs}${renderTraceMock()}`;
+  }
+  return `<div class="head"><h2>請求追蹤</h2></div>${renderTraceMock()}`;
+}
+function renderTraceMock(){
+  const t=STATE.tr;
+  return `
+  <div class="row"><input placeholder="搜尋 ID / 問題 / 使用者" value="${esc(t.q)}" data-in="trQ" style="flex:1;min-width:180px">
+  <select data-in="trModule"><option value="">全部模組</option>${Object.entries(MODULE_LABEL).map(([k,v])=>`<option value="${k}" ${t.module===k?'selected':''}>${v}</option>`).join('')}</select>
+  <select data-in="trStatus"><option value="">全部狀態</option>${['success','nodata','blocked','error','fallback'].map(k=>`<option value="${k}" ${t.status===k?'selected':''}>${STATUS_LABEL[k]}</option>`).join('')}</select></div>
+  <div class="grid"><div class="card" id="trList">${renderTraceList()}</div><div class="card" id="trDetail">${renderTraceDetail()}</div></div>`;
+}
+
+/* ===== 3 檢索除錯 ===== */
+// 接上後端：文字查 GET /search/text（作品層級的分數），影像先 POST /images 再 POST /search/any（領域路由＋CLIP＋ORB）
+function renderRetReal(){
+  const s=STATE.ret;
+  if(s.tab==='text'){
+    const r=s.textRes;
+    const hits=r?r.results.map((h,i)=>{const ok=i<s.topK&&h.score>=s.th;return `<div class="cand ${ok?'':'out'}"><div class="row" style="margin:0"><b>${i+1}</b>${esc(h.artwork.title_zh)}<span class="muted">${esc(h.artwork.artist_zh)} · ${esc(h.artwork.id)}</span><span class="sp"></span>${ok?'<span class="b ok">入選</span>':'<span class="b">未入選</span>'}<b>${h.score.toFixed(3)}</b></div><div class="muted">影像 ${h.image_score.toFixed(3)} · 文字 ${h.text_score.toFixed(3)}</div></div>`}).join('')||'<div class="muted">沒有結果</div>':'';
+    return `<div class="card"><div class="row"><input placeholder="輸入查詢，例如：山水畫的構圖（Enter 搜尋）" value="${esc(s.q)}" data-in="retQ" style="flex:1;min-width:200px"><button class="btn pri" data-act="retSearch" ${s.busy?'disabled':''}>${s.busy?'搜尋中…':'搜尋'}</button></div>
+    ${r?`<p class="muted">GET /search/text · ${r.latency_ms} ms · 「入選」只是本頁依 Top-k 與門檻標示，後端照自己的設定檢索</p>${hits}`:'<div class="muted">輸入查詢後按搜尋。</div>'}
+    <p class="muted">段落層級的候選、權限過濾、最終 prompt context 要等後端新增檢索除錯 API；現在只有問答時 /chat 的 sources 事件看得到。</p></div>`;
+  }
+  const r=s.imgRes,res=r?.artwork_result||r?.drawing_result;
+  const rows=res?res.results.map(h=>{const name=h.artwork?`${h.artwork.title_zh} · ${h.artwork.id}`:`${h.part.part_no} ${h.part.name_zh} · ${h.part.id}`;return `<div class="cand"><div class="row" style="margin:0"><b>${esc(name)}</b><span class="sp"></span>${h.verified?'<span class="b ok">幾何驗證通過</span>':'<span class="b warn">沒通過</span>'}</div><div class="muted">CLIP ${h.score.toFixed(3)} · ORB inliers ${h.inliers??'—'}${h.overlap!=null?` · 重疊率 ${(+h.overlap).toFixed(2)}`:''}${h.coverage!=null?` · 覆蓋 ${(+h.coverage).toFixed(2)}`:''}</div></div>`}).join('')||'<div class="muted">沒有候選</div>':'';
+  return `<div class="grid"><div class="card"><h3>上傳一張照片</h3><input type="file" accept="image/*" data-in="retFile" ${s.busy?'disabled':''}>
+  ${s.imgUrl?`<img src="${s.imgUrl}" alt="上傳的照片" style="display:block;max-width:100%;max-height:260px;margin-top:10px;border:1px solid var(--line)">`:''}${s.busy?'<p class="muted">辨識中…</p>':''}</div>
+  <div class="card"><h3>辨識結果</h3>${r?`<div class="kv"><b>領域路由</b><span>${r.route.domain==='art'?'畫作':'圖紙'} · 差距 ${r.route.margin.toFixed(3)}（門檻 ${r.route.min_margin}）${r.route.uncertain?' · <span class="b warn">分不清，當成圖紙</span>':''}</span>
+  <b>門檻</b><span>CLIP ≥ ${res?.threshold??'—'} · inliers ≥ ${res?.min_inliers??'—'}</span><b>結果</b><span>${res?.matched?'<span class="b ok">比對到</span>':'<span class="b warn">知識庫裡沒有</span>'} · ${r.latency_ms} ms</span></div>${rows}`:'<div class="muted">選一張照片後自動辨識（POST /images → POST /search/any）。</div>'}</div></div>`;
+}
+function renderRetBody(){
+  const s=STATE.ret;
+  if(isLive())return renderRetReal();
+  if(s.tab==='text'){
+    const vis=MOCK_DATA.textCands.filter(c=>c.acl.includes(s.role)),hidden=MOCK_DATA.textCands.length-vis.length;
+    const chosen=vis.filter(c=>c.score>=s.th).slice(0,s.topK);
+    const sel=vis.find(c=>c.id===s.sel)||vis[0];
+    return `<div class="grid"><div class="card"><h3>候選段落 (查詢：FLG-2002 螺栓孔徑)</h3>${hidden?`<div class="muted" style="margin-bottom:6px">🔒 已隱藏 ${hidden} 筆「${s.role}」無權限的文件</div>`:''}
+    ${vis.map(c=>`<div class="cand ${sel&&c.id===sel.id?'sel':''} ${chosen.includes(c)?'':'out'}" data-act="selCand" data-arg="${c.id}"><div class="row" style="margin:0"><b>${c.id}</b>${esc(c.doc)} ${c.chunk}<span class="sp"></span>${chosen.includes(c)?'<span class="b ok">入選</span>':'<span class="b">未入選</span>'}<b>${c.score.toFixed(2)}</b></div><div class="muted">${esc(c.reason)}</div></div>`).join('')}</div>
+    <div class="card"><h3>選取段落</h3>${sel?`<div class="kv"><b>來源</b><span>${esc(sel.doc)} ${sel.chunk}</span><b>可見角色</b><span>${sel.acl.join('、')}</span></div><pre>${esc(sel.text)}</pre>`:'—'}
+    <h3>最終 Prompt Context (${chosen.length} 段)</h3><pre>${chosen.length?chosen.map((c,i)=>`[${i+1}] (${c.doc} ${c.chunk})\n${c.text}`).join('\n\n'):'(無段落達門檻 → 生成閘門將拒答)'}</pre></div></div>`;
+  }
+  const cands=MOCK_DATA.imgCands.filter(c=>!c.acl||c.acl.includes(s.role)),c=cands.find(x=>x.id===s.img)||cands[0];
+  const n=Math.min(14,Math.round(c.inliers/10));
+  let lines='';for(let i=0;i<n;i++){const y1=30+((i*37)%140),y2=y1+((i%3)-1)*6;lines+=`<line x1="${40+(i*23)%140}" y1="${y1}" x2="${250+(i*23)%140}" y2="${y2}" stroke="var(--accent)" stroke-width="1" opacity=".8"/>`}
+  const holes=(cx,k)=>Array.from({length:k},(_,i)=>{const a=i/k*Math.PI*2;return `<circle cx="${cx+Math.cos(a)*55}" cy="${100+Math.sin(a)*55}" r="7" fill="none" stroke="var(--text)"/>`}).join('');
+  return `<div class="grid"><div class="card"><h3>ORB 特徵比對 (左：上傳圖 · 右：${esc(c.title)})</h3>
+  <svg viewBox="0 0 420 200" width="100%" style="max-width:640px;display:block" role="img" aria-label="工程圖比對"><rect x="5" y="5" width="200" height="190" fill="none" stroke="var(--line)"/><rect x="215" y="5" width="200" height="190" fill="none" stroke="var(--line)"/>
+  <circle cx="105" cy="100" r="75" fill="none" stroke="var(--text)"/><circle cx="105" cy="100" r="28" fill="none" stroke="var(--text)"/>${holes(105,8)}
+  <circle cx="315" cy="100" r="75" fill="none" stroke="var(--text)"/><circle cx="315" cy="100" r="28" fill="none" stroke="var(--text)"/>${holes(315,c.holes)}${lines}</svg></div>
+  <div class="card"><h3>影像候選</h3>${cands.map(x=>`<div class="cand ${x.id===c.id?'sel':''}" data-act="selImg" data-arg="${x.id}"><b>${x.id}</b> ${esc(x.title)}<div class="muted">CLIP ${x.clip} · ORB inliers ${x.inliers} · 重疊率 ${x.overlap} ${x.inliers>=40?'<span class="b ok">通過</span>':'<span class="b warn">低於 40</span>'}</div></div>`).join('')}
+  ${cands.length<MOCK_DATA.imgCands.length?`<div class="muted">🔒 已隱藏 ${MOCK_DATA.imgCands.length-cands.length} 筆無權限圖面</div>`:''}</div></div>`;
+}
+function renderRetrieval(){
+  const s=STATE.ret;
+  return `<div class="head"><h2>檢索除錯</h2></div>
+  <div class="tabs"><button class="btn ${s.tab==='text'?'on':''}" data-act="retTab" data-arg="text">文字檢索 (bge-m3)</button><button class="btn ${s.tab==='image'?'on':''}" data-act="retTab" data-arg="image">影像辨識 (CLIP + ORB)</button></div>
+  <div class="row">${isLive()?`<span class="muted">以目前身分檢索：<b>${esc(LIVE.account.label)}</b>（要換角色請用頁首或主介面切換）</span>`:`<label>以角色檢視 <select data-in="retRole">${ROLES.map(r=>`<option ${r===s.role?'selected':''}>${r}</option>`).join('')}</select></label>`}
+  ${!isLive()||s.tab==='text'?`<label>Top-k <input type="range" min="1" max="5" value="${s.topK}" data-in="retTopK"> <b id="tkV">${s.topK}</b></label>
+  <label>門檻 <input type="range" min="0.3" max="0.9" step="0.05" value="${s.th}" data-in="retTh"> <b id="thV">${s.th.toFixed(2)}</b></label><span class="muted">(僅本頁標示，不影響設定)</span>`:''}</div>
+  <div id="retBody">${renderRetBody()}</div>`;
+}
+
+/* ===== 4 實驗與評估 ===== */
+const EVAL_Q={art:['谿山行旅圖的構圖特色？','范寬的款識位於何處？','比較谿山行旅圖與早春圖'],factory:['FLG-2002 螺栓孔徑？','A 倉低於安全庫存品項','W44 CNC 班表衝突？']};
+function renderEvalResult(){
+  const e=STATE.ev;if(!e.result)return '<div class="muted">尚未執行。調整參數後按「模擬執行」。</div>';
+  const R=e.result;
+  return `<div class="grid g2">${['base','cand'].map(k=>`<div class="card"><h3>${k==='base'?'Baseline':'Candidate'} · ${esc(R[k].model)}</h3><pre>${esc(R[k].answer)}</pre><div class="kv"><b>品質</b><span>${R[k].q.toFixed(2)}</span><b>延遲</b><span>${R[k].lat}s</span><b>引用正確率</b><span>${R[k].cite}%</span></div></div>`).join('')}</div>
+  <div class="card"><h3>回歸測試</h3><div class="tw"><table><tr><th>案例</th><th>Baseline</th><th>Candidate</th><th>變化</th></tr>${R.reg.map(x=>`<tr><td>${esc(x[0])}</td><td>${badge(x[1]?'success':'error')}</td><td>${badge(x[2]?'success':'error')}</td><td>${x[1]===x[2]?'—':x[2]?'<span style="color:var(--ok)">改善</span>':'<span style="color:var(--danger)">退步</span>'}</td></tr>`).join('')}</table></div></div>`;
+}
+function renderEval(){
+  const e=STATE.ev,models=MOCK_DATA.models.slice(0,2).map(m=>m.name),prompts=Object.keys(MOCK_DATA.prompts);
+  const opt=(arr,v)=>arr.map(x=>`<option ${x===v?'selected':''}>${x}</option>`).join('');
+  // 評估結果的 summary 每種評估欄位不同，只列數字欄位的前幾個
+  const sum=o=>Object.entries(o||{}).filter(([,v])=>typeof v==='number').slice(0,4).map(([k,v])=>`${k} ${Number.isInteger(v)?v:v.toFixed(3)}`).join(' · ')||'—';
+  const history=isReal('evalRuns')
+    ?`<div class="card"><h3>評估紀錄（GET /eval/runs，${LD.evalRuns.length} 筆）</h3><div class="tw"><table><tr><th>時間</th><th>run_id</th><th>prompt</th><th>知識庫</th><th>摘要</th></tr>${LD.evalRuns.slice(0,20).map(r=>`<tr><td>${esc(ymdhm(r.created_at))}</td><td>${esc(r.run_id)}</td><td>${esc(r.prompt_version)}</td><td>${esc(r.kb_version)}</td><td class="muted">${esc(sum(r.summary))}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">還沒有評估紀錄</td></tr>'}</table></div><p class="muted">從頁面觸發評估、baseline 與 candidate 的比較要等後端新增 API；現在用 make eval 等指令跑。</p></div>`
+    :`<div class="card"><h3>執行歷史</h3><table>${e.history.map(h=>`<tr><td>${h.t}</td><td>${h.d==='art'?'藝術品':'工廠'}</td><td>${esc(h.s)}</td></tr>`).join('')}</table></div>`;
+  return `<div class="head"><h2>實驗與評估</h2>${isLive()?`<span class="muted">比較實驗與回歸測試 ${MOCK_TAG}</span>`:''}</div>
+  <div class="card"><div class="row"><label>領域 <select data-in="evDomain"><option value="art" ${e.domain==='art'?'selected':''}>藝術品</option><option value="factory" ${e.domain==='factory'?'selected':''}>工廠</option></select></label>
+  <label>Baseline 模型 <select data-in="evBase">${opt(models,e.base)}</select></label><label>Candidate 模型 <select data-in="evCand">${opt(models,e.cand)}</select></label>
+  <label>Baseline prompt <select data-in="evBp">${opt(prompts,e.bp)}</select></label><label>Candidate prompt <select data-in="evCp">${opt([...prompts,'art-cite-v3 (實驗)'],e.cp)}</select></label></div>
+  <div class="row"><label><input type="checkbox" data-in="evRearr" ${e.rearr?'checked':''}> 段落重排 (rearrange)</label><label><input type="checkbox" data-in="evConflict" ${e.conflict?'checked':''}> 衝突證據注入</label><label><input type="checkbox" data-in="evImage" ${e.image?'checked':''}> 附影像輸入</label>
+  <span class="sp"></span><button class="btn pri" data-act="runEval" ${e.running?'disabled':''}>▶ 模擬執行 (${EVAL_Q[e.domain==='art'?'art':'factory'].length+STATE.pendingCases.length} 案例)</button></div>
+  <div class="prog"><i id="evProg" style="width:${e.progress}%"></i></div></div>
+  <div id="evResult">${renderEvalResult()}</div>
+  <div class="grid g2"><div class="card"><h3>待加入案例 (${STATE.pendingCases.length})</h3>${STATE.pendingCases.map(p=>`<div class="row" style="margin:4px 0"><span class="b info">${MODULE_LABEL[p.module]}</span>${esc(p.q)} <span class="muted">來源 ${p.from}</span><span class="sp"></span><button class="btn" data-act="rmCase" data-arg="${p.id}">移除</button></div>`).join('')||'<div class="muted">無</div>'}</div>
+  ${isReal('evalRuns')?'</div>'+history:history+'</div>'}`;
+}
+
+/* ===== 5 模型與設定 ===== */
+function renderModels(){
+  const d=MOCK_DATA,p=STATE.promptSel,text=STATE.promptEdits[p]??d.prompts[p],models=pick('models'),settings=pick('settings');
+  return `<div class="head"><h2>模型與設定</h2></div>
+  <div class="card"><h3>${isReal('models')?'模型（GET /memory）':'模型狀態'} ${mockTag('models')}</h3><div class="tw"><table><tr><th>模型</th><th>${isReal('models')?'在哪裡':'用途'}</th><th>${isReal('models')?'代號':'版本'}</th><th>狀態</th><th>資源</th></tr>${models.map(m=>`<tr><td>${esc(m.name)}</td><td>${esc(m.role)}</td><td>${esc(m.ver)}</td><td>${badge(m.status)}</td><td>${esc(m.res)}</td></tr>`).join('')}</table></div></div>
+  <div class="grid g2"><div class="card"><h3>${isReal('settings')?'生效設定（GET /admin/diagnostics）':'生效設定與來源 (優先序 request › env › shared)'} ${mockTag('settings')}</h3><div class="tw"><table><tr><th>鍵</th><th>值</th><th>來源</th><th>說明</th></tr>${settings.map(s=>`<tr><td>${esc(s[0])}</td><td><b>${esc(s[1])}</b></td><td><span class="b ${s[2]==='request'?'info':s[2]==='env'?'warn':''}">${esc(s[2])}</span></td><td class="muted">${esc(s[3])}</td></tr>`).join('')}</table></div>${isReal('settings')?'<p class="muted">models.yaml 的完整內容還沒有 API 可以讀，這裡只列 diagnostics 回傳的部分。</p>':''}</div>
+  <div class="card"><h3>Prompt (僅限實驗使用，不影響正式環境) ${isLive()?MOCK_TAG:''}</h3><div class="row"><select data-in="promptSel">${Object.keys(d.prompts).map(k=>`<option ${k===p?'selected':''}>${k}</option>`).join('')}</select>${STATE.promptEdits[p]!=null?'<span class="b warn">已修改 (實驗)</span>':'<span class="b">原始</span>'}</div>
+  <textarea id="promptText">${esc(text)}</textarea><div class="row" style="margin-top:8px"><button class="btn pri" data-act="savePrompt">儲存為實驗版</button><button class="btn" data-act="resetPrompt">重設</button></div></div></div>`;
+}
+
+/* ===== 6 知識庫與索引 ===== */
+function renderKbList(){
+  const k=STATE.kb.q.trim().toLowerCase(),list=pick('kb').filter(i=>!k||(i.id+i.title+i.source).toLowerCase().includes(k));
+  return `<div class="tw"><table><tr><th>ID</th><th>類型</th><th>名稱</th><th>版本</th><th>Chunks</th><th>機密等級</th><th>索引</th></tr>${list.map(i=>`<tr class="click ${i.id===STATE.kb.sel?'sel':''}" data-act="selKb" data-arg="${esc(i.id)}"><td>${esc(i.id)}</td><td>${i.type==='art'?'藝術品':'工程圖'}</td><td>${esc(i.title)}</td><td>${esc(i.ver)}</td><td>${i.chunks??'—'}</td><td>${esc(i.conf)}</td><td>${STATE.kb.rebuilding===i.id?badge('running'):i.stale?badge('stale'):badge('ok')}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">找不到符合項目</td></tr>'}</table></div>`;
+}
+// 真的資料：清單只有摘要，點了才讀 GET /artworks/{id} 或 /parts/{id} 的解說段落與畫面區域
+function renderKbDetailReal(i){
+  const det=STATE.kb.detail[i.id];
+  // 先記成讀取中：讀完之前重繪幾次都不會重複發請求
+  if(!det){STATE.kb.detail[i.id]={loading:true};kbLoadDetail(i)}
+  if(!det||det.loading)return `<h3 class="title">${esc(i.id)} · ${esc(i.title)}</h3><div class="muted">讀取中…</div>`;
+  if(det.error)return `<h3 class="title">${esc(i.id)} · ${esc(i.title)}</h3><pre style="border-color:var(--danger)">${esc(det.error)}</pre>`;
+  const descs=det.descriptions||[],regions=det.regions?.items||[];
+  return `<h3 class="title">${esc(i.id)} · ${esc(i.title)}</h3><div class="kv"><b>來源</b><span>${esc(i.source)}</span><b>版本</b><span>${esc(i.ver)}</span><b>機密等級</b><span>${esc(i.conf)}</span><b>知識庫版本</b><span>${esc(i.indexed)}</span></div>
+  ${i.stale?`<pre style="border-color:var(--warn)">⚠ /admin/diagnostics 的 index_problems 提到這一筆。</pre>`:''}
+  <h3 style="margin-top:10px">解說段落（${descs.length}）</h3>${descs.slice(0,6).map(p=>`<pre>${esc((p.topic?`【${p.topic}】`:'')+clip(p.text,160))}</pre>`).join('')||'<div class="muted">沒有</div>'}${descs.length>6?`<div class="muted">另有 ${descs.length-6} 段</div>`:''}
+  <h3>影像區域</h3><div class="row">${regions.map(r=>`<span class="b info">${esc(r.label||r.id)}</span>`).join('')||'<span class="muted">沒有</span>'}</div>
+  <button class="btn" disabled title="後端沒有單獨重建索引的 API（照片建檔收錄時才會重建）">⟳ 重建索引</button> <span class="muted">後端沒有單獨重建的 API</span>`;
+}
+async function kbLoadDetail(i){
+  try{STATE.kb.detail[i.id]=await api(i.type==='art'?`/artworks/${encodeURIComponent(i.id)}`:`/parts/${encodeURIComponent(i.id)}`)}
+  catch(e){STATE.kb.detail[i.id]={error:`${e.message}（${e.code}）`}}
+  if(STATE.view==='kb'&&STATE.kb.sel===i.id)render();
+}
+function renderKb(){
+  const d=pick('kb'),i=d.find(x=>x.id===STATE.kb.sel),real=isReal('kb');
+  return `<div class="head"><h2>知識庫與索引</h2>${mockTag('kb')}<span class="sp"></span><button class="btn" data-act="importDlg">⇪ 匯入驗證</button>${isLive()?MOCK_TAG:''}</div>
+  <div class="stats">${stat('藝術品',d.filter(x=>x.type==='art').length)}${stat('工程圖',d.filter(x=>x.type==='drawing').length)}${real?stat('看不到的圖紙',REAL.parts?.hidden??'—'):stat('總 Chunks',d.reduce((a,x)=>a+x.chunks,0))}${stat(real?'索引問題':'過期索引',real?(REAL.diag?.index_problems?.length??'—'):d.filter(x=>x.stale).length,'warn')}</div>
+  <div class="row"><input placeholder="搜尋 ID / 名稱 / 來源" value="${esc(STATE.kb.q)}" data-in="kbQ" style="flex:1"></div>
+  <div class="grid"><div class="card" id="kbList">${renderKbList()}</div>
+  <div class="card">${i&&real?renderKbDetailReal(i):i?`<h3 class="title">${i.id} · ${esc(i.title)}</h3><div class="kv"><b>來源</b><span>${i.source}</span><b>版本</b><span>${i.ver}</span><b>機密等級</b><span>${i.conf}</span><b>索引日期</b><span>${i.indexed}</span></div>
+  ${i.stale?`<pre style="border-color:var(--warn)">⚠ 來源 PLM 已更新為 rev D (2026-10-22)，索引仍為 ${i.ver}。</pre>`:''}
+  <h3 style="margin-top:10px">段落</h3>${i.passages.map(p=>`<pre>${esc(p)}</pre>`).join('')}<h3>影像區域</h3><div class="row">${i.regions.map(r=>`<span class="b info">${esc(r)}</span>`).join('')}</div>
+  <button class="btn pri" data-act="rebuild" data-arg="${i.id}" ${STATE.kb.rebuilding?'disabled':''}>⟳ 模擬重建索引</button>`:'<div class="muted">請點選項目</div>'}</div></div>`;
+}
+
+/* ===== 7 背景工作 ===== */
+function renderJobs(){
+  const jobs=pick('jobs'),real=isReal('jobs'),f=STATE.jobs.filter,list=jobs.filter(j=>!f||j.status===f),j=jobs.find(x=>x.id===STATE.jobs.sel);
+  const showId=id=>real?shortId(id):id;
+  // 背景工作沒啟用（.env 沒有 REDIS_URL）時 GET /jobs 回 503 JOBS_UNAVAILABLE，這頁就留著模擬資料
+  const why=isLive()&&!real&&REAL_ERR.jobs?`<p class="muted">${MOCK_TAG} GET /jobs：${esc(REAL_ERR.jobs.message)}（${esc(REAL_ERR.jobs.code)}）</p>`:'';
+  return `<div class="head"><h2>背景工作</h2>${mockTag('jobs')}${real?'<span class="muted">GET /jobs：目前身分看得到的最近 50 個</span>':''}</div>${why}
+  <div class="tabs">${['','running','queued','done','failed','cancelled'].map(s=>`<button class="btn ${f===s?'on':''}" data-act="jobFilter" data-arg="${s}">${s?STATUS_LABEL[s]:'全部'} (${jobs.filter(x=>!s||x.status===s).length})</button>`).join('')}</div>
+  <div class="grid"><div class="card"><div class="tw"><table><tr><th>ID</th><th>類型</th><th>狀態</th><th>Worker</th><th>嘗試</th><th>佇列</th><th>執行時間</th></tr>${list.map(x=>`<tr class="click ${x.id===STATE.jobs.sel?'sel':''}" data-act="selJob" data-arg="${esc(x.id)}"><td title="${esc(x.id)}">${esc(showId(x.id))}</td><td>${x.type}</td><td>${badge(x.status)}</td><td>${x.worker}</td><td>${x.attempt}/${x.max}</td><td>${x.queue}</td><td>${x.runtime}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">無</td></tr>'}</table></div></div>
+  <div class="card">${j?`<div class="row"><h3 style="margin:0" title="${esc(j.id)}">${esc(showId(j.id))}</h3>${badge(j.status)}<span class="sp"></span>
+  ${real?'<button class="btn" disabled title="後端沒有重試的 API">重試</button>':`<button class="btn" data-act="retryJob" ${['failed','cancelled'].includes(j.status)&&j.attempt<j.max?'':'disabled'}>重試</button>`}<button class="btn" data-act="cancelJob" ${['running','queued'].includes(j.status)?'':'disabled'}>取消</button></div>
+  <div class="kv"><b>相關請求</b><span>${j.req?`<a class="lnk" data-act="openReq" data-arg="${j.req}">${j.req}</a>`:'無'}</span></div>
+  <h3 style="margin-top:10px">事件</h3><pre>${j.events.map(esc).join('\n')}</pre><h3>產出物</h3>${j.artifacts.map((a,i)=>`<div class="row" style="margin:4px 0">📄 ${esc(a)}<span class="sp"></span>${real?`<a class="btn" href="${esc(j.urls[i])}" target="_blank" rel="noopener">下載</a>`:`<button class="btn" data-act="previewArt" data-arg="${i}">預覽</button>`}</div>`).join('')||'<div class="muted">尚無</div>'}`:'<div class="muted">請點選工作</div>'}</div></div>`;
+}
+
+/* ===== 8 權限與外送 ===== */
+// 接上後端：角色矩陣用 /auth/accounts 列的展示帳號（ops、views、資料範圍都是 shared/access.yaml 算出來的）
+function renderMatrixReal(){
+  const accs=LD.matrix,sel=accs.find(a=>a.id===STATE.perm.role)||accs[0];
+  const ops=[...new Set(accs.flatMap(a=>a.ops))],views=[...new Set(accs.flatMap(a=>a.views||[]))];
+  const row=(label,has)=>`<tr><td>${esc(label)}</td>${accs.map(a=>`<td>${has(a)?'✅':'—'}</td>`).join('')}</tr>`;
+  return `<div class="card"><h3>角色與權限（GET /auth/accounts）</h3><div class="tw"><table><tr><th>操作／檢視</th>${accs.map(a=>`<th>${esc(a.label)}</th>`).join('')}</tr>
+  ${ops.map(o=>row(`操作 ${o}`,a=>a.ops.includes(o))).join('')}${views.map(v=>row(`檢視 ${v}`,a=>(a.views||[]).includes(v))).join('')}
+  <tr><td>資料領域</td>${accs.map(a=>`<td>${esc((a.domains||[]).join('、')||'—')}</td>`).join('')}</tr><tr><td>機密等級</td>${accs.map(a=>`<td>${esc((a.levels||[]).join('、')||'—')}</td>`).join('')}</tr></table></div>
+  <p class="muted">開發者平台沒有自己的角色：診斷、稽核、評估照 access.yaml 的 views 只開給主管。</p></div>
+  <div class="card"><h3>帳號細節</h3><div class="row"><select data-in="permRole">${accs.map(a=>`<option value="${esc(a.id)}" ${a.id===sel.id?'selected':''}>${esc(a.label)}</option>`).join('')}</select></div>
+  <div class="kv"><b>角色</b><span>${esc(sel.role_label)}（${esc(sel.role)}）</span><b>說明</b><span>${esc(sel.note||'—')}</span><b>資料範圍</b><span>${esc(sel.scope_note||'—')}</span><b>部門</b><span>${esc((sel.depts||[]).join('、')||'—')}</span><b>可標註的畫</b><span>${esc((sel.artworks||[]).join('、')||'—')}</span></div></div>`;
+}
+function renderPermBody(){
+  const p=STATE.perm,d=MOCK_DATA;
+  if(p.tab==='matrix'&&isReal('matrix'))return renderMatrixReal();
+  if(p.tab==='sec'&&isReal('secLogs'))return `<div class="card tw"><table><tr><th>時間</th><th>編號</th><th>身分</th><th>哪一段</th><th>規則</th><th>request_id</th></tr>${LD.secLogs.map(l=>`<tr>${l.slice(0,5).map(x=>`<td>${esc(x)}</td>`).join('')}<td title="${esc(l[5])}">${esc(shortId(l[5]))}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">還沒有紀錄</td></tr>'}</table><p class="muted">GET /security/logs：今天各段 ${esc(Object.entries(REAL.sec.today||{}).map(([k,v])=>`第 ${k} 段 ${v} 筆`).join('、')||'沒有')}</p></div>`;
+  if(p.tab==='audit'&&isReal('changeAudit')){
+    const reads=REAL.audit.reads||[];
+    return `<div class="card tw"><h3>變更稽核（GET /audit）</h3><table><tr><th>時間</th><th>操作者</th><th>操作</th><th>摘要</th><th>編號</th></tr>${LD.changeAudit.map(a=>`<tr>${a.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="5" class="muted">還沒有紀錄</td></tr>'}</table></div>
+    <div class="card tw"><h3>機密資料讀取</h3><table><tr><th>時間</th><th>身分</th><th>圖紙</th><th>等級</th><th>讀了什麼</th></tr>${reads.map(r=>`<tr><td>${esc(ymdhm(r.created_at))}</td><td>${esc(r.account_label||r.account_id)}</td><td>${esc(r.part_id)}</td><td>${esc(r.level||'—')}</td><td>${esc(r.what)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">還沒有紀錄</td></tr>'}</table></div>`;
+  }
+  if(!isLive())return renderPermMock();
+  // 走到這裡就是這個分頁沒有真的資料：說明原因（沒 API，或不是主管被擋）再顯示模擬資料
+  const err=REAL_ERR[{sec:'sec',audit:'audit'}[p.tab]];
+  const why=p.tab==='out'?'後端沒有外送稽核的 API（外送量只記在問答、分流紀錄的 egress 欄位）':err?`${err.message}（${err.code}）`:'沒有讀到資料';
+  return `<p class="muted">${MOCK_TAG} ${esc(why)}</p>`+renderPermMock();
+}
+function renderPermMock(){
+  const p=STATE.perm,d=MOCK_DATA;
+  if(p.tab==='matrix'){
+    const ri=ROLES.indexOf(p.role);
+    return `<div class="card"><div class="tw"><table><tr><th>能力</th>${ROLES.map(r=>`<th>${r}</th>`).join('')}<th>開發者 (診斷)</th></tr>${d.matrix.map(([c,a])=>`<tr><td>${c}</td>${a.map(v=>`<td>${v?'✅':'—'}</td>`).join('')}<td>${/寫入|核准/.test(c)?'🚫':'👁 唯讀診斷'}</td></tr>`).join('')}</table></div>
+    <p class="muted">開發者診斷權限只能檢視遮罩後的追蹤資料，與業務寫入/核准權限完全分離，不可代替任何角色寫入或簽核。</p></div>
+    <div class="card"><h3>角色預覽</h3><div class="row"><select data-in="permRole">${ROLES.map(r=>`<option ${r===p.role?'selected':''}>${r}</option>`).join('')}</select></div>
+    <div class="kv"><b>可用能力</b><span>${d.matrix.filter(m=>m[1][ri]).map(m=>m[0]).join('、')||'無'}</span><b>可見文件</b><span>${d.kb.filter(k=>k.conf==='公開'||(k.conf==='內部'&&['倉管','業務','主管'].includes(p.role))||p.role==='主管').map(k=>k.id).join('、')}</span></div></div>`;
+  }
+  if(p.tab==='sec')return `<div class="card tw"><table><tr><th>時間</th><th>事件</th><th>使用者</th><th>類型</th><th>原因</th><th>請求</th></tr>${d.secLogs.map(l=>`<tr><td>${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td><td>${l[3]}</td><td>${l[4]}</td><td><a class="lnk" data-act="openReq" data-arg="${l[5]}">${l[5]}</a></td></tr>`).join('')}</table></div>`;
+  if(p.tab==='audit')return `<div class="card tw"><table><tr><th>時間</th><th>操作者</th><th>對象</th><th>變更</th><th>版本</th></tr>${d.changeAudit.map(a=>`<tr>${a.map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</table></div>`;
+  const outs=d.requests.filter(r=>r.egress),sel=reqById(p.out)||outs[0];
+  return `<div class="grid g2"><div class="card tw"><table><tr><th>請求</th><th>階段</th><th>目的地</th><th>Bytes</th></tr>${outs.map(r=>`<tr class="click ${r.id===sel.id?'sel':''}" data-act="selOut" data-arg="${r.id}"><td>${r.id}</td><td>${r.egress.stage}</td><td>${r.egress.target}</td><td>${r.egress.bytes}</td></tr>`).join('')}</table>
+  <p class="muted">即使在本地生成，仍可能將假名化或公開文字送往 Jev；內部/機密內容一律不外送。</p></div>
+  <div class="card"><h3>Payload 預覽 · ${sel.id} (虛構)</h3><pre>${esc(JSON.stringify({request:sel.id,stage:sel.egress.stage,target:sel.egress.target,classification:'public+pseudonymized',bytes:sel.egress.bytes,text:sel.egress.payload},null,2))}</pre></div></div>`;
+}
+function renderPerm(){
+  const t=STATE.perm.tab;
+  return `<div class="head"><h2>權限與外送</h2></div><div class="tabs">${[['matrix','角色矩陣'],['sec','安全日誌'],['audit','變更稽核'],['out','外送稽核']].map(([k,l])=>`<button class="btn ${t===k?'on':''}" data-act="permTab" data-arg="${k}">${l}</button>`).join('')}</div>${renderPermBody()}`;
+}
+
+/* ===== 9 資料流：四個情境從 demo/flow-command-center 原樣搬來，那邊改了流程這裡要跟著改 ===== */
+// cards 依序 4 條線 × 3 張；steps 是播放腳本
+// step 欄位：c＝卡片、s＝狀態（run／done／hold／block）、note＝卡片上那一行、log＝[誰, 做了什麼]
+// j＝使用者流程走到第幾步、r＝入口那一行、ev＝前端收到哪個回應、out＝落點、ms＝示意耗時、wait＝這一步停多久（倍數）
+const FLOW_SCENARIOS=[
+  {
+    key: 'art',
+    tab: '拍照問畫',
+    role: '一般員工',
+    path: '/  →  /art/:id',
+    ask: '〔附照片〕這幅畫的山是怎麼畫的？',
+    entry: { name: '/agent/route', label: '統一入口' },
+    caption: '一個入口 · 12 段 · 門檻不夠或要寫資料才停下來問人',
+    output: '藝術模組・展示區',
+    model: 'Qwen3-VL 4B',
+    startAt: '14:02:10',
+    chips: ['/images', '/agent/route', 'sources', 'token', 'done'],
+    note: '回覆先在伺服器收齊，第 7 段輸出檢查過了才送第一個 token',
+    lanes: [
+      { name: '入口', tag: 'agent' },
+      { name: '辨識分派', tag: 'CLIP＋ORB' },
+      { name: '檢索防護', tag: '第 1–6 段' },
+      { name: '生成', tag: '第 7 段' },
+    ],
+    cards: [
+      { name: '上傳照片', where: 'POST /images', by: 'frontend', tip: '回 image_id，之後的請求只帶這個編號' },
+      { name: '遮蔽個資', where: 'guard.mask_pii', by: 'agent', tip: '問句裡的姓名、電話先換成代號' },
+      { name: '領域路由', where: 'rag/router.py', by: 'clip', tip: '比「畫作」「圖紙」兩個原型向量的差距；分不清時當成圖紙' },
+      { name: 'CLIP 比對', where: '512 維 · ≥ 0.70', by: 'clip', tip: 'chinese-clip-vit-base-patch16，取前 N 名候選' },
+      { name: '幾何驗證', where: 'ORB／RANSAC', by: 'opencv', tip: 'inliers ≥ 20，並檢查退化的 homography；沒過就回「知識庫中沒有這幅畫」' },
+      { name: '意圖路由', where: 'local_router', by: 'bge-m3', tip: '關鍵字＋bge-m3 比例句，softmax 後過信心門檻（read 0.60／heavy 0.75／write 0.85）' },
+      { name: '授權＋意圖', where: '第 1–2 段', by: 'jwt', tip: '第 1 段看 JWT 角色；第 2 段沿用 /agent/route 的交接票（10 分鐘內有效）' },
+      { name: '向量檢索', where: '第 3 段 · bge-m3', by: 'bge-m3', tip: '只找已辨識那幅畫的段落；score ≥ 0.30 且 ≥ 第一名 × 0.6，最多 5 段' },
+      { name: '驗證＋重排', where: '第 4–6 段', by: 'jev', tip: 'Jev 是外部防護分類器，只收代號化的公開段落；內部、機密段落在本機判斷' },
+      { name: '組 prompt', where: 'answer_v4', by: 'prompt', tip: '每句附 [n]；只看畫面才知道的內容標 [畫面]' },
+      { name: '本機生成', where: 'Ollama :11434', by: 'qwen3-vl', tip: 'hybrid 失敗改走 hybrid_fallback，永遠不退回雲端' },
+      { name: '輸出檢查', where: 'OpenCC＋第 7 段', by: 'guard', tip: '轉台灣用語，再查帳密、個資、看不到的文件、引用編號' },
+    ],
+    journey: [
+      '首頁 / 按＋附上照片',
+      '輸入問題、送出',
+      '首頁的七段追蹤一段段打勾',
+      '出現簡答＋「進入藝術模組」',
+      '/art/:id 展示區放出作品＋玻璃展籤',
+      '點答案裡的 [1] 看出處段落',
+      '追問「它的構圖呢？」自動代入這幅畫',
+    ],
+    steps: [
+      { j: 0, c: 0, s: 'run', note: '照片傳到 data/uploads', log: ['使用者', '按＋附上照片'], ms: 180 },
+      { c: 0, s: 'done', note: '回 image_id img_7f3a', ev: '/images', log: ['前端', 'POST /images → image_id img_7f3a'], ms: 60 },
+      { j: 1, c: 1, s: 'run', note: '姓名、電話換成代號', r: '收到問句＋image_id', log: ['使用者', '送出「這幅畫的山是怎麼畫的？」'], ms: 20 },
+      { c: 1, s: 'done', note: '沒有個資' },
+      { c: 2, s: 'run', note: '比畫作／圖紙原型向量', ms: 110 },
+      { c: 2, s: 'done', note: '畫作', r: '照片是畫作 → 本機辨識', log: ['clip', '領域路由：畫作'] },
+      { c: 3, s: 'run', note: '找最像的候選', ms: 140 },
+      { c: 3, s: 'done', note: '谿山行旅圖 0.91', log: ['clip', 'top-1 谿山行旅圖，0.91 ≥ 0.70'] },
+      { c: 4, s: 'run', note: '比對特徵點', ms: 260 },
+      { c: 4, s: 'done', note: 'inliers 146 ≥ 20', log: ['opencv', '幾何驗證通過 → npm-000001'] },
+      { c: 5, s: 'run', note: '關鍵字＋bge-m3 比例句', ms: 90 },
+      { c: 5, s: 'done', note: 'art.chat · 0.93', ev: '/agent/route', r: 'art.chat 0.93 ≥ read 0.60 → /chat', log: ['agent', '派給 /chat，附交接票'] },
+      { j: 2, c: 6, s: 'run', note: '看 JWT 角色、交接票', ms: 10 },
+      { c: 6, s: 'done', note: '公開畫作 · 沿用第 2 段', log: ['guard', '第 1 段授權 pass · 第 2 段沿用交接票'] },
+      { c: 7, s: 'run', note: '只找這幅畫的段落', ms: 180 },
+      { c: 7, s: 'done', note: '5 段候選', log: ['bge-m3', 'Metadata Filter 畫作・公開 → 5 段候選'] },
+      { c: 8, s: 'run', note: '公開段落代號化後送 Jev', ms: 900, egress: '1.9 KB' },
+      { c: 8, s: 'block', note: '1 段跟問題無關 → 剔除', log: ['jev', '第 4 段：1 段判定無關，剔除'], wait: 1.8 },
+      { c: 8, s: 'done', note: '留 3 段 · 生成閘門 pass', ev: 'sources', log: ['jev', '第 5 段重排留 3 段 · 第 6 段閘門 pass'] },
+      { c: 9, s: 'run', note: '3 段參考資料＋照片', ms: 30 },
+      { c: 9, s: 'done', note: '每句附 [n]', log: ['prompt', 'answer_v4：看畫面才知道的標 [畫面]'] },
+      { c: 10, s: 'run', note: 'hybrid 生成中', ms: 6200, wait: 1.8 },
+      { c: 10, s: 'done', note: '先在伺服器收齊', log: ['qwen3-vl', '生成完成，還沒送出'] },
+      { c: 11, s: 'run', note: '轉台灣用語、查外洩', ms: 120 },
+      { c: 11, s: 'done', note: 'pass → 開始送 token', ev: 'token', r: '7/7 段 pass · 回答送出', log: ['guard', '第 7 段輸出檢查 pass，送出 token'] },
+      { j: 3, ev: 'done', out: ['run', '首頁：簡答＋七段追蹤'], log: ['前端', 'done · 外送只有給 Jev 的代號化段落'] },
+      { j: 4, out: ['run', '展示區：谿山行旅圖・玻璃展籤'], log: ['使用者', '按「進入藝術模組」→ /art/:id'], ms: 2400 },
+      { j: 5, log: ['使用者', '點 [1] → 看來源段落與授權'], ms: 3100 },
+      { j: 6, ask: '它的構圖呢？', out: ['done', '谿山行旅圖 · 回答引用 [1][2][3]'], log: ['前端', '追問自動代入「谿山行旅圖」'], ms: 1800, final: true },
+    ],
+  },
+  {
+    key: 'factory',
+    tab: '圖紙 → 3D／庫存',
+    role: '倉管',
+    path: '側欄  →  /factory/:id',
+    ask: '〔附圖紙照片〕把這張圖重建成 3D',
+    entry: { name: '/agent/route', label: '統一入口' },
+    caption: '耗時任務先出確認卡 · 3D 走背景工作 · 庫存只開唯讀連線',
+    output: '工廠工作台・四個板塊',
+    model: 'Ortho2CAD 8B＋Qwen3-VL',
+    startAt: '09:41:05',
+    chips: ['/images', '/agent/route', '202 queued', 'progress', 'succeeded', 'sql', 'result', 'done'],
+    note: '3D 的 progress 只回字元數，不回模型輸出；庫存答案只照查到的資料回答',
+    lanes: [
+      { name: '圖紙辨識', tag: 'CLIP＋ORB' },
+      { name: '背景工作', tag: 'Celery＋Redis' },
+      { name: '3D 重建', tag: 'Ortho2CAD' },
+      { name: '庫存問答', tag: 'Text-to-SQL' },
+    ],
+    cards: [
+      { name: '上傳圖紙照片', where: 'POST /images', by: 'frontend', tip: '回 image_id' },
+      { name: '領域路由', where: 'rag/router.py', by: 'clip', tip: '比「畫作」「圖紙」原型向量；分不清時當成圖紙' },
+      { name: '圖紙辨識', where: 'identify_drawing', by: 'clip+orb', tip: 'CLIP ≥ 0.60 → ORB inliers ≥ 25 → 拉正後比線條重疊' },
+      { name: '確認卡', where: 'heavy ≥ 0.75', by: 'frontend', tip: '3D 重建、排程屬耗時任務，信心過 0.75 還要使用者按確認' },
+      { name: '建立工作', where: 'POST /cad/jobs', by: 'fastapi', tip: 'jobs 和 outbox 寫在同一個交易，回 202' },
+      { name: '領 GPU 名額', where: 'Celery worker', by: 'redis', tip: 'GPU 名額由 resource_leases 管；租約過期會整個重跑' },
+      { name: '圖紙 → 程式碼', where: 'llama-server :8081', by: 'ortho2cad', tip: 'Qwen3-VL-8B 微調，輸出 CadQuery 程式碼' },
+      { name: '沙箱執行', where: 'CadQuery · WSL2', by: 'sandbox', tip: '執行上限 60 秒；產出 STL／STEP，並做孔位校正' },
+      { name: '寫回產物', where: '/jobs/{id}/artifacts', by: 'celery', tip: '進 committing 之後就不能取消' },
+      { name: '意圖路由', where: '/agent/route', by: 'bge-m3', tip: '「這個零件」自動代入目前的圖紙' },
+      { name: '產生 SQL', where: 'sql_v2 · 白名單', by: 'qwen3-vl', tip: '執行失敗時把錯誤回饋給模型修正，最多 2 次；要求改資料直接拒絕' },
+      { name: '唯讀執行', where: 'inventory.sqlite3', by: 'sqlite', tip: '唯讀連線＋白名單，單次 2 秒上限，最多回 200 列' },
+    ],
+    journey: [
+      '側欄點「工廠模組」直接進工作台',
+      '左邊對話附上圖紙照片',
+      '01 圖紙板塊亮起：FLG-2002',
+      '說「重建成 3D」→ 按確認卡',
+      '02 3D 板塊跑進度，完成可旋轉',
+      '追問「這個零件庫存還有多少？」',
+      '04 庫存板塊出表，可下載 CSV',
+    ],
+    steps: [
+      { j: 0, r: '工作台就緒 · 等待輸入', log: ['使用者', '側欄點「工廠模組」→ /factory/:id'] },
+      { j: 1, c: 0, s: 'run', note: '照片傳到 data/uploads', log: ['使用者', '附上圖紙照片'], ms: 200 },
+      { c: 0, s: 'done', note: '回 image_id img_c21b', ev: '/images', ms: 60 },
+      { c: 1, s: 'run', note: '比畫作／圖紙原型向量', r: '遮蔽個資 → 辨識照片', ms: 120 },
+      { c: 1, s: 'done', note: '圖紙', log: ['clip', '領域路由：圖紙'] },
+      { c: 2, s: 'run', note: 'CLIP → ORB → 拉正比線條', ms: 420 },
+      { j: 2, c: 2, s: 'done', note: 'FLG-2002 連接法蘭 rev C', ev: '/agent/route', r: 'cad.reconstruct 0.88 ≥ heavy 0.75', log: ['agent', '辨識 D-24-0203 → 01 圖紙板塊'] },
+      { j: 3, c: 3, s: 'hold', note: '要用 GPU，等使用者確認', r: '耗時任務 → 先出確認卡', log: ['agent', '3D 重建屬耗時任務，出確認卡'], wait: 2.2 },
+      { c: 3, s: 'done', note: '使用者按「開始重建」', log: ['使用者', '按「開始重建」'], ms: 3500 },
+      { c: 4, s: 'run', note: 'jobs＋outbox 同一交易', ms: 40 },
+      { c: 4, s: 'done', note: '202 · 排進佇列', ev: '202 queued', log: ['後端', 'POST /cad/jobs → 202 queued'] },
+      { c: 5, s: 'run', note: '等 GPU 名額', ms: 800 },
+      { c: 5, s: 'done', note: 'started · attempt 1', log: ['worker', '領到 GPU 名額，開始'] },
+      { j: 4, c: 6, s: 'run', note: '圖紙 → CadQuery 程式碼', ev: 'progress', log: ['ortho2cad', 'progress：只回字元數'], ms: 14000, wait: 1.8 },
+      { c: 6, s: 'done', note: '1,874 字元' },
+      { c: 7, s: 'run', note: '執行程式碼，上限 60 秒', ms: 3100 },
+      { c: 7, s: 'done', note: 'STL／STEP · 孔位校正', log: ['sandbox', '實體有效，輸出 STL／STEP'] },
+      { c: 8, s: 'run', note: 'committing', ms: 200 },
+      { c: 8, s: 'done', note: '→ 02 3D 板塊', ev: 'succeeded', out: ['run', '01 圖紙 ✓ · 02 3D ✓'], log: ['worker', 'succeeded · 02 3D 板塊可旋轉'] },
+      { j: 5, c: 9, s: 'run', ask: '這個零件庫存還有多少？', note: '「這個零件」→ FLG-2002', r: '收到追問 · 代入 FLG-2002', log: ['使用者', '追問「這個零件庫存還有多少？」'], ms: 90 },
+      { c: 9, s: 'done', note: 'inventory.ask · 0.95', r: 'inventory.ask 0.95 ≥ read 0.60' },
+      { c: 10, s: 'run', note: '問題 → SQL（temperature 0）', ms: 1600 },
+      { c: 10, s: 'block', note: 'attempt 1 欄位名稱錯 → 錯誤回饋給模型', log: ['sqlite', 'attempt 1 執行失敗，錯誤回饋給模型'], wait: 1.8 },
+      { c: 10, s: 'done', note: 'attempt 2 · 白名單 ok', ev: 'sql', log: ['qwen3-vl', 'attempt 2：SELECT … FROM v_part_stock'], ms: 1400 },
+      { c: 11, s: 'run', note: '唯讀連線，上限 2 秒', ms: 40 },
+      { c: 11, s: 'done', note: '4 列 → 04 庫存板塊', ev: 'result', log: ['sqlite', '唯讀查詢 4 列'] },
+      { j: 6, ev: 'done', out: ['done', '01 圖紙 ✓ · 02 3D ✓ · 04 庫存 ✓'], r: '回答送出 · 資料沒有離開本機', log: ['前端', 'done · egress 0 B'], ms: 900, final: true },
+    ],
+  },
+  {
+    key: 'schedule',
+    tab: '排程＋主管核准',
+    role: '業務',
+    path: '/factory/:id  →  /approvals',
+    ask: 'SO-2609-003 交期延後 10 天',
+    entry: { name: '/agent/route', label: '統一入口' },
+    caption: '寫入類一律先試算 · 超過額度送主管 · 排程不用任何 AI 模型',
+    output: '03 排程板塊・甘特圖',
+    model: 'Timefold（無 AI）',
+    startAt: '16:20:40',
+    chips: ['/agent/route', '/changes/preview', 'request-approval', 'approve', '202 queued', 'progress', 'succeeded'],
+    note: '示意時間大多花在等主管：系統只負責把該問的人問到',
+    lanes: [
+      { name: '提出變更', tag: '業務' },
+      { name: '主管核准', tag: '主管' },
+      { name: '排程求解', tag: 'Timefold' },
+      { name: '寫回呈現', tag: 'production' },
+    ],
+    cards: [
+      { name: '寫入意圖', where: '/agent/route', by: 'bge-m3', tip: '改資料類的意圖要過 write 0.85' },
+      { name: '權限檢查', where: 'access.yaml · JWT', by: 'jwt', tip: '業務有 so_update，只能改 due_on、qty' },
+      { name: '試算', where: 'POST /changes/preview', by: 'dry-run', tip: '額度：交期延後超過 7 天、訂購數量減少，要主管核准' },
+      { name: '送核准', where: 'request-approval', by: 'fastapi', tip: '超過 24 小時沒人處理自動失效' },
+      { name: '主管審核', where: 'GET /approvals', by: '主管', tip: '主管不能核准自己的申請；硬性上限主管也不能放行' },
+      { name: '寫入＋稽核', where: 'approve → commit', by: 'sqlite', tip: '寫 production.sqlite3 的 data_changes、approvals、audit_log' },
+      { name: '確認排程', where: 'heavy ≥ 0.75', by: 'frontend', tip: 'schedule_run 只有主管有' },
+      { name: '建立工作', where: 'POST /schedule/jobs', by: 'celery', tip: '回 202；排程範圍用租約鎖住，同時只跑一個' },
+      { name: '求解', where: 'Java 21 · :8082', by: 'timefold', tip: 'Timefold 連不上時改用 greedy 簡易排程' },
+      { name: '進度串流', where: '/jobs/{id}/events', by: 'sse', tip: '找到更好的解就送 progress，前端即時重畫甘特圖；斷線可用 Last-Event-ID 續接' },
+      { name: '寫回', where: 'production.sqlite3', by: 'sqlite', tip: '同步到工廠資料庫的 schedule_ops、v_wo_plan' },
+      { name: '甘特圖', where: '03 排程板塊', by: 'frontend', tip: '標出交期與延遲工單' },
+    ],
+    journey: [
+      '業務在工廠模組說「SO-2609-003 交期延後 10 天」',
+      '出現試算卡：改哪個欄位、改前 → 改後',
+      '超過額度 → 按「送主管核准」',
+      '頁首切換身分成「主管」，開「主管核准」',
+      '主管按核准 → 寫入，留稽核紀錄',
+      '主管說「重新排程」→ 按確認卡',
+      '03 排程板塊：甘特圖邊算邊重畫',
+    ],
+    steps: [
+      { j: 0, c: 0, s: 'run', note: '判斷是不是改資料', r: '收到問句 · 判斷意圖', log: ['業務', '「SO-2609-003 交期延後 10 天」'], ms: 90 },
+      { c: 0, s: 'done', note: 'so_update · 0.91', ev: '/agent/route', r: 'so_update 0.91 ≥ write 0.85', log: ['agent', '寫入類意圖，走修改資料流程'] },
+      { c: 1, s: 'run', note: '看 JWT 的角色與 ops', ms: 10 },
+      { c: 1, s: 'done', note: '可改 due_on、qty', log: ['guard', '業務有 so_update 權限'] },
+      { j: 1, c: 2, s: 'run', note: 'dry-run，不寫資料', ms: 60 },
+      { c: 2, s: 'hold', note: '10/06 → 10/16，延後 10 天 > 額度 7 天', ev: '/changes/preview', log: ['change', '試算：交期延後超過 7 天，需主管核准'], wait: 2.2 },
+      { j: 2, c: 2, s: 'done', note: '改前 → 改後已列出', log: ['業務', '按「送主管核准」'], ms: 4000 },
+      { c: 3, s: 'run', note: '建立核准單', ms: 30 },
+      { c: 3, s: 'done', note: '等主管 · 24 小時內有效', ev: 'request-approval', log: ['後端', '核准單 AP-0412 建立'] },
+      { j: 3, c: 4, s: 'hold', note: '等主管登入審核', role: '主管', r: '等主管核准 · 不能核准自己的申請', log: ['主管', '切換身分，打開「主管核准」'], wait: 2.2, ms: 240000 },
+      { c: 4, s: 'done', note: '主管按「核准」', ev: 'approve', log: ['主管', '核准 AP-0412'] },
+      { j: 4, c: 5, s: 'run', note: '寫 production.sqlite3', ms: 40 },
+      { c: 5, s: 'done', note: 'data_changes＋audit_log', log: ['sqlite', '交期改成 2026-10-16，留稽核'] },
+      { j: 5, c: 6, s: 'hold', ask: '重新排程', note: '會重排所有工單，等確認', r: 'schedule_run 0.89 ≥ heavy 0.75', log: ['主管', '「重新排程」→ 出確認卡'], wait: 2 },
+      { c: 6, s: 'done', note: '主管按「開始排程」', ms: 3000 },
+      { c: 7, s: 'run', note: 'jobs＋outbox 同一交易', ms: 40 },
+      { c: 7, s: 'done', note: '202 · 排程範圍租約', ev: '202 queued', log: ['後端', 'POST /schedule/jobs → 202 queued'] },
+      { j: 6, c: 8, s: 'run', note: '建構初始解 → 局部搜尋', r: 'Timefold 求解中', ms: 9000, wait: 1.6 },
+      { c: 9, s: 'run', note: '每找到更好的解就送一次', ev: 'progress', log: ['timefold', '找到更好的解 → 甘特圖重畫'] },
+      { c: 8, s: 'done', note: 'hard 0 · 8 秒沒進步就收工', log: ['timefold', '連續 8 秒沒更好的解，提前結束'], ms: 8000 },
+      { c: 9, s: 'done', note: 'stopped → 採用最佳合法解' },
+      { c: 10, s: 'run', note: 'committing', ms: 120 },
+      { c: 10, s: 'done', note: 'schedule_runs · v_wo_plan', ev: 'succeeded', log: ['worker', '寫回生產資料庫，同步工廠資料庫'] },
+      { c: 11, s: 'run', note: '重畫甘特圖', ms: 60 },
+      { c: 11, s: 'done', note: '延遲工單標紅', out: ['done', '甘特圖更新 · SO-2609-003 新交期 10/16'], r: '排程完成 · 沒有用到 AI 模型', log: ['前端', '03 排程板塊更新'], final: true },
+    ],
+  },
+  {
+    key: 'intake',
+    tab: '照片建檔＋建索引',
+    role: '主管',
+    path: '側欄  →  /artworks/intake',
+    ask: '〔照片建檔〕早春圖・郭熙',
+    entry: { name: '/artworks/intake', label: '照片建檔頁' },
+    caption: '草稿誰都能建 · 只有主管能收錄 · 收錄後整個索引重建',
+    output: '知識庫上線',
+    model: 'CLIP＋bge-m3',
+    startAt: '10:15:00',
+    chips: ['/images', 'stage', 'draft', 'commit', 'manifest', 'pgvector'],
+    note: '後端啟動時 manifest 和 models.yaml、kb/VERSION 對不上就拒絕啟動',
+    lanes: [
+      { name: '建檔', tag: 'intake' },
+      { name: '收錄', tag: 'kb/' },
+      { name: '特徵', tag: 'build_index' },
+      { name: '發布', tag: 'index＋pgvector' },
+    ],
+    cards: [
+      { name: '上傳照片', where: 'POST /images', by: 'frontend', tip: '回 image_id' },
+      { name: '建草稿', where: 'POST /intake', by: 'clip', tip: '畫作：清晰度 → 知識庫有沒有 → 驗證；圖紙會多一步 Qwen3-VL 讀標題欄' },
+      { name: '填表', where: 'PUT /intake/{id}', by: '人工', tip: '畫作的欄位全由人填；每個欄位記錄來源（模型／規則／人）' },
+      { name: '主管收錄', where: '/intake/{id}/commit', by: '主管', tip: '要有 kb_intake 權限，展示帳號裡只有主管有' },
+      { name: '寫進 kb/', where: 'kb/artworks/*.json', by: 'fs', tip: '照片放進 kb/images' },
+      { name: '版本號＋1', where: 'kb/VERSION', by: 'bump_version', tip: '同月遞增，跨月重設為 1' },
+      { name: '結構驗證', where: 'shared/schemas', by: 'validate_kb', tip: '欄位不符 schema 就停，不發布' },
+      { name: '圖向量', where: 'chinese-clip · 512 維', by: 'clip', tip: '同時產生 480px 縮圖' },
+      { name: '色彩分析', where: 'CIELAB k-means', by: 'analysis', tip: '結果變成一段「色彩分析」段落' },
+      { name: '切塊', where: 'build_chunks', by: 'chunking', tip: '一段 #meta 基本資料；解說切 300–500 字、重疊 50；一段 #color' },
+      { name: '文字向量', where: 'bge-m3 · 1024 維', by: 'bge-m3', tip: '所有段落重新 embed' },
+      { name: '發布索引', where: 'publish_index', by: 'pgvector', tip: '寫 data/index；有設 DATABASE_URL 才同一個交易寫進 pgvector（HNSW cosine）' },
+    ],
+    journey: [
+      '側欄打開「照片建檔（畫作）」',
+      '上傳作品照片',
+      '系統查清晰度、知識庫有沒有',
+      '跳出表單：名稱、作者、年代、解說',
+      '主管按「收錄進知識庫」',
+      '等重建索引，版本號＋1',
+      '回首頁拍這幅畫發問：認得了',
+    ],
+    steps: [
+      { j: 0, r: '照片建檔頁 · 等待上傳', log: ['主管', '打開「照片建檔（畫作）」'] },
+      { j: 1, c: 0, s: 'run', note: '照片傳到 data/uploads', log: ['前端', 'POST /images'], ms: 220 },
+      { c: 0, s: 'done', note: '回 image_id img_e90d', ev: '/images' },
+      { j: 2, c: 1, s: 'run', note: '清晰度 → 知識庫有沒有 → 驗證', r: '建草稿 · 查清晰度與重複', ev: 'stage', ms: 700 },
+      { c: 1, s: 'done', note: '知識庫沒有 → 可以建檔', log: ['intake', '清晰度 ok；知識庫沒有這幅畫'] },
+      { j: 3, c: 2, s: 'run', note: '人工填名稱、作者、年代、解說', ms: 90000, wait: 1.6 },
+      { c: 2, s: 'done', note: '早春圖・郭熙・1072 年', ev: 'draft', log: ['主管', '填好表單，草稿驗證通過'] },
+      { j: 4, c: 3, s: 'hold', note: '只有主管能收錄', r: '等收錄 · 要 kb_intake 權限', log: ['guard', '收錄要 kb_intake 權限'], wait: 2 },
+      { c: 3, s: 'done', note: '主管按「收錄進知識庫」', ev: 'commit', log: ['主管', '收錄 npm-000002'], ms: 2500 },
+      { c: 4, s: 'run', note: '寫 JSON＋照片', ms: 40 },
+      { c: 4, s: 'done', note: 'kb/artworks/npm-000002.json', log: ['fs', '寫進 kb/artworks、kb/images'] },
+      { j: 5, c: 5, s: 'run', note: '同月遞增', ms: 5 },
+      { c: 5, s: 'done', note: '2026.10.2 → 2026.10.3', r: '重建索引 · 版本 2026.10.3', log: ['pipeline', 'kb/VERSION 2026.10.2 → 2026.10.3'] },
+      { c: 6, s: 'run', note: 'validate_kb', ms: 80 },
+      { c: 6, s: 'done', note: '4 幅畫作 ok' },
+      { c: 7, s: 'run', note: 'CLIP 圖向量＋縮圖', ms: 900 },
+      { c: 7, s: 'done', note: 'image_vec 512 維' },
+      { c: 8, s: 'run', note: 'CIELAB k-means', ms: 600 },
+      { c: 8, s: 'done', note: '#color 段落', log: ['analysis', '色彩分析完成'] },
+      { c: 9, s: 'run', note: '#meta、解說 300–500 字、#color', ms: 40 },
+      { c: 9, s: 'done', note: '段落切好' },
+      { c: 10, s: 'run', note: '全部段落 embed', ms: 4200, wait: 1.4 },
+      { c: 10, s: 'done', note: 'text_vec 1024 維', log: ['bge-m3', '段落向量完成'] },
+      { c: 11, s: 'run', note: 'manifest.json＋一個交易', ev: 'manifest', ms: 600 },
+      { c: 11, s: 'done', note: 'HNSW cosine 索引更新', ev: 'pgvector', log: ['pgvector', 'artworks、chunks 一次發布'] },
+      { j: 6, out: ['done', '知識庫 2026.10.3 上線 · 早春圖認得了'], r: 'manifest 與 models.yaml、kb/VERSION 一致', log: ['使用者', '首頁拍早春圖發問 → 辨識成功'], ms: 5000, final: true },
+    ],
+  },
+];
+const FLOW_LABEL={queued:'排隊',run:'執行中',done:'完成',hold:'等確認',block:'擋下'};
+const FLOW_BADGE={queued:'',run:'running',done:'done',hold:'warn',block:'bad'};
+const FLOW_HUMANS=new Set(['使用者','業務','主管']);
+const FLOW_BASE_MS=950;
+const FLOW_REDUCE=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 播放進度不放 STATE：每一步只改有變的元素，整頁重繪會把卡片的動畫打斷
+// 不自動播放：只有按「執行」才開始亮。接上後端時由 flowRunLive() 依後端的回應呼叫 flowApply()；連不上才用 flowTick() 播腳本
+// live＝這一輪是真的請求；run＝第幾輪，舊的那輪晚到的回應靠它丟掉
+const FLOW={idx:0,step:0,playing:false,finished:false,timer:null,typing:null,clock:0,blocks:0,holds:0,egress:'0 B',role:'',ask:'',entry:'',j:-1,chip:-1,out:['idle',''],cards:[],log:[],live:false,model:'',run:0,abort:null};
+
+const flowBadge=s=>`<span class="b ${FLOW_BADGE[s]}">${FLOW_LABEL[s]}</span>`;
+const flowDone=()=>FLOW.cards.filter(c=>c.s==='done').length;
+const flowLaneDone=li=>FLOW.cards.slice(li*3,li*3+3).filter(c=>c.s==='done').length;
+const flowStatus=()=>FLOW.finished?'<span class="b done">完成</span>':FLOW.playing?'<span class="b running">執行中</span>':'<span class="b">等待執行</span>';
+function flowClock(ms){const s=ms/1000;return s<60?s.toFixed(1)+' s':`${Math.floor(s/60)}m ${String(Math.round(s%60)).padStart(2,'0')}s`}
+function flowWall(start,ms){const [h,m,s]=start.split(':').map(Number),t=h*3600+m*60+s+Math.floor(ms/1000),p=v=>String(v).padStart(2,'0');return `${p(Math.floor(t/3600)%24)}:${p(Math.floor(t/60)%60)}:${p(t%60)}`}
+
+function flowReset(i){
+  const sc=FLOW_SCENARIOS[i];clearTimeout(FLOW.timer);clearInterval(FLOW.typing);FLOW.abort?.abort();
+  Object.assign(FLOW,{idx:i,step:0,finished:false,live:false,noImage:false,model:'',run:FLOW.run+1,abort:null,clock:0,blocks:0,holds:0,egress:'0 B',role:sc.role,ask:sc.ask,entry:'等待輸入',j:-1,chip:-1,out:['idle','等 12 段回報'],cards:sc.cards.map(()=>({s:'queued',note:'等待'})),log:[]});
+}
+function flowLoad(i){flowReset(i);if(STATE.view==='flow')render()}
+// 連不上後端時沒有真的意圖路由：用有沒有附圖＋關鍵字挑最接近的現成情境；排程是唯一不從上傳照片開始的情境
+function flowPick(q,hasImg){
+  const key=!hasImg?'schedule':/3D|圖紙|零件|重建|庫存/i.test(q)?'factory':/建檔|收錄|索引/.test(q)?'intake':'art';
+  return FLOW_SCENARIOS.findIndex(s=>s.key===key);
+}
+// 接上後端：照主介面 frontend/src/shell/runner.ts 的順序真的走一次——附圖先 POST /images → POST /agent/route →
+// 判斷是問答才 POST /chat。卡片沿用「拍照問畫」那一列，它畫的就是 /agent/route → /chat 這條路。
+// /chat 沒有逐段事件：第 3～6 段在 sources 一次到、第 7 段在 done 才到，所以卡片分三批亮
+async function flowRunLive(q,img){
+  flowReset(0);
+  const run=FLOW.run,ctl=new AbortController(),t0=Date.now();
+  Object.assign(FLOW,{live:true,playing:true,abort:ctl,noImage:!img,role:LIVE.account.label,ask:(img?`〔附圖 ${img.name}〕`:'')+q});
+  render();
+  let cur=null;
+  // 中途切情境或再按一次執行，flowReset 會換掉 run，這一輪之後的回應就不再寫進畫面
+  const step=st=>{if(FLOW.run!==run)return;if(st.s==='run')cur=st.c;FLOW.clock=Date.now()-t0;flowApply(st)};
+  const skip=(c,note)=>step({c,s:'queued',note});
+  const finish=(j,out)=>{if(FLOW.run!==run)return;FLOW.clock=Date.now()-t0;Object.assign(FLOW,{finished:true,playing:false,j,out});flowSync()};
+  try{
+    let imageId=null;
+    if(img){
+      step({j:0,c:0,s:'run',note:'上傳中',log:['使用者',`附上 ${img.name}`]});
+      const fd=new FormData();fd.append('file',img.file);
+      const up=await api('/images',{method:'POST',body:fd,signal:ctl.signal});imageId=up.image_id;
+      step({c:0,s:'done',note:`image_id ${up.image_id}`,ev:'/images',log:['前端',`POST /images → ${up.image_id}（${up.width}×${up.height}）`]});
+    }else skip(0,'沒附圖，略過');
+    step({j:1,c:1,s:'run',note:'送到統一入口',r:'POST /agent/route',log:['使用者',q?`送出「${q}」`:'只附照片送出']});
+    const r=await api('/agent/route',{...postJson({question:q,image_id:imageId}),signal:ctl.signal});
+    step({c:1,s:'done',note:r.pii.length?`${r.pii.length} 項換成代號`:'沒有個資',egress:`${r.egress.bytes} B`});
+    if(r.photo){
+      const hit=!!r.photo.id;
+      step({c:2,s:'done',note:r.photo.domain==='art'?'畫作':r.photo.domain==='mfg'?'圖紙':'分不出來'});
+      step({c:3,s:hit?'done':'block',note:r.photo.label});
+      step({c:4,s:hit?'done':'block',note:hit?`對到 ${r.photo.id}`:'沒有對到'});
+    }else [2,3,4].forEach(c=>skip(c,'沒附圖，略過'));
+    step({c:5,s:'done',note:`${r.intent_label} · ${r.confidence.toFixed(2)}`,ev:'/agent/route',r:`${r.intent} ${r.confidence.toFixed(2)} → ${r.gate}`,log:['agent',`意圖 ${r.intent_label}（${r.router.engine}），閘門 ${r.gate}：${r.gate_reason}`]});
+    const ok=r.auth.passed&&(!r.guard||r.guard.passed);
+    step({j:2,c:6,s:ok?'done':'block',note:ok?`${r.account.label} · 第 2 段 ${r.guard?.engine??'略過'}`:clip(r.blocked?.reason||r.blocked?.rule||'擋下',40),
+      log:['guard',ok?`第 1 段授權 pass · 第 2 段 ${r.guard?.verdict??'略過'}（${r.guard?.engine??'—'}）`:`第 ${r.blocked?.stage??'?'} 段擋下：${r.blocked?.rule??''} ${r.blocked?.log_no??''}`]});
+    if(!ok)return finish(2,['block',`第 ${r.blocked?.stage??'?'} 段擋下：${r.blocked?.reason||r.blocked?.rule||''}`]);
+    if(r.outcome==='short_circuit'){step({log:['agent',`第 ${r.short_circuit.stage} 段直接回覆（${r.short_circuit.kind}）`]});return finish(3,['done',r.short_circuit.reply])}
+    const d=r.dispatch||{};
+    // 只有問答走 /chat；3D 重建、排程、改資料、庫存、搜尋等分流這張圖還沒接，留給主介面
+    const target=r.gate!=='direct'?null:r.intent==='art_qa'?(d.artwork_id?{artwork_id:d.artwork_id}:d.global_qa?{}:null):r.intent==='drawing_qa'&&d.part_id?{part_id:d.part_id}:null;
+    if(!target){step({log:['前端',`分流到「${r.intent_label}」（閘門 ${r.gate}），資料流還沒接這一類，請到主介面操作`]});return finish(3,['block',`分流到「${r.intent_label}」：這一類還沒接到資料流`])}
+    step({c:7,s:'run',note:'檢索中',log:['前端','POST /chat']});
+    let answer='',first=true,gated=false;
+    await apiStream('/chat',{question:d.question||q||(target.part_id?'這張圖紙的重點是什麼？':'請介紹這幅畫'),...target,route_ticket:r.route_ticket},(ev,data)=>{
+      if(ev==='sources'){
+        const at=n=>(data.pipeline||[]).find(p=>p.stage===n),pf=data.post_filter,s3=at(3),bad=[4,5,6].map(at).find(p=>p?.status==='block');
+        step({c:7,s:s3?.status==='block'?'block':'done',note:`${data.candidates??data.sources.length} 段候選`,log:['bge-m3',s3?`第 3 段 ${s3.name}：${s3.detail}`:'檢索完成']});
+        step({c:8,s:bad?'block':'done',note:pf?`留 ${pf.kept}/${pf.candidates} 段 · ${pf.engine==='jev'?'Jev':'地端'}`:'沒有驗證（關檢索）',ev:'sources',log:[pf?.engine==='jev'?'jev':'guard',bad?`第 ${bad.stage} 段擋下：${bad.detail}`:`第 4～6 段 pass，留 ${data.sources.length} 段`]});
+        // 生成閘門沒過：後端送一句降級回應，不組 prompt、不呼叫生成端
+        if(bad){gated=true;skip(9,'閘門沒過，沒組');skip(10,'閘門沒過，沒呼叫')}
+        else{step({c:9,s:'done',note:`${data.sources.length} 段參考資料`});step({c:10,s:'run',note:`${data.strategy} 生成中`});FLOW.model=data.strategy}
+      }else if(ev==='token'){
+        answer+=data.text;
+        if(first&&!gated){step({c:10,s:'done',note:'生成完，先在伺服器收齊',ev:'token'});step({c:11,s:'run',note:'輸出檢查通過，送出中'})}
+        first=false;
+      }else if(ev==='done'){
+        const s7=(data.pipeline||[]).find(p=>p.stage===7),blocked=s7?.status==='block'||data.degraded;
+        if(data.model)FLOW.model=data.model;
+        step({j:3,c:11,s:blocked?'block':'done',note:s7?`${s7.status} · ${s7.by}`:'完成',ev:'done',egress:`${r.egress.bytes+(data.egress?.bytes||0)} B`,
+          log:['guard',`done · ${data.model??''} · 總耗時 ${fmtMs(data.latency_ms?.total)}${data.degraded?' · 降級回應':''}`]});
+        // 使用者流程停在「出現簡答」：之後進展示區、點出處、追問都要使用者自己操作，這裡沒有發生
+        finish(3,[blocked?'block':'done',clip(answer,140)||'（沒有內容）']);
+      }else if(ev==='error')throw new ApiErr(data.code,data.message,0);
+    },ctl.signal);
+    if(FLOW.run===run&&!FLOW.finished){step({log:['前端','串流結束了，但沒有收到 done']});finish(FLOW.j,['block','串流中斷：沒有收到 done'])}
+  }catch(e){
+    if(e.name==='AbortError'||FLOW.run!==run)return;
+    if(cur!=null&&FLOW.cards[cur].s==='run')step({c:cur,s:'block',note:clip(e.message,40)});
+    step({log:['前端',`錯誤 ${e.code||''}：${e.message}`]});
+    finish(FLOW.j,['block',`${e.message}（${e.code||'ERROR'}）`]);
+  }
+}
+const flowRunImgHtml=()=>{const img=STATE.flowIn.img;return img?`<img src="${img.url}" alt=""><span title="${esc(img.name)}">${esc(img.name)}</span><button type="button" data-act="flowImgClear" aria-label="移除附圖">✕</button>`:''};
+function flowSchedule(f){
+  clearTimeout(FLOW.timer);
+  if(FLOW.live||!FLOW.playing||FLOW.finished||STATE.view!=='flow')return;
+  FLOW.timer=setTimeout(flowTick,FLOW_BASE_MS*f);
+}
+// 切到別頁時計時器到了也不走下一步，切回來由 render() 接著排
+function flowTick(){
+  const steps=FLOW_SCENARIOS[FLOW.idx].steps;
+  if(STATE.view!=='flow'||FLOW.step>=steps.length)return;
+  const st=steps[FLOW.step++];
+  flowApply(st);
+  flowSchedule(st.wait||(st.s==='run'?0.75:1));
+}
+function flowApply(st){
+  const sc=FLOW_SCENARIOS[FLOW.idx];
+  if(st.ms)FLOW.clock+=st.ms;
+  if(st.ask)FLOW.ask=st.ask;
+  if(st.role)FLOW.role=st.role;
+  if(st.j!=null)FLOW.j=st.j;
+  if(st.c!=null){FLOW.cards[st.c]={s:st.s,note:st.note||FLOW.cards[st.c].note};if(st.s==='block')FLOW.blocks++;if(st.s==='hold')FLOW.holds++}
+  if(st.ev)FLOW.chip=Math.max(FLOW.chip,sc.chips.indexOf(st.ev));
+  if(st.egress)FLOW.egress=st.egress;
+  if(st.out)FLOW.out=st.out;
+  if(st.log){const [who,what]=st.log;FLOW.log.push({t:FLOW.live?hms():flowWall(sc.startAt,FLOW.clock),who,what,kind:st.s==='block'?'block':st.s==='hold'?'hold':st.final?'final':FLOW_HUMANS.has(who)?'human':'sys'})}
+  if(st.final){FLOW.finished=true;FLOW.j=sc.journey.length}
+  flowSync();
+  if(st.r)flowType(st.r);
+}
+function flowType(text){
+  FLOW.entry=text;clearInterval(FLOW.typing);
+  const el=$('#flEntry');if(!el)return;
+  if(FLOW_REDUCE){el.textContent=text;return}
+  let n=0;el.textContent='';
+  FLOW.typing=setInterval(()=>{el.textContent=text.slice(0,++n);if(n>=text.length)clearInterval(FLOW.typing)},22);
+}
+
+function flowStatsHtml(){
+  const done=flowDone(),now=s=>FLOW.cards.some(c=>c.s===s);
+  return stat('段落完成',`${done}/12`,done===12?'ok':'')+stat('擋下・待確認',`擋下 ${FLOW.blocks} · 待確認 ${FLOW.holds}`,now('block')?'danger':now('hold')?'warn':'')
+    +stat('資料外送',FLOW.egress)+stat('用到的模型',esc(FLOW.model||FLOW_SCENARIOS[FLOW.idx].model))+stat(FLOW.live?'實際耗時':'示意時間',flowClock(FLOW.clock));
+}
+function flowJourneyHtml(){
+  const sc=FLOW_SCENARIOS[FLOW.idx];
+  return `<p class="muted fl-path">${esc(sc.path)}</p><ol>${sc.journey.map((t,k)=>`<li data-state="${k<FLOW.j?'done':k===FLOW.j?'now':'todo'}">${esc(t)}</li>`).join('')}</ol>
+  <div class="kv fl-foot"><b>身分</b><span>${esc(FLOW.role)}</span><b>擋下次數</b><span>${FLOW.blocks}</span><b>等人確認</b><span>${FLOW.holds}</span></div>`;
+}
+// 晶片照順序亮到走到的那一格；真的請求沒附圖時沒有呼叫 /images，那一格不亮
+const flowChipsHtml=()=>FLOW_SCENARIOS[FLOW.idx].chips.map((c,k)=>`${k?'<i>→</i>':''}<span${k<=FLOW.chip&&!(c==='/images'&&FLOW.noImage)?' data-on':''}>${esc(c)}</span>`).join('');
+const flowLogHtml=()=>FLOW.log.map(l=>`<li data-kind="${l.kind}"><time>${l.t}</time><span class="who">${esc(l.who)}</span><span class="what">${esc(l.what)}</span></li>`).join('')||'<li class="empty">— 等待第一個事件 —</li>';
+function flowCardHtml(card,ci,lane){
+  // 小長條的高度用編號算，重繪、重播都不會跳
+  const c=FLOW.cards[ci],bars=Array.from({length:12},(_,i)=>`<i style="--h:${30+(ci*7+i*13)%8*10}%;--d:${(i*0.07).toFixed(2)}s"></i>`).join('');
+  return `<article class="fl-card" id="flCard${ci}" data-state="${c.s}" title="${esc(card.where+'｜'+card.tip)}"><div class="fl-card-top"><span>#${String(ci+1).padStart(2,'0')} · ${esc(lane.name)}</span><span class="fl-st">${flowBadge(c.s)}</span></div>
+  <h4>${esc(card.name)}</h4><p class="fl-where">${esc(card.where)}</p><p class="fl-note">› ${esc(c.note)}</p><div class="fl-card-foot"><span class="fl-spark" aria-hidden="true">${bars}</span><span>${esc(card.by)}</span></div><div class="fl-card-bar"><i></i></div></article>`;
+}
+function renderFlow(){
+  if(!FLOW.cards.length)flowReset(0);
+  const sc=FLOW_SCENARIOS[FLOW.idx],done=flowDone(),pct=Math.round(done/12*100);
+  return `<div class="fl"><div class="head"><h2>資料流</h2><span class="muted">${isLive()?'接上後端：按執行會真的送出，用「拍照問畫」這一列顯示；問答以外的分流還沒接':'時間、分數、編號是演示用的數字'}</span><span class="sp"></span><span id="flStatus">${flowStatus()}</span></div>
+  <div class="chat-input fl-run"><div class="fl-run-img" id="flRunImg">${flowRunImgHtml()}</div><textarea id="flDraft" rows="1" data-in="flowDraft" placeholder="輸入一段問題，或附一張圖，按執行看它走到哪一段（Enter 執行）" aria-label="資料流的輸入">${esc(STATE.flowIn.text)}</textarea>
+  <button type="button" class="btn" data-act="flowAttach">＋ 附圖</button><input type="file" accept="image/*" id="flFile" data-in="flowFile" hidden><button type="button" class="btn pri" data-act="flowRun">▶ 執行</button></div>
+  <div class="fl-bar"><div class="tabs">${FLOW_SCENARIOS.map((s,i)=>`<button type="button" class="btn ${i===FLOW.idx?'on':''}" data-act="flowScene" data-arg="${i}"><b>${i+1}</b>${esc(s.tab)}</button>`).join('')}</div></div>
+  <div class="fl-legend">${flowBadge('run')}${flowBadge('done')}<span class="b bad">擋下・失敗</span><span class="b warn">等確認・核准</span>${flowBadge('queued')}<span class="muted">滑鼠停在卡片上看補充說明・1–4 切情境</span></div>
+  <div class="stats fl-stats" id="flStats">${flowStatsHtml()}</div>
+  <div class="fl-board"><div class="card fl-journey"><h3>使用者流程</h3><div id="flJourney">${flowJourneyHtml()}</div></div>
+  <div class="fl-flow"><div class="fl-entry"><div class="fl-entry-head"><b>${esc(sc.entry.name)}</b><span>${esc(sc.entry.label)}</span><em id="flRole">身分 ${esc(FLOW.role)}</em></div><p class="fl-ask" id="flAsk">${esc(FLOW.ask)}</p><p class="fl-entry-line"><span id="flEntry">${esc(FLOW.entry)}</span><span class="fl-cursor" aria-hidden="true"></span></p></div>
+  <div class="fl-caption">${esc(sc.caption)}</div>
+  <div class="fl-lanes">${sc.lanes.map((l,li)=>`<div class="fl-lane" id="flLane${li}" data-done="${flowLaneDone(li)===3}"><div class="fl-lane-head"><span>${esc(l.name)} · <em>${esc(l.tag)}</em></span><b>${flowLaneDone(li)}/3</b></div>${[0,1,2].map(k=>flowCardHtml(sc.cards[li*3+k],li*3+k,l)).join('')}</div>`).join('')}</div>
+  <div class="fl-report">每段只回報一行 · 前端收的是事件，不是原始 log</div>
+  <div class="fl-output" id="flOut" data-state="${FLOW.out[0]}"><div class="fl-output-head"><span>落點</span><strong>${esc(sc.output)}</strong></div><p id="flOutText">${esc(FLOW.out[1])}</p></div></div></div>
+  <div class="grid g2"><div class="card"><h3>前端收到的回應</h3><div class="fl-chips" id="flChips">${flowChipsHtml()}</div>
+  <div class="fl-progress" id="flProgress" data-done="${done===12}"><span>整體進度</span><div class="prog"><i id="flProg" style="width:${pct}%"></i></div><b id="flPct">${pct}%</b></div><p class="muted" style="margin:8px 0 0">${esc(sc.note)}</p></div>
+  <div class="card fl-log"><h3>事件紀錄</h3><ol id="flLog">${flowLogHtml()}</ol></div></div></div>`;
+}
+function flowSync(){
+  if(STATE.view!=='flow')return;
+  const done=flowDone(),pct=Math.round(done/12*100);
+  FLOW.cards.forEach((c,ci)=>{const el=$('#flCard'+ci);if(el.dataset.state!==c.s){el.dataset.state=c.s;el.querySelector('.fl-st').innerHTML=flowBadge(c.s)}el.querySelector('.fl-note').textContent='› '+c.note});
+  FLOW_SCENARIOS[FLOW.idx].lanes.forEach((l,li)=>{const n=flowLaneDone(li),el=$('#flLane'+li);el.dataset.done=String(n===3);el.querySelector('.fl-lane-head b').textContent=n+'/3'});
+  $('#flStatus').innerHTML=flowStatus();
+  $('#flStats').innerHTML=flowStatsHtml();$('#flJourney').innerHTML=flowJourneyHtml();
+  $('#flRole').textContent='身分 '+FLOW.role;$('#flAsk').textContent=FLOW.ask;
+  $('#flOut').dataset.state=FLOW.out[0];$('#flOutText').textContent=FLOW.out[1];
+  $('#flChips').innerHTML=flowChipsHtml();
+  $('#flProgress').dataset.done=String(done===12);$('#flProg').style.width=pct+'%';$('#flPct').textContent=pct+'%';
+  const log=$('#flLog');log.innerHTML=flowLogHtml();log.scrollTop=log.scrollHeight;
+}
+// 資料流的快捷鍵：正在打字、拖對話欄（它自己用了方向鍵）、開著對話框時都不攔
+function flowKey(e){
+  const t=e.target instanceof Element?e.target:document.body;
+  // 執行列：Enter 執行、Shift+Enter 換行；輸入法還在選字時按 Enter 不執行
+  if(t.id==='flDraft'){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();ACT.flowRun()}return}
+  if(e.defaultPrevented||e.ctrlKey||e.metaKey||e.altKey||t.closest('input,textarea,select')||$('#dlg').classList.contains('open'))return;
+  if(/^[1-4]$/.test(e.key))ACT.flowScene(e.key-1);
+}
+
+/* ===== 開發助理：不連伺服器，只從 MOCK_DATA 比對關鍵字回答 ===== */
+const CHAT_SUGS=['R-1023-009 為什麼失敗？','J-2041 現在怎樣？','今天有哪些阻擋？'];
+const reqLink=r=>`<a class="lnk" data-act="openReq" data-arg="${r.id}">${r.id}</a>`;
+const jobLink=j=>`<a class="lnk" data-act="openJob" data-arg="${j.id}">${j.id}</a>`;
+function botReply(q){
+  const u=q.toUpperCase(),rid=u.match(/R-\d{4}-\d{3}/)?.[0],jid=u.match(/J-\d{4}/)?.[0];
+  if(rid){
+    const r=reqById(rid);
+    if(!r)return `<p>找不到 ${esc(rid)}，這份模擬資料只有 R-1023-001～010。</p>`;
+    const stop=r.stages.find(s=>s.note);
+    return `<p>${reqLink(r)}（${r.time}・${esc(r.role)}・${MODULE_LABEL[r.module]}）${STATUS_LABEL[r.status]}，總延遲 ${(totalMs(r)/1000).toFixed(2)} s。${stop?`停在「${esc(stop.name)}」：${esc(stop.note)}。`:'七段都通過。'}${r.error?`\n訊息：${esc(r.error)}`:''}</p>`;
+  }
+  if(jid){
+    const j=MOCK_DATA.jobs.find(x=>x.id===jid);
+    if(!j)return `<p>找不到 ${esc(jid)}，背景工作只有 J-2040～2045。</p>`;
+    return `<p>${jobLink(j)}（${j.type}）${STATUS_LABEL[j.status]}，第 ${j.attempt}/${j.max} 次・Worker ${j.worker}。最後的事件：${esc(j.events.at(-1))}。</p>`;
+  }
+  // 依關鍵字挑出異常的請求；只說「異常」沒指定哪一種就全部列
+  const kinds=[[/阻擋|擋/,'blocked'],[/錯誤|失敗|error|fail/i,'error'],[/拒答|無資料/,'nodata'],[/備援|fallback/i,'fallback']].filter(([re])=>re.test(q)).map(([,k])=>k);
+  if(kinds.length||/異常|問題|狀況/.test(q)){
+    const want=kinds.length?kinds:['blocked','error','nodata','fallback'];
+    const list=MOCK_DATA.requests.filter(r=>want.includes(r.status));
+    const jobs=/失敗|fail/i.test(q)?MOCK_DATA.jobs.filter(j=>j.status==='failed'):[];
+    if(!list.length&&!jobs.length)return '<p>今天沒有這類的請求。</p>';
+    return `<p>今天共 ${list.length} 筆${jobs.length?`，另有 ${jobs.length} 個失敗的背景工作`:''}：</p><ul>${list.map(r=>`<li>${reqLink(r)} ${STATUS_LABEL[r.status]}・${esc(r.q.slice(0,18))}…</li>`).join('')}${jobs.map(j=>`<li>${jobLink(j)} ${j.type} 失敗</li>`).join('')}</ul>`;
+  }
+  return '<p>我只讀這頁的模擬資料，可以問：某筆請求（例如 R-1023-009）、某個背景工作（例如 J-2041），或今天的阻擋／錯誤／拒答／備援。</p>';
+}
+function renderChat(){
+  const c=STATE.chat,th=$('#chatThread');
+  th.innerHTML=c.msgs.length
+    ?c.msgs.map(m=>m.who==='user'?`<div class="msg msg-user"><span class="msg-who">YOU</span><p>${esc(m.text)}</p></div>`:`<div class="msg msg-bot"><span class="msg-who">ASSISTANT</span>${m.html||'<p class="thinking"></p>'}</div>`).join('')
+    :`<p class="chat-hint">問這頁的請求、背景工作或今天的異常，回答會附上可以點開的連結。</p><div class="chat-sugs">${CHAT_SUGS.map(s=>`<button type="button" class="btn" data-act="ask" data-arg="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+  $('#chatSend').disabled=c.busy;
+  th.scrollTop=th.scrollHeight;
+}
+/* 對話欄寬度與收合：和其他互動一樣只存在記憶體，重新整理回到預設 */
+const CHAT_W={min:280,max:640,def:380};
+function applyChatLayout(){
+  const c=STATE.chat,label=c.collapsed?'展開對話欄':'收合對話欄',b=$('#chatToggle');
+  $('.term-main').style.setProperty('--chat-w',c.w+'px');
+  $('.term-main').classList.toggle('is-collapsed',c.collapsed);
+  $('.term-main').dataset.pane=c.pane;
+  $('#paneChat').setAttribute('aria-selected',String(c.pane==='chat'));$('#paneWork').setAttribute('aria-selected',String(c.pane==='work'));
+  b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-expanded',String(!c.collapsed));
+  $('#chatResize').setAttribute('aria-valuenow',c.w);
+}
+function setChatW(w){STATE.chat.w=Math.round(Math.min(CHAT_W.max,Math.max(CHAT_W.min,w)));applyChatLayout()}
+function sendChat(text){
+  const q=text.trim(),c=STATE.chat;if(!q||c.busy)return;
+  c.msgs.push({who:'user',text:q},{who:'bot',html:''});c.busy=true;$('#chatInput').value='';renderChat();
+  // 停半秒再回答，模擬本地模型在想
+  setTimeout(()=>{c.msgs[c.msgs.length-1].html=botReply(q);c.busy=false;renderChat()},500);
+}
+
+/* ===== 主繪製 ===== */
+const RENDERERS={overview:renderOverview,trace:renderTrace,retrieval:renderRetrieval,eval:renderEval,models:renderModels,kb:renderKb,jobs:renderJobs,perm:renderPerm,flow:renderFlow};
+function render(){
+  renderNav();$('#main').innerHTML=RENDERERS[STATE.view]();
+  if(STATE.view==='flow'){flowSync();flowSchedule(1.4)}
+}
+
+/* ===== 點擊動作 ===== */
+const ACT={
+  go:a=>go(a),closeDlg,
+  theme:()=>{STATE.theme=STATE.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=STATE.theme;renderThemeBtn();toast(`已切換為${STATE.theme==='dark'?'深色':'淺色'}主題`)},
+  refresh:()=>{
+    if(isLive())return liveLoad().then(()=>toast('已重新讀取後端資料'));
+    const m=STATE.metrics,j=n=>Math.floor(Math.random()*n);
+    m.success+=5+j(10);m.refusal+=j(2);m.block+=j(2);m.error+=j(2);
+    const t=MOCK_DATA.trend;t.p50.shift();t.p50.push(+(1.7+Math.random()*.7).toFixed(1));t.p95.shift();t.p95.push(+(4+Math.random()*2.2).toFixed(1));
+    MOCK_DATA.resources.vram[0]=+(18+Math.random()*4).toFixed(1);
+    const d=new Date(2026,9,23,14,32+j(20),j(60));STATE.refreshedAt='2026-10-23 '+d.toTimeString().slice(0,8);
+    render();toast('已重新整理 (模擬資料)');
+  },
+  openReq:a=>{STATE.selReq=a;STATE.tr={q:'',module:'',status:'',tab:'mock'};go('trace')},
+  trTab:a=>{STATE.tr.tab=a;go('trace')},
+  // 只有展示模式（DEMO_CONTROLS）且從本機連線時後端才允許免密碼切換；cookie 和主介面共用，主介面的身分也會跟著換
+  liveSwitch:async()=>{
+    try{const acc=await api('/auth/switch',postJson({account_id:'manager'}));Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});await liveLoad();toast('已切換成主管；同一個瀏覽器裡主介面的身分也跟著換了')}
+    catch(e){toast(`切換失敗：${e.message}（${e.code}）`)}
+  },
+  retSearch:async()=>{
+    const s=STATE.ret,q=s.q.trim();if(!q)return toast('先輸入查詢');
+    s.busy=true;$('#retBody').innerHTML=renderRetBody();
+    try{s.textRes=await api(`/search/text?q=${encodeURIComponent(q)}&top_k=10`)}catch(e){toast(`搜尋失敗：${e.message}（${e.code}）`)}
+    s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
+  },
+  selReq:a=>{STATE.selReq=a;$('#trList').innerHTML=renderTraceList();$('#trDetail').innerHTML=renderTraceDetail()},
+  addEval:a=>{
+    const r=reqById(a);if(STATE.pendingCases.some(p=>p.from===a))return toast(`${a} 已在待加入案例中`);
+    STATE.pendingCases.push({id:'P-'+String(STATE.pendingCases.length+1).padStart(2,'0')+a.slice(-3),q:r.q,module:r.module,from:a});renderNav();toast(`已加入評估待辦：${a} (共 ${STATE.pendingCases.length} 筆)`);
+  },
+  exportReq:a=>{
+    // 用 Blob 在本機產生下載，不經過任何網路
+    const blob=new Blob([JSON.stringify(reqById(a),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),el=document.createElement('a');
+    el.href=url;el.download=a+'.json';document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),500);toast(`已匯出 ${a}.json`);
+  },
+  openOut:a=>{STATE.perm.tab='out';STATE.perm.out=a;go('perm')},
+  openJob:a=>{STATE.jobs.sel=a;STATE.jobs.filter='';go('jobs')},
+  retTab:a=>{STATE.ret.tab=a;render()},
+  selCand:a=>{STATE.ret.sel=a;$('#retBody').innerHTML=renderRetBody()},
+  selImg:a=>{STATE.ret.img=a;$('#retBody').innerHTML=renderRetBody()},
+  runEval:()=>{
+    const e=STATE.ev;e.running=true;e.progress=0;e.result=null;render();
+    const timer=setInterval(()=>{
+      e.progress+=10;const bar=$('#evProg');if(bar)bar.style.width=e.progress+'%';
+      if(e.progress<100)return;
+      clearInterval(timer);e.running=false;
+      // 依勾選項目調整模擬分數，讓控制項對結果有可見影響
+      const bonus=(e.rearr?.03:0)-(e.conflict?.06:0)+(e.cp.includes('實驗')?.02:0)+(e.image?.01:0);
+      const qs=[...EVAL_Q[e.domain],...STATE.pendingCases.map(p=>p.q)];
+      const sample=e.domain==='art'?'《谿山行旅圖》為北宋范寬所作，採高遠構圖 [1]。':'FLG-2002：8 孔 Ø18 mm，PCD 180 [1]。';
+      e.result={base:{model:e.base+' / '+e.bp,answer:sample,q:.82,lat:2.4,cite:91},
+        cand:{model:e.cand+' / '+e.cp,answer:sample+(e.conflict?'\n(注意：證據 [2] 與 [1] 年代描述不一致)':''),q:+(.82+bonus).toFixed(2),lat:+(2.4+(e.image?.6:0)-(e.rearr?.1:0)).toFixed(1),cite:Math.round(91+bonus*100)},
+        reg:qs.map((q,i)=>[q,i!==2,bonus>=0?true:i%2===0])};
+      e.history.unshift({t:'10-23 '+new Date().toTimeString().slice(0,5),d:e.domain,s:`base 0.82 → cand ${e.result.cand.q.toFixed(2)}`});
+      if(STATE.view==='eval')render();toast('模擬評估完成');
+    },150);
+  },
+  rmCase:a=>{STATE.pendingCases=STATE.pendingCases.filter(p=>p.id!==a);render();toast('已移除案例')},
+  savePrompt:()=>{STATE.promptEdits[STATE.promptSel]=$('#promptText').value;render();toast('已儲存為實驗版 prompt (僅本頁記憶體)')},
+  resetPrompt:()=>{delete STATE.promptEdits[STATE.promptSel];render();toast('已重設為原始 prompt')},
+  selKb:a=>{STATE.kb.sel=a;render()},
+  importDlg:()=>openDlg(`<h3>匯入驗證：batch_2026-10-23.zip (模擬)</h3><div class="tw"><table><tr><th>檔案</th><th>檢查</th><th>結果</th></tr>
+    <tr><td>art-021 寒林圖.json</td><td>欄位/授權/機密等級</td><td>${badge('success')}</td></tr><tr><td>mfg-012 FLG-2020.pdf</td><td>標題欄 OCR、料號格式</td><td>${badge('success')}</td></tr>
+    <tr><td>mfg-013.dwg</td><td>格式</td><td>${badge('error')} 不支援 DWG，請轉 PDF</td></tr><tr><td>cost_2026Q3.xlsx</td><td>機密等級</td><td>${badge('blocked')} 缺少機密標記</td></tr></table></div>
+    <div class="row" style="margin-top:10px"><button class="btn pri" data-act="confirmImport">匯入 2 筆通過項目</button></div>`),
+  confirmImport:()=>{
+    if(!MOCK_DATA.kb.some(k=>k.id==='art-021')){MOCK_DATA.kb.push({id:'art-021',type:'art',title:'寒林圖',ver:'v1',chunks:7,source:'館藏解說',conf:'公開',indexed:'2026-10-23',stale:false,passages:['§1 李成寒林…'],regions:['寒林']},{id:'mfg-012',type:'drawing',title:'FLG-2020 法蘭',ver:'rev A',chunks:12,source:'PLM 匯出',conf:'內部',indexed:'2026-10-23',stale:false,passages:['6×Ø16 PCD150'],regions:['正視圖']})}
+    closeDlg();render();toast('已匯入 2 筆 (模擬)，2 筆被驗證擋下');
+  },
+  rebuild:a=>{
+    STATE.kb.rebuilding=a;render();toast(`開始重建 ${a} 索引…`);
+    setTimeout(()=>{const i=MOCK_DATA.kb.find(x=>x.id===a);i.stale=false;i.indexed='2026-10-23';if(i.id==='mfg-002')i.ver='rev D';STATE.kb.rebuilding=null;if(STATE.view==='kb')render();toast(`${a} 索引重建完成`)},1500);
+  },
+  jobFilter:a=>{STATE.jobs.filter=a;render()},
+  selJob:a=>{STATE.jobs.sel=a;render()},
+  retryJob:()=>{const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel);j.status='queued';j.attempt++;j.worker='—';j.events.push('14:35 手動重試 → 重新排隊');render();toast(`${j.id} 已重新排隊 (第 ${j.attempt} 次)`)},
+  cancelJob:async()=>{
+    if(isReal('jobs')){
+      try{const r=await api(`/jobs/${encodeURIComponent(STATE.jobs.sel)}/cancel`,{method:'POST'});toast({cancelled:'已取消',cancelling:'已要求取消，worker 停下來後才算取消',already_cancelled:'本來就取消了'}[r.result]||r.result)}
+      catch(e){toast(`取消失敗：${e.message}（${e.code}）`)}
+      return liveLoad();
+    }
+    const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel);j.status='cancelled';j.events.push('14:35 手動取消');render();toast(`${j.id} 已取消`)},
+  previewArt:a=>{
+    const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel),name=j.artifacts[a];
+    const body=/step/i.test(name)?`<svg viewBox="0 0 200 140" width="100%"><ellipse cx="100" cy="50" rx="70" ry="22" fill="none" stroke="var(--accent)"/><ellipse cx="100" cy="90" rx="70" ry="22" fill="none" stroke="var(--accent)"/><line x1="30" y1="50" x2="30" y2="90" stroke="var(--accent)"/><line x1="170" y1="50" x2="170" y2="90" stroke="var(--accent)"/><ellipse cx="100" cy="50" rx="25" ry="8" fill="none" stroke="var(--text)"/></svg><p class="muted">CadQuery 線框示意 (產生中，僅預覽)</p>`
+      :`<pre>${esc(JSON.stringify({job:j.id,artifact:name,generatedAt:'2026-10-23',note:'mock content',status:j.status},null,2))}</pre>`;
+    openDlg(`<h3>預覽：${esc(name)}</h3>${body}`);
+  },
+  permTab:a=>{STATE.perm.tab=a;render()},
+  selOut:a=>{STATE.perm.out=a;render()},
+  flowScene:a=>{FLOW.playing=false;flowLoad(+a)},
+  flowRun:()=>{
+    const q=STATE.flowIn.text.trim(),img=STATE.flowIn.img;
+    if(!q&&!img)return toast('先輸入一段文字或附一張圖');
+    if(isLive())return flowRunLive(q,img);
+    const i=flowPick(q,!!img);
+    FLOW.playing=true;flowReset(i);FLOW.ask=(img?`〔附圖 ${img.name}〕`:'')+q;render();
+    toast(`照「${FLOW_SCENARIOS[i].tab}」情境演示`);
+  },
+  flowAttach:()=>$('#flFile').click(),
+  flowImgClear:()=>{URL.revokeObjectURL(STATE.flowIn.img.url);STATE.flowIn.img=null;$('#flRunImg').innerHTML=''},
+  ask:a=>sendChat(a),
+  chatToggle:()=>{STATE.chat.collapsed=!STATE.chat.collapsed;applyChatLayout()},
+  pane:a=>{STATE.chat.pane=a;applyChatLayout()}
+};
+
+/* ===== 輸入動作：只局部更新，避免輸入框失焦 ===== */
+const IN={
+  trQ:v=>{STATE.tr.q=v;$('#trList').innerHTML=renderTraceList()},
+  trModule:v=>{STATE.tr.module=v;$('#trList').innerHTML=renderTraceList()},
+  trStatus:v=>{STATE.tr.status=v;$('#trList').innerHTML=renderTraceList()},
+  retRole:v=>{STATE.ret.role=v;$('#retBody').innerHTML=renderRetBody()},
+  retTopK:v=>{STATE.ret.topK=+v;$('#tkV').textContent=v;$('#retBody').innerHTML=renderRetBody()},
+  retTh:v=>{STATE.ret.th=+v;$('#thV').textContent=(+v).toFixed(2);$('#retBody').innerHTML=renderRetBody()},
+  evDomain:v=>{STATE.ev.domain=v;render()},evBase:v=>STATE.ev.base=v,evCand:v=>STATE.ev.cand=v,evBp:v=>STATE.ev.bp=v,evCp:v=>STATE.ev.cp=v,
+  evRearr:(v,t)=>STATE.ev.rearr=t.checked,evConflict:(v,t)=>STATE.ev.conflict=t.checked,evImage:(v,t)=>STATE.ev.image=t.checked,
+  promptSel:v=>{STATE.promptSel=v;render()},
+  kbQ:v=>{STATE.kb.q=v;$('#kbList').innerHTML=renderKbList()},
+  permRole:v=>{STATE.perm.role=v;render()},
+  retQ:v=>STATE.ret.q=v,
+  retFile:async(v,t)=>{
+    const f=t.files[0],s=STATE.ret;if(!f)return;
+    if(s.imgUrl)URL.revokeObjectURL(s.imgUrl);
+    Object.assign(s,{imgUrl:URL.createObjectURL(f),imgRes:null,busy:true});$('#retBody').innerHTML=renderRetBody();
+    try{
+      const fd=new FormData();fd.append('file',f);
+      const up=await api('/images',{method:'POST',body:fd});
+      s.imgRes=await api('/search/any',postJson({image_id:up.image_id}));
+    }catch(e){toast(`辨識失敗：${e.message}（${e.code}）`)}
+    s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
+  },
+  flowDraft:v=>STATE.flowIn.text=v,
+  flowFile:(v,t)=>{
+    const f=t.files[0];if(!f)return;
+    // 只在本機產生 blob 網址當縮圖，不經過任何網路；清掉 value，再選同一張圖才會再觸發
+    if(STATE.flowIn.img)URL.revokeObjectURL(STATE.flowIn.img.url);
+    STATE.flowIn.img={name:f.name,url:URL.createObjectURL(f),file:f};t.value='';$('#flRunImg').innerHTML=flowRunImgHtml();
+  }
+};
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');
+  if(t){if(t.tagName==='A')e.preventDefault();ACT[t.dataset.act]?.(t.dataset.arg,t,e);return}
+  if(e.target.id==='dlg')closeDlg();
+});
+document.addEventListener('input',e=>{const t=e.target.closest('[data-in]');if(t)IN[t.dataset.in]?.(t.value,t)});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeDlg();
+  else if(e.key==='Enter'&&!e.isComposing&&e.target.dataset?.in==='retQ')ACT.retSearch();
+  else if(STATE.view==='flow')flowKey(e);
+});
+$('#chatForm').addEventListener('submit',e=>{e.preventDefault();sendChat($('#chatInput').value)});
+// Enter 送出、Shift+Enter 換行；輸入法還在選字時按 Enter 不送出
+$('#chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendChat(e.target.value)}});
+
+// 拖曳以對話欄左緣為準算寬度；放開前把游標鎖在把手上，拖出視窗也不會斷
+$('#chatResize').addEventListener('pointerdown',e=>{
+  const el=e.currentTarget,left=$('.chat').getBoundingClientRect().left;
+  const move=ev=>setChatW(ev.clientX-left);
+  const up=()=>{el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);document.body.classList.remove('is-resizing')};
+  el.setPointerCapture(e.pointerId);document.body.classList.add('is-resizing');
+  el.addEventListener('pointermove',move);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+});
+$('#chatResize').addEventListener('dblclick',()=>setChatW(CHAT_W.def));
+$('#chatResize').addEventListener('keydown',e=>{
+  const d={ArrowLeft:-16,ArrowRight:16}[e.key];
+  if(d){e.preventDefault();setChatW(STATE.chat.w+d)}
+  else if(e.key==='Home'||e.key==='Enter'){e.preventDefault();setChatW(CHAT_W.def)}
+});
+
+renderThemeBtn();
+renderChat();
+applyChatLayout();
+render();
+liveConnect();
+</script>
+</body>
+</html>
