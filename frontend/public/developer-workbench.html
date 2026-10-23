@@ -4,6 +4,7 @@
   （開發時 Vite 把 /api 轉給 8000）或 http://localhost:8000/developer-workbench.html（展示模式由後端提供）。
   只呼叫同源的 /api/v1（憑證是主介面同一個 HttpOnly cookie）；連不上（直接雙擊檔案、後端沒啟動）就整頁用 MOCK_DATA。
   有接上的區塊用真的資料；後端還沒有 API 的區塊保留模擬資料，並標「模擬」。
+  07 背景工作例外：只讀真的 /jobs，連不上或讀不到就寫原因、給重試，不拿模擬資料充數（假的工作會讓人去取消一個不存在的東西）。
   互動狀態放 STATE、後端回應放 REAL／LD（09 資料流的進度另放 FLOW）。
   字型從 Google Fonts 載入（JetBrains Mono、Noto Sans TC），沒網路時改用系統字型，其他照常。
 -->
@@ -358,6 +359,32 @@ label.if-field { display: flex; flex-direction: column; align-items: stretch; ga
 .if-state { margin: 10px 0; font-weight: 600; }
 .if-state.ok { color: var(--ok); }
 .if-state.run { color: var(--text); animation: blink 1.6s steps(1) infinite; }
+/* 07 背景工作：事件清單照 09 資料流的事件紀錄，自己捲動；新事件接在後面，不整份重畫 */
+.jb-log {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 20em;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.jb-log li { display: grid; grid-template-columns: 8ch 5ch 16ch minmax(0, 1fr); gap: 8px; line-height: 1.45; }
+.jb-log time, .jb-log .seq { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.jb-log .type { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jb-log li[data-kind="ok"] .type { color: var(--ok); }
+.jb-log li[data-kind="warn"] .type { color: var(--warn); }
+.jb-log li[data-kind="bad"] :is(.type, .what) { color: var(--danger); }
+.jb-log .what { font-family: var(--font-cjk); overflow-wrap: anywhere; }
+.jb-log li.empty { display: block; color: var(--text-3); font-family: var(--font-cjk); }
+.jb-msg { margin: 8px 0; font-family: var(--font-cjk); }
+.jb-msg.ok { color: var(--ok); }
+.jb-msg.warn { color: var(--warn); }
+.jb-msg.bad { color: var(--danger); }
 @keyframes blink { 50% { opacity: 0; } }
 
 /* ---------- 表單 ---------- */
@@ -926,7 +953,7 @@ const STATE={
   cmp:{artwork:'',q:'畫家的簽名藏在哪裡？是誰發現的？'},
   promptSel:'art-cite-v3',promptEdits:{},
   kb:{q:'',sel:'art-001',rebuilding:null,detail:{}},
-  jobs:{filter:'',sel:'J-2042'},
+  jobs:{filter:'',sel:null},
   perm:{tab:'matrix',role:'倉管',out:'R-1023-001'},
   chat:{msgs:[],busy:false,w:380,collapsed:false,pane:'work'},
   flowIn:{text:'',img:null}
@@ -984,7 +1011,12 @@ async function apiFetch(path,init={},retried=false){
   try{res=await fetch(API_BASE+path,init)}catch(e){if(e.name==='AbortError')throw e;throw new ApiErr('NETWORK_ERROR','連不上後端',0)}
   if(res.status===401&&!retried&&!path.startsWith('/auth/')){
     const body=await res.clone().json().catch(()=>null);
-    if(RENEWABLE.has(body?.error?.code)){await fetch(API_BASE+'/auth/accounts').catch(()=>{});return apiFetch(path,init,true)}
+    if(RENEWABLE.has(body?.error?.code)){
+      const acc=await fetch(API_BASE+'/auth/accounts').then(r=>r.ok?r.json():null).catch(()=>null);
+      // 換發的是預設身分：和頁首不同時跟著換，07 背景工作停掉上一個身分的訂閱、清掉它的資料
+      if(acc?.current&&LIVE.account&&acc.current.id!==LIVE.account.id){Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});renderLive();jobsAccountChanged()}
+      return apiFetch(path,init,true);
+    }
   }
   return res;
 }
@@ -1022,8 +1054,8 @@ async function liveConnect(){
   }
   await liveLoad();
 }
-// 一個來源失敗（不是主管回 403、背景工作沒啟用回 503）只影響那一塊，其他照常用真的資料
-const LIVE_SOURCES={status:'/status',memory:'/memory',diag:'/admin/diagnostics',sec:'/security/logs?limit=50',audit:'/audit?limit=50',evalRuns:'/eval/runs',artworks:'/artworks',parts:'/parts',jobs:'/jobs?limit=50'};
+// 一個來源失敗（不是主管回 403）只影響那一塊，其他照常用真的資料；07 背景工作的 /jobs 由那一頁自己讀（JOBS）
+const LIVE_SOURCES={status:'/status',memory:'/memory',diag:'/admin/diagnostics',sec:'/security/logs?limit=50',audit:'/audit?limit=50',evalRuns:'/eval/runs',artworks:'/artworks',parts:'/parts'};
 async function liveLoad(){
   const keys=Object.keys(LIVE_SOURCES),res=await Promise.allSettled(keys.map(k=>api(LIVE_SOURCES[k])));
   keys.forEach((k,i)=>{if(res[i].status==='fulfilled'){REAL[k]=res[i].value;delete REAL_ERR[k]}else{delete REAL[k];REAL_ERR[k]=res[i].reason}});
@@ -1066,13 +1098,6 @@ function liveAdapt(){
     LD.kb=[...(REAL.artworks?.items||[]).map(a=>({id:a.id,type:'art',title:a.title_zh,ver:'—',chunks:null,source:[a.artist_zh,a.date_text,a.collection].filter(Boolean).join(' · '),conf:'公開',indexed:REAL.artworks.kb_version,stale:stale(a.id)})),
       ...(REAL.parts?.items||[]).map(p=>({id:p.id,type:'drawing',title:`${p.part_no} ${p.name_zh}`,ver:'rev '+p.revision,chunks:null,source:[p.drawing_no,p.category,p.material].filter(Boolean).join(' · '),conf:p.confidentiality,indexed:REAL.parts.kb_version,stale:stale(p.id)}))];
     if(!LD.kb.some(i=>i.id===STATE.kb.sel))STATE.kb.sel=LD.kb[0]?.id||null;
-  }
-  if(REAL.jobs){
-    const ST={succeeded:'done'};
-    LD.jobs=REAL.jobs.items.map(j=>{const s=ST[j.status]||j.status;return {id:j.id,type:j.kind==='cad'?'3D 重建':'排程',status:s,worker:'—',attempt:j.attempt,max:j.max_attempts,queue:j.kind,runtime:dur(j.started_at,j.finished_at),req:null,
-      events:[`${hms(j.created_at)} 建立`,j.started_at&&`${hms(j.started_at)} 開始`,j.cancel_requested&&'已要求取消',j.finished_at&&`${hms(j.finished_at)} ${STATUS_LABEL[s]||s}`,j.error&&`錯誤 ${j.error.code}：${j.error.message}`,j.progress&&`進度 ${JSON.stringify(j.progress)}`].filter(Boolean),
-      artifacts:j.artifacts.map(a=>a.name),urls:j.artifacts.map(a=>a.url)}});
-    if(!LD.jobs.some(j=>j.id===STATE.jobs.sel))STATE.jobs.sel=LD.jobs[0]?.id||null;
   }
   if(LIVE.accounts.length)LD.matrix=LIVE.accounts;
   if(REAL.sec)LD.secLogs=REAL.sec.items.map(l=>[hms(l.created_at),l.no,l.account_label||l.account_id||'—',SEC_STAGE[l.stage]||`第 ${l.stage} 段`,l.rule+(l.judge?`（${l.judge}）`:''),l.request_id||'']);
@@ -1508,20 +1533,480 @@ function renderIntakeDraft(d){
     <p class="muted">草稿 ${esc(d.draft_id)} · 保存 7 天 · 外送 ${d.egress?.images??0} 張圖、${d.egress?.bytes??0} bytes</p></div></div>`;
 }
 
-/* ===== 7 背景工作 ===== */
-function renderJobs(){
-  const jobs=pick('jobs'),real=isReal('jobs'),f=STATE.jobs.filter,list=jobs.filter(j=>!f||j.status===f),j=jobs.find(x=>x.id===STATE.jobs.sel);
-  const showId=id=>real?shortId(id):id;
-  // 背景工作沒啟用（.env 沒有 REDIS_URL）時 GET /jobs 回 503 JOBS_UNAVAILABLE，這頁就留著模擬資料
-  const why=isLive()&&!real&&REAL_ERR.jobs?`<p class="muted">${MOCK_TAG} GET /jobs：${esc(REAL_ERR.jobs.message)}（${esc(REAL_ERR.jobs.code)}）</p>`:'';
-  return `<div class="head"><h2>背景工作</h2>${mockTag('jobs')}${real?'<span class="muted">GET /jobs：目前身分看得到的最近 50 個</span>':''}</div>${why}
-  <div class="tabs">${['','running','queued','done','failed','cancelled'].map(s=>`<button class="btn ${f===s?'on':''}" data-act="jobFilter" data-arg="${s}">${s?STATUS_LABEL[s]:'全部'} (${jobs.filter(x=>!s||x.status===s).length})</button>`).join('')}</div>
-  <div class="grid"><div class="card"><div class="tw"><table><tr><th>ID</th><th>類型</th><th>狀態</th><th>Worker</th><th>嘗試</th><th>佇列</th><th>執行時間</th></tr>${list.map(x=>`<tr class="click ${x.id===STATE.jobs.sel?'sel':''}" data-act="selJob" data-arg="${esc(x.id)}"><td title="${esc(x.id)}">${esc(showId(x.id))}</td><td>${x.type}</td><td>${badge(x.status)}</td><td>${x.worker}</td><td>${x.attempt}/${x.max}</td><td>${x.queue}</td><td>${x.runtime}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">無</td></tr>'}</table></div></div>
-  <div class="card">${j?`<div class="row"><h3 style="margin:0" title="${esc(j.id)}">${esc(showId(j.id))}</h3>${badge(j.status)}<span class="sp"></span>
-  ${real?'<button class="btn" disabled title="後端沒有重試的 API">重試</button>':`<button class="btn" data-act="retryJob" ${['failed','cancelled'].includes(j.status)&&j.attempt<j.max?'':'disabled'}>重試</button>`}<button class="btn" data-act="cancelJob" ${['running','queued'].includes(j.status)?'':'disabled'}>取消</button></div>
-  <div class="kv"><b>相關請求</b><span>${j.req?`<a class="lnk" data-act="openReq" data-arg="${j.req}">${j.req}</a>`:'無'}</span></div>
-  <h3 style="margin-top:10px">事件</h3><pre>${j.events.map(esc).join('\n')}</pre><h3>產出物</h3>${j.artifacts.map((a,i)=>`<div class="row" style="margin:4px 0">📄 ${esc(a)}<span class="sp"></span>${real?`<a class="btn" href="${esc(j.urls[i])}" target="_blank" rel="noopener">下載</a>`:`<button class="btn" data-act="previewArt" data-arg="${i}">預覽</button>`}</div>`).join('')||'<div class="muted">尚無</div>'}`:'<div class="muted">請點選工作</div>'}</div></div>`;
+/* ===== 7 背景工作：接 backend/app/api/routers/jobs.py（docs/adr/041） ===== */
+// GET /jobs 清單、GET /jobs/{id} 詳情、GET /jobs/{id}/events（SSE，Last-Event-ID 續接）、POST /jobs/{id}/cancel、產物網址；
+// 服務狀況用 GET /status 的 jobs。後端刻意不回 worker、沒有手動重試 API：這頁照實寫「未提供」，不杜撰
+const JOB_ID_RE=/^(cad|sch)_[0-9a-f]{16}$/;
+const JOB_KIND={cad:'3D 重建',schedule:'排程'};
+// 和 backend/app/jobs/store.py 的 QUEUE_OF 一致：3D 重建排 gpu 佇列
+const JOB_QUEUE={cad:'gpu',schedule:'schedule'};
+const JOB_TERMINAL=new Set(['succeeded','failed','cancelled']);
+const JOB_FATAL=new Set([401,403,404]);
+const JOB_FILTERS=['','queued','running','succeeded','failed','cancelled'];
+const JOB_SVC_LABEL={ok:'正常',bad:'連不上',warn:'注意',down:'未啟用'};
+// 重連退讓、輪詢間隔、清單自動更新間隔（毫秒）；scripts/developer-workbench-jobs.test.mjs 會調小
+const JOB_CFG={retryMs:[500,1500,4000],maxFailures:3,pollMs:3000,pollStreamEvery:10,listMs:10000};
+// 每個非同步回應回來都先比對：gen（帳號）、listSeq（清單請求）、f（訂閱）、cancelSeq（取消）換了就丟掉，不寫進新的工作或新的身分
+const JOBS={active:false,account:null,gen:0,list:null,listErr:null,listAt:'',listSeq:0,loading:false,listTimer:null,listSig:'',
+  svc:undefined,svcErr:null,f:null,followRun:0,dataId:null,detail:null,detailErr:null,events:[],lastId:0,meta:null,committing:false,
+  cancel:{busy:null,msg:'',tone:''},cancelSeq:0,paint:new Set(),paintQueued:false};
+const jst=s=>s==='succeeded'?'done':s;   // 狀態徽章沿用 .b.done 的顏色與「完成」
+const jobShort=id=>String(id).slice(0,12);
+const ymdhms=iso=>iso?`${ymdhm(iso)}:${pad2(new Date(iso).getSeconds())}`:'—';
+const sizeText=n=>n<1024?`${n} B`:n<1048576?`${(n/1024).toFixed(1)} KB`:`${(n/1048576).toFixed(1)} MB`;
+const NOT_GIVEN='<span class="muted" title="GET /jobs 刻意不回這個欄位">未提供</span>';
+const jobWait=(ms,signal)=>new Promise(r=>{if(signal.aborted)return r();const t=setTimeout(done,ms);function done(){clearTimeout(t);signal.removeEventListener('abort',done);r()}signal.addEventListener('abort',done)});
+function jobsErrText(e,what){
+  if(!e)return '';
+  if(e.code==='STREAM_ERROR')return `${what}中途斷線`;
+  if(e.status===0)return `連不上後端（${what}）：後端沒啟動或網路中斷`;
+  if(e.code==='JOBS_UNAVAILABLE')return `背景工作系統無法使用（${what} 回 503 JOBS_UNAVAILABLE）：${e.message}`;
+  if(e.status===401)return `憑證無效（${what} 回 401，重新取得憑證後仍失敗）：${e.message}`;
+  if(e.status===403)return `目前身分沒有權限（${what} 回 403 ${e.code}）：${e.message}`;
+  if(e.status===404)return what==='GET /jobs'?`這台後端沒有背景工作清單的 API（GET /jobs 回 404 ${e.code}），可能是較舊的版本`:`找不到，或目前身分看不到這個工作（${what} 回 404 ${e.code}）：${e.message}`;
+  return `${what} 失敗：${e.message}（${e.code}${e.status?`，HTTP ${e.status}`:''}）`;
 }
+
+// ---- 服務狀況：未啟用、資料庫不通、Redis 不通、沒有對應佇列的 worker 分開寫；「沒有工作」不等於服務壞掉
+function jobSvcRows(j){
+  if(!j.enabled)return [['down','背景工作系統','這台後端沒有設定 REDIS_URL 與工作資料庫（JOBS_DATABASE_URL，留空沿用 DATABASE_URL）：GET /jobs 回 503，3D 重建與排程都不能建立']];
+  const rows=[[j.database_ok?'ok':'bad','工作資料庫（PostgreSQL）',j.database_ok?'連線正常':'連不上：清單、詳情、事件都讀不到，worker 也領不到工作']];
+  rows.push([j.broker_ok?'ok':'bad','Redis（broker）',j.broker_ok?'連線正常':`連不上：新工作留在 outbox 等投遞（待投遞 ${j.pending_dispatch} 個），恢復後自動補送`]);
+  for(const [q,label,cmd] of [['gpu','3D 重建','make worker-gpu'],['schedule','排程','make worker-schedule']]){
+    const ws=(j.workers||[]).filter(w=>(w.queues||[]).includes(q));
+    rows.push([ws.length?'ok':'warn',`${q} worker（${label}）`,ws.length?ws.map(w=>`${w.name}（${w.age_s} 秒前登記）`).join('、'):`沒有 worker 在線：${label}工作會一直排隊（${cmd}）`]);
+  }
+  if(j.pending_dispatch&&j.broker_ok)rows.push(['warn','待投遞',`${j.pending_dispatch} 個工作還沒送進 Redis`]);
+  return rows;
+}
+function jobSvcHtml(){
+  const j=JOBS.svc,e=JOBS.svcErr,head='<h3>服務狀況（GET /status 的 jobs）</h3>';
+  if(j===undefined)return head+(e?`<p class="muted">${esc(jobsErrText(e,'GET /status'))}</p>`:'<div class="muted">讀取中…</div>');
+  if(j===null)return head+'<p class="muted">GET /status 沒有 jobs 欄位：這版後端不回報背景工作狀況</p>';
+  const counts=Object.entries(j.counts||{}).map(([k,v])=>`${STATUS_LABEL[jst(k)]||k} ${v}`).join(' · ');
+  return head+`<div class="tw"><table>${jobSvcRows(j).map(([c,name,detail])=>`<tr><td>${esc(name)}</td><td><span class="b ${c}">${JOB_SVC_LABEL[c]}</span></td><td class="muted" style="white-space:normal">${esc(detail)}</td></tr>`).join('')}</table></div>
+  ${j.enabled?`<p class="muted">全系統各狀態的工作數（不分身分）：${esc(counts||'0')}</p>`:''}${e?`<p class="muted" style="color:var(--warn)">剛才更新失敗，上面是之前讀到的：${esc(jobsErrText(e,'GET /status'))}</p>`:''}`;
+}
+const jobSvcHealthy=()=>!!(JOBS.svc?.enabled&&JOBS.svc.database_ok&&JOBS.svc.broker_ok);
+
+// ---- 清單
+function jobRowHtml(x){
+  const busy=x.cancel_requested&&!JOB_TERMINAL.has(x.status)?' <span class="b warn">待取消</span>':'';
+  return `<tr class="click ${x.id===STATE.jobs.sel?'sel':''}" data-act="selJob" data-arg="${esc(x.id)}"><td title="${esc(x.id)}">${esc(jobShort(x.id))}</td><td>${esc(JOB_KIND[x.kind]||x.kind)}</td><td>${badge(jst(x.status))}${busy}</td><td>${NOT_GIVEN}</td><td>${x.attempt}/${x.max_attempts}</td><td>${esc(JOB_QUEUE[x.kind]||x.kind)}</td><td title="${esc(ymdhms(x.created_at))}">${esc(hms(x.created_at))}</td><td>${x.started_at?dur(x.started_at,x.finished_at):'—'}</td></tr>`;
+}
+function jobListHtml(){
+  const list=JOBS.list,f=STATE.jobs.filter,e=JOBS.listErr,head='<h3>工作清單（GET /jobs）</h3>';
+  if(!list){
+    if(e&&!JOBS.loading)return head+`<pre style="border-color:var(--danger)">${esc(jobsErrText(e,'GET /jobs'))}</pre><div class="row"><button class="btn" data-act="jobsRefresh">重試</button></div>`;
+    return head+'<div class="muted">讀取中…</div>';
+  }
+  const rows=list.filter(j=>!f||j.status===f),active=list.some(j=>!JOB_TERMINAL.has(j.status));
+  const empty=!list.length
+    ?`目前身分「${LIVE.account?.label||'—'}」看得到的背景工作是 0 個。這不是故障：在主介面按「開始轉換」（3D 重建）或「開始排程」才會建立工作。${JOBS.svc&&!jobSvcHealthy()?'不過上面的服務狀況有異常，建立了也跑不了。':''}`
+    :'這個狀態沒有工作';
+  return head+`<div class="tabs">${JOB_FILTERS.map(s=>`<button class="btn ${f===s?'on':''}" data-act="jobFilter" data-arg="${s}">${s?STATUS_LABEL[jst(s)]:'全部'} (${list.filter(x=>!s||x.status===s).length})</button>`).join('')}</div>
+  <p class="muted" id="jobListMeta">${esc(jobListMeta(active))}</p>
+  ${e?`<p class="muted" style="color:var(--warn)">剛才更新失敗，下面是 ${esc(JOBS.listAt)} 讀到的清單：${esc(jobsErrText(e,'GET /jobs'))} <button class="btn" data-act="jobsRefresh">重試</button></p>`:''}
+  <div class="tw"><table><tr><th>ID</th><th>類型</th><th>狀態</th><th>Worker</th><th>嘗試</th><th>佇列</th><th>建立</th><th>執行時間</th></tr>${rows.map(jobRowHtml).join('')||`<tr><td colspan="8" class="muted" style="white-space:normal">${esc(empty)}</td></tr>`}</table></div>`;
+}
+const jobListMeta=active=>`目前身分看得到的最近 ${JOBS.list.length} 個（上限 50）· 更新於 ${JOBS.listAt}${JOBS.loading?' · 更新中…':''}${active?` · 有排隊或執行中的工作，每 ${JOB_CFG.listMs/1000} 秒自動更新`:''}`;
+// 清單內容沒變就只換「更新於」那一行：表格不重畫，橫向捲動位置、選取都留著
+function jobPaintList(){
+  const el=$('#jobList');if(!el)return;
+  const sig=JSON.stringify([STATE.jobs.filter,STATE.jobs.sel,!!JOBS.list,JOBS.listErr?.code,JOBS.listErr&&JOBS.listAt,!JOBS.list&&JOBS.loading,LIVE.account?.id,!!JOBS.svc&&jobSvcHealthy(),
+    (JOBS.list||[]).map(j=>[j.id,j.status,j.attempt,j.cancel_requested,j.started_at,j.finished_at])]);
+  const meta=$('#jobListMeta');
+  if(sig===JOBS.listSig&&meta){meta.textContent=jobListMeta(JOBS.list.some(j=>!JOB_TERMINAL.has(j.status)));return}
+  JOBS.listSig=sig;el.innerHTML=jobListHtml();
+}
+
+// ---- 詳情
+function jobProgressHtml(j){
+  const p=j.progress;
+  if(!p)return JOB_TERMINAL.has(j.status)?'':`<div class="muted">${j.status==='queued'?'排隊中，還沒有 worker 領走':'還沒有進度回報'}</div>`;
+  const last=JOB_TERMINAL.has(j.status)?'（最後一次回報）':'';
+  if(j.kind==='schedule'){
+    const secs=j.params?.seconds||JOBS.meta?.seconds,ms=p.elapsed_ms,pct=secs&&ms!=null?Math.min(100,ms/(secs*1000)*100):null;
+    return `${pct!=null?`<div class="prog"><i style="width:${pct.toFixed(1)}%"></i></div>`:''}<div>${esc(p.phase||p.label||'求解中')} · ${ms!=null?`${fmtMs(ms)}${secs?` / 上限 ${secs} 秒`:''}`:'—'} · 分數 ${esc(p.score??'—')} · 改善 ${p.improvements??0} 次 <span class="muted">${last}</span></div>`;
+  }
+  return `<div>${esc(p.label||p.stage||'—')}${p.chars!=null?` · 已生成 ${p.chars} 字元`:''} <span class="muted">${last}只回階段與字元數，不回模型輸出</span></div>`;
+}
+function jobResultHtml(j){
+  const r=j.result;if(!r)return '';
+  if(j.kind==='cad'){
+    const m=r.meta||{},x=r.result||{},d=r.done||{},dims=x.dims;
+    const part=m.part?`${m.part.part_no} ${m.part.name_zh}`:m.identified?.best_part_id||(m.image_id?'上傳的照片（知識庫沒有對到）':'—');
+    return `<h3>結果</h3><div class="kv"><b>圖紙</b><span>${esc(part)}</span><b>策略・模型</b><span>${esc(m.strategy||'—')} · ${esc(m.model||'—')}</span>
+    <b>實體</b><span>${x.ok?(x.valid===false?'產生了但實體無效':'有效'):'沒有產生'}${x.repaired?'（已自動修復）':''}</span><b>尺寸</b><span>${dims?`${dims.width} × ${dims.depth} × ${dims.height} mm`:'—'}</span>
+    <b>IoU</b><span>${x.iou!=null?(+x.iou).toFixed(3):'—'}${x.iou_bbox!=null?` · 外框對齊 ${(+x.iou_bbox).toFixed(3)}`:''}</span><b>孔位校正</b><span>${esc(x.holes?.status||'—')}</span>
+    <b>結果快取</b><span>${esc(x.cache?.status||'—')}</span><b>總耗時</b><span>${fmtMs(d.latency_ms?.total)}</span></div>`;
+  }
+  return `<h3>結果</h3><div class="kv"><b>排程 run_id</b><span>${esc(r.run_id||'—')}</span><b>引擎</b><span>${esc(r.engine||'—')}</span><b>結束方式</b><span>${r.run_status==='stopped'?'提前結束（採用當時最佳解）':esc(r.run_status||'—')}</span>
+  <b>分數</b><span>${esc(r.score||'—')}${r.score_check===false?' · <span class="b warn">後端重算不一致</span>':''}</span><b>改善次數</b><span>${r.improvements??'—'}</span><b>求解耗時</b><span>${fmtMs(r.latency_ms?.solve)}</span>${r.reconciled?'<b>備註</b><span>寫回後工作來不及結案，依生產資料庫補記</span>':''}</div>`;
+}
+function jobArtifactsHtml(j){
+  // 只接受這個工作自己的產物網址：網址是後端給的，還是擋掉其他形式，不讓它變成任意連結
+  const base=`/api/v1/jobs/${j.id}/artifacts/`,arts=(j.artifacts||[]).filter(a=>String(a.url).startsWith(base));
+  if(arts.length)return arts.map(a=>`<div class="row" style="margin:4px 0">📄 ${esc(a.name)}<span class="muted">${esc(a.content_type)} · ${sizeText(a.size_bytes)}</span><span class="sp"></span><a class="btn" href="${esc(a.url)}" target="_blank" rel="noopener">開啟</a><a class="btn" href="${esc(a.url)}?download=true" download>下載</a></div>`).join('');
+  if(j.kind==='schedule')return '<div class="muted">排程沒有檔案產物：結果直接寫回生產資料庫（上面的 run_id）</div>';
+  if(!JOB_TERMINAL.has(j.status))return '<div class="muted">完成（或執行失敗）後才發布</div>';
+  return `<div class="muted">${j.status==='cancelled'?'已取消，沒有產物':'沒有產物'}</div>`;
+}
+function jobDetailHtml(){
+  const id=STATE.jobs.sel;
+  if(!id)return JOBS.list?.length===0?'<div class="muted">沒有工作可以看</div>':'<div class="muted">請點選工作</div>';
+  if(!JOB_ID_RE.test(id))return `<p class="muted">「${esc(id)}」是開發助理或請求追蹤模擬資料裡的編號，後端沒有這個工作；請從上面的清單點選。</p>`;
+  // 詳情、錯誤只在屬於目前選取的工作時才畫：剛換選取、還沒讀到之前不會露出上一個工作的內容
+  const mine=JOBS.dataId===id,j=mine?JOBS.detail:null,e=mine?JOBS.detailErr:null,title=`<h3 style="margin:0" title="${esc(id)}">${esc(id)}</h3>`;
+  if(e)return `<div class="row">${title}</div><pre style="border-color:var(--danger)">${esc(e.text)}</pre>${e.revoked?'<p class="muted">詳情與事件已清除，不再顯示。</p>':''}<div class="row"><button class="btn" data-act="jobRetryFollow">重新讀取</button></div>`;
+  if(!j)return `<div class="row">${title}</div><div class="muted">讀取中…（GET /jobs/${esc(id)}）</div>`;
+  const c=JOBS.cancel,busy=c.busy===j.id,end=JOB_TERMINAL.has(j.status);
+  const label=busy?'取消中…':j.cancel_requested&&!end?'已要求取消':JOBS.committing&&!end?'寫回中，不能取消':'取消工作';
+  const t=j.target||{},p=j.params||{};
+  const src=[t.part_id&&`圖紙 ${t.part_id}`,t.image_id&&`照片 ${t.image_id}`,t.identified_part_id&&`辨識為 ${t.identified_part_id}`].filter(Boolean).join(' · ')||(j.kind==='schedule'?'整廠排程範圍':'—');
+  const params=Object.entries(p).filter(([,v])=>v!=null).map(([k,v])=>`${k}=${v}`).join(' · ')||'—';
+  return `<div class="row">${title}${badge(jst(j.status))}${j.cancel_requested&&!end?'<span class="b warn">已要求取消</span>':''}${j.stop_requested&&!end?'<span class="b warn">已要求提前結束</span>':''}<span class="sp"></span>
+  <button class="btn" data-act="cancelJob" ${end||j.cancel_requested||JOBS.committing||busy?'disabled':''} title="POST /jobs/{id}/cancel：排隊中直接取消；執行中請 worker 停下來，不寫回結果">${label}</button></div>
+  ${c.msg?`<p class="jb-msg ${c.tone}">${esc(c.msg)}</p>`:''}
+  <div class="kv"><b>類型</b><span>${esc(JOB_KIND[j.kind]||j.kind)}</span><b>佇列</b><span>${esc(JOB_QUEUE[j.kind]||j.kind)}</span><b>建立者</b><span>${esc(j.owner_id)}</span>
+  <b>嘗試</b><span>第 ${j.attempt} 次，最多 ${j.max_attempts} 次（worker 中斷時自動重新排隊、整個重跑）</span>
+  <b>建立</b><span>${esc(ymdhms(j.created_at))}</span><b>開始</b><span>${esc(ymdhms(j.started_at))}</span><b>結束</b><span>${esc(ymdhms(j.finished_at))}</span>
+  <b>執行時間</b><span>${j.started_at?dur(j.started_at,j.finished_at):'—'}</span><b>來源</b><span>${esc(src)}</span><b>參數</b><span>${esc(params)}</span>
+  ${j.input_version?`<b>輸入版本</b><span>${esc(j.input_version)}</span>`:''}<b>Worker</b><span>${NOT_GIVEN}</span><b>相關請求</b><span>${NOT_GIVEN}</span></div>
+  <h3 style="margin-top:12px">進度</h3>${jobProgressHtml(j)||'<div class="muted">—</div>'}
+  ${j.error?`<h3>錯誤</h3><pre style="border-color:var(--danger)">${esc(j.error.message)}（${esc(j.error.code)}）</pre>`:''}
+  ${jobResultHtml(j)}
+  <h3>產物</h3>${jobArtifactsHtml(j)}
+  <p class="muted" style="margin-top:10px">沒有「重試」：後端沒有手動重試的 API；失敗的工作要在主介面重新建立。</p>`;
+}
+
+// ---- 事件
+function jobEventText({type,data:d={}}){
+  switch(type){
+    case 'created':return '建立工作，排進佇列';
+    case 'started':return `worker 領走，開始第 ${d.attempt??'?'} 次執行${d.resource?`（資源 ${d.resource}）`:''}`;
+    case 'requeued':return `重新排隊：${d.reason||'worker 中斷'}`;
+    case 'meta':return d.engine_label?`${d.engine_label}${d.fallback_reason?`（${d.fallback_reason}）`:''} · 上限 ${d.seconds} 秒 · ${d.problem?.n_work_orders??'?'} 張工單`
+      :`${d.part?`圖紙 ${d.part.part_no} ${d.part.name_zh}`:d.image_id?'上傳的照片':'—'} · ${d.strategy||''} ${d.model||''}`.trim();
+    case 'progress':return d.chars!=null?`${d.label||'模型生成中'}：${d.chars} 字元`:`${d.phase||'求解中'} · 分數 ${d.score??'—'} · 改善 ${d.improvements??0} 次 · ${fmtMs(d.elapsed_ms)}`;
+    case 'tick':return `${d.phase||'求解中'} · ${fmtMs(d.elapsed_ms)} · 改善 ${d.improvements??0} 次`;
+    case 'stage':return d.label||d.stage||'';
+    case 'committing':return '進入寫回（之後不能取消）';
+    case 'cancel_requested':return '已要求取消，等 worker 停下來';
+    case 'stop_requested':return '已要求提前結束（採用目前最佳解）';
+    case 'succeeded':return '完成';
+    case 'failed':return `失敗：${d.message||'—'}${d.code?`（${d.code}）`:''}`;
+    case 'cancelled':return `已取消${d.note?`：${d.note}`:''}`;
+    default:return clip(JSON.stringify(d),120);
+  }
+}
+function jobEventLi(ev){
+  const kind=ev.type==='succeeded'?'ok':ev.type==='failed'?'bad':['cancelled','cancel_requested','requeued','stop_requested','committing'].includes(ev.type)?'warn':'';
+  return `<li data-kind="${kind}"><time>${ev.data?.at?esc(hms(ev.data.at)):'—'}</time><span class="seq">#${ev.id||'—'}</span><span class="type">${esc(ev.type)}</span><span class="what">${esc(jobEventText(ev))}</span></li>`;
+}
+function jobEventsHtml(){
+  const id=STATE.jobs.sel,f=JOBS.f;
+  if(JOBS.events.length&&JOBS.dataId===id)return JOBS.events.map(jobEventLi).join('');
+  const t=!id||!JOB_ID_RE.test(id)?'點選工作後顯示事件':JOBS.detailErr?'沒有事件（讀不到這個工作）':!f||f.state==='loading'||f.state==='connecting'?'讀取事件中…':'還沒有事件';
+  return `<li class="empty">— ${t} —</li>`;
+}
+function jobFollowHtml(){
+  const f=JOBS.f,id=STATE.jobs.sel;
+  if(!id||!JOB_ID_RE.test(id))return '<span class="muted">沒有選取工作</span>';
+  if(!f)return JOBS.detailErr?'<span class="b bad">已停止</span><span class="muted">讀不到這個工作，沒有在追蹤</span>':'<span class="muted">沒有在追蹤</span>';
+  const [c,l]={loading:['','讀取詳情中…'],connecting:['info','連線中…'],live:['running','串流連線中'],
+    reconnecting:['warn',`斷線，重新連線（第 ${f.reconnects} 次，從事件 #${JOBS.lastId} 之後接）`],
+    polling:['warn',`事件串流連不上，改用狀態輪詢（每 ${JOB_CFG.pollMs/1000} 秒）；事件清單暫停更新`],done:['done','工作已結束，串流已關閉']}[f.state]||['',f.state];
+  return `<span class="b ${c}">${esc(l)}</span><span class="muted">收到 ${JOBS.events.length} 筆 · 最後 #${JOBS.lastId||'—'}${f.note?` · ${esc(f.note)}`:''}</span>`;
+}
+// 新事件接在清單後面，不整份重畫：使用者往上捲著看時不會被拉回去，捲在底部時跟著捲
+function jobPaintEvents(){
+  const ol=$('#jobEvents');if(!ol)return;
+  const evs=JOBS.events,n=+ol.dataset.n||0,key=JOBS.dataId||'',atEnd=ol.scrollTop+ol.clientHeight>=ol.scrollHeight-4;
+  if(ol.dataset.key!==key||!n||n>evs.length)ol.innerHTML=jobEventsHtml();
+  else if(n<evs.length)ol.insertAdjacentHTML('beforeend',evs.slice(n).map(jobEventLi).join(''));
+  ol.dataset.key=key;ol.dataset.n=evs.length;
+  if(atEnd)ol.scrollTop=ol.scrollHeight;
+}
+const jobEventsCardHtml=()=>`<h3>事件（GET /jobs/{id}/events）</h3><div class="row" id="jobFollow">${jobFollowHtml()}</div><ol class="jb-log" id="jobEvents" data-key="${esc(JOBS.dataId||'')}" data-n="${JOBS.events.length}">${jobEventsHtml()}</ol>`;
+
+function renderJobs(){
+  const head=`<div class="head"><h2>背景工作</h2><span class="muted">3D 重建（gpu 佇列）與排程（schedule 佇列）；工作在主介面建立</span><span class="sp"></span>${isLive()?'<button class="btn pri" data-act="jobsRefresh">↻ 重新整理</button>':''}</div>`;
+  if(!isLive())return head+`<div class="card">${LIVE.state==='offline'
+    ?`<p>連不上後端（${esc(LIVE.error)}）：背景工作要讀真的 GET /jobs，沒有模擬版本，這頁不顯示假的工作。</p><div class="row"><button class="btn" data-act="liveRetry">重新連線</button></div>`
+    :'<p class="muted">連線中…</p>'}</div>`;
+  JOBS.listSig='';
+  return head+`<div class="card" id="jobSvc">${jobSvcHtml()}</div><div class="grid"><div class="card" id="jobList">${jobListHtml()}</div><div class="card" id="jobDetail">${jobDetailHtml()}</div><div class="card" id="jobEventsCard">${jobEventsCardHtml()}</div></div>`;
+}
+// 一輪事件迴圈裡的多次更新合併成一次重畫（重連後一次重播幾百筆事件也只畫一次）
+function jobsPaint(...parts){
+  for(const p of parts)if(p)JOBS.paint.add(p);
+  if(JOBS.paintQueued)return;
+  JOBS.paintQueued=true;
+  queueMicrotask(()=>{
+    JOBS.paintQueued=false;
+    const ps=new Set(JOBS.paint),all=ps.has('all');JOBS.paint.clear();
+    if(STATE.view!=='jobs'||!isLive())return;
+    const set=(sel,html)=>{const el=$(sel);if(el)el.innerHTML=html};
+    if(all||ps.has('svc'))set('#jobSvc',jobSvcHtml());
+    if(all||ps.has('list'))jobPaintList();
+    if(all||ps.has('detail'))set('#jobDetail',jobDetailHtml());
+    if(all||ps.has('events'))jobPaintEvents();
+    if(all||ps.has('events')||ps.has('follow'))set('#jobFollow',jobFollowHtml());
+  });
+}
+
+// ---- 讀清單與服務狀況
+async function jobsLoad(opts={}){
+  if(!JOBS.active||!isLive())return;
+  const gen=JOBS.gen,seq=++JOBS.listSeq;
+  clearTimeout(JOBS.listTimer);
+  JOBS.loading=true;jobsPaint('list');
+  const [lr,sr]=await Promise.allSettled([api('/jobs?limit=50'),opts.status?api('/status'):Promise.resolve()]);
+  if(gen!==JOBS.gen||seq!==JOBS.listSeq||!JOBS.active)return;   // 換帳號、離開 07，或之後又發了一次：這次的回應不用
+  JOBS.loading=false;
+  if(lr.status==='fulfilled'){
+    JOBS.list=lr.value.items||[];JOBS.listErr=null;JOBS.listAt=hms();
+    // 選取的工作以事件串流更新的那份為準（比清單新）
+    if(JOBS.detail)jobsPatchRow(JOBS.detail);
+    // 清單不滿 50 筆卻沒有正在看的工作：可能別的分頁換了身分或被撤權（伺服器端舊串流仍照原身分送），重新驗證一次
+    const sel=STATE.jobs.sel;
+    if(sel&&JOBS.detail&&JOBS.dataId===sel&&JOBS.list.length<50&&!JOBS.list.some(j=>j.id===sel))jobRecheck(sel);
+  }else{
+    const e=JOBS.listErr=lr.reason;
+    // 清單 401／403＝這個身分整體讀不了背景工作：上一份清單、選取工作的詳情、事件、取消狀態立刻清掉，串流即使還開著也停掉。
+    // 不走 jobRevoked（它會再讀清單），只留「重試」讓人手動再讀，不會一直重打。
+    // 404 是這台後端沒有 /jobs（版本不同），不是撤權：和 503、斷線一樣保留畫面上的內容並寫原因
+    if(e.status===401||e.status===403){
+      JOBS.list=null;jobUnfollow();jobClearDetail();
+      const id=STATE.jobs.sel;
+      if(id&&JOB_ID_RE.test(id)){JOBS.dataId=id;JOBS.detailErr={text:`${jobsErrText(e,'GET /jobs')}；這個工作的詳情與事件已一併清除`,revoked:true}}
+      jobsPaint('events');
+    }
+  }
+  if(opts.status){if(sr.status==='fulfilled'){JOBS.svc=sr.value?.jobs??null;JOBS.svcErr=null}else JOBS.svcErr=sr.reason}
+  if(!STATE.jobs.sel&&JOBS.list?.length)jobSelect(JOBS.list[0].id);
+  jobsPaint('list','svc','detail');
+  jobsScheduleList();
+}
+// 清單只在有排隊或執行中的工作時才自動更新；全部結束就不再打 GET /jobs
+function jobsScheduleList(){
+  clearTimeout(JOBS.listTimer);
+  if(JOBS.active&&JOBS.list?.some(j=>!JOB_TERMINAL.has(j.status)))JOBS.listTimer=setTimeout(()=>jobsLoad(),JOB_CFG.listMs);
+}
+async function jobRecheck(id){
+  const gen=JOBS.gen;
+  try{await api(`/jobs/${encodeURIComponent(id)}`)}
+  catch(e){if(gen===JOBS.gen&&JOBS.dataId===id&&JOB_FATAL.has(e.status))jobRevoked(id,e,`GET /jobs/${id}`)}
+}
+function jobsPatchRow(j){
+  const i=JOBS.list?.findIndex(x=>x.id===j.id)??-1;
+  if(i>=0){JOBS.list[i]={...JOBS.list[i],...j};jobsPaint('list')}
+}
+
+// ---- 訂閱一個工作：GET 詳情 → 事件串流（斷線用 Last-Event-ID 接上）→ 連續失敗改輪詢 → 終態讀一次最終結果
+function jobUnfollow(){const f=JOBS.f;if(f){f.ctl.abort();JOBS.f=null}}
+// cancelSeq 跟著加一：換詳情、離頁、換帳號、撤權之後，還在路上的取消回應都作廢，不會蓋掉重新讀到的狀態
+function jobClearDetail(){JOBS.cancelSeq++;Object.assign(JOBS,{dataId:null,detail:null,detailErr:null,events:[],lastId:0,meta:null,committing:false,cancel:{busy:null,msg:'',tone:''}})}
+function jobSetDetail(j){JOBS.detail=j;JOBS.detailErr=null;jobsPatchRow(j);jobsPaint('detail')}
+// 回應裡的工作快照比已經收到的事件舊（串流先送到終態，取消的回應才回來）：不拿它蓋掉較新的狀態
+const jobFresher=j=>(j?.last_event_id??0)>=Math.max(JOBS.lastId,JOBS.detail?.last_event_id??0);
+function jobAddEvent(ev){
+  // 伺服器從 Last-Event-ID 之後送，照理不會重複；保險起見 id 沒有比收過的大就丟掉
+  if(ev.id&&ev.id<=JOBS.lastId)return;
+  if(ev.id)JOBS.lastId=ev.id;
+  JOBS.events.push(ev);
+  const j=JOBS.detail,{type,data:d}=ev;
+  if(type==='committing')JOBS.committing=true;
+  else if(type==='started'||type==='requeued')JOBS.committing=false;
+  if(type==='meta')JOBS.meta=d;
+  if(j){
+    if(type==='started')Object.assign(j,{status:'running',attempt:d.attempt??j.attempt,started_at:j.started_at||d.at});
+    else if(type==='requeued')j.status='queued';
+    else if(type==='cancel_requested')j.cancel_requested=true;
+    else if(type==='stop_requested')j.stop_requested=true;
+    else if(type==='progress'||type==='stage'||type==='tick')j.progress=d;
+    else if(JOB_TERMINAL.has(type)){j.status=type;j.finished_at=d.at||j.finished_at;if(d.code)j.error={code:d.code,message:d.message}}
+    jobsPatchRow(j);
+  }
+  jobsPaint('events','detail');
+}
+// GET /jobs/{id}/events：瀏覽器的 EventSource 拿不到 404／503 的狀態碼、也不會走 apiFetch 的憑證換發，所以和 /chat 一樣用 fetch 讀。
+// 串流正常結束時 resolve；HTTP 錯誤與串流裡的 error 事件丟 ApiErr，由 jobFollow 決定重連、輪詢或停止
+async function jobStream(id,after,onEvent,signal,onOpen){
+  const res=await apiFetch(`/jobs/${encodeURIComponent(id)}/events`,{headers:{Accept:'text/event-stream',...(after>0?{'Last-Event-ID':String(after)}:{})},signal});
+  if(!res.ok)throw await apiError(res);
+  onOpen();
+  const reader=res.body.getReader(),dec=new TextDecoder();let buf='';
+  const dispatch=block=>{
+    let type='message',eid=0;const data=[];
+    for(const line of block.split('\n')){
+      if(!line||line[0]===':')continue;   // 空行、「: keepalive」註解
+      const k=line.indexOf(':'),field=k<0?line:line.slice(0,k);let v=k<0?'':line.slice(k+1);if(v[0]===' ')v=v.slice(1);
+      if(field==='event')type=v;else if(field==='data')data.push(v);else if(field==='id')eid=Number(v)||0;
+    }
+    if(!data.length)return;   // 只有「retry: 2000」的區塊
+    const body=JSON.parse(data.join('\n'));
+    // 串流本身的錯誤（被撤權、工作資料庫暫時不可用）不是工作的終態
+    if(type==='error')throw new ApiErr(body.code||'STREAM_ERROR',body.message||'串流中斷',body.code==='PERMISSION_REVOKED'?403:503);
+    onEvent({id:eid,type,data:body});
+  };
+  try{
+    for(;;){
+      const {value,done}=await reader.read();
+      if(signal.aborted){reader.cancel().catch(()=>{});return}
+      if(done)return;   // 沒有收完的最後一段照 SSE 規格丟掉
+      buf=(buf+dec.decode(value,{stream:true})).replace(/\r\n/g,'\n');
+      let i;
+      while((i=buf.indexOf('\n\n'))>=0){const b=buf.slice(0,i);buf=buf.slice(i+2);dispatch(b);if(signal.aborted)return}
+    }
+  }catch(e){
+    reader.cancel().catch(()=>{});
+    if(e instanceof ApiErr)throw e;
+    if(signal.aborted||e.name==='AbortError')return;
+    throw new ApiErr('STREAM_ERROR','串流中斷',0);
+  }
+}
+// 讀不到這個工作（404、被撤權、憑證失效）：受保護的詳情與事件立刻清掉，清單也重讀，不留著看不到的東西
+function jobRevoked(id,e,what){
+  if(JOBS.f?.id===id)jobUnfollow();
+  if(STATE.jobs.sel!==id)return;
+  jobClearDetail();JOBS.dataId=id;
+  JOBS.detailErr={text:jobsErrText(e,what),revoked:true};
+  if(JOBS.list)JOBS.list=JOBS.list.filter(j=>j.id!==id);
+  jobsPaint('list','detail','events');
+  jobsLoad();
+}
+async function jobFollow(id){
+  jobUnfollow();
+  if(JOBS.dataId!==id){jobClearDetail();JOBS.dataId=id}   // 同一個工作（重新整理、斷線後）就從最後收到的事件接著讀
+  JOBS.detailErr=null;
+  const f=JOBS.f={id,run:++JOBS.followRun,ctl:new AbortController(),state:'loading',fails:0,reconnects:0,note:''},signal=f.ctl.signal;
+  const live=()=>JOBS.f===f&&!signal.aborted;
+  const path=`/jobs/${encodeURIComponent(id)}`;
+  jobsPaint('detail','events');
+  const fail=(e,what)=>{
+    if(JOB_FATAL.has(e.status))return jobRevoked(id,e,what);
+    jobUnfollow();JOBS.detailErr={text:jobsErrText(e,what),revoked:false};jobsPaint('detail','events');
+  };
+  try{const j=await api(path,{signal});if(!live())return;jobSetDetail(j)}
+  catch(e){if(live())fail(e,`GET ${path}`);return}
+  let terminal=JOB_TERMINAL.has(JOBS.detail.status);
+  while(live()){
+    let ended=false;
+    f.state=f.reconnects?'reconnecting':'connecting';jobsPaint('follow');
+    try{
+      await jobStream(id,JOBS.lastId,ev=>{
+        if(!live())return;
+        f.fails=0;jobAddEvent(ev);
+        if(JOB_TERMINAL.has(ev.type))ended=true;
+      },signal,()=>{if(live()){f.state='live';f.note='';jobsPaint('follow')}});
+    }catch(e){
+      if(!live())return;
+      if(JOB_FATAL.has(e.status))return jobRevoked(id,e,'事件串流');
+      f.note=jobsErrText(e,'事件串流');
+    }
+    if(!live())return;
+    // 終態的串流伺服器會自己結束：收到終態事件、或一開始就已結束（只重播一次）就不再重連
+    if(ended||terminal)break;
+    f.fails++;
+    if(f.fails>=JOB_CFG.maxFailures){
+      const r=await jobPoll(f,path);
+      if(r==='stop')return;
+      if(r==='final'){terminal=true;f.fails=0}   // 終態：再接一次串流把事件補齊（只重播，不會一直連著）
+      else f.fails=JOB_CFG.maxFailures-1;        // 輪詢一陣子後再試一次串流，接得上就換回串流
+      continue;
+    }
+    f.reconnects++;f.state='reconnecting';jobsPaint('follow');
+    await jobWait(JOB_CFG.retryMs[Math.min(f.fails-1,JOB_CFG.retryMs.length-1)],signal);
+  }
+  if(!live())return;
+  try{const j=await api(path,{signal});if(!live())return;jobSetDetail(j)}   // 結果與產物以終態後讀到的為準
+  catch(e){if(!live())return;if(JOB_FATAL.has(e.status))return jobRevoked(id,e,`GET ${path}`);f.note=jobsErrText(e,'讀最終結果')}
+  f.state='done';jobsPaint('detail','follow');
+}
+// 事件串流連續連不上：改用 GET /jobs/{id} 輪詢狀態；回 'final'（到終態）、'stream'（該再試串流）或 'stop'
+async function jobPoll(f,path){
+  const live=()=>JOBS.f===f&&!f.ctl.signal.aborted;
+  f.state='polling';jobsPaint('follow');
+  for(let n=1;;n++){
+    await jobWait(JOB_CFG.pollMs,f.ctl.signal);
+    if(!live())return 'stop';
+    try{
+      const j=await api(path,{signal:f.ctl.signal});if(!live())return 'stop';
+      jobSetDetail(j);f.note='';
+      if(JOB_TERMINAL.has(j.status))return 'final';
+    }catch(e){
+      if(!live())return 'stop';
+      if(JOB_FATAL.has(e.status)){jobRevoked(f.id,e,'狀態輪詢');return 'stop'}
+      f.note=jobsErrText(e,'狀態輪詢');
+    }
+    jobsPaint('follow');
+    if(n%JOB_CFG.pollStreamEvery===0)return 'stream';
+  }
+}
+function jobSelect(id){STATE.jobs.sel=id;jobShow(id)}
+function jobShow(id){
+  jobsPaint('list','detail','events');
+  if(id&&JOB_ID_RE.test(id)&&JOBS.active)jobFollow(id);
+  else{jobUnfollow();jobClearDetail()}
+}
+
+// ---- 取消：只用既有的 POST /jobs/{id}/cancel；送出中不重送，回應照實寫
+async function jobCancel(){
+  const id=STATE.jobs.sel,j=JOBS.detail;
+  if(!j||j.id!==id||JOBS.cancel.busy)return;
+  const gen=JOBS.gen,tok=++JOBS.cancelSeq;
+  const same=()=>gen===JOBS.gen&&tok===JOBS.cancelSeq&&STATE.jobs.sel===id&&JOBS.dataId===id;
+  JOBS.cancel={busy:id,msg:'',tone:''};jobsPaint('detail');
+  let msg,tone,reread=false;
+  try{
+    const r=await api(`/jobs/${encodeURIComponent(id)}/cancel`,{method:'POST'});
+    if(!same())return;
+    msg={cancelled:'已取消：工作還在排隊，直接取消，沒有執行',cancelling:'已要求取消：工作執行中，worker 停下來後才會變成「已取消」，不會寫回任何結果',already_cancelled:'這個工作本來就已取消'}[r.result]||`後端回 ${r.result}`;
+    tone=r.result==='cancelling'?'warn':'ok';
+    if(r.job&&jobFresher(r.job))jobSetDetail({...JOBS.detail,...r.job});
+  }catch(e){
+    if(!same())return;
+    if(e.status===404||e.status===401){JOBS.cancel={busy:null,msg:'',tone:''};return jobRevoked(id,e,'取消')}
+    if(e.code==='JOB_COMMITTING'){JOBS.committing=true;msg='沒有取消：工作已進入寫回階段，會完成並寫入結果（409 JOB_COMMITTING）'}
+    else if(e.code==='JOB_ALREADY_FINISHED')msg=`沒有取消：${e.message}（409 JOB_ALREADY_FINISHED）`;
+    else if(e.status===403)msg=`沒有取消：目前身分「${LIVE.account?.label||'—'}」不能取消這個工作（403 ${e.code}）；3D 重建只有建立的人、排程要有 schedule_run 才能取消`;
+    else if(e.status===0)msg='取消請求沒有送到後端（連不上），結果不確定；請按「重新整理」確認狀態';
+    else msg=jobsErrText(e,'取消');
+    tone=e.status===409||e.status===403?'warn':'bad';
+    reread=e.status===409;   // 已經寫回或結束：重讀一次實際狀態
+  }
+  JOBS.cancel={busy:null,msg,tone};jobsPaint('detail');
+  if(reread){
+    try{const j=await api(`/jobs/${encodeURIComponent(id)}`);if(same()&&jobFresher(j))jobSetDetail({...j})}catch{}
+  }
+}
+
+// ---- 進出 07、換帳號、關頁面：只停止觀察（串流、輪詢、計時器），不取消任何工作
+function jobsStop(){clearTimeout(JOBS.listTimer);JOBS.listSeq++;jobUnfollow()}
+function jobsStart(){
+  if(JOBS.svc===undefined&&REAL.status)JOBS.svc=REAL.status.jobs??null;
+  jobsLoad({status:true});
+  const id=STATE.jobs.sel;if(id&&JOB_ID_RE.test(id))jobFollow(id);
+}
+function jobsAccountChanged(){
+  const id=LIVE.account?.id??null;if(id===JOBS.account)return false;
+  const switched=JOBS.account!=null;
+  JOBS.account=id;JOBS.gen++;jobsStop();jobClearDetail();
+  Object.assign(JOBS,{list:null,listErr:null,listAt:'',loading:false,svc:undefined,svcErr:null});
+  if(switched)STATE.jobs.sel=null;
+  if(JOBS.active){jobsPaint('all');jobsStart()}
+  return true;
+}
+function jobsSync(){
+  const on=STATE.view==='jobs'&&isLive();
+  if(on&&!JOBS.active){JOBS.active=true;if(!jobsAccountChanged())jobsStart()}
+  else if(!on&&JOBS.active){JOBS.active=false;jobsStop();jobClearDetail()}
+}
+addEventListener('pagehide',()=>{if(JOBS.active)jobsStop()});
+// 從瀏覽器的上一頁快取回來：頁面還在 07 就重新開始觀察
+addEventListener('pageshow',e=>{if(e.persisted&&JOBS.active)jobsStart()});
 
 /* ===== 8 權限與外送 ===== */
 // 接上後端：角色矩陣用 /auth/accounts 列的展示帳號（ops、views、資料範圍都是 shared/access.yaml 算出來的）
@@ -2120,6 +2605,7 @@ const RENDERERS={overview:renderOverview,trace:renderTrace,retrieval:renderRetri
 function render(){
   renderNav();$('#main').innerHTML=RENDERERS[STATE.view]();
   if(STATE.view==='flow'){flowSync();flowSchedule(1.4)}
+  jobsSync();
 }
 
 /* ===== 點擊動作 ===== */
@@ -2141,7 +2627,7 @@ const ACT={
   trTab:a=>{STATE.tr.tab=a;go('trace')},
   // 只有展示模式（DEMO_CONTROLS）且從本機連線時後端才允許免密碼切換；cookie 和主介面共用，主介面的身分也會跟著換
   liveSwitch:async()=>{
-    try{const acc=await api('/auth/switch',postJson({account_id:'manager'}));Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});await liveLoad();toast('已切換成主管；同一個瀏覽器裡主介面的身分也跟著換了')}
+    try{const acc=await api('/auth/switch',postJson({account_id:'manager'}));Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});jobsAccountChanged();await liveLoad();toast('已切換成主管；同一個瀏覽器裡主介面的身分也跟著換了')}
     catch(e){toast(`切換失敗：${e.message}（${e.code}）`)}
   },
   retSearch:async()=>{
@@ -2157,7 +2643,8 @@ const ACT={
     el.href=url;el.download=a+'.json';document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),500);toast(`已匯出 ${a}.json`);
   },
   openOut:a=>{STATE.perm.tab='out';STATE.perm.out=a;go('perm')},
-  openJob:a=>{STATE.jobs.sel=a;STATE.jobs.filter='';go('jobs')},
+  // 已經在 07：go() 不會重新進頁，要自己換訂閱；不在 07 時進頁會照 STATE.jobs.sel 開始觀察
+  openJob:a=>{const was=JOBS.active;STATE.jobs.sel=a;STATE.jobs.filter='';go('jobs');if(was)jobShow(a)},
   retTab:a=>{STATE.ret.tab=a;render()},
   selCand:a=>{STATE.ret.sel=a;$('#retBody').innerHTML=renderRetBody()},
   selImg:a=>{STATE.ret.img=a;$('#retBody').innerHTML=renderRetBody()},
@@ -2198,22 +2685,18 @@ const ACT={
     STATE.kb.rebuilding=a;render();toast(`開始重建 ${a} 索引…`);
     setTimeout(()=>{const i=MOCK_DATA.kb.find(x=>x.id===a);i.stale=false;i.indexed='2026-10-23';if(i.id==='mfg-002')i.ver='rev D';STATE.kb.rebuilding=null;if(STATE.view==='kb')render();toast(`${a} 索引重建完成`)},1500);
   },
-  jobFilter:a=>{STATE.jobs.filter=a;render()},
-  selJob:a=>{STATE.jobs.sel=a;render()},
-  retryJob:()=>{const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel);j.status='queued';j.attempt++;j.worker='—';j.events.push('14:35 手動重試 → 重新排隊');render();toast(`${j.id} 已重新排隊 (第 ${j.attempt} 次)`)},
-  cancelJob:async()=>{
-    if(isReal('jobs')){
-      try{const r=await api(`/jobs/${encodeURIComponent(STATE.jobs.sel)}/cancel`,{method:'POST'});toast({cancelled:'已取消',cancelling:'已要求取消，worker 停下來後才算取消',already_cancelled:'本來就取消了'}[r.result]||r.result)}
-      catch(e){toast(`取消失敗：${e.message}（${e.code}）`)}
-      return liveLoad();
-    }
-    const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel);j.status='cancelled';j.events.push('14:35 手動取消');render();toast(`${j.id} 已取消`)},
-  previewArt:a=>{
-    const j=MOCK_DATA.jobs.find(x=>x.id===STATE.jobs.sel),name=j.artifacts[a];
-    const body=/step/i.test(name)?`<svg viewBox="0 0 200 140" width="100%"><ellipse cx="100" cy="50" rx="70" ry="22" fill="none" stroke="var(--accent)"/><ellipse cx="100" cy="90" rx="70" ry="22" fill="none" stroke="var(--accent)"/><line x1="30" y1="50" x2="30" y2="90" stroke="var(--accent)"/><line x1="170" y1="50" x2="170" y2="90" stroke="var(--accent)"/><ellipse cx="100" cy="50" rx="25" ry="8" fill="none" stroke="var(--text)"/></svg><p class="muted">CadQuery 線框示意 (產生中，僅預覽)</p>`
-      :`<pre>${esc(JSON.stringify({job:j.id,artifact:name,generatedAt:'2026-10-23',note:'mock content',status:j.status},null,2))}</pre>`;
-    openDlg(`<h3>預覽：${esc(name)}</h3>${body}`);
+  // 篩選只重畫清單：詳情、事件與訂閱都不動
+  jobFilter:a=>{STATE.jobs.filter=a;jobsPaint('list')},
+  selJob:a=>{if(a!==STATE.jobs.sel||!JOBS.f)jobSelect(a)},
+  cancelJob:()=>jobCancel(),
+  // 串流還連著就不用重來；斷線、出錯、輪詢中或已結束，就從最後收到的事件接著讀
+  jobsRefresh:()=>{
+    jobsLoad({status:true});
+    const id=STATE.jobs.sel;
+    if(id&&JOB_ID_RE.test(id)&&!['live','connecting','loading','reconnecting'].includes(JOBS.f?.state))jobFollow(id);
   },
+  jobRetryFollow:()=>{const id=STATE.jobs.sel;if(id&&JOB_ID_RE.test(id))jobFollow(id)},
+  liveRetry:()=>{LIVE.state='connecting';renderLive();render();liveConnect()},
   permTab:a=>{STATE.perm.tab=a;render()},
   selOut:a=>{STATE.perm.out=a;render()},
   flowScene:a=>{FLOW.playing=false;flowLoad(+a)},
