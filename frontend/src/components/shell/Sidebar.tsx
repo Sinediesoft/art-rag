@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useCanView } from "../../api/hooks";
 import { MODULE, TOOLS, type Domain } from "../../shell/design";
 import { domainOf } from "../../shell/outputs";
 import { timeOf, titleOf, whenOf } from "../../shell/persist";
@@ -15,6 +16,11 @@ function infoOf(c: Conv) {
 
 const DOMAINS: Domain[] = ["factory", "art"];
 const MOD_ICON: Record<Domain, string> = { factory: "factory", art: "palette" };
+/**
+ * 開發者平台是 public/ 裡的獨立 HTML、不是路由：用 <a> 另開分頁（navigate 會被 * 導回首頁，同一分頁開也會換掉這裡的對話）。
+ * 它的診斷、稽核、評估只開給 access.yaml 的 views.diagnostics（預設主管），入口跟著同一個條件
+ */
+const DEV_URL = "/developer-workbench.html";
 
 /**
  * 模組捷徑：按名稱直接進模組（不用先問一句），按右邊的箭頭展開那個模組的功能頁、點了直接開。
@@ -22,6 +28,7 @@ const MOD_ICON: Record<Domain, string> = { factory: "factory", art: "palette" };
  */
 function ModuleNav({ current, onModule, onTool }: { current?: Domain; onModule: (d: Domain) => void; onTool: (to: string) => void }) {
   const [open, setOpen] = useState<Domain | null>(null);
+  const canDev = useCanView("diagnostics");
   return (
     <nav className="side__mods" aria-label="模組">
       <p className="side__label">
@@ -69,6 +76,24 @@ function ModuleNav({ current, onModule, onTool }: { current?: Domain; onModule: 
           </div>
         );
       })}
+      {canDev && (
+        <div className="side__modgroup">
+          <div className="side__modrow">
+            <a className="side__modgo" href={DEV_URL} target="_blank" rel="noopener" title="另開分頁：開發者平台（系統診斷、請求追蹤、檢索除錯、資料流）">
+              <span className="side__modicon">
+                <Icon name="code" strokeWidth={1.5} />
+              </span>
+              <span className="side__modtext">
+                <span className="side__modname">開發者平台</span>
+                <span className="side__modsub">診斷・追蹤・檢索・資料流</span>
+              </span>
+              <span className="side__modext" aria-hidden="true">
+                ↗
+              </span>
+            </a>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
@@ -124,6 +149,7 @@ export function Sidebar({
     else groups.push([g, [c]]);
   }
   const mini = collapsed && variant === "rail";
+  const canDev = useCanView("diagnostics");
 
   if (mini)
     return (
@@ -155,6 +181,11 @@ export function Sidebar({
             <Icon name={MOD_ICON[d]} strokeWidth={1.5} />
           </button>
         ))}
+        {canDev && (
+          <a className="side__icon" href={DEV_URL} target="_blank" rel="noopener" title="另開分頁：開發者平台" aria-label="開發者平台（另開分頁）">
+            <Icon name="code" strokeWidth={1.5} />
+          </a>
+        )}
         <span className="side__rule" />
         <ol className="side__minis">
           {sorted.slice(0, 8).map((c) => {
