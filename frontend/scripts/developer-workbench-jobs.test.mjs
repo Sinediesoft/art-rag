@@ -7,7 +7,8 @@
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
 // 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
-// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果、讀不到草稿時留著 ID。
+// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果、讀不到草稿時留著 ID、
+// 換身分時資料流不自己播模擬情境。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -937,5 +938,28 @@ test("重新整理時讀不到網址上的草稿：ID 留在網址、寫原因�
     await waitFor(() => p.$('#intakeBox [data-key="title_zh"]'), "重試後讀回草稿");
     assert.equal(p.ev("INTAKE.resumeErr"), null);
     assert.equal(p.win.location.hash, "#intake=drf-1");
+  });
+});
+
+test("資料流真的在跑時換了身分：這一輪停掉，也不會自己接著播模擬情境", async () => {
+  const be = backend({ current: "manager" });
+  be.on("POST", "/agent/route", () => new Promise(() => {}));
+  await withPage(be, async (p) => {
+    p.click('[data-act="go"][data-arg="flow"]');
+    const draft = p.$("#flDraft");
+    draft.value = "這幅畫是誰畫的";
+    draft.dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    p.click('[data-act="flowRun"]');
+    await waitFor(() => callsTo(be, "POST", "/agent/route").length === 1, "真的送出 /agent/route");
+    assert.equal(p.ev("FLOW.live"), true);
+    be.state.current = "guest";
+    await p.ev("liveRecheck()");
+    await waitFor(() => p.ev("LIVE.account.id") === "guest", "換成一般員工");
+    assert.equal(p.ev("FLOW.playing"), false, "播放也停掉");
+    assert.ok(p.text("#flStatus").includes("等待執行"));
+    // 模擬情境的第一步排在 FLOW_BASE_MS×1.4（約 1.3 秒）之後
+    await sleep(1600);
+    assert.equal(p.ev("FLOW.step"), 0, "沒有自己播起模擬情境");
+    assert.equal(p.ev("FLOW.log.length"), 0);
   });
 });

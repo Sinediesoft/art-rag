@@ -1093,7 +1093,8 @@ function liveAccountChanged(){
   const r=STATE.ret;
   STATE.kb.detail={};Object.assign(r,{textRes:null,imgRes:null,busy:false,textSeq:r.textSeq+1,imgSeq:r.imgSeq+1});
   CMP.ctl?.abort();Object.assign(CMP,{run:CMP.run+1,ctl:null,req:null,cols:{}});
-  if(FLOW.live)flowReset(FLOW.idx);
+  // 真的在跑的那一輪停掉；playing 也要關，不然重畫時 flowSchedule 會接著播模擬情境，頁首卻寫已連線
+  if(FLOW.live){flowReset(FLOW.idx);FLOW.playing=false}
   intakeAccountChanged();
   jobsAccountChanged();renderLive();render();
   intakeResume(true);
