@@ -7,7 +7,7 @@
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
 // 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
-// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果。
+// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果、讀不到草稿時留著 ID。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -910,5 +910,32 @@ test("以文搜畫還沒回來又按 Enter：先送出、晚回來的結果不�
     assert.ok(!p.text("#retBody").includes("第一次的結果"), "晚到的第一次不蓋掉");
     assert.ok(p.text("#retBody").includes("第二次的結果"));
     assert.equal(p.ev("STATE.ret.busy"), false);
+  });
+});
+
+// ---------------------------------------------------------------- 07 以外（Codex 第三次審查 2026-10-24）
+test("重新整理時讀不到網址上的草稿：ID 留在網址、寫原因，暫時連不上按重試讀回來；按「不再找這份草稿」才清掉", async () => {
+  const be = backend({ current: "manager" });
+  be.on("GET", "/intake/drf-2", () => apiError(404, "INTAKE_NOT_FOUND", "找不到這份草稿"));
+  let down = true;
+  be.on("GET", "/intake/drf-1", () => (down ? apiError(503, "SERVICE_UNAVAILABLE", "後端暫時無法服務") : json(intakeDraft("標題"))));
+  await withPage(be, async (p) => {
+    p.win.history.replaceState(null, "", "#intake=drf-2");
+    p.ev("intakeResume()");
+    await waitFor(() => p.text("#intakeBox").includes("INTAKE_NOT_FOUND"), "寫出讀不到的原因");
+    assert.equal(p.ev("STATE.view"), "kb", "跳到 06 照片建檔");
+    assert.equal(p.win.location.hash, "#intake=drf-2", "讀不到也不清掉網址的草稿 ID");
+    p.clickText("不再找這份草稿", "#intakeBox button");
+    assert.equal(p.win.location.hash, "", "使用者說不找了才清掉");
+    assert.ok(!p.text("#intakeBox").includes("INTAKE_NOT_FOUND"));
+    p.win.history.replaceState(null, "", "#intake=drf-1");
+    p.ev("intakeResume()");
+    await waitFor(() => p.text("#intakeBox").includes("SERVICE_UNAVAILABLE"), "暫時連不上");
+    assert.equal(p.win.location.hash, "#intake=drf-1");
+    down = false;
+    p.clickText("重試", "#intakeBox button");
+    await waitFor(() => p.$('#intakeBox [data-key="title_zh"]'), "重試後讀回草稿");
+    assert.equal(p.ev("INTAKE.resumeErr"), null);
+    assert.equal(p.win.location.hash, "#intake=drf-1");
   });
 });

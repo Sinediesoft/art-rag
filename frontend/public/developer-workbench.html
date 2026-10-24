@@ -1507,23 +1507,25 @@ async function intakeAct(what,fn){
 async function intakeResume(stay){
   const m=location.hash.match(/^#intake=(.+)$/);if(!m||!isLive())return;
   const run=INTAKE.run;
+  let d=null;
   try{
-    const d=await api(`/intake/${m[1]}`);if(INTAKE.run!==run)return;
-    Object.assign(INTAKE,{draft:d,imageId:d.image_id});
-    if(stay)intakePaint();else{INTAKE.open=true;go('kb')}
-    intakeSettle(run);
+    d=await api(`/intake/${m[1]}`);if(INTAKE.run!==run)return;
+    Object.assign(INTAKE,{draft:d,imageId:d.image_id,resumeErr:null});
   }catch(e){
     if(INTAKE.run!==run)return;
-    // 後端只給建檔的人和主管讀（其他身分和不存在一樣回 404）：換身分後讀不到時 ID 留著，換回有權限的身分會再重讀
-    if(stay){INTAKE.resumeErr={id:m[1],code:e.code,message:e.message};intakePaint()}
-    else{toast(`找不到建檔草稿：${e.message}（${e.code}）`);intakeHash(null)}
+    // 讀不到時草稿 ID 一律留在網址（後端沒有草稿清單，清掉就找不回來）：暫時連不上可以重試；
+    // 權限不夠（只給建檔的人和主管讀，其他身分和不存在一樣回 404）換成有權限的身分會自動重讀
+    INTAKE.resumeErr={id:m[1],code:e.code,message:e.message};
   }
+  if(stay)intakePaint();else{INTAKE.open=true;go('kb')}
+  if(d)intakeSettle(run);
 }
 
 function renderIntake(){
   if(!isLive())return `<h3>照片建檔</h3><p class="muted">${LIVE.state==='offline'?'連不上後端：照片建檔要真的送 POST /images、POST /intake，沒有模擬版本。':'連線中…'}</p>`;
   const e=INTAKE.resumeErr;
-  const lost=e?`<p class="muted" style="color:var(--warn)">草稿 ${esc(e.id)} 用目前身分「${esc(LIVE.account?.label||'—')}」讀不到：${esc(e.message)}（${esc(e.code)}）。草稿只有建檔的人和主管讀得到，換回有權限的身分會自動重讀；上傳新照片就不再找這份。</p>`:'';
+  const lost=e?`<p class="muted" style="color:var(--warn)">草稿 ${esc(e.id)} 用目前身分「${esc(LIVE.account?.label||'—')}」讀不到：${esc(e.message)}（${esc(e.code)}）。草稿只有建檔的人和主管讀得到，換成有權限的身分會自動重讀；暫時連不上就按重試。</p>
+    <div class="row"><button class="btn" data-act="intakeResumeRetry" ${e.retrying?'disabled':''}>${e.retrying?'重讀中…':'重試'}</button><button class="btn" data-act="intakeAgain">不再找這份草稿</button></div>`:'';
   return `<h3>照片建檔</h3>${INTAKE.draft?renderIntakeDraft(INTAKE.draft):lost+renderIntakeStart()}`;
 }
 function renderIntakeStart(){
@@ -2720,6 +2722,7 @@ const ACT={
   selKb:a=>{STATE.kb.sel=a;render()},
   intakeToggle:()=>{INTAKE.open=!INTAKE.open;render()},
   intakeAgain:()=>{intakeReset();intakePaint()},
+  intakeResumeRetry:()=>{if(!INTAKE.resumeErr)return;INTAKE.resumeErr.retrying=true;intakePaint();intakeResume(true)},
   // 領域選錯（INTAKE_WRONG_DOMAIN）：同一張照片改用另一邊重新建檔，不用重傳
   intakeRetry:a=>{INTAKE.domain=a;intakeStart(INTAKE.imageId,a)},
   intakeView:a=>{INTAKE.view=+a;intakePaint()},
