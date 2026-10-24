@@ -6,7 +6,8 @@
 // 測：內嵌 JavaScript 語法、正常／空清單、503／未啟用／離線、服務狀況分辨、事件解析與 Last-Event-ID 續接去重、輪詢備援、
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
-// 另外放了不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期換成別的身分時撤下舊身分的資料。
+// 另外放了兩個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期換成別的身分時撤下舊身分的資料、
+// 照片建檔儲存中鎖住欄位。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -727,5 +728,31 @@ test("憑證過期換發成一般員工：主管讀到的診斷與請求紀錄�
     assert.equal(p.ev("'diag' in REAL"), false, "舊身分晚到的診斷不寫入");
     assert.equal(p.ev("'recent' in LD"), false);
     assert.ok(!p.win.document.body.textContent.includes(SECRET));
+  });
+});
+
+test("照片建檔儲存修改：送出到回應之間欄位鎖住，回應回來後恢復可編輯並顯示儲存的值", async () => {
+  const fields = (title) => [
+    { key: "title_zh", label: "標題", kind: "text", value: title, status: "ok" },
+    { key: "artist_zh", label: "作者", kind: "text", value: "舊作者", status: "ok" },
+  ];
+  const draft = (title) => ({ draft_id: "drf-1", status: "draft", domain: "art", item_id: "art-x", photo_url: "/p.jpg", kb_image_url: null, can_commit: false, checks: [], blockers: [], extraction: null, fields: fields(title) });
+  const be = backend({ current: "manager" });
+  const put = deferred();
+  be.on("PUT", "/intake/drf-1", () => put.promise);
+  await withPage(be, async (p) => {
+    p.click('[data-act="go"][data-arg="kb"]');
+    p.ev(`Object.assign(INTAKE,{open:true,imageId:'img-1',draft:${JSON.stringify(draft("舊標題"))}});render()`);
+    const field = (k) => p.$(`#intakeBox [data-key="${k}"]`);
+    await waitFor(() => field("title_zh"), "草稿表單");
+    field("title_zh").value = "新標題";
+    field("title_zh").dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    p.click("#intakeSave");
+    await waitFor(() => callsTo(be, "PUT", "/intake/").length === 1, "送出儲存");
+    assert.ok(p.$$('#intakeBox [data-in="intakeField"]').every((el) => el.disabled), "儲存中每個欄位都不能改");
+    put.resolve(json(draft("新標題")));
+    await waitFor(() => field("artist_zh") && !field("artist_zh").disabled, "回應後恢復可編輯");
+    assert.equal(field("title_zh").value, "新標題");
+    assert.deepEqual(JSON.parse(p.ev("JSON.stringify(INTAKE.edits)")), {});
   });
 });

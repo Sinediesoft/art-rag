@@ -1537,7 +1537,8 @@ function renderIntakeDraft(d){
     <p class="muted">${isArt?'這張照片會存成知識庫的原圖（長邊 1024 px），之後辨識、色彩分析都用它':k===0?'對照照片確認每個欄位：Qwen3-VL＝模型讀的、規則＝依知識庫校正的、人＝你填的':'拉正、對齊知識庫圖紙版面、去陰影後的樣子；收錄後辨識與 3D 重建都用這張'}</p>`;
   const checks=`<ul class="if-checks">${d.checks.map(c=>`<li><span class="b ${c.ok?'ok':'bad'}">${c.ok?'通過':'未過'}</span> <b>${esc(c.label)}</b> <span class="muted">${esc(c.detail)}</span></li>`).join('')}</ul>`;
   const groups=[];for(const f of d.fields){const g=groups[groups.length-1];if(g&&g[0]===(f.group??null))g[1].push(f);else groups.push([f.group??null,[f]])}
-  const form=groups.map(([g,fs])=>`<fieldset class="if-group">${g?`<legend>${esc(g)}</legend>`:''}<div class="if-fields">${fs.map(f=>intakeFieldHtml(f,editable)).join('')}</div></fieldset>`).join('')
+  // 儲存、收錄送出到回應之間欄位鎖住：回應回來會清空 edits，這段期間改的會無聲消失
+  const form=groups.map(([g,fs])=>`<fieldset class="if-group">${g?`<legend>${esc(g)}</legend>`:''}<div class="if-fields">${fs.map(f=>intakeFieldHtml(f,editable&&!s.busy)).join('')}</div></fieldset>`).join('')
     +(editable?`<div class="row"><button class="btn" id="intakeSave" data-act="intakeSave" ${!dirty||s.busy?'disabled':''}>${s.busy==='save'?'儲存中…':'儲存修改'}</button><span class="muted" id="intakeDirty" style="color:var(--warn)">${dirty?'有修改還沒儲存':''}</span></div>`:'')
     +(d.blockers.length?`<p class="muted" style="color:var(--danger)">還要處理：${d.blockers.map(esc).join('、')}</p>`:'');
   const note=isArt?'＊必填。典藏單位是知識庫已有的，來源代碼會自動帶入；沒填介紹，系統會依這些欄位寫一段「基本資料」。'
