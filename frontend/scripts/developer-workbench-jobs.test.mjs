@@ -8,7 +8,7 @@
 // 產物連結、清單只在需要時自動更新。
 // 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
 // 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果、讀不到草稿時留著 ID、
-// 換身分時資料流不自己播模擬情境。
+// 換身分時資料流不自己播模擬情境、請求追蹤讀不到 diagnostics 時標模擬。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -961,5 +961,16 @@ test("資料流真的在跑時換了身分：這一輪停掉，也不會自己�
     await sleep(1600);
     assert.equal(p.ev("FLOW.step"), 0, "沒有自己播起模擬情境");
     assert.equal(p.ev("FLOW.log.length"), 0);
+  });
+});
+
+test("請求追蹤：連著後端但讀不到 diagnostics（不是主管）時標「模擬」並寫原因", async () => {
+  const be = backend({ current: "guest" });
+  diagForManager(be);
+  await withPage(be, async (p) => {
+    await waitFor(() => p.ev("REAL_ERR.diag?.status") === 403, "diagnostics 403");
+    p.click('[data-act="go"][data-arg="trace"]');
+    assert.ok(p.text("#main .head").includes("模擬"), "標題旁標模擬");
+    assert.ok(p.text("#main").includes("要主管身分才看得到"), "寫出讀不到的原因");
   });
 });

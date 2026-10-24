@@ -1256,6 +1256,8 @@ function renderTrace(){
     if(t.tab==='real')return `<div class="head"><h2>請求追蹤</h2></div>${tabs}${renderTraceReal()}`;
     return `<div class="head"><h2>請求追蹤</h2>${MOCK_TAG}</div>${tabs}${renderTraceMock()}`;
   }
+  // 連著後端但讀不到 diagnostics（不是主管 403、或讀取失敗）：標「模擬」並寫原因，模擬的請求紀錄才不會被當成真的
+  if(isLive())return `<div class="head"><h2>請求追蹤</h2>${MOCK_TAG}</div><p class="muted">後端紀錄：${esc(diagWhy())}。下面是模擬的七段追蹤。</p>${renderTraceMock()}`;
   return `<div class="head"><h2>請求追蹤</h2></div>${renderTraceMock()}`;
 }
 function renderTraceMock(){
