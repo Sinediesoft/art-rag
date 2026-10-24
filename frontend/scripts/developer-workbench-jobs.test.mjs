@@ -7,7 +7,7 @@
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
 // 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
-// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀。
+// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀、以文搜畫晚到的結果。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -884,5 +884,31 @@ test("一般員工的草稿照畫面指示「切換成主管」：草稿與還�
     assert.equal(p.win.location.hash, "#intake=drf-1", "草稿 ID 還在網址");
     assert.equal(field("artist_zh").value, "改過的作者", "還沒儲存的修改留著");
     assert.ok(!commit().disabled, "主管可以收錄");
+  });
+});
+
+test("以文搜畫還沒回來又按 Enter：先送出、晚回來的結果不蓋掉後來那次", async () => {
+  const be = backend();
+  const first = deferred();
+  const hits = (title) => ({ results: [{ score: 0.9, image_score: 0.8, text_score: 0.7, artwork: { id: "art-1", title_zh: title, artist_zh: "某人" } }], latency_ms: 5 });
+  be.on("GET", /^\/search\/text\?q=first&/, () => first.promise);
+  be.on("GET", /^\/search\/text\?q=second&/, () => json(hits("第二次的結果")));
+  await withPage(be, async (p) => {
+    p.click('[data-act="go"][data-arg="retrieval"]');
+    const search = (q) => {
+      const el = p.$('[data-in="retQ"]');
+      el.value = q;
+      el.dispatchEvent(new p.win.Event("input", { bubbles: true }));
+      el.dispatchEvent(new p.win.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    };
+    search("first");
+    await waitFor(() => callsTo(be, "GET", "/search/text?q=first").length === 1, "第一次搜尋送出");
+    search("second");
+    await waitFor(() => p.text("#retBody").includes("第二次的結果"), "第二次的結果");
+    first.resolve(json(hits("第一次的結果")));
+    await sleep(50);
+    assert.ok(!p.text("#retBody").includes("第一次的結果"), "晚到的第一次不蓋掉");
+    assert.ok(p.text("#retBody").includes("第二次的結果"));
+    assert.equal(p.ev("STATE.ret.busy"), false);
   });
 });

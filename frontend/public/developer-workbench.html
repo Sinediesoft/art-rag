@@ -949,7 +949,7 @@ const STATE={
   view:'overview',theme:'dark',refreshedAt:'2026-10-23 14:32:00',
   metrics:{success:1284,refusal:57,block:23,error:9},
   selReq:'R-1023-002',tr:{q:'',module:'',status:'',tab:'real',fold:{art:false,factory:false}},
-  ret:{tab:'text',topK:3,th:.55,role:'倉管',sel:'C1',img:'mfg-002',q:'',busy:false,textRes:null,imgRes:null,imgUrl:null},
+  ret:{tab:'text',topK:3,th:.55,role:'倉管',sel:'C1',img:'mfg-002',q:'',busy:false,textRes:null,imgRes:null,imgUrl:null,textSeq:0,imgSeq:0},
   cmp:{artwork:'',q:'畫家的簽名藏在哪裡？是誰發現的？'},
   promptSel:'art-cite-v3',promptEdits:{},
   kb:{q:'',sel:'art-001',rebuilding:null,detail:{}},
@@ -1086,11 +1086,12 @@ function liveRecheckLoop(){setTimeout(()=>liveRecheck().finally(liveRecheckLoop)
 document.addEventListener('visibilitychange',liveRecheck);
 // 身分換了（頁首切換、憑證過期換發成預設身分、別的分頁切換）：不撤下的話，主管才看得到的 diagnostics、請求紀錄、搜尋與問答結果
 // 會留在一般員工的畫面上（isReal 只看有沒有資料、不看身分）。先清掉、立刻重畫，再用新身分重讀；
-// gen 加一，換身分前送出、晚到的回應就不會寫進來
+// gen 加一（檢索除錯是 textSeq／imgSeq 加一），換身分前送出、晚到的回應就不會寫進來
 function liveAccountChanged(){
   LIVE.gen++;
   for(const o of [REAL,REAL_ERR,LD])for(const k of Object.keys(o))delete o[k];
-  STATE.kb.detail={};Object.assign(STATE.ret,{textRes:null,imgRes:null,busy:false});
+  const r=STATE.ret;
+  STATE.kb.detail={};Object.assign(r,{textRes:null,imgRes:null,busy:false,textSeq:r.textSeq+1,imgSeq:r.imgSeq+1});
   CMP.ctl?.abort();Object.assign(CMP,{run:CMP.run+1,ctl:null,req:null,cols:{}});
   if(FLOW.live)flowReset(FLOW.idx);
   intakeAccountChanged();
@@ -2684,9 +2685,11 @@ const ACT={
   },
   retSearch:async()=>{
     const s=STATE.ret,q=s.q.trim();if(!q)return toast('先輸入查詢');
+    // 還沒回來又按 Enter、或換了身分：只採用最新那一次，先送出、晚回來的不蓋掉後來的結果
+    const seq=++s.textSeq;
     s.busy=true;$('#retBody').innerHTML=renderRetBody();
-    const gen=LIVE.gen;
-    try{const r=await api(`/search/text?q=${encodeURIComponent(q)}&top_k=10`);if(gen===LIVE.gen)s.textRes=r}catch(e){toast(`搜尋失敗：${e.message}（${e.code}）`)}
+    try{const r=await api(`/search/text?q=${encodeURIComponent(q)}&top_k=10`);if(seq===s.textSeq)s.textRes=r}catch(e){if(seq===s.textSeq)toast(`搜尋失敗：${e.message}（${e.code}）`)}
+    if(seq!==s.textSeq)return;
     s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
   },
   selReq:a=>{STATE.selReq=a;$('#trList').innerHTML=renderTraceList();$('#trDetail').innerHTML=renderTraceDetail()},
@@ -2801,13 +2804,15 @@ const IN={
   retFile:async(v,t)=>{
     const f=t.files[0],s=STATE.ret;if(!f)return;
     if(s.imgUrl)URL.revokeObjectURL(s.imgUrl);
+    // 和以文搜畫一樣只採用最新那一次
+    const seq=++s.imgSeq;
     Object.assign(s,{imgUrl:URL.createObjectURL(f),imgRes:null,busy:true});$('#retBody').innerHTML=renderRetBody();
-    const gen=LIVE.gen;
     try{
       const fd=new FormData();fd.append('file',f);
       const up=await api('/images',{method:'POST',body:fd});
-      const r=await api('/search/any',postJson({image_id:up.image_id}));if(gen===LIVE.gen)s.imgRes=r;
-    }catch(e){toast(`辨識失敗：${e.message}（${e.code}）`)}
+      const r=await api('/search/any',postJson({image_id:up.image_id}));if(seq===s.imgSeq)s.imgRes=r;
+    }catch(e){if(seq===s.imgSeq)toast(`辨識失敗：${e.message}（${e.code}）`)}
+    if(seq!==s.imgSeq)return;
     s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
   },
   flowDraft:v=>STATE.flowIn.text=v,
