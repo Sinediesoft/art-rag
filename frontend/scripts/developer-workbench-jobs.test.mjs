@@ -6,6 +6,7 @@
 // 測：內嵌 JavaScript 語法、正常／空清單、503／未啟用／離線、服務狀況分辨、事件解析與 Last-Event-ID 續接去重、輪詢備援、
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
+// 另外放了不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期換成別的身分時撤下舊身分的資料。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -675,5 +676,56 @@ test("模擬資料的工作編號（開發助理的連結）不會打到後端",
     await waitFor(() => p.text("#jobDetail").includes("模擬資料裡的編號"), "說明");
     await sleep(50);
     assert.equal(be.calls.filter((c) => c.path.includes("J-2041")).length, 0);
+  });
+});
+
+// ---------------------------------------------------------------- 07 以外（Codex 審查 2026-10-24）
+const diagWith = (question) => ({
+  db: true,
+  index_consistent: true,
+  index_problems: [],
+  kb_version: "2026.10.2",
+  llm_mode: "mock",
+  embed_mode: "mock",
+  allow_cloud: false,
+  system1: {},
+  demo_controls: true,
+  eval_controls: false,
+  recent_routes: [],
+  recent_chats: [{ created_at: "2026-10-24T01:00:00+00:00", request_id: "req-mgr", question, strategy_used: "rag", model: "m", fallback: false, first_token_ms: 1, total_ms: 2, egress_bytes: 0 }],
+  recent_sql: [],
+});
+
+test("憑證過期換發成一般員工：主管讀到的診斷與請求紀錄立刻撤下，換身分前送出、晚到的主管回應不寫入", async () => {
+  const SECRET = "主管才看得到的問題";
+  const be = backend({ current: "manager" });
+  const lateDiag = deferred();
+  let hold = false;
+  be.on("GET", "/admin/diagnostics", () => {
+    if (be.state.current !== "manager") return apiError(403, "FORBIDDEN");
+    return hold ? lateDiag.promise : json(diagWith(SECRET));
+  });
+  await withPage(be, async (p) => {
+    await waitFor(() => p.ev("'recent' in LD"), "主管的請求紀錄");
+    p.click('[data-act="go"][data-arg="trace"]');
+    await waitFor(() => p.win.document.body.textContent.includes(SECRET), "請求追蹤顯示主管的紀錄");
+    // 下一輪重讀：診斷用主管身分送出後卡住；/status 晚一點才發現憑證過期，換發成一般員工
+    hold = true;
+    let expired = false;
+    be.on("GET", "/status", async () => {
+      if (expired) return json({ status: "ok", strategies: {}, system1: { jev_configured: false, detail: "" }, memory: null, chat_defaults: {}, jobs: svcOk() });
+      expired = true;
+      await sleep(10);
+      be.state.current = "guest";
+      return apiError(401, "TOKEN_EXPIRED");
+    });
+    p.ev("liveLoad()");
+    await waitFor(() => p.ev("LIVE.account.id") === "guest" && p.ev("REAL_ERR.diag?.status") === 403, "換成一般員工並重讀");
+    assert.ok(!p.win.document.body.textContent.includes(SECRET), "換身分後畫面上不再有主管的紀錄");
+    lateDiag.resolve(json(diagWith(SECRET)));
+    await sleep(50);
+    assert.equal(p.ev("'diag' in REAL"), false, "舊身分晚到的診斷不寫入");
+    assert.equal(p.ev("'recent' in LD"), false);
+    assert.ok(!p.win.document.body.textContent.includes(SECRET));
   });
 });

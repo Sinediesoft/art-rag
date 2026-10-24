@@ -988,7 +988,7 @@ function dur(from,to){
 // 連不上（直接雙擊檔案、後端沒啟動、被別的靜態伺服器提供）就整頁沿用 MOCK_DATA，不標「模擬」（頁首已經寫了）；
 // 接上時，有 API 的區塊改讀 LD（從 REAL 轉成 MOCK_DATA 同樣的格式，畫面程式不用分兩套），沒有 API 的區塊標「模擬」
 const API_BASE='/api/v1';
-const LIVE={state:'connecting',account:null,accounts:[],demo:false,error:'',loadedAt:''};
+const LIVE={state:'connecting',account:null,accounts:[],demo:false,error:'',loadedAt:'',gen:0};
 const REAL={},REAL_ERR={},LD={};
 const isLive=()=>LIVE.state==='live';
 const isReal=k=>isLive()&&k in LD;
@@ -1013,8 +1013,8 @@ async function apiFetch(path,init={},retried=false){
     const body=await res.clone().json().catch(()=>null);
     if(RENEWABLE.has(body?.error?.code)){
       const acc=await fetch(API_BASE+'/auth/accounts').then(r=>r.ok?r.json():null).catch(()=>null);
-      // 換發的是預設身分：和頁首不同時跟著換，07 背景工作停掉上一個身分的訂閱、清掉它的資料
-      if(acc?.current&&LIVE.account&&acc.current.id!==LIVE.account.id){Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});renderLive();jobsAccountChanged()}
+      // 換發的是預設身分：和頁首不同時跟著換，上一個身分讀到的資料全部撤下再重讀（和頁首切換走同一條路）
+      if(acc?.current&&LIVE.account&&acc.current.id!==LIVE.account.id){Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});liveAccountChanged()}
       return apiFetch(path,init,true);
     }
   }
@@ -1057,11 +1057,27 @@ async function liveConnect(){
 // 一個來源失敗（不是主管回 403）只影響那一塊，其他照常用真的資料；07 背景工作的 /jobs 由那一頁自己讀（JOBS）
 const LIVE_SOURCES={status:'/status',memory:'/memory',diag:'/admin/diagnostics',sec:'/security/logs?limit=50',audit:'/audit?limit=50',evalRuns:'/eval/runs',artworks:'/artworks',parts:'/parts'};
 async function liveLoad(){
-  const keys=Object.keys(LIVE_SOURCES),res=await Promise.allSettled(keys.map(k=>api(LIVE_SOURCES[k])));
+  const gen=LIVE.gen,keys=Object.keys(LIVE_SOURCES),res=await Promise.allSettled(keys.map(k=>api(LIVE_SOURCES[k])));
+  // 等回應時換了身分：這批有些是用舊身分讀到的，整批丟掉（換身分時已經另外重讀）
+  if(gen!==LIVE.gen)return;
   keys.forEach((k,i)=>{if(res[i].status==='fulfilled'){REAL[k]=res[i].value;delete REAL_ERR[k]}else{delete REAL[k];REAL_ERR[k]=res[i].reason}});
   Object.assign(LIVE,{state:'live',loadedAt:ymdhm(new Date())+':'+pad2(new Date().getSeconds())});
   STATE.kb.detail={};
   liveAdapt();renderLive();render();
+}
+// 身分換了（頁首切換、憑證過期換發成預設身分）：不撤下的話，主管才看得到的 diagnostics、請求紀錄、搜尋與問答結果
+// 會留在一般員工的畫面上（isReal 只看有沒有資料、不看身分）。先清掉、立刻重畫，再用新身分重讀；
+// gen 加一，換身分前送出、晚到的回應就不會寫進來
+function liveAccountChanged(){
+  LIVE.gen++;
+  for(const o of [REAL,REAL_ERR,LD])for(const k of Object.keys(o))delete o[k];
+  STATE.kb.detail={};Object.assign(STATE.ret,{textRes:null,imgRes:null,busy:false});
+  CMP.ctl?.abort();Object.assign(CMP,{run:CMP.run+1,ctl:null,req:null,cols:{}});
+  if(FLOW.live)flowReset(FLOW.idx);
+  // 草稿屬於上一個身分；沒有草稿時不呼叫，intakeReset 會清掉網址的 #intake
+  if(INTAKE.imgUrl||INTAKE.imageId||INTAKE.draft)intakeReset();
+  jobsAccountChanged();renderLive();render();
+  return liveLoad();
 }
 const SEC_STAGE={1:'第 1 段 授權',2:'第 2 段 輸入防護',4:'第 4 段 段落驗證',7:'第 7 段 輸出檢查'};
 function liveAdapt(){
@@ -2627,13 +2643,14 @@ const ACT={
   trTab:a=>{STATE.tr.tab=a;go('trace')},
   // 只有展示模式（DEMO_CONTROLS）且從本機連線時後端才允許免密碼切換；cookie 和主介面共用，主介面的身分也會跟著換
   liveSwitch:async()=>{
-    try{const acc=await api('/auth/switch',postJson({account_id:'manager'}));Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});jobsAccountChanged();await liveLoad();toast('已切換成主管；同一個瀏覽器裡主介面的身分也跟著換了')}
+    try{const acc=await api('/auth/switch',postJson({account_id:'manager'}));Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});await liveAccountChanged();toast('已切換成主管；同一個瀏覽器裡主介面的身分也跟著換了')}
     catch(e){toast(`切換失敗：${e.message}（${e.code}）`)}
   },
   retSearch:async()=>{
     const s=STATE.ret,q=s.q.trim();if(!q)return toast('先輸入查詢');
     s.busy=true;$('#retBody').innerHTML=renderRetBody();
-    try{s.textRes=await api(`/search/text?q=${encodeURIComponent(q)}&top_k=10`)}catch(e){toast(`搜尋失敗：${e.message}（${e.code}）`)}
+    const gen=LIVE.gen;
+    try{const r=await api(`/search/text?q=${encodeURIComponent(q)}&top_k=10`);if(gen===LIVE.gen)s.textRes=r}catch(e){toast(`搜尋失敗：${e.message}（${e.code}）`)}
     s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
   },
   selReq:a=>{STATE.selReq=a;$('#trList').innerHTML=renderTraceList();$('#trDetail').innerHTML=renderTraceDetail()},
@@ -2749,10 +2766,11 @@ const IN={
     const f=t.files[0],s=STATE.ret;if(!f)return;
     if(s.imgUrl)URL.revokeObjectURL(s.imgUrl);
     Object.assign(s,{imgUrl:URL.createObjectURL(f),imgRes:null,busy:true});$('#retBody').innerHTML=renderRetBody();
+    const gen=LIVE.gen;
     try{
       const fd=new FormData();fd.append('file',f);
       const up=await api('/images',{method:'POST',body:fd});
-      s.imgRes=await api('/search/any',postJson({image_id:up.image_id}));
+      const r=await api('/search/any',postJson({image_id:up.image_id}));if(gen===LIVE.gen)s.imgRes=r;
     }catch(e){toast(`辨識失敗：${e.message}（${e.code}）`)}
     s.busy=false;if(STATE.view==='retrieval')$('#retBody').innerHTML=renderRetBody();
   },
