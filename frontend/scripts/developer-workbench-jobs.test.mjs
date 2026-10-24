@@ -6,7 +6,7 @@
 // 測：內嵌 JavaScript 語法、正常／空清單、503／未啟用／離線、服務狀況分辨、事件解析與 Last-Event-ID 續接去重、輪詢備援、
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
-// 另外放了兩個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期換成別的身分時撤下舊身分的資料、
+// 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
 // 照片建檔儲存中鎖住欄位。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -151,7 +151,7 @@ const callsTo = (be, method, prefix) => be.calls.filter((c) => c.method === meth
 const eventCalls = (be, id) => be.calls.filter((c) => c.path === `/jobs/${id}/events`);
 
 // ---------------------------------------------------------------- 頁面
-async function openPage(be) {
+async function openPage(be, liveCfg = {}) {
   const errors = [];
   const vc = new VirtualConsole();
   vc.on("jsdomError", (e) => errors.push(String(e?.stack ?? e)));
@@ -191,6 +191,8 @@ async function openPage(be) {
   };
   // 測試用短間隔：重連退讓、輪詢、清單自動更新
   p.ev("Object.assign(JOB_CFG,{retryMs:[15,15,15],maxFailures:3,pollMs:20,pollStreamEvery:1000,listMs:60})");
+  // 定時對身分預設 10 秒，其他測試跑完前不會觸發；要測它的測試另外給短間隔（連上之後才開始計時，在這裡改來得及）
+  p.ev(`Object.assign(LIVE_CFG,${JSON.stringify(liveCfg)})`);
   await waitFor(() => ["live", "offline"].includes(p.ev("LIVE.state")), "連線狀態");
   return p;
 }
@@ -198,8 +200,8 @@ async function gotoJobs(p) {
   p.click('[data-act="go"][data-arg="jobs"]');
   await waitFor(() => p.$("#jobList"), "07 頁");
 }
-async function withPage(be, fn) {
-  const p = await openPage(be);
+async function withPage(be, fn, liveCfg) {
+  const p = await openPage(be, liveCfg);
   try {
     await fn(p);
     assert.deepEqual(p.errors, [], "頁面不應有 JavaScript 錯誤");
@@ -755,4 +757,54 @@ test("照片建檔儲存修改：送出到回應之間欄位鎖住，回應回�
     assert.equal(field("title_zh").value, "新標題");
     assert.deepEqual(JSON.parse(p.ev("JSON.stringify(INTAKE.edits)")), {});
   });
+});
+
+// ---------------------------------------------------------------- 07 以外（Codex 第二次審查 2026-10-24）
+const SECRET = "主管才看得到的問題";
+/** 診斷只開給主管，其他身分 403（和後端一樣） */
+const diagForManager = (be) => be.on("GET", "/admin/diagnostics", () => (be.state.current === "manager" ? json(diagWith(SECRET)) : apiError(403, "FORBIDDEN")));
+test("別的分頁在主介面換了身分（沒有 401）：按「重新整理」、切回這個分頁都會對出來，舊身分的資料撤下", async () => {
+  const be = backend({ current: "manager" });
+  diagForManager(be);
+  await withPage(be, async (p) => {
+    await waitFor(() => p.ev("'recent' in LD"), "主管的請求紀錄");
+    be.state.current = "guest";
+    p.click('[data-act="refresh"]');
+    await waitFor(() => p.ev("LIVE.account.id") === "guest" && p.ev("REAL_ERR.diag?.status") === 403, "重新整理後換成一般員工");
+    assert.equal(p.ev("'recent' in LD"), false);
+    assert.ok(p.text("#heroSub").includes("一般員工"));
+    p.click('[data-act="go"][data-arg="trace"]');
+    assert.ok(!p.win.document.body.textContent.includes(SECRET), "畫面上不再有主管的紀錄");
+    be.state.current = "manager";
+    p.win.document.dispatchEvent(new p.win.Event("visibilitychange"));
+    await waitFor(() => p.ev("LIVE.account.id") === "manager" && p.ev("'recent' in LD"), "切回分頁後換成主管");
+  });
+});
+
+test("別的分頁換了身分：定時對身分（測試縮成 30 毫秒）會跟著換；分頁在背景時不讀", async () => {
+  const be = backend({ current: "manager" });
+  diagForManager(be);
+  let hidden = false;
+  await withPage(
+    be,
+    async (p) => {
+      Object.defineProperty(p.win.document, "hidden", { configurable: true, get: () => hidden });
+      await waitFor(() => p.ev("'recent' in LD"), "主管的請求紀錄");
+      const accountCalls = () => callsTo(be, "GET", "/auth/accounts").length;
+      const n0 = accountCalls();
+      await waitFor(() => accountCalls() >= n0 + 2, "定時對身分");
+      hidden = true;
+      await sleep(60);
+      const n = accountCalls();
+      be.state.current = "guest";
+      await sleep(150);
+      assert.equal(accountCalls(), n, "分頁在背景時不讀");
+      assert.equal(p.ev("LIVE.account.id"), "manager");
+      // 不送 visibilitychange：只靠定時檢查對出來
+      hidden = false;
+      await waitFor(() => p.ev("LIVE.account.id") === "guest" && p.ev("REAL_ERR.diag?.status") === 403, "定時檢查後換成一般員工");
+      assert.equal(p.ev("'recent' in LD"), false);
+    },
+    { recheckMs: 30 },
+  );
 });

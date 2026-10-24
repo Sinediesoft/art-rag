@@ -1013,8 +1013,7 @@ async function apiFetch(path,init={},retried=false){
     const body=await res.clone().json().catch(()=>null);
     if(RENEWABLE.has(body?.error?.code)){
       const acc=await fetch(API_BASE+'/auth/accounts').then(r=>r.ok?r.json():null).catch(()=>null);
-      // 換發的是預設身分：和頁首不同時跟著換，上一個身分讀到的資料全部撤下再重讀（和頁首切換走同一條路）
-      if(acc?.current&&LIVE.account&&acc.current.id!==LIVE.account.id){Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});liveAccountChanged()}
+      liveFollow(acc);
       return apiFetch(path,init,true);
     }
   }
@@ -1057,15 +1056,35 @@ async function liveConnect(){
 // 一個來源失敗（不是主管回 403）只影響那一塊，其他照常用真的資料；07 背景工作的 /jobs 由那一頁自己讀（JOBS）
 const LIVE_SOURCES={status:'/status',memory:'/memory',diag:'/admin/diagnostics',sec:'/security/logs?limit=50',audit:'/audit?limit=50',evalRuns:'/eval/runs',artworks:'/artworks',parts:'/parts'};
 async function liveLoad(){
-  const gen=LIVE.gen,keys=Object.keys(LIVE_SOURCES),res=await Promise.allSettled(keys.map(k=>api(LIVE_SOURCES[k])));
+  const gen=LIVE.gen,keys=Object.keys(LIVE_SOURCES);
+  // 目前身分一起讀：別的分頁在主介面換了身分不會有 401，按「重新整理」時要對得出來
+  const [acc,...res]=await Promise.allSettled([api('/auth/accounts'),...keys.map(k=>api(LIVE_SOURCES[k]))]);
   // 等回應時換了身分：這批有些是用舊身分讀到的，整批丟掉（換身分時已經另外重讀）
   if(gen!==LIVE.gen)return;
+  const changed=liveFollow(acc.value);if(changed)return changed;
   keys.forEach((k,i)=>{if(res[i].status==='fulfilled'){REAL[k]=res[i].value;delete REAL_ERR[k]}else{delete REAL[k];REAL_ERR[k]=res[i].reason}});
   Object.assign(LIVE,{state:'live',loadedAt:ymdhm(new Date())+':'+pad2(new Date().getSeconds())});
   STATE.kb.detail={};
   liveAdapt();renderLive();render();
 }
-// 身分換了（頁首切換、憑證過期換發成預設身分）：不撤下的話，主管才看得到的 diagnostics、請求紀錄、搜尋與問答結果
+// /auth/accounts 回的目前身分和頁首不同（憑證過期換發成預設身分、別的分頁在主介面切換）：跟著換，
+// 上一個身分讀到的資料全部撤下再重讀（和頁首切換走同一條路）。身分沒換回 null
+function liveFollow(acc){
+  if(!acc?.current||!LIVE.account||acc.current.id===LIVE.account.id)return null;
+  Object.assign(LIVE,{account:acc.current,accounts:acc.accounts});
+  return liveAccountChanged();
+}
+// 身分 cookie 和主介面共用，在別的分頁切換不會讓這頁收到 401：照主介面（frontend/src/api/hooks.ts 的 useScope）每 10 秒對一次，
+// 分頁在背景時不讀、切回來時馬上對；只讀 /auth/accounts，身分沒換就不重讀其他來源
+const LIVE_CFG={recheckMs:10000};
+async function liveRecheck(){
+  if(!isLive()||document.hidden)return;
+  const gen=LIVE.gen,acc=await api('/auth/accounts').catch(()=>null);
+  if(gen===LIVE.gen)liveFollow(acc);
+}
+function liveRecheckLoop(){setTimeout(()=>liveRecheck().finally(liveRecheckLoop),LIVE_CFG.recheckMs)}
+document.addEventListener('visibilitychange',liveRecheck);
+// 身分換了（頁首切換、憑證過期換發成預設身分、別的分頁切換）：不撤下的話，主管才看得到的 diagnostics、請求紀錄、搜尋與問答結果
 // 會留在一般員工的畫面上（isReal 只看有沒有資料、不看身分）。先清掉、立刻重畫，再用新身分重讀；
 // gen 加一，換身分前送出、晚到的回應就不會寫進來
 function liveAccountChanged(){
@@ -2819,7 +2838,8 @@ renderThemeBtn();
 renderChat();
 applyChatLayout();
 render();
-liveConnect().then(intakeResume);
+// 連上之後才開始定時對身分：測試在這之前就能改 LIVE_CFG
+liveConnect().then(()=>{liveRecheckLoop();return intakeResume()});
 </script>
 </body>
 </html>
