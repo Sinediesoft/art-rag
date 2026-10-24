@@ -1093,9 +1093,9 @@ function liveAccountChanged(){
   STATE.kb.detail={};Object.assign(STATE.ret,{textRes:null,imgRes:null,busy:false});
   CMP.ctl?.abort();Object.assign(CMP,{run:CMP.run+1,ctl:null,req:null,cols:{}});
   if(FLOW.live)flowReset(FLOW.idx);
-  // 草稿屬於上一個身分；沒有草稿時不呼叫，intakeReset 會清掉網址的 #intake
-  if(INTAKE.imgUrl||INTAKE.imageId||INTAKE.draft)intakeReset();
+  intakeAccountChanged();
   jobsAccountChanged();renderLive();render();
+  intakeResume(true);
   return liveLoad();
 }
 const SEC_STAGE={1:'第 1 段 授權',2:'第 2 段 輸入防護',4:'第 4 段 段落驗證',7:'第 7 段 輸出檢查'};
@@ -1441,14 +1441,21 @@ const INTAKE_TIPS={
 };
 const INTAKE_SOURCE={'Qwen3-VL':'info','規則':'','人':'ok'};
 // 每次上傳換一個 run：換一張、捨棄、再建一筆之後，上一輪的串流與輪詢晚到也不寫進畫面
-const INTAKE={open:false,domain:'',run:0,ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0};
+const INTAKE={open:false,domain:'',run:0,ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0,resumeErr:null};
 const intakePaint=()=>{const el=STATE.view==='kb'&&$('#intakeBox');if(el)el.innerHTML=renderIntake()};
 function intakeHash(id){history.replaceState(null,'',id?`#intake=${encodeURIComponent(id)}`:location.pathname+location.search)}
-function intakeReset(){
+function intakeReset(keepHash){
   INTAKE.ctl?.abort();INTAKE.run++;
   if(INTAKE.imgUrl)URL.revokeObjectURL(INTAKE.imgUrl);
-  Object.assign(INTAKE,{ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0});
-  intakeHash(null);
+  Object.assign(INTAKE,{ctl:null,imageId:null,imgUrl:null,stages:[],raw:'',fail:null,draft:null,edits:{},busy:'',actionError:'',view:0,resumeErr:null});
+  if(!keepHash)intakeHash(null);
+}
+// 身分換了：進行中的建檔請求一律作廢、舊身分讀到的草稿撤下，草稿 ID 留在網址，由 intakeResume 用新身分重讀同一份。
+// 收錄要主管、畫面也叫人「切換成主管」，後端又沒有草稿清單，清掉 ID 就找不回來；還沒儲存的修改是使用者自己打的，一起留著
+function intakeAccountChanged(){
+  const id=INTAKE.draft?.draft_id,edits=INTAKE.edits;
+  intakeReset(true);
+  if(id){intakeHash(id);INTAKE.edits=edits}
 }
 async function intakeStart(imageId,domain){
   INTAKE.ctl?.abort();
@@ -1495,19 +1502,28 @@ async function intakeAct(what,fn){
   try{await fn(run)}catch(e){if(INTAKE.run===run)INTAKE.actionError=`${e.message}（${e.code}）`}
   if(INTAKE.run===run){INTAKE.busy='';intakePaint()}
 }
-// 網址帶 #intake=草稿 ID（重新整理）：回到 06 頁打開那份草稿
-async function intakeResume(){
+// 網址帶 #intake=草稿 ID：重新整理時回到 06 頁打開那份草稿；換了身分時（stay）留在原本的頁面，用新身分重讀
+async function intakeResume(stay){
   const m=location.hash.match(/^#intake=(.+)$/);if(!m||!isLive())return;
   const run=INTAKE.run;
   try{
     const d=await api(`/intake/${m[1]}`);if(INTAKE.run!==run)return;
-    Object.assign(INTAKE,{open:true,draft:d,imageId:d.image_id});go('kb');intakeSettle(run);
-  }catch(e){toast(`找不到建檔草稿：${e.message}（${e.code}）`);intakeHash(null)}
+    Object.assign(INTAKE,{draft:d,imageId:d.image_id});
+    if(stay)intakePaint();else{INTAKE.open=true;go('kb')}
+    intakeSettle(run);
+  }catch(e){
+    if(INTAKE.run!==run)return;
+    // 後端只給建檔的人和主管讀（其他身分和不存在一樣回 404）：換身分後讀不到時 ID 留著，換回有權限的身分會再重讀
+    if(stay){INTAKE.resumeErr={id:m[1],code:e.code,message:e.message};intakePaint()}
+    else{toast(`找不到建檔草稿：${e.message}（${e.code}）`);intakeHash(null)}
+  }
 }
 
 function renderIntake(){
   if(!isLive())return `<h3>照片建檔</h3><p class="muted">${LIVE.state==='offline'?'連不上後端：照片建檔要真的送 POST /images、POST /intake，沒有模擬版本。':'連線中…'}</p>`;
-  return `<h3>照片建檔</h3>${INTAKE.draft?renderIntakeDraft(INTAKE.draft):renderIntakeStart()}`;
+  const e=INTAKE.resumeErr;
+  const lost=e?`<p class="muted" style="color:var(--warn)">草稿 ${esc(e.id)} 用目前身分「${esc(LIVE.account?.label||'—')}」讀不到：${esc(e.message)}（${esc(e.code)}）。草稿只有建檔的人和主管讀得到，換回有權限的身分會自動重讀；上傳新照片就不再找這份。</p>`:'';
+  return `<h3>照片建檔</h3>${INTAKE.draft?renderIntakeDraft(INTAKE.draft):lost+renderIntakeStart()}`;
 }
 function renderIntakeStart(){
   const s=INTAKE,busy=s.busy==='upload'||(!!s.imageId&&!s.fail),n=s.stages.length;

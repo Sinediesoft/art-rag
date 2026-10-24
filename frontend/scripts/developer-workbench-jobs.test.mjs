@@ -7,7 +7,7 @@
 // 切換工作與離頁的過期回應隔離、換帳號、撤權清除、取消的各種結果與晚到的取消回應、清單 401／403 立即清除、
 // 產物連結、清單只在需要時自動更新。
 // 另外放了幾個不屬於 07、但要同一套假後端的（Codex 審查 2026-10-24）：憑證過期或別的分頁換了身分時撤下舊身分的資料、
-// 照片建檔儲存中鎖住欄位。
+// 照片建檔儲存中鎖住欄位、換身分時草稿的作廢與重讀。
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -84,7 +84,7 @@ function liveSse(call) {
   };
 }
 
-const account = (id) => ({ id, label: { warehouse: "倉管", manager: "主管", guest: "一般員工" }[id], views: id === "manager" ? ["diagnostics"] : [], ops: [] });
+const account = (id) => ({ id, label: { warehouse: "倉管", manager: "主管", guest: "一般員工" }[id], views: id === "manager" ? ["diagnostics"] : [], ops: id === "manager" ? ["kb_intake"] : [] });
 const svcOk = (over = {}) => ({
   enabled: true,
   database_ok: true,
@@ -763,6 +763,29 @@ test("照片建檔儲存修改：送出到回應之間欄位鎖住，回應回�
 const SECRET = "主管才看得到的問題";
 /** 診斷只開給主管，其他身分 403（和後端一樣） */
 const diagForManager = (be) => be.on("GET", "/admin/diagnostics", () => (be.state.current === "manager" ? json(diagWith(SECRET)) : apiError(403, "FORBIDDEN")));
+/** 頁首「切換成主管」：後端換 cookie，回新的目前身分 */
+const allowSwitch = (be) =>
+  be.on("POST", "/auth/switch", () => {
+    be.state.current = "manager";
+    return json({ current: account("manager"), accounts: [account("guest"), account("warehouse"), account("manager")] });
+  });
+const intakeDraft = (title) => ({
+  draft_id: "drf-1",
+  status: "draft",
+  domain: "art",
+  item_id: "art-x",
+  photo_url: "/p.jpg",
+  kb_image_url: null,
+  can_commit: true,
+  checks: [],
+  blockers: [],
+  extraction: null,
+  fields: [
+    { key: "title_zh", label: "標題", kind: "text", value: title, status: "ok" },
+    { key: "artist_zh", label: "作者", kind: "text", value: "舊作者", status: "ok" },
+  ],
+});
+
 test("別的分頁在主介面換了身分（沒有 401）：按「重新整理」、切回這個分頁都會對出來，舊身分的資料撤下", async () => {
   const be = backend({ current: "manager" });
   diagForManager(be);
@@ -807,4 +830,59 @@ test("別的分頁換了身分：定時對身分（測試縮成 30 毫秒）會�
     },
     { recheckMs: 30 },
   );
+});
+
+test("網址帶草稿 ID、讀取中換了身分：主管晚到的草稿不顯示，改用新身分重讀；讀不到寫原因、留著 ID，換回主管再讀回來", async () => {
+  const TITLE = "主管建檔的草稿標題";
+  const be = backend({ current: "manager" });
+  const late = deferred();
+  let hold = true;
+  be.on("GET", "/intake/drf-1", () => {
+    if (be.state.current !== "manager") return apiError(404, "INTAKE_NOT_FOUND", "找不到這份草稿");
+    return hold ? late.promise : json(intakeDraft(TITLE));
+  });
+  allowSwitch(be);
+  await withPage(be, async (p) => {
+    p.click('[data-act="go"][data-arg="kb"]');
+    p.click('[data-act="intakeToggle"]');
+    p.win.history.replaceState(null, "", "#intake=drf-1");
+    p.ev("intakeResume()");
+    await waitFor(() => callsTo(be, "GET", "/intake/drf-1").length === 1, "用主管身分讀草稿");
+    // 讀取中換成一般員工（用定時檢查觸發；憑證過期的 401 換發走同一個 liveFollow）
+    be.state.current = "guest";
+    await p.ev("liveRecheck()");
+    await waitFor(() => p.ev("INTAKE.resumeErr?.code") === "INTAKE_NOT_FOUND", "一般員工重讀草稿");
+    assert.ok(p.text("#intakeBox").includes("讀不到") && p.text("#intakeBox").includes("drf-1"), "寫出讀不到的原因");
+    late.resolve(json(intakeDraft(TITLE)));
+    await sleep(50);
+    assert.equal(p.ev("INTAKE.draft"), null, "主管晚到的草稿不寫入");
+    assert.ok(!p.win.document.body.textContent.includes(TITLE));
+    assert.equal(p.win.location.hash, "#intake=drf-1", "草稿 ID 留在網址");
+    hold = false;
+    p.click("#liveSwitch");
+    await waitFor(() => p.ev("INTAKE.draft?.draft_id") === "drf-1" && p.$('#intakeBox [data-key="title_zh"]'), "換回主管後讀回草稿");
+    assert.equal(p.ev("INTAKE.resumeErr"), null);
+    assert.equal(p.$('#intakeBox [data-key="title_zh"]').value, TITLE);
+  });
+});
+
+test("一般員工的草稿照畫面指示「切換成主管」：草稿與還沒儲存的修改都留著，用主管身分重讀後可以收錄", async () => {
+  const be = backend({ current: "guest" });
+  be.on("GET", "/intake/drf-1", () => json(intakeDraft("標題")));
+  allowSwitch(be);
+  await withPage(be, async (p) => {
+    p.win.history.replaceState(null, "", "#intake=drf-1");
+    p.ev("intakeResume()");
+    const field = (k) => p.$(`#intakeBox [data-key="${k}"]`);
+    const commit = () => p.$('#intakeBox [data-act="intakeCommit"]');
+    await waitFor(() => field("artist_zh"), "一般員工打開草稿");
+    assert.ok(commit().disabled && p.text("#intakeBox").includes("切換成主管"), "一般員工不能收錄，畫面叫人切換成主管");
+    field("artist_zh").value = "改過的作者";
+    field("artist_zh").dispatchEvent(new p.win.Event("input", { bubbles: true }));
+    p.click("#liveSwitch");
+    await waitFor(() => p.ev("LIVE.account.id") === "manager" && callsTo(be, "GET", "/intake/drf-1").length >= 2 && field("artist_zh"), "主管重讀同一份草稿");
+    assert.equal(p.win.location.hash, "#intake=drf-1", "草稿 ID 還在網址");
+    assert.equal(field("artist_zh").value, "改過的作者", "還沒儲存的修改留著");
+    assert.ok(!commit().disabled, "主管可以收錄");
+  });
 });
