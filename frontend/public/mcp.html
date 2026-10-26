@@ -1,0 +1,178 @@
+<!doctype html>
+<!--
+  AI 助理接口（MCP）說明頁：跟 developer-workbench.html 一樣放在 frontend/public、另開分頁。
+  純靜態介紹（不呼叫任何 /api），所以所有身分都看得到；程式與評估資料在 integrations/art-mcp/。
+  數字來源：integrations/art-mcp/eval/results/（2026-10-27，人工複核後）。
+-->
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 助理接口（MCP）｜ArtRAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* 顏色沿用開發者平台與入口介面（01 Quiet）：只有一種墨色，綠黃紅只用在狀態 */
+:root {
+  color-scheme: dark;
+  --bg: #0f0f0e;
+  --surface: #151514;
+  --surface-2: #1c1b1a;
+  --text: #f1efea;
+  --text-2: #b7b2aa;
+  --text-3: #7c776f;
+  --line: #2a2927;
+  --line-3: #3b3936;
+  --ok: #7fbf8e;
+  --warn: #d9b25f;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --sans: "Noto Sans TC", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.7 var(--sans); }
+main { max-width: 980px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: .02em; }
+h2 { font-size: 17px; margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+h2 small { font: 12px var(--mono); color: var(--text-3); margin-left: 8px; }
+p { margin: 0 0 12px; color: var(--text-2); }
+.lead { font-size: 16px; color: var(--text); }
+.tag { display: inline-block; font: 12px var(--mono); color: var(--text-3); border: 1px solid var(--line-3); padding: 1px 8px; margin: 0 6px 6px 0; }
+.box { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.grid .box b { display: block; font: 500 14px var(--mono); color: var(--text); margin-bottom: 4px; }
+.grid .box span { font-size: 13px; color: var(--text-2); }
+.flow { display: flex; flex-direction: column; gap: 0; }
+.flow .step { background: var(--surface); border: 1px solid var(--line); padding: 10px 14px; }
+.flow .step b { font: 500 13px var(--mono); }
+.flow .step span { color: var(--text-2); font-size: 13px; }
+.flow .arrow { text-align: center; color: var(--text-3); font: 12px var(--mono); padding: 4px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--text-3); font-weight: 500; font-size: 12px; }
+td.num { font-family: var(--mono); white-space: nowrap; }
+td.good { color: var(--ok); }
+.note { font-size: 13px; color: var(--text-3); margin-top: 8px; }
+pre { background: var(--surface-2); border: 1px solid var(--line); padding: 14px; overflow-x: auto; font: 13px/1.6 var(--mono); color: var(--text); margin: 0; }
+.copy { font: 12px var(--mono); background: transparent; color: var(--text-2); border: 1px solid var(--line-3); padding: 3px 10px; cursor: pointer; float: right; margin: -4px 0 8px; }
+.copy:hover { color: var(--text); border-color: var(--text-3); }
+ol.steps { padding-left: 20px; color: var(--text-2); }
+ol.steps li { margin-bottom: 6px; }
+code { font: 13px var(--mono); background: var(--surface-2); padding: 1px 5px; }
+.warn { color: var(--warn); }
+footer { margin-top: 56px; font-size: 12px; color: var(--text-3); border-top: 1px solid var(--line); padding-top: 14px; }
+.scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+
+<p class="tag">個人 AI 模組</p><p class="tag">MCP 2.x</p><p class="tag">RAG</p><p class="tag">本機執行</p>
+<h1>AI 助理接口（MCP）</h1>
+<p class="lead">讓 Claude 等 AI 助理透過 MCP 標準，直接查詢本系統的臺灣民間藝術知識庫（版印、交趾陶、剪黏），回答附原文出處與授權。</p>
+<p>網站是給「人」用的介面；MCP 是給「AI 助理」用的介面。兩邊讀的是同一份知識庫 <code>kb/artworks/</code>。</p>
+
+<h2>運作方式<small>architecture</small></h2>
+<div class="flow">
+  <div class="step"><b>使用者 → Claude 桌面版</b><br><span>用自然語言問：「團鶴版印彩紙的圖案可以商用嗎？要怎麼標示？」</span></div>
+  <div class="arrow">↓ Claude 讀工具說明，自己決定要叫哪個工具（MCP，stdio）</div>
+  <div class="step"><b>server.py（MCP Server，4 個工具＋1 個資料＋1 個範本）</b><br><span>每次呼叫都寫進登記簿 logs/tool_calls.jsonl；找不到時回傳「下一步該做什麼」</span></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>search.py（自建語意搜尋）</b><br><span>切段成索引卡 → bge-small-zh 向量 → 作品名／人名加分（上限 0.10）→ 門檻 0.60 擋離題 → 97% 相似去重</span></div>
+  <div class="arrow">↓</div>
+  <div class="step"><b>kb/artworks/（與小組同一份資料）</b><br><span>23 件作品、97 張索引卡；20 件臺灣民間藝術為本模組新增</span></div>
+  <div class="arrow">↑ 只回傳原文段落＋出處＋授權，回答由 Claude 撰寫（筆電不需跑大模型）</div>
+</div>
+
+<h2>提供的工具<small>tools / resource / prompt</small></h2>
+<div class="grid">
+  <div class="box"><b>search_passages</b><span>依問題找最相關的原文段落（細節、技法、用途、匠師生平），附出處與授權</span></div>
+  <div class="box"><b>search_artworks</b><span>依描述找作品，回傳候選作品與編號</span></div>
+  <div class="box"><b>get_artwork</b><span>依編號取得單一作品完整資料、授權與標示文字</span></div>
+  <div class="box"><b>list_artworks</b><span>列出知識庫收錄的全部作品</span></div>
+  <div class="box"><b>artworks://catalog</b><span>資料：館藏清單，使用者可附進對話</span></div>
+  <div class="box"><b>tour_script</b><span>範本：產生指定主題與長度的導覽稿</span></div>
+</div>
+<p class="note">工具說明採「適用情境／禁忌情境與替代方案／硬性規範」格式，規定 query 要帶作品名或人名、只能根據回傳段落回答、找不到就直說。</p>
+
+<h2>評估結果<small>30 題 × 2 條件，2026-10-27</small></h2>
+<p>同一份 30 題考卷問兩次，只差「有沒有接上 MCP」：同一個帳號、同一個模型（Sonnet 5.5 Medium）、關閉網頁搜尋、每題開新對話。題型：一般 6、冷門細節 15、知識庫沒有的 4、陷阱題 5。</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>指標</th><th>A：不接 MCP</th><th>B：接上 MCP</th><th>意思</th></tr></thead>
+  <tbody>
+    <tr><td>關鍵字全部答對</td><td class="num">5/26（19%）</td><td class="num good">25/26（96%）</td><td>答案的得分點全部出現</td></tr>
+    <tr><td>附上知識庫出處網址</td><td class="num">0/26（0%）</td><td class="num good">24/26（92%）</td><td>網址是知識庫真的有的出處</td></tr>
+    <tr><td>網址對不上知識庫</td><td class="num">0</td><td class="num">0</td><td>疑似編造的網址數</td></tr>
+    <tr><td>該拒答時有拒答</td><td class="num">4/4</td><td class="num">4/4</td><td>知識庫沒有的，老實說查不到</td></tr>
+    <tr><td>不該拒答卻拒答</td><td class="num">10/26</td><td class="num good">0/26</td><td>A 沒有資料時多半誠實說不知道</td></tr>
+    <tr><td>工具選對（人工複核）</td><td class="num">—</td><td class="num">29/30</td><td>登記簿比對出題時指定的工具</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="note">數字為人工複核後結果（列舉時順帶提到不算答對；考卷中 1 題標準答案有誤已更正）。原始輸出與每題明細在 integrations/art-mcp/eval/results/。題目自行出題、各跑一次，結論限於本知識庫。</p>
+
+<h2>接上自己的 Claude 桌面版<small>Windows</small></h2>
+<ol class="steps">
+  <li>在 <code>integrations\art-mcp\</code> 依序雙擊 <code>setup.bat</code>（裝 Python 環境）→ <code>build_index.bat</code>（下載向量模型、建索引）→ <code>self_check.bat</code>（應為 27/27）。</li>
+  <li>把下面設定合併進 Claude 桌面版設定檔的 <code>mcpServers</code>（路徑換成實際位置，反斜線要寫兩個）。</li>
+  <li>從右下角系統匣完全結束 Claude 再打開，輸入框旁「＋」就看得到 art-rag。</li>
+</ol>
+<button class="copy" type="button" data-copy="cfg">複製</button>
+<pre id="cfg">{
+  "mcpServers": {
+    "art-rag": {
+      "command": "C:\\dev\\art-rag\\integrations\\art-mcp\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\dev\\art-rag\\integrations\\art-mcp\\server.py"],
+      "env": { "PYTHONUTF8": "1", "HF_HUB_OFFLINE": "1" }
+    }
+  }
+}</pre>
+
+<h2>技術清單<small>stack</small></h2>
+<p>
+  <span class="tag">Model Context Protocol（mcp 2.3.0，stdio）</span>
+  <span class="tag">Python 3.12・uv</span>
+  <span class="tag">RAG 檢索增強生成</span>
+  <span class="tag">fastembed・BAAI/bge-small-zh-v1.5（512 維）</span>
+  <span class="tag">餘弦相似度＋關鍵字加分混合排序</span>
+  <span class="tag">相似度門檻・近重複去除</span>
+  <span class="tag">工具說明設計（tool description）</span>
+  <span class="tag">結構化日誌（JSONL）</span>
+  <span class="tag">A/B 對照評估・自動計分＋人工複核</span>
+  <span class="tag">JSON Schema 資料規格（小組 validate_kb）</span>
+  <span class="tag">CC 授權標示</span>
+</p>
+
+<h2>已知限制與下一步</h2>
+<p>・<b>長段落裡的人名會被稀釋</b>：江清露的生卒年寫在一段講北港朝天宮屋頂的長段落裡，問「江清露的生平」時分數 0.565 沒過門檻（加上廟名可達 0.869）。下一步：把卡切得更小，或名字命中時放寬門檻。</p>
+<p>・<b>口語問法可能不叫工具</b>：「我去褒忠祠拜拜看到……」這類現場描述，Claude 曾當成一般知識直接回答。下一步：工具說明加入「宮廟名、現場看到的作品」等情境。</p>
+<p>・<b>未做</b>：小組網站內建聊天改走 MCP（需改權限控管）；連接模式（MCP 轉呼叫小組後端 API）待展示主機確定。</p>
+
+<h2>資料來源與授權</h2>
+<p>版印 12 件：國立臺灣歷史博物館（文化部典藏網），CC BY 4.0。交趾陶、剪黏 8 件：文化部國家文化記憶庫（班馬傳媒股份有限公司建檔），CC BY 3.0 TW 及其後版本。每筆資料的出處網址與標示文字都在 <code>kb/artworks/</code>，工具回傳時一併附上。</p>
+
+<footer>ArtRAG・AI 助理接口（MCP）｜個人 AI 模組：Door｜程式與評估：integrations/art-mcp/</footer>
+</main>
+<script>
+// 複製按鈕：瀏覽器不允許時改成選取文字，讓使用者自己按 Ctrl+C
+document.querySelectorAll("[data-copy]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const el = document.getElementById(btn.dataset.copy);
+    try {
+      await navigator.clipboard.writeText(el.textContent);
+      btn.textContent = "已複製";
+    } catch {
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      btn.textContent = "請按 Ctrl+C";
+    }
+    setTimeout(() => (btn.textContent = "複製"), 1600);
+  });
+});
+</script>
+</body>
+</html>

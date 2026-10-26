@@ -23,6 +23,12 @@ const MOD_ICON: Record<Domain, string> = { factory: "factory", art: "palette" };
 const DEV_URL = "/developer-workbench.html";
 
 /**
+ * AI 助理接口（MCP）說明頁：跟開發者平台一樣是 public/ 裡的獨立 HTML、另開分頁。
+ * 只是介紹與成績單（不呼叫任何 API），所以所有身分都看得到。程式在 integrations/art-mcp/。
+ */
+const MCP_URL = "/mcp.html";
+
+/**
  * 模組捷徑：按名稱直接進模組（不用先問一句），按右邊的箭頭展開那個模組的功能頁、點了直接開。
  * 一次只展開一個模組，清單太長時自己捲動，不會把對話紀錄擠掉
  */
@@ -76,6 +82,22 @@ function ModuleNav({ current, onModule, onTool }: { current?: Domain; onModule: 
           </div>
         );
       })}
+      <div className="side__modgroup">
+        <div className="side__modrow">
+          <a className="side__modgo" href={MCP_URL} target="_blank" rel="noopener" title="另開分頁：AI 助理接口（MCP），讓 Claude 等 AI 助理查臺灣民間藝術知識庫">
+            <span className="side__modicon">
+              <Icon name="cpu" strokeWidth={1.5} />
+            </span>
+            <span className="side__modtext">
+              <span className="side__modname">AI 助理接口（MCP）</span>
+              <span className="side__modsub">工具・接法・評估結果</span>
+            </span>
+            <span className="side__modext" aria-hidden="true">
+              ↗
+            </span>
+          </a>
+        </div>
+      </div>
       {canDev && (
         <div className="side__modgroup">
           <div className="side__modrow">
@@ -181,6 +203,9 @@ export function Sidebar({
             <Icon name={MOD_ICON[d]} strokeWidth={1.5} />
           </button>
         ))}
+        <a className="side__icon" href={MCP_URL} target="_blank" rel="noopener" title="另開分頁：AI 助理接口（MCP）" aria-label="AI 助理接口（MCP）（另開分頁）">
+          <Icon name="cpu" strokeWidth={1.5} />
+        </a>
         {canDev && (
           <a className="side__icon" href={DEV_URL} target="_blank" rel="noopener" title="另開分頁：開發者平台" aria-label="開發者平台（另開分頁）">
             <Icon name="code" strokeWidth={1.5} />

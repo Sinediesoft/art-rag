@@ -1,0 +1,31 @@
+﻿題號,工具（依時間，用｜分隔）,參數（依時間，用｜分隔）,呼叫時間
+B01,search_passages,"{""query"": ""一心誠敬版印斗方 搭配 版印 貼在"", ""top_k"": 5}",10/27 03:24:31
+B02,search_passages,"{""query"": ""臺南庇馬瘟版畫 母猴"", ""top_k"": 5}",10/27 03:25:08
+B03,search_passages,"{""query"": ""蟠龍版印彩紙 興字"", ""top_k"": 3}",10/27 03:25:53
+B04,search_passages,"{""query"": ""鶴鹿版印彩紙 鶴鹿同春 又稱"", ""top_k"": 3}",10/27 03:27:16
+B05,search_passages,"{""query"": ""北港朝天宮天上聖母版印神禡 媽祖下方兩旁將軍"", ""top_k"": 5}",10/27 03:27:40
+B06,search_passages｜search_passages,"{""query"": ""桃園平鎮褒忠祠的交趾陶匠師代表作"", ""top_k"": 5}｜{""query"": ""陳天乞的生平與業界稱呼"", ""top_k"": 5}",10/27 03:28:07｜10/27 03:28:09
+B07,search_passages,"{""query"": ""陳天乞的生平 來臺 跟隨"", ""top_k"": 3}",10/27 03:28:41
+B08,search_passages,"{""query"": ""震興宮水車堵 葉王 韓愈過秦嶺 懸在空中的人物"", ""top_k"": 3}",10/27 03:29:00
+B09,search_passages,"{""query"": ""王保原 剪粘 西施入吳宮 仿匠師 吳王 綠衣女子"", ""top_k"": 5}",10/27 03:29:38
+B10,search_passages,"{""query"": ""雲林北港朝天宮屋頂剪黏的匠師傳承"", ""top_k"": 5}",10/27 03:30:19
+N01,search_passages,"{""query"": ""貢寶圖版印屏垛 左右兩個人的動作"", ""top_k"": 3}",10/27 03:30:55
+N02,search_passages,"{""query"": ""平鎮褒忠祠陳天乞交趾陶 民族文化精神 主題"", ""top_k"": 5}",10/27 03:31:20
+N03,search_passages,"{""query"": ""花紙版印屏垛 正中間一排 花草 文字"", ""top_k"": 5}",10/27 03:32:10
+N04,search_passages,"{""query"": ""山水版印花條 畫了哪四種古代農業社會的生活職業"", ""top_k"": 5}",10/27 03:32:34
+N07,search_passages,"{""query"": ""葉王 震興宮 韓愈過秦嶺 隨從"", ""top_k"": 5}",10/27 03:32:54
+N08,search_artworks｜get_artwork｜search_passages,"{""query"": ""王保原 剪粘 西施入吳宮"", ""limit"": 5}｜{""artwork_id"": ""tcmb-300485""}｜{""query"": ""王保原剪粘西施入吳宮 創作年代 民國"", ""top_k"": 3}",10/27 03:33:16｜10/27 03:33:17｜10/27 03:33:19
+N09,search_passages｜search_artworks,"{""query"": ""鹿港龍山寺正殿屋頂剪黏 匠師 修復"", ""top_k"": 5}｜{""query"": ""鹿港龍山寺"", ""limit"": 5}",10/27 03:33:49｜10/27 03:33:53
+N10,search_passages,"{""query"": ""三仙版印屏垛 祿仙 手持如意 寓意"", ""top_k"": 5}",10/27 03:34:17
+N11,search_passages,"{""query"": ""蟠龍版印彩紙 後肢 興字"", ""top_k"": 3}",10/27 03:34:58
+N13,list_artworks,{},10/27 03:35:51
+N14,search_passages,"{""query"": ""一心誠敬版印斗方 福祿壽三仙 福仙身後 兩旁動物"", ""top_k"": 3}",10/27 03:36:21
+N15,search_passages,"{""query"": ""三仙版印屏垛 福仙 騎鹿童子 雙手捧著"", ""top_k"": 5}",10/27 03:36:49
+N16,search_passages,"{""query"": ""富貴圖版印屏垛 畫面正中 孔雀 四周環繞鳥類花卉"", ""top_k"": 3}",10/27 03:37:11
+N18,search_passages,"{""query"": ""平鎮褒忠祠 陳天乞 就地建窯燒製 交趾陶偶 數量"", ""top_k"": 5}",10/27 03:37:31
+N19,search_passages｜search_artworks,"{""query"": ""剪黏大師江清露的生平 出生 逝世"", ""top_k"": 5}｜{""query"": ""江清露 剪黏"", ""limit"": 5}",10/27 03:38:34｜10/27 03:38:35
+N20,search_artworks｜list_artworks｜get_artwork,"{""query"": ""八仙過海圖 傳統版畫 赤崁樓"", ""limit"": 5}｜{}｜{""artwork_id"": ""nmth-20100030009""}",10/27 03:39:19｜10/27 03:39:22｜10/27 03:39:24
+N21,search_passages,"{""query"": ""王保原 西施入吳宮 剪粘 畫面第一排 頭戴冕冠 長髥朱袍"", ""top_k"": 5}",10/27 03:39:47
+N22,search_artworks｜get_artwork,"{""query"": ""花紙版印屏垛"", ""limit"": 5}｜{""artwork_id"": ""nmth-20030080171""}",10/27 03:40:22｜10/27 03:40:25
+N23,,,
+N24,search_passages,"{""query"": ""三仙版印屏垛 福祿壽三仙 位置"", ""top_k"": 3}",10/27 03:41:47
