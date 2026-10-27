@@ -1,16 +1,19 @@
 ﻿<#
-離線安裝（docs/adr/046）：離線包根目錄的「安裝.cmd」呼叫，安裝過程不連網，全部功能都裝好。
+離線安裝（docs/adr/046）：安裝過程不連網，全部功能都裝好。
+桌面程式 art-rag.exe（docs/adr/047）第一次打開時用 -NoStart -NoShortcut 呼叫，啟動交給它；也可以自己在終端機執行。
 預設身分是一般員工（.env 照 .env.example 的 DEMO_CONTROLS=false）：其他功能要有權限的身分，這裡不替使用者打開。
 偵測顯卡選方案 → 確認 WSL2 → 匯入 WSL 環境（PostgreSQL、Redis、3D 重建的沙箱）→ 寫 .env → 用離線包的 Python 與套件建環境
 → 建索引 → 桌面捷徑 → 啟動全部服務並打開瀏覽器。
 重複執行沒關係：已經做好的會略過，.env 裡你自己改過的設定不會被覆蓋（資料庫、模型位址等離線包的設定除外）。
 
-這台還沒有 WSL2 時：會請你允許一次系統管理員權限，用離線包裡的檔案啟用 WSL，重新開機後再點一次「安裝.cmd」。
+這台還沒有 WSL2 時：會請你允許一次系統管理員權限，用離線包裡的檔案啟用 WSL，以結束碼 3010 結束，
+重新開機後再執行一次（桌面程式會再打開時自動繼續）。
+裝完寫 data\installed.json（離線包的 commit）：桌面程式靠它判斷要不要再跑安裝。
 
-  安裝.cmd                  # 自動判斷
-  安裝.cmd -Mode mock       # 指定方案：full、light、mock
-  安裝.cmd -NoStart         # 裝完不啟動
-  安裝.cmd -NoShortcut      # 不在桌面建捷徑
+  install-offline.ps1                  # 自動判斷
+  install-offline.ps1 -Mode mock       # 指定方案：full、light、mock
+  install-offline.ps1 -NoStart         # 裝完不啟動
+  install-offline.ps1 -NoShortcut      # 不在桌面建捷徑
 
 方案（-Mode auto 依顯卡記憶體選）：
   full  顯卡 12 GB 以上：Qwen3-VL 8B 主力、4B 備援
@@ -103,7 +106,7 @@ $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 # Hyper-V 已經在跑時 VirtualizationFirmwareEnabled 會回 False，要一起看 HypervisorPresent
 $virtOk = $cs.HypervisorPresent -or $cpu.VirtualizationFirmwareEnabled
 if (-not $virtOk) {
-    throw 'BIOS 的虛擬化功能沒有開（WSL2 需要）：重開機進 BIOS，開啟 Intel VT-x 或 AMD SVM，再點一次「安裝.cmd」'
+    throw 'BIOS 的虛擬化功能沒有開（WSL2 需要）：重開機進 BIOS，開啟 Intel VT-x 或 AMD SVM，再打開 art-rag'
 }
 $status = Invoke-Wsl @('--status')
 if ($status.Code -ne 0) {
@@ -121,8 +124,9 @@ Start-Process msiexec.exe -ArgumentList '/i', '"$($msi.FullName)"', '/quiet', '/
     $p = Start-Process powershell -Verb RunAs -Wait -PassThru `
         -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"")
     Remove-Item $script -ErrorAction SilentlyContinue
-    Say 'WSL2 已啟用：請重新開機，開機後再點一次「安裝.cmd」繼續安裝'
-    exit 0
+    Say 'WSL2 已啟用：請重新開機，開機後再打開 art-rag 繼續安裝'
+    # 3010 和 Windows Installer 的「需要重新開機」同義：桌面程式看到它就提示重新開機
+    exit 3010
 }
 Note '✓ WSL2'
 
@@ -165,6 +169,9 @@ Note '✓ PostgreSQL :5432、Redis :6379'
 Say '建索引並寫進資料庫（用離線包裡的 bge-m3、Chinese-CLIP）'
 Push-Location backend
 try { Run 'uv' @('run', 'python', '..\pipelines\build_index.py') } finally { Pop-Location }
+# 換了新版離線包（commit 不同）時桌面程式會再跑一次安裝
+$installed = [ordered]@{ commit = $info.commit; mode = $Mode; installed = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssK') }
+[IO.File]::WriteAllText((Join-Path $Repo 'data\installed.json'), ($installed | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 
 # ---------------------------------------------------------------- 6. 桌面捷徑
 $bundleRoot = Split-Path $Repo -Parent
@@ -185,7 +192,7 @@ else {
 # ---------------------------------------------------------------- 7. 啟動
 if ($NoStart) {
     Say '安裝完成（-NoStart）'
-    Note '啟動：點兩下桌面的「啟動 art-rag」，或離線包裡的「啟動.cmd」'
+    Note '啟動：打開 art-rag，或執行 deploy\windows\start-services.ps1'
     exit 0
 }
 Say '啟動並檢查'

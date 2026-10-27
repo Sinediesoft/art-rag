@@ -1,8 +1,8 @@
 # ADR 046：離線安裝包（完整功能、安裝過程不連網）
 
 - 日期：2026-10-27
-- 狀態：採用（`deploy/offline/`：`pack.ps1`、`install-offline.ps1`、`offline-env.ps1`、`bundle.py`、`wsl-setup.sh`、
-  `安裝.cmd`／`啟動.cmd`／`停止.cmd`）
+- 狀態：採用（`deploy/offline/`：`pack.ps1`、`install-offline.ps1`、`offline-env.ps1`、`bundle.py`、`wsl-setup.sh`）；
+  入口從 `安裝.cmd`／`啟動.cmd`／`停止.cmd` 改成安裝精靈＋桌面程式，見 ADR 047（下面的資料夾結構是 payload 裡的內容）
 - 編號：本分支最大是 045（dev 已有 042–044），接著用 046
 
 ## 背景

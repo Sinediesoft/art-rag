@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'">
+  <title>art-rag</title>
+  <style>
+    :root {
+      /* 和圖示同一組顏色：深色底、米白字、琥珀點 #B99005 */
+      --paper: #121212;
+      --card: #1a1a19;
+      --ink: #f2f0ea;
+      --muted: #a29e95;
+      --line: #2f2e2b;
+      --amber: #b99005;
+      --error: #e2705f;
+      --log: #151514;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.6 "Microsoft JhengHei UI", "Microsoft JhengHei", "Segoe UI", sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(760px, 100%);
+      max-height: 100%;
+      display: flex; flex-direction: column;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      padding: 28px 32px;
+    }
+    header { display: flex; align-items: center; gap: 14px; }
+    header img { width: 48px; height: 48px; }
+    header .name { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+    header .sub { color: var(--muted); font-size: 13px; }
+    h1 { font-size: 20px; margin: 24px 0 4px; }
+    .detail { color: var(--muted); margin: 0; }
+    .step { margin-top: 14px; min-height: 1.6em; font-variant-numeric: tabular-nums; }
+    body:not(.working) .step { display: none; }
+    .bar { position: relative; height: 4px; margin-top: 10px; background: var(--line); border-radius: 2px; overflow: hidden; }
+    .bar::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 30%;
+      background: var(--amber); border-radius: 2px;
+      animation: slide 1.4s ease-in-out infinite;
+    }
+    @keyframes slide { from { left: -30%; } to { left: 100%; } }
+    body:not(.working) .bar { display: none; }
+    body.error h1 { color: var(--error); }
+    body.warning h1, body.reboot h1 { color: var(--amber); }
+    details { margin-top: 18px; min-height: 0; display: flex; flex-direction: column; }
+    details[open] { flex: 1; }
+    summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+    pre {
+      margin: 8px 0 0; padding: 12px 14px;
+      height: 280px; max-height: 40vh; overflow: auto;
+      background: var(--log); border: 1px solid var(--line); color: var(--ink); border-radius: 8px;
+      font: 12.5px/1.55 "Cascadia Mono", Consolas, "Microsoft JhengHei UI", monospace;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .actions:empty { display: none; }
+    button {
+      font: inherit; padding: 8px 18px; border-radius: 8px; cursor: pointer;
+      border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    }
+    button:hover { border-color: var(--muted); }
+    button.primary { background: var(--amber); border-color: var(--amber); color: #121212; font-weight: 600; }
+    button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  </style>
+</head>
+<body class="working">
+  <main class="card">
+    <header>
+      <img src="build/icon.png" alt="">
+      <div>
+        <div class="name">art-rag</div>
+        <div class="sub">全部在這台電腦上執行，資料不外送</div>
+      </div>
+    </header>
+    <h1 id="title">準備中</h1>
+    <p class="detail" id="detail"></p>
+    <div class="step" id="step" aria-live="polite"></div>
+    <div class="bar" role="progressbar" aria-label="進行中"></div>
+    <details id="more">
+      <summary>詳細紀錄</summary>
+      <pre id="log"></pre>
+    </details>
+    <div class="actions" id="actions"></div>
+  </main>
+  <script src="splash.js"></script>
+</body>
+</html>

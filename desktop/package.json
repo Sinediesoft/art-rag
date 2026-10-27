@@ -1,0 +1,16 @@
+{
+  "name": "art-rag-desktop",
+  "productName": "art-rag",
+  "version": "1.0.0",
+  "private": true,
+  "description": "art-rag 桌面程式：起停本機服務、把網頁介面放進自己的視窗（docs/adr/047）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . art-rag --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=build/icon.ico --app-copyright=art-rag --win32metadata.ProductName=art-rag --win32metadata.FileDescription=art-rag --ignore=^/dist"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.7.0"
+  }
+}

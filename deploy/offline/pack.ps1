@@ -1,12 +1,15 @@
 ﻿<#
-做完整版離線安裝包（docs/adr/046）：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次，輸出一個資料夾。
-把整個資料夾複製到別台 Windows 電腦後，點兩下「安裝.cmd」就能裝好並啟動全部功能，安裝過程不連網。
+做完整版離線安裝包（docs/adr/046、047）：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次，輸出一個資料夾：
+  setup.exe（安裝精靈）、使用說明.txt、payload\（app、offline、desktop：程式、模型與執行環境、桌面程式 art-rag.exe）
+把整個資料夾複製到別台 Windows 電腦後點兩下 setup.exe；裝完從開始功能表或桌面打開 art-rag，
+第一次打開會在程式視窗裡完成安裝（不連網），之後直接用。
 
   powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1                         # 輸出到 D:\art-rag-offline
   powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1 -Out E:\art-rag-offline
 
 - 打包時會連網：可攜版 Python 3.12、Python 套件（照 backend\uv.lock）、前端套件（npm ci）、Timefold 排程的套件（Maven）、
-  Ubuntu 24.04 的 WSL 映像與裡面的 PostgreSQL／Redis／CadQuery、WSL 的離線安裝程式
+  Ubuntu 24.04 的 WSL 映像與裡面的 PostgreSQL／Redis／CadQuery、WSL 的離線安裝程式、Electron（desktop\package-lock.json）
+- 打包這台要有 Inno Setup 6（winget install JRSoftware.InnoSetup；-Iscc 指定 ISCC.exe），裝的電腦不用
 - 從這台複製：Ollama 與 qwen3-vl 8B／4B、Hugging Face 快取裡 shared\models.yaml 釘選的 bge-m3、Chinese-CLIP、
   Ortho2CAD 模型與 llama.cpp（CUDA 版）、Java 21
 - 只打包已 commit 的內容（git archive HEAD）：.env、data\ 不會帶出去
@@ -14,7 +17,8 @@
 #>
 param(
     [string]$Out = 'D:\art-rag-offline',
-    [string[]]$Models = @('qwen3-vl:8b-instruct', 'qwen3-vl:4b-instruct')
+    [string[]]$Models = @('qwen3-vl:8b-instruct', 'qwen3-vl:4b-instruct'),
+    [string]$Iscc
 )
 
 $ErrorActionPreference = 'Stop'
@@ -102,6 +106,13 @@ if (-not $llamaServer) {
 if (-not $llamaServer -or -not (Get-ChildItem (Split-Path $llamaServer) -Filter 'ggml-cuda*.dll')) {
     throw '找不到 CUDA 版的 llama-server（docs\5070ti-host.md「第一次安裝」第 6 步）'
 }
+# Inno Setup：winget 預設裝在使用者資料夾，也可能裝在 Program Files 或自訂位置
+if (-not $Iscc) {
+    $Iscc = @((Resolve-Exe 'iscc'), (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'), 'D:\tools\InnoSetup6\ISCC.exe') |
+        Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+}
+if (-not $Iscc -or -not (Test-Path $Iscc)) { throw '找不到 Inno Setup 6 的 ISCC.exe（winget install JRSoftware.InnoSetup，或用 -Iscc 指定）' }
 $javaHome = if ($env:JAVA_HOME) { $env:JAVA_HOME } else { Split-Path (Split-Path (Resolve-Exe 'java') -Parent) -Parent }
 if (-not (Test-Path (Join-Path $javaHome 'bin\java.exe'))) { throw '找不到 Java 21（winget install Microsoft.OpenJDK.21）' }
 
@@ -110,10 +121,13 @@ Note "Ollama：$ollamaProgram（模型 $ollamaModels）"
 Note "Hugging Face 快取：$hfHub"
 Note "Ortho2CAD：$ortho2cad；llama-server：$llamaServer"
 Note "Java：$javaHome"
+Note "Inno Setup：$Iscc"
 Note "輸出：$Out（$($drive): 剩 $freeGb GB）"
 
-$App = Join-Path $Out 'app'
-$Offline = Join-Path $Out 'offline'
+# 安裝精靈把 payload\ 整個複製到安裝位置：裝好的結構是 app\、offline\、desktop\ 三個資料夾並排
+$Payload = Join-Path $Out 'payload'
+$App = Join-Path $Payload 'app'
+$Offline = Join-Path $Payload 'offline'
 $Tmp = Join-Path $Out 'tmp'
 New-Item -ItemType Directory -Force $App, $Offline, $Tmp, (Join-Path $Offline 'wsl') | Out-Null
 
@@ -165,6 +179,14 @@ Push-Location (Join-Path $App 'frontend')
 try { Run 'npm' @('ci'); Run 'npm' @('run', 'build') } finally { Pop-Location }
 Remove-Item -Recurse -Force (Join-Path $App 'frontend\node_modules')
 
+# ---------------------------------------------------------------- 3b. 桌面程式（Electron）
+Say '建置桌面程式 art-rag.exe'
+$desktopSrc = Join-Path $App 'desktop'
+Push-Location $desktopSrc
+try { Run 'npm' @('ci'); Run 'npm' @('run', 'pack') } finally { Pop-Location }
+Move-Item (Join-Path $desktopSrc 'dist\art-rag-win32-x64') (Join-Path $Payload 'desktop')
+foreach ($leftover in 'node_modules', 'dist') { Remove-Item -Recurse -Force (Join-Path $desktopSrc $leftover) }
+
 # ---------------------------------------------------------------- 4. 排程服務（Timefold）與 Java
 Say '排程服務（Maven 建置）與 Java 21'
 $env:JAVA_HOME = $javaHome
@@ -211,11 +233,8 @@ New-Item -ItemType Directory -Force $ortho2cadOut | Out-Null
 Get-ChildItem $ortho2cad -Filter '*.gguf' | Copy-Item -Destination $ortho2cadOut
 Copy-Item -Recurse (Split-Path $llamaServer -Parent) (Join-Path $Offline 'llama.cpp')
 
-# ---------------------------------------------------------------- 7. 點兩下用的檔案、完成標記
-Say '安裝、啟動、停止的捷徑檔'
-foreach ($name in '安裝.cmd', '啟動.cmd', '停止.cmd', '使用說明.txt') {
-    Copy-Item (Join-Path $App "deploy\offline\$name") (Join-Path $Out $name)
-}
+# ---------------------------------------------------------------- 7. 完成標記、安裝精靈
+Copy-Item (Join-Path $App 'deploy\offline\使用說明.txt') (Join-Path $Out '使用說明.txt')
 Remove-Item -Recurse -Force $Tmp
 # offline.json 最後才寫：有它才算完整的離線包（offline-env.ps1 靠它判斷）
 $info = [ordered]@{
@@ -228,6 +247,13 @@ $info = [ordered]@{
 }
 [IO.File]::WriteAllText((Join-Path $Offline 'offline.json'), ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 
+Say '安裝精靈 setup.exe（Inno Setup）'
+$payloadBytes = (Get-ChildItem $Payload -Recurse -File -Force | Measure-Object Length -Sum).Sum
+# 安裝後再用約 10 GB（Python 環境、WSL 環境、索引）：一起算進安裝精靈要求的空間
+$isccArgs = @('/Q', "/DAppVersion=$((Get-Date).ToString('yyyy.M.d'))", "/DCommit=$commit",
+    "/DExtraBytes=$([int64]$payloadBytes + 10GB)", "/DOutputDir=$Out", (Join-Path $App 'deploy\offline\art-rag.iss'))
+Run $Iscc $isccArgs
+
 $sizeGb = [math]::Round((Get-ChildItem $Out -Recurse -File -Force | Measure-Object Length -Sum).Sum / 1GB, 1)
 Say "完成：$Out（$sizeGb GB）"
-Note '把整個資料夾複製到別台電腦的本機磁碟（不要直接在隨身碟上裝），點兩下「安裝.cmd」'
+Note '把整個資料夾複製到別台電腦（隨身碟要 exFAT 或 NTFS），點兩下 setup.exe'

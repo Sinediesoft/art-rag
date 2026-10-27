@@ -85,20 +85,22 @@ bash deploy/install.sh --dry-run    # 只列出會做什麼
 只給建議、不執行指令（ADR 045）。也可以自己跑：`uv run --no-project python deploy/diagnose.py`
 （看最近 1 小時的 log；`--no-llm` 只比對規則表）。
 
-### 離線安裝包（安裝過程不連網）
+### 離線安裝包：桌面程式 art-rag（安裝過程不連網）
 
-給不能連網、或不想打指令的電腦（ADR 046），全部功能都裝好（含 3D 重建、排程）。
+給不能連網、或不想打指令的電腦（ADR 046、047），全部功能都裝好（含 3D 重建、排程）。
 裝完的預設身分是一般員工（只查公開畫作），其他功能要有權限的身分，離線包不替使用者打開身分切換。
-在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 25.5 GB）：
+在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 26 GB；要有 Inno Setup 6）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1    # 輸出到 D:\art-rag-offline，-Out 換位置
 ```
 
-把整個資料夾複製到別台 Windows 電腦的本機磁碟（隨身碟要 exFAT／NTFS），點兩下「安裝.cmd」：
-自動判斷顯卡、匯入 WSL 環境 `artrag`（取代 Docker：PostgreSQL＋pgvector、Redis、3D 重建的沙箱）、從離線包建 Python 環境、
-建索引、在桌面建「啟動 art-rag」「停止 art-rag」，最後打開瀏覽器。Ollama、Ortho2CAD、Timefold、Java 都用離線包自己的
-（Ollama 用連接埠 11435，不影響那台原本的 Ollama）。那台還沒有 WSL2 時，會要一次系統管理員權限離線啟用，重開機後再點一次。
+輸出是 `setup.exe`＋`payload\`＋`使用說明.txt`。把整個資料夾複製到別台 Windows 電腦（隨身碟要 exFAT／NTFS），
+點兩下 `setup.exe` 選安裝位置（預設 `C:\art-rag`），裝完開始功能表與桌面有「art-rag」。
+第一次打開時在程式視窗裡完成安裝：自動判斷顯卡、匯入 WSL 環境 `artrag`（取代 Docker：PostgreSQL＋pgvector、Redis、
+3D 重建的沙箱）、從離線包建 Python 環境、建索引，接著啟動服務、直接顯示介面。Ollama、Ortho2CAD、Timefold、Java
+都用離線包自己的（Ollama 用連接埠 11435，不影響那台原本的 Ollama）。那台還沒有 WSL2 時，會要一次系統管理員權限離線啟用，
+重開機後再打開 art-rag。關掉視窗服務仍在背景跑，從系統匣圖示「結束 art-rag」才停止；解除安裝在「新增或移除程式」。
 
 ## 快速開始（macOS／WSL2）
 
