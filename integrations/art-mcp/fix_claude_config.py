@@ -21,8 +21,18 @@ TEMPLATES = ["claude_config_step2_full.json"]
 def main():
     local = os.environ.get("LOCALAPPDATA", "")
     found = glob.glob(os.path.join(local, "Claude-Data", "claude_*", "claude_desktop_config.json"))
+    # 10/27：除了 Store 版，也支援官網安裝版（%APPDATA%\Claude），讓別台電腦也能一鍵接上
+    if not found:
+        std_dir = os.path.join(os.environ.get("APPDATA", ""), "Claude")
+        if os.path.isdir(std_dir):
+            std = os.path.join(std_dir, "claude_desktop_config.json")
+            if not os.path.exists(std):
+                with open(std, "w", encoding="utf-8") as f:
+                    f.write("{}")
+            found = [std]
     if len(found) != 1:
         print(f"✘ 找到 {len(found)} 份設定檔（應該剛好 1 份），先不修改：{found}")
+        print("  沒找到的話：請先安裝 Claude 桌面版、打開登入一次，再重跑。")
         return 1
     path = found[0]
     print(f"設定檔：{path}")

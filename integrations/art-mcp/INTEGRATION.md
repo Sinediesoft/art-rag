@@ -43,6 +43,8 @@ Verified before PR (in a clean clone of `dev` + this branch): `ruff check ..` an
 
 From `integrations/art-mcp/` (path must be ASCII-only, e.g. `C:\dev\art-rag\integrations\art-mcp`):
 
+**One step:** double-click `connect_claude.bat` (runs 1, 2 and 4–5 below automatically; config merge backs up the original file). Manual steps:
+
 1. `setup.bat` → creates `.venv` (Python 3.12 via uv) and installs `requirements.lock.txt`.
 2. `build_index.bat` → downloads `BAAI/bge-small-zh-v1.5` into `models/` and builds `index/` from `kb/artworks/` (23 artworks, ~97 chunks).
 3. `self_check.bat` → expect `27/27`.

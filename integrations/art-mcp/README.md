@@ -145,6 +145,7 @@ kb/artworks/（跟小組系統同一份資料，23 件、97 張索引卡）
 | `test_search.py`、`diag_search.py` | 搜尋小測驗、找錯原因的診斷實驗 |
 | `score.py`／`.bat` | 評估計分（A/B 對照、6 項指標、HTML 成績單） |
 | `exam_helper.py`、`exam_A.bat`、`exam_B.bat` | 考試小幫手：遞題目、收回答、記時間（不呼叫 Claude） |
+| `connect_claude.bat` | **一鍵接上 Claude 桌面版**：依序執行 setup → build_index → 寫入 Claude 設定（Store 版、官網版都支援）並重開 Claude |
 | `setup.bat` | 安裝 Python 3.12 環境與固定版本套件 |
 | `check_claude_config.*`、`fix_claude_config.*`、`remove_hello.*` | 檢查、修改 Claude 桌面版設定檔（Store 版位置） |
 | `keywords.txt` | 名字加分用的人名、廟名清單 |
