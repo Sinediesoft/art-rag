@@ -691,6 +691,124 @@ v2 問「瀑布是什麼顏色」只留下色彩分析、丟掉寫到瀑布的�
 | 未收錄圖紙拒答 | 80/80，指錯 0 |
 | 文字：名稱、料號、圖號、描述 | 24/24 |
 
+### 分層檢索指標總表（TASK-20261027-001）
+
+把「找得到對的段落或圖紙嗎」和「答得對嗎」分開量。每個數字都連到來源檔與 JSON 欄位，並寫明分母；
+下表由 `backend/tests/test_retrieval_evidence.py` 逐列對照保存的檔案（來源檔不存在、欄位讀不到、數字或分母不符都會失敗）。
+
+| 層 | 量什麼 | 指標與入口 |
+|---|---|---|
+| 辨識層 | 照片／圖片找到哪一幅畫、哪一張圖紙 | 以圖搜圖 Top-1／Top-5、CLIP 第一階段 Recall@K（既有 run，只引用）；圖紙照片 candidates 的 Recall@1／2／3／5 與 MRR（`make eval-drawing-retrieval`，現行版本待真模型 run） |
+| 文字檢索層 | `retrieve` 最終回傳的段落有沒有包含正解（不經 LLM、不調參） | Recall@1／2／5、MRR、Precision、nDCG@5（多正解）、空答案誤回傳率、外洩（`make eval-retrieval`，待真模型 run） |
+| 生成層 | 回答的內容與引用 | `citation_ok`、問答正確率等屬生成層，在 `make eval`；**不在本表**，也不由檢索指標推得 |
+
+- **Text-to-SQL（庫存、生產排程）不適用**：查詢結果是 SQL 的列，不是檢索段落，沒有「正解段落」可算 Recall／MRR；它的指標在 `make eval-sql`。
+- **`citation_ok` 屬生成層**：它檢查回答有沒有標對引用，要先有模型回答才有；檢索層只看 `retrieve` 回傳的段落。
+- **Context Precision／Context Recall（RAGAS 類）列為待辦、這次不做**：兩項都需要 LLM 當評審；地端模型當評審的可信度與成本還沒評估，
+  在那之前不輸出這兩個數字。
+
+<!-- 以下是 backend/tests/test_retrieval_evidence.py 解析的總表，欄位固定：ID｜層｜指標｜數字｜分母｜分母欄位｜來源檔｜來源欄位｜狀態。 -->
+<!-- retrieval-layer-table:start -->
+| ID | 層 | 指標（帳號／模式／分母口徑） | 數字 | 分母 | 分母欄位 | 來源檔 | 來源欄位 | 狀態 |
+|---|---|---|---|---|---|---|---|---|
+| L-M1 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：原圖（Flickr），知識庫 3 幅 | 0.9916／1.0／1.0／1.0／1.0 | 160 | `summary.current.原圖（Flickr）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.原圖（Flickr）.3.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-M2 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：原圖（Flickr），知識庫 2467 幅 | 0.6625／0.7937／0.8438／0.8812／0.9187 | 160 | `summary.current.原圖（Flickr）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.原圖（Flickr）.2467.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-M3 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：500px（Flickr），知識庫 3 幅 | 0.9922／1.0／1.0／1.0／1.0 | 160 | `summary.current.500px（Flickr）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.500px（Flickr）.3.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-M4 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：500px（Flickr），知識庫 2467 幅 | 0.6438／0.8125／0.85／0.875／0.9125 | 160 | `summary.current.500px（Flickr）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.500px（Flickr）.2467.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-M5 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：500px（研究團隊），知識庫 3 幅 | 0.9598／1.0／1.0／1.0／1.0 | 46 | `summary.current.500px（研究團隊）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.500px（研究團隊）.3.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-M6 | 辨識層（CLIP 第一階段） | Recall@1／3／5／10／20：500px（研究團隊），知識庫 2467 幅 | 0.5／0.5652／0.6304／0.7174／0.7391 | 46 | `summary.current.500px（研究團隊）.n` | `eval/runs/20261004T165452-a7ba-met-photos.json` | `summary.recall.500px（研究團隊）.2467.{@1／@3／@5／@10／@20}` | legacy_provenance_incomplete |
+| L-A1 | 辨識層 | 圖片搜尋 Top-1／Top-5（15 張已收錄模擬實拍） | 1.0／1.0 | 15 | `summary.n_known` | `eval/runs/20260929T075014-aeab.json` | `summary.{image_top1／image_top5}` | legacy_provenance_incomplete |
+| L-A2 | 辨識層 | 同一 run 由 images.csv 重算 Top-1／Top-5（truth 非「(未收錄)」） | 15／15 | 15 | `csv:n_known` | `eval/runs/20260929T075014-aeab-images.csv` | `csv:top1／top5` | derived_from_legacy_run |
+| L-D1 | 辨識層（圖紙照片，10/10 修正前） | 歷史帳號 planner：photo_top1／photo_rejected／text_ok／photo_wrong／leaks | 56/94／80/80／24/24／0／0 | 94／80／24／—／— | `字串分母` | `eval/runs/20261010T140539-f694-drawing-retrieval.json` | `accounts.planner.summary.{photo_top1／photo_rejected／text_ok／photo_wrong／leaks}` | legacy_provenance_incomplete |
+| L-D2 | 辨識層（圖紙照片，10/10 修正前） | 歷史帳號 sales_a：photo_top1／photo_rejected／text_ok／photo_wrong／leaks | 18/31／143/143／24/24／0／0 | 31／143／24／—／— | `字串分母` | `eval/runs/20261010T140539-f694-drawing-retrieval.json` | `accounts.sales_a.summary.{photo_top1／photo_rejected／text_ok／photo_wrong／leaks}` | legacy_provenance_incomplete |
+| N-T1 | 文字檢索層 | 畫作｜production_retrieve｜指定畫作：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.art/production_retrieve/specified.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E1 | 文字檢索層 | 畫作｜production_retrieve｜指定畫作：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.art/production_retrieve/specified.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-T2 | 文字檢索層 | 畫作｜production_retrieve｜全庫：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.art/production_retrieve/global.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E2 | 文字檢索層 | 畫作｜production_retrieve｜全庫：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.art/production_retrieve/global.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-T3 | 文字檢索層 | 圖紙｜production_retrieve｜指定圖紙｜manager：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/production_retrieve/specified/manager.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E3 | 文字檢索層 | 圖紙｜production_retrieve｜指定圖紙｜manager：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/production_retrieve/specified/manager.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-T4 | 文字檢索層 | 圖紙｜collection_global_diagnostic_postfilter（診斷，不是 production）｜全庫｜manager：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/collection_global_diagnostic_postfilter/global/manager.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E4 | 文字檢索層 | 圖紙｜collection_global_diagnostic_postfilter（診斷，不是 production）｜全庫｜manager：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/collection_global_diagnostic_postfilter/global/manager.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-T5 | 文字檢索層 | 圖紙｜production_retrieve｜指定圖紙｜sales：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/production_retrieve/specified/sales.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E5 | 文字檢索層 | 圖紙｜production_retrieve｜指定圖紙｜sales：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/production_retrieve/specified/sales.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-T6 | 文字檢索層 | 圖紙｜collection_global_diagnostic_postfilter（診斷，不是 production）｜全庫｜sales：可答題 Recall@1／2／5、MRR、Precision（cohort all） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/collection_global_diagnostic_postfilter/global/sales.cohorts.all.answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean` | 待人類代跑真模型 |
+| N-E6 | 文字檢索層 | 圖紙｜collection_global_diagnostic_postfilter（診斷，不是 production）｜全庫｜sales：空答案題誤回傳率 | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-retrieval-layer-metrics.json` | `summary.mfg/collection_global_diagnostic_postfilter/global/sales.cohorts.all.expected_empty.false_nonempty.rate` | 待人類代跑真模型 |
+| N-P1 | 辨識層（圖紙照片候選排名，現行版本） | manager：candidates Recall@1／2／3／5、MRR（幾何驗證後混合排名前 5） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-drawing-retrieval.json` | `accounts.manager.summary.candidate_ranking.metrics.{recall@1／recall@2／recall@3／recall@5／mrr}.mean` | 待人類代跑真模型 |
+| N-P2 | 辨識層（圖紙照片候選排名，現行版本） | sales：candidates Recall@1／2／3／5、MRR（幾何驗證後混合排名前 5） | 待人類代跑真模型 | — | — | `eval/runs/<run_id>-drawing-retrieval.json` | `accounts.sales.summary.candidate_ranking.metrics.{recall@1／recall@2／recall@3／recall@5／mrr}.mean` | 待人類代跑真模型 |
+<!-- retrieval-layer-table:end -->
+
+**狀態欄**
+- `legacy_provenance_incomplete`：舊 run（2026-09／10），JSON 不含完整的模型 revision、執行 HEAD、題庫 hash，**不能倒填成已證實的真模型 run**；數字照原檔引用。
+- `derived_from_legacy_run`：由同一個舊 run 的 CSV 重算（L-A2：`20260929T075014-aeab-images.csv` 中 `truth` 不是「(未收錄)」的 15 張，數 `top1`、`top5` 為 True 的張數）。
+- `待人類代跑真模型`：新增的文字檢索與圖紙照片候選排名。**目前沒有任何數字**：V2 的 `run_check` 固定 `EMBED_MODE=mock`，mock 的成績不是成績；
+  沒有估計、沒有 mock 數字。人類在真模型環境代跑並交回 `eval/runs/` 的三份檔案（見下）、核對 provenance 之後，才把這些列改成 `real_run` 並填數字。
+  交回的真 run 一旦通過驗證，測試會要求這些列不能再寫「待人類代跑真模型」。
+
+**舊 run 的使用限制**
+- L-M*（`20261004T165452-a7ba-met-photos.json`）：`summary.recall.<照片類型>.<知識庫大小>.@K` 是 CLIP 第一階段的 Recall@K，
+  `rows[].own_rank` 是 0-based、同分採樂觀排名；分母取 `summary.current.<照片類型>.n`（張數）。按庫大小與照片類型分 cohort，**不是辨識成功率**，不要混用。
+  這裡只列知識庫 3 與 2,467 幅兩端，其他大小見該檔。
+- L-A*（`20260929T075014-aeab.json`）：只有 `image_top1`／`image_top5`＝1.0、`n_known`＝15；沒有保存名次，不猜；換成其他延遲不同的 run 不算同一份數字。
+- L-D*（`20261010T140539-f694-drawing-retrieval.json`）：**這是 2026-10-10 修正前的版本**（人類指出 10/10 的結果有誤，現行版本另用新真模型 run）；
+  歷史帳號 **planner／sales_a 保留原名**，不改寫為現在的 manager／sales，也不用 README 後來的敘述取代這份 JSON。
+  `photo_top1` 等是辨識成功率（`matched`），不是 candidates 排名；舊 JSON 雖存了 `candidates`，這次不從舊版推算 Recall／MRR（沒有 provenance），以新 run 為準。
+
+**新增文字檢索的指標定義與測量邊界**（程式：`eval/retrieval_metrics.py`、`eval/run_retrieval_eval.py`）
+- gold：題庫的文件 ID＋`topics` 對 KB `descriptions[].topic`，再從實際索引的 chunks 解析出全部 `chunk_id`（不手填、同 topic 切成多段時全部算正確）；
+  對不上的整題排除並列題號與原因。畫作用 `eval/qa.jsonl`（35 題），圖紙用新增的 `eval/drawing_retrieval/qa.jsonl`（33 題，涵蓋 6 張圖紙全部 28 個 descriptions topic）。
+- Recall@K＝|前 K 個去重回傳 ∩ G|／|G|；MRR＝1／第一個正確段落的名次（未命中 0）；Precision＝|回傳 ∩ G|／|回傳（去重後的實際段數）|，
+  有正解但回空記 0，不除以固定 5；nDCG@5 只算 |G|>1 的題。按題 macro-average，每個數字附有效分母；分母為 0 記 `null`，不寫 0%。
+- 空答案題（`no_answer`／不存在的文件／該身分看不到）的排名與 Precision 記 `null`、不併入平均，另報誤回傳率＝有回傳的空答案題數／空答案題數；外洩檢查整份回傳資料，不只前 K。
+- `production_retrieve`：程序內直接呼叫原 `chat_service.retrieve`，原樣保存有序 sources，不經 LLM／Jev／重排。指定文件時問句含「比較、相比、差異…」等觸發詞會補同領域全庫（global-fill），
+  逐題記 `global_fill_triggered` 與跨文件回傳，**不宣稱指定模式一定只搜自己的段落**；沒觸發的題另列 owner-only cohort。
+- `collection_global_diagnostic_postfilter`（圖紙全庫）：產品沒有「不指定圖紙」的 `retrieve` 入口，所以只在 eval 層對真正的圖紙庫（`store.mfg`）做全庫搜尋、
+  用帳號 scope 的圖紙集合過濾、套同一組 `min_chunk_score`／`relative_chunk_ratio`；沒有 owner 優先、沒有至少保留一段、沒有 catalog。
+  這是**診斷，不是 production 結果**，與指定圖紙的結果分組報告、不混合平均。
+- 只量 `retrieve`（第 3 段）的最終 sources：不含 `/chat` 的文件授權、Jev 篩選、重排與生成；distractor 題用原問句、沒有注入干擾段落，所以沒有量抗注入。
+- 語料很小（畫作 3 幅、圖紙 6 張；索引段落數含 `#meta`／`#color`，art 21、mfg 34 是本次索引的實際數量，run 檔會記當次 counts），
+  Recall／MRR 要搭配段落數解讀；未審核 descriptions 的「topic 相關」不等於內容安全或事實正確（另有 `reviewed_gold_only` cohort）。
+- 實測若有非零外洩或誤回傳照實報告，不為過關調參、也不改檢索行為。
+
+**新增圖紙照片候選排名**（`eval/run_drawing_retrieval_eval.py`，保留原本摘要與停止條件）：`candidates` 是 `identify_drawing` 經幾何驗證後的混合排名前 5
+（通過驗證的在前，再依 ORB inliers、CLIP 分數），**包含沒通過驗證的候選；不是 CLIP 原始粗篩，也不等於辨識成功（`got`／`matched`）**。
+分母是該身分看得到正解的照片：route 不是 mfg、候選空或沒排進去都記 0 並留在分母；看不到與未收錄的照片不進排名分母，另計拒答、誤接受與外洩。
+
+#### 真模型代跑：環境前檢與指令
+
+正式數字只接受 `EMBED_MODE=real` 的新 run；mock、索引與收據不符、依賴缺失都會明確失敗（結束碼非 0），不會產出看起來像成績的檔案。
+三個入口都不讀 `.env`：啟動時先 `eval/retrieval_runtime.bootstrap()`，在第一次讀設定之前關掉 `env_file`，設定只取下列環境變數與 `shared/*.yaml`。
+
+環境前檢：
+- 向量模型是**本機 HF 快取**的 Chinese-CLIP（`OFA-Sys/chinese-clip-vit-base-patch16`）與 bge-m3（`BAAI/bge-m3`），revision 固定在 `shared/models.yaml`；
+  不是從 Ollama 載入。快取缺了會失敗，不會改用 mock。
+- 照著人類的要求，真跑前仍先確認 Ollama `127.0.0.1:11434` 可用（`curl -fsS http://127.0.0.1:11434/api/tags`），而且**不呼叫任何生成模型**。
+- `HYBRID_BASE_URL` 是**生成端**位置，不影響 `retrieve` 與這幾份評估；沒有 `OLLAMA_BASE_URL`、`INDEX_BACKEND` 這種設定，不要自己加。
+- 要有真實的圖紙照片（`eval/drawing_photos/`、`eval/drawing_retrieval/` 的照片）；缺檔就失敗。
+
+```bash
+cd '/Users/sdl/Desktop/專題第二組新方案/art-rag'
+export LC_ALL=en_US.UTF-8
+export PYTHONPATH="$PWD/backend"
+export PYTHONDONTWRITEBYTECODE=1
+export EMBED_MODE=real EMBED_DEVICE=cpu LLM_MODE=real
+export DATABASE_URL= JOBS_DATABASE_URL= REDIS_URL=
+export JEV_ENABLED=false ALLOW_CLOUD=false MEMORY_GUARD=false
+export HYBRID_BASE_URL=http://127.0.0.1:11434/v1
+export DATA_DIR="$PWD/data"
+curl -fsS http://127.0.0.1:11434/api/tags
+make eval-retrieval-index PY=backend/.venv/bin/python   # 建索引並寫 eval/runs/<run_id>-retrieval-index.json
+make eval-retrieval PY=backend/.venv/bin/python         # eval/runs/<run_id>-retrieval-layer-metrics.json
+make eval-drawing-retrieval PY=backend/.venv/bin/python # eval/runs/<run_id>-drawing-retrieval.json
+```
+
+- 三個 target 依序跑，各自輸出**新檔**（檔名開頭是 UTC 時間，不覆寫歷史 run）；要在含同一版程式變更的主目錄執行，run 檔會記 HEAD 與 dirty。
+- 收據參數名稱兩個 runner 不同：`eval/run_retrieval_eval.py` 是 `--receipt`，`eval/run_drawing_retrieval_eval.py` 是 `--index-receipt`；
+  **預設都是 `latest`**（`eval/runs` 中最新的 `*-retrieval-index.json`），所以 Make 不用帶參數。要指定某一份收據時，文字檢索用 `--receipt PATH`、
+  圖紙照片用 `--index-receipt PATH`。
+- 圖紙照片的結束碼：指錯、外洩、文字第一名不符、回報截圖沒認出就非 0，但 JSON 仍寫；一般低品質照片認不出來照實記錄，不算失敗。
+- 交回的檔案：三份 JSON（`*-retrieval-index.json`、`*-retrieval-layer-metrics.json`、新版 `*-drawing-retrieval.json`）與終端機日誌。
+  收到後依 `backend/tests/test_retrieval_evidence.py` 核對 HEAD、real／模型 revision、索引收據、題庫與設定 hash，再把待代跑列改成真 run 的數字。
+
 ### 工廠機械加工圖（`make eval-cad`）
 
 需要後端與 Ortho2CAD 都在執行；約 20 分鐘。2026-09-30 在 MacBook Air M5 16 GB 上的結果：
