@@ -52,7 +52,8 @@ Name: "zh"; MessagesFile: "ChineseTraditional.isl"
 Name: "desktopicon"; Description: "在桌面建立萊問捷徑"
 
 [Files]
-Source: "{src}\payload\app\*"; DestDir: "{app}\app"; Flags: external recursesubdirs createallsubdirs ignoreversion
+; 有人直接從 payload 打開過程式（就地安裝）時，會在裡面留下這台電腦的設定、Python 環境、紀錄：不帶到別台
+Source: "{src}\payload\app\*"; DestDir: "{app}\app"; Excludes: "\.env,\backend\.venv,\data,\scheduler\.java-home"; Flags: external recursesubdirs createallsubdirs ignoreversion
 Source: "{src}\payload\offline\*"; DestDir: "{app}\offline"; Flags: external recursesubdirs createallsubdirs ignoreversion
 Source: "{src}\payload\desktop\*"; DestDir: "{app}\desktop"; Flags: external recursesubdirs createallsubdirs ignoreversion
 Source: "{src}\使用說明.txt"; DestDir: "{app}"; Flags: external ignoreversion
