@@ -1,6 +1,6 @@
 ﻿<#
 離線安裝（docs/adr/046）：安裝過程不連網，全部功能都裝好。
-桌面程式 art-rag.exe（docs/adr/047）第一次打開時用 -NoStart -NoShortcut 呼叫，啟動交給它；也可以自己在終端機執行。
+桌面程式萊問 LaiWen.exe（docs/adr/047）第一次打開時用 -NoStart -NoShortcut 呼叫，啟動交給它；也可以自己在終端機執行。
 預設身分是一般員工（.env 照 .env.example 的 DEMO_CONTROLS=false）：其他功能要有權限的身分，這裡不替使用者打開。
 偵測顯卡選方案 → 確認 WSL2 → 匯入 WSL 環境（PostgreSQL、Redis、3D 重建的沙箱）→ 寫 .env → 用離線包的 Python 與套件建環境
 → 建索引 → 桌面捷徑 → 啟動全部服務並打開瀏覽器。
@@ -106,7 +106,7 @@ $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
 # Hyper-V 已經在跑時 VirtualizationFirmwareEnabled 會回 False，要一起看 HypervisorPresent
 $virtOk = $cs.HypervisorPresent -or $cpu.VirtualizationFirmwareEnabled
 if (-not $virtOk) {
-    throw 'BIOS 的虛擬化功能沒有開（WSL2 需要）：重開機進 BIOS，開啟 Intel VT-x 或 AMD SVM，再打開 art-rag'
+    throw 'BIOS 的虛擬化功能沒有開（WSL2 需要）：重開機進 BIOS，開啟 Intel VT-x 或 AMD SVM，再打開萊問'
 }
 $status = Invoke-Wsl @('--status')
 if ($status.Code -ne 0) {
@@ -124,7 +124,7 @@ Start-Process msiexec.exe -ArgumentList '/i', '"$($msi.FullName)"', '/quiet', '/
     $p = Start-Process powershell -Verb RunAs -Wait -PassThru `
         -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"")
     Remove-Item $script -ErrorAction SilentlyContinue
-    Say 'WSL2 已啟用：請重新開機，開機後再打開 art-rag 繼續安裝'
+    Say 'WSL2 已啟用：請重新開機，開機後再打開萊問繼續安裝'
     # 3010 和 Windows Installer 的「需要重新開機」同義：桌面程式看到它就提示重新開機
     exit 3010
 }
@@ -192,7 +192,7 @@ else {
 # ---------------------------------------------------------------- 7. 啟動
 if ($NoStart) {
     Say '安裝完成（-NoStart）'
-    Note '啟動：打開 art-rag，或執行 deploy\windows\start-services.ps1'
+    Note '啟動：打開萊問，或執行 deploy\windows\start-services.ps1'
     exit 0
 }
 Say '啟動並檢查'

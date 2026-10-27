@@ -1,7 +1,7 @@
-﻿; art-rag 安裝精靈（docs/adr/047）：deploy\offline\pack.ps1 用 Inno Setup 6 編譯成 setup.exe。
+﻿; 萊問（art-rag 桌面程式）安裝精靈（docs/adr/047）：deploy\offline\pack.ps1 用 Inno Setup 6 編譯成 setup.exe。
 ; 約 25 GB 的資料不壓進 exe：放在 setup.exe 旁邊的 payload\，安裝時直接複製（external）。
 ; 模型本來就壓不小，這樣打包快，也不會有單一安裝檔太大的問題。
-; 真正的安裝（WSL 環境、Python 環境、索引）在第一次打開 art-rag 時由 install-offline.ps1 做，進度顯示在程式視窗裡。
+; 真正的安裝（WSL 環境、Python 環境、索引）在第一次打開萊問時由 install-offline.ps1 做，進度顯示在程式視窗裡。
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -19,21 +19,22 @@
 
 [Setup]
 AppId={{0618A7A7-C1AB-43E2-99ED-1773859D3F78}
-AppName=art-rag
+AppName=萊問
 AppVersion={#AppVersion}
-AppVerName=art-rag {#AppVersion}（{#Commit}）
-AppPublisher=art-rag
+AppVerName=萊問 {#AppVersion}（{#Commit}）
+AppPublisher=LAIWEN
 VersionInfoVersion={#AppVersion}
 ; 預設不放 Program Files：程式執行時要在安裝資料夾裡寫 .env、紀錄、Python 環境與 WSL 的虛擬磁碟，
 ; 一般使用者權限就能裝，不用跳系統管理員確認
-DefaultDirName={sd}\art-rag
+; 資料夾名稱用英文：uv、WSL、PostgreSQL 的路徑都經過它
+DefaultDirName={sd}\LaiWen
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=setup
 SetupIconFile=..\..\desktop\build\icon.ico
-UninstallDisplayIcon={app}\desktop\art-rag.exe
-UninstallDisplayName=art-rag
+UninstallDisplayIcon={app}\desktop\LaiWen.exe
+UninstallDisplayName=萊問
 ExtraDiskSpaceRequired={#ExtraBytes}
 Compression=lzma2
 SolidCompression=yes
@@ -48,7 +49,7 @@ SetupLogging=yes
 Name: "zh"; MessagesFile: "ChineseTraditional.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "在桌面建立 art-rag 捷徑"
+Name: "desktopicon"; Description: "在桌面建立萊問捷徑"
 
 [Files]
 Source: "{src}\payload\app\*"; DestDir: "{app}\app"; Flags: external recursesubdirs createallsubdirs ignoreversion
@@ -57,11 +58,11 @@ Source: "{src}\payload\desktop\*"; DestDir: "{app}\desktop"; Flags: external rec
 Source: "{src}\使用說明.txt"; DestDir: "{app}"; Flags: external ignoreversion
 
 [Icons]
-Name: "{autoprograms}\art-rag"; Filename: "{app}\desktop\art-rag.exe"; WorkingDir: "{app}\desktop"; AppUserModelID: "art-rag"
-Name: "{autodesktop}\art-rag"; Filename: "{app}\desktop\art-rag.exe"; WorkingDir: "{app}\desktop"; AppUserModelID: "art-rag"; Tasks: desktopicon
+Name: "{autoprograms}\萊問"; Filename: "{app}\desktop\LaiWen.exe"; WorkingDir: "{app}\desktop"; AppUserModelID: "LaiWen"
+Name: "{autodesktop}\萊問"; Filename: "{app}\desktop\LaiWen.exe"; WorkingDir: "{app}\desktop"; AppUserModelID: "LaiWen"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\desktop\art-rag.exe"; Description: "立即開啟 art-rag（第一次會先完成安裝，約 5～10 分鐘）"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\desktop\LaiWen.exe"; Description: "立即開啟萊問（第一次會先完成安裝，約 5～10 分鐘）"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\app\deploy\offline\uninstall.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "artrag-cleanup"
@@ -92,7 +93,7 @@ begin
     Src := AddBackslash(Lowercase(ExpandConstant('{src}')));
     if Pos(Src, Dir) = 1 then
     begin
-      MsgBox('不能裝在安裝檔所在的資料夾裡，請選別的位置（例如 C:\art-rag 或 D:\art-rag）。', mbError, MB_OK);
+      MsgBox('不能裝在安裝檔所在的資料夾裡，請選別的位置（例如 C:\LaiWen 或 D:\LaiWen）。', mbError, MB_OK);
       Result := False;
     end
     else if Copy(Dir, 1, 2) = '\\' then

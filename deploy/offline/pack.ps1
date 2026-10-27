@@ -1,7 +1,7 @@
 ﻿<#
 做完整版離線安裝包（docs/adr/046、047）：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次，輸出一個資料夾：
-  setup.exe（安裝精靈）、使用說明.txt、payload\（app、offline、desktop：程式、模型與執行環境、桌面程式 art-rag.exe）
-把整個資料夾複製到別台 Windows 電腦後點兩下 setup.exe；裝完從開始功能表或桌面打開 art-rag，
+  setup.exe（安裝精靈）、使用說明.txt、payload\（app、offline、desktop：程式、模型與執行環境、桌面程式萊問 LaiWen.exe）
+把整個資料夾複製到別台 Windows 電腦後點兩下 setup.exe；裝完從開始功能表或桌面打開萊問，
 第一次打開會在程式視窗裡完成安裝（不連網），之後直接用。
 
   powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1                         # 輸出到 D:\art-rag-offline
@@ -180,11 +180,11 @@ try { Run 'npm' @('ci'); Run 'npm' @('run', 'build') } finally { Pop-Location }
 Remove-Item -Recurse -Force (Join-Path $App 'frontend\node_modules')
 
 # ---------------------------------------------------------------- 3b. 桌面程式（Electron）
-Say '建置桌面程式 art-rag.exe'
+Say '建置桌面程式萊問（LaiWen.exe）'
 $desktopSrc = Join-Path $App 'desktop'
 Push-Location $desktopSrc
 try { Run 'npm' @('ci'); Run 'npm' @('run', 'pack') } finally { Pop-Location }
-Move-Item (Join-Path $desktopSrc 'dist\art-rag-win32-x64') (Join-Path $Payload 'desktop')
+Move-Item (Join-Path $desktopSrc 'dist\LaiWen-win32-x64') (Join-Path $Payload 'desktop')
 foreach ($leftover in 'node_modules', 'dist') { Remove-Item -Recurse -Force (Join-Path $desktopSrc $leftover) }
 
 # ---------------------------------------------------------------- 4. 排程服務（Timefold）與 Java

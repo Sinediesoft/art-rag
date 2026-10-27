@@ -1,4 +1,4 @@
-// art-rag 桌面程式的主行程（docs/adr/047）。
+// 萊問（art-rag 桌面程式）的主行程（docs/adr/047）。
 // 介面就是後端在 :8000 提供的網頁（frontend/ 不用改）；這裡負責第一次安裝、起停服務、系統匣，
 // 真正的安裝與啟動都交給既有的 PowerShell 腳本（install-offline.ps1、start-services.ps1），不另寫一套。
 const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } = require('electron');
@@ -13,7 +13,7 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 // install-offline.ps1 啟用 WSL2 之後用這個結束碼表示「要重新開機」（和 Windows Installer 的 3010 同義）
 const REBOOT_EXIT = 3010;
 
-// 安裝後的結構：<安裝位置>\desktop\art-rag.exe、<安裝位置>\app（程式）、<安裝位置>\offline（離線包）。
+// 安裝後的結構：<安裝位置>\desktop\LaiWen.exe、<安裝位置>\app（程式）、<安裝位置>\offline（離線包）。
 // 開發時（npm start）直接用這個 repo
 const repo = app.isPackaged
   ? path.resolve(path.dirname(process.execPath), '..', 'app')
@@ -164,7 +164,7 @@ const BUTTONS = {
   retry: { id: 'retry', label: '重試', primary: true },
   openAnyway: { id: 'open-anyway', label: '仍要開啟', primary: true },
   logs: { id: 'open-logs', label: '開啟紀錄資料夾' },
-  quit: { id: 'quit', label: '結束 art-rag' },
+  quit: { id: 'quit', label: '結束萊問' },
 };
 
 async function boot() {
@@ -183,7 +183,7 @@ async function boot() {
       return setState({
         kind: 'reboot',
         title: '請重新開機',
-        detail: 'WSL2 已啟用。重新開機之後，再打開 art-rag 就會繼續安裝。',
+        detail: 'WSL2 已啟用。重新開機之後，再打開萊問就會繼續安裝。',
         buttons: [BUTTONS.quit],
       });
     }
@@ -251,7 +251,7 @@ async function diagnose() {
     kind: 'info',
     title: '故障診斷結果',
     detail: up ? '服務正在執行。' : '服務沒有在執行。',
-    buttons: [up ? { ...BUTTONS.openAnyway, label: '回到 art-rag' } : BUTTONS.retry, BUTTONS.logs],
+    buttons: [up ? { ...BUTTONS.openAnyway, label: '回到萊問' } : BUTTONS.retry, BUTTONS.logs],
   });
 }
 
@@ -269,13 +269,13 @@ function updateTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: '開啟 art-rag', click: showWindow },
+      { label: '開啟萊問', click: showWindow },
       { type: 'separator' },
       { label: '重新啟動服務', enabled: !busy && !quitting, click: restartServices },
       { label: '故障診斷', enabled: !busy && !quitting, click: diagnose },
       { label: '開啟紀錄資料夾', click: () => shell.openPath(logsDir) },
       { type: 'separator' },
-      { label: '結束 art-rag（停止全部服務）', enabled: !quitting, click: quitAll },
+      { label: '結束萊問（停止全部服務）', enabled: !quitting, click: quitAll },
     ]),
   );
 }
@@ -300,7 +300,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     show: false,
-    title: 'art-rag',
+    title: '萊問',
     icon: path.join(__dirname, 'build', 'icon.png'),
     backgroundColor: '#121212',
     webPreferences: {
@@ -311,6 +311,8 @@ function createWindow() {
     },
   });
   win.once('ready-to-show', () => win.show());
+  // 視窗標題固定是程式名稱，不跟著網頁的 <title> 變
+  win.on('page-title-updated', (event) => event.preventDefault());
   win.webContents.on('did-finish-load', () => {
     if (showingApp) return;
     for (const line of logLines) win.webContents.send('log', line);
@@ -336,8 +338,8 @@ function createWindow() {
       toldAboutTray = true;
       tray.displayBalloon({
         iconType: 'info',
-        title: 'art-rag 仍在背景執行',
-        content: '要停止服務、釋放記憶體：在系統匣的 art-rag 圖示按右鍵 →「結束 art-rag」。',
+        title: '萊問仍在背景執行',
+        content: '要停止服務、釋放記憶體：在系統匣的萊問圖示按右鍵 →「結束萊問」。',
       });
     }
   });
@@ -355,10 +357,10 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', showWindow);
   app.whenReady().then(() => {
-    app.setAppUserModelId('art-rag');
+    app.setAppUserModelId('LaiWen');
     Menu.setApplicationMenu(null);
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'build', 'tray.png')));
-    tray.setToolTip('art-rag');
+    tray.setToolTip('萊問');
     tray.on('click', showWindow);
     updateTrayMenu();
     createWindow();
