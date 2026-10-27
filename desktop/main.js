@@ -83,6 +83,8 @@ function backendUp() {
 function runPowerShell(body) {
   const script = [
     '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
+    // 沒有主控台時 PowerShell 會把進度條序列化成 CLIXML 寫到 stderr，紀錄裡全是雜訊
+    "$ProgressPreference = 'SilentlyContinue'",
     '$global:LASTEXITCODE = 0',
     `try { ${body}; if ($LASTEXITCODE -eq ${REBOOT_EXIT}) { exit ${REBOOT_EXIT} }; exit 0 }`,
     "catch { Write-Output ('✗ ' + $_.Exception.Message); exit 1 }",
@@ -96,6 +98,9 @@ function runPowerShell(body) {
       {
         cwd: repo,
         windowsHide: true,
+        // 不給標準輸入：背景的 wsl.exe（帶著 PostgreSQL／Redis）會一直讀繼承來的輸入管線，
+        // 之後起的 python 初始化時查這條管線就會卡死（建索引停在 0% CPU）
+        stdio: ['ignore', 'pipe', 'pipe'],
         // 診斷（Python）的輸出直接寫到這條管線：也要 UTF-8
         env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
       },
