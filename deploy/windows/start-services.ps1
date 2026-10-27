@@ -14,8 +14,9 @@
 - 直接在 Windows 跑時，3D 重建產生的程式碼要在 WSL2 執行（.env 設 CAD_WSL_PYTHON，docs/adr/027）；
   這個腳本最後會檢查並預熱 WSL 裡的 CadQuery 環境，做法見 docs/5070ti-host.md
 - 啟動失敗或健康檢查有 ✗ 時，deploy/diagnose.py 會看這次的 log 說明原因與修法（docs/adr/045；-NoDiagnose 關掉）
-- 在離線包裡執行時（docs/adr/046），uv、Python、Ollama、模型都用離線包裡的；Ollama 用 .env 的 HYBRID_BASE_URL
-  那個連接埠（離線包是 :11435），-Stop 也會停掉它
+- 在離線包裡執行時（docs/adr/046），uv、Python、Ollama、模型、llama.cpp 都用離線包裡的；Ollama 用 .env 的
+  HYBRID_BASE_URL 那個連接埠（離線包是 :11435）；PostgreSQL、Redis 不用 Docker，跑在離線包的 WSL 環境 artrag。
+  -Stop 也會停掉這兩樣
 #>
 param(
     [string]$LlamaServer = $env:LLAMA_SERVER,
@@ -31,6 +32,8 @@ $Logs = Join-Path $Repo 'data\logs'
 New-Item -ItemType Directory -Force $Logs | Out-Null
 Set-Location $Repo
 . (Join-Path $Repo 'deploy\offline\offline-env.ps1')
+# param 的預設值在 offline-env 設好 LLAMA_SERVER 之前就決定了：離線包要再補一次
+if (-not $LlamaServer) { $LlamaServer = $env:LLAMA_SERVER }
 
 # 診斷只看這次執行之後寫的 log：上次留下的舊錯誤不算
 $RunStart = [DateTimeOffset]::Now.ToUnixTimeSeconds()
@@ -88,7 +91,11 @@ if ($Stop) {
     Get-Worker | ForEach-Object {
         Stop-Process -Id $_.ProcessId -Force -Confirm:$false -ErrorAction SilentlyContinue; "已停止 worker（pid $($_.ProcessId)）"
     }
-    if (-not $IsOfflineBundle) {
+    if ($IsOfflineBundle) {
+        # 離線包的 PostgreSQL、Redis 在自己的 WSL 環境裡：一起停，釋放記憶體
+        Stop-OfflineWsl
+        "已停止 WSL 環境 $OfflineWslDistro（PostgreSQL、Redis）"
+    } else {
         '（資料庫與 Redis 容器不停：docker compose -f deploy/docker-compose.yml stop）'
         '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
     }
@@ -112,7 +119,12 @@ if ($envVars['DATABASE_URL']) { $services += 'db' }
 if ($jobsOn) { $services += 'redis' }
 if (-not $envVars['DATABASE_URL']) { '－ 沒設 DATABASE_URL：用檔案索引＋SQLite' }
 if (-not $jobsOn) { '－ 沒設 REDIS_URL：背景工作沒啟用，3D 重建與排程頁會回 503' }
-if ($services.Count -gt 0) {
+if ($IsOfflineBundle -and $services.Count -gt 0) {
+    # 離線包沒有 Docker：PostgreSQL、Redis 跑在離線包自己的 WSL 環境（docs/adr/046、deploy/offline/wsl-setup.sh）
+    if (Start-OfflineWsl $Logs) { "✓ WSL 環境 $OfflineWslDistro：PostgreSQL :5432、Redis :6379" }
+    else { throw "WSL 環境 $OfflineWslDistro 的 PostgreSQL／Redis 沒起來，看 $Logs\wsl-services.log" }
+}
+elseif ($services.Count -gt 0) {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw '設了 DATABASE_URL／REDIS_URL 但找不到 docker：先開 Docker Desktop' }
     # docker 把進度訊息寫到 stderr；Windows PowerShell 5.1 在 Stop 模式下會把它當錯誤中止，這段改看結束碼
     $ErrorActionPreference = 'Continue'

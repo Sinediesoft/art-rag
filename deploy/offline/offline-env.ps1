@@ -9,6 +9,9 @@ $OfflineDir = Join-Path (Split-Path $Repo -Parent) 'offline'
 $IsOfflineBundle = Test-Path (Join-Path $OfflineDir 'offline.json')
 # 離線包的 Ollama 用另一個連接埠：這台電腦原本就裝了 Ollama（佔著 11434）也不會打架
 $OfflineOllamaPort = 11435
+# 取代 Docker 的 WSL 環境（PostgreSQL＋pgvector、Redis、3D 重建的沙箱），裡面的設定見 wsl-setup.sh
+$OfflineWslDistro = 'artrag'
+$OfflineWslPorts = @(5432, 6379)
 
 if ($IsOfflineBundle) {
     $env:Path = (Join-Path $OfflineDir 'uv') + ';' + (Join-Path $OfflineDir 'ollama') + ';' + $env:Path
@@ -24,4 +27,41 @@ if ($IsOfflineBundle) {
     $env:HF_HUB_OFFLINE = '1'
     $env:OLLAMA_MODELS = Join-Path $OfflineDir 'ollama-models'
     $env:OLLAMA_HOST = "127.0.0.1:$OfflineOllamaPort"
+    $env:LLAMA_SERVER = Join-Path $OfflineDir 'llama.cpp\llama-server.exe'
+}
+
+# 本機連接埠連得上就算起來了。WSL 的服務經 localhost 轉送，Windows 這邊不一定看得到 Listen 狀態，所以直接連連看
+function Test-TcpPort([int]$Port) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try { return $client.ConnectAsync('127.0.0.1', $Port).Wait(500) -and $client.Connected }
+    catch { return $false }
+    finally { $client.Dispose() }
+}
+
+# 帶著 WSL 服務的 wsl.exe 行程（命令列有 artrag-services）
+function Get-OfflineWslKeeper {
+    Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" | Where-Object { $_.CommandLine -like '*artrag-services*' }
+}
+
+# 起 WSL 環境裡的 PostgreSQL 與 Redis，等到兩個連接埠都連得上；回傳是否成功
+function Start-OfflineWsl([string]$LogDir, [int]$Seconds = 60) {
+    if (-not (Get-OfflineWslKeeper)) {
+        Start-Process -FilePath 'wsl.exe' -WindowStyle Hidden `
+            -ArgumentList @('-d', $OfflineWslDistro, '-u', 'root', '--exec', '/usr/local/bin/artrag-services') `
+            -RedirectStandardOutput (Join-Path $LogDir 'wsl-services.out.log') `
+            -RedirectStandardError (Join-Path $LogDir 'wsl-services.log') | Out-Null
+    }
+    for ($i = 0; $i -lt $Seconds; $i++) {
+        if (@($OfflineWslPorts | Where-Object { -not (Test-TcpPort $_) }).Count -eq 0) { return $true }
+        Start-Sleep 1
+    }
+    return $false
+}
+
+function Stop-OfflineWsl {
+    Get-OfflineWslKeeper | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    wsl.exe --terminate $OfflineWslDistro *> $null
+    $ErrorActionPreference = $prev
 }

@@ -102,6 +102,21 @@ RULES: list[tuple[str, str, str, str]] = [
         "關掉這個視窗、開一個新的再重跑；還是不行就重跑 deploy/install.ps1",
     ),
     (
+        "wsl-unavailable",
+        r"BIOS 的虛擬化功能沒有開|HCS_E_HYPERV_NOT_INSTALLED|0x80370102|Virtual Machine Platform"
+        r"|WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED",
+        "WSL2 不能用：Windows 的「虛擬機器平台」沒啟用，或 BIOS 的虛擬化功能沒開",
+        "重新點一次「安裝.cmd」會自動啟用 WSL2（要系統管理員權限、重新開機）；還是不行就進 BIOS "
+        "開啟 Intel VT-x 或 AMD SVM",
+    ),
+    (
+        "wsl-distro-missing",
+        r"WSL_E_DISTRO_NOT_FOUND|There is no distribution with the supplied name|匯入 WSL 環境失敗",
+        "離線包的 WSL 環境 artrag 不見了或匯入失敗",
+        "重新點一次「安裝.cmd」會再匯入；還是失敗就看磁碟空間，"
+        "並確認離線包的 offline\\wsl\\artrag.tar 完整",
+    ),
+    (
         "offline-missing",
         r"Network connectivity is disabled|(was not|wasn't) found in the cache",
         "離線環境找不到需要的 Python 套件或 Python",
@@ -135,6 +150,11 @@ OFFLINE_FIXES = {
     "ollama-missing": "離線包的 offline\\ollama 缺檔，或連接埠 11435 被佔："
     "重新複製離線包、確認沒有別的程式用 11435",
     "uv-missing": "離線包的 offline\\uv 缺檔：從原本的離線包重新複製整個資料夾",
+    # 離線包沒有 Docker：資料庫與 Redis 在自己的 WSL 環境裡
+    "db-unreachable": "WSL 環境 artrag 的 PostgreSQL 沒起來：點兩下「停止」再「啟動」，"
+    "還是不行就看 app\\data\\logs\\wsl-services.log",
+    "redis": "WSL 環境 artrag 的 Redis 沒起來：點兩下「停止」再「啟動」，"
+    "還是不行就看 app\\data\\logs\\wsl-services.log",
 }
 
 # PowerShell 5.1 把原生程式寫到 stderr 的內容包成 NativeCommandError：就算成功，db.log 也有這幾行

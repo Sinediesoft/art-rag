@@ -101,6 +101,8 @@ def test_message_from_script_is_matched_too(repo, capsys):
             "Network connectivity is disabled, but the requested data wasn't found in the cache",
             "offline-missing",
         ),
+        ("Error code: Wsl/Service/CreateInstance/HCS_E_HYPERV_NOT_INSTALLED", "wsl-unavailable"),
+        ("Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND", "wsl-distro-missing"),
     ],
 )
 def test_each_rule_matches_its_example(line, rule_id):

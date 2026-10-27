@@ -1,15 +1,16 @@
 ﻿<#
-做離線安裝包（docs/adr/046）：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次，輸出一個資料夾。
-把整個資料夾複製到別台 Windows 電腦後，點兩下「安裝.cmd」就能裝好並啟動，安裝過程不連網。
+做完整版離線安裝包（docs/adr/046）：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次，輸出一個資料夾。
+把整個資料夾複製到別台 Windows 電腦後，點兩下「安裝.cmd」就能裝好並啟動全部功能，安裝過程不連網。
 
   powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1                         # 輸出到 D:\art-rag-offline
   powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1 -Out E:\art-rag-offline
 
-- 打包時會連網：可攜版 Python 3.12、Python 套件（照 backend\uv.lock）、前端套件（npm ci）
-- 模型直接從這台複製：Ollama 的 qwen3-vl 8B／4B，Hugging Face 快取裡 shared\models.yaml 釘選的 bge-m3、Chinese-CLIP
+- 打包時會連網：可攜版 Python 3.12、Python 套件（照 backend\uv.lock）、前端套件（npm ci）、Timefold 排程的套件（Maven）、
+  Ubuntu 24.04 的 WSL 映像與裡面的 PostgreSQL／Redis／CadQuery、WSL 的離線安裝程式
+- 從這台複製：Ollama 與 qwen3-vl 8B／4B、Hugging Face 快取裡 shared\models.yaml 釘選的 bge-m3、Chinese-CLIP、
+  Ortho2CAD 模型與 llama.cpp（CUDA 版）、Java 21
 - 只打包已 commit 的內容（git archive HEAD）：.env、data\ 不會帶出去
-- 輸出約 17 GB；複製到隨身碟要用 exFAT 或 NTFS（8B 模型單一個檔案超過 4 GB，FAT32 放不下）
-- 不含 Docker（PostgreSQL、Redis）、Ortho2CAD、Java 排程：離線包用 SQLite，3D 重建與排程的背景工作不能用
+- 輸出約 25 GB；複製到隨身碟要用 exFAT 或 NTFS（8B 模型單一個檔案超過 4 GB，FAT32 放不下）
 #>
 param(
     [string]$Out = 'D:\art-rag-offline',
@@ -17,8 +18,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 的下載進度條會讓 Invoke-WebRequest 慢好幾倍
+$ProgressPreference = 'SilentlyContinue'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 Set-Location $Repo
+
+# Ubuntu 官方的 WSL 映像；同一個資料夾有 SHA256SUMS 可以核對
+$RootfsBase = 'https://cloud-images.ubuntu.com/wsl/releases/24.04/current'
+$RootfsName = 'ubuntu-noble-wsl-amd64-wsl.rootfs.tar.gz'
+$BuildDistro = 'artrag-build'
 
 function Say([string]$text) { Write-Host "`n▶ $text" -ForegroundColor Cyan }
 function Note([string]$text) { Write-Host "  $text" }
@@ -35,18 +43,42 @@ function Resolve-Exe([string]$name) {
     if ($item.LinkType -and $item.Target) { return @($item.Target)[0] }
     return $item.FullName
 }
+# C:\Users\me → /mnt/c/Users/me（WSL 預設掛載點）
+function ConvertTo-WslPath([string]$path) {
+    $full = [IO.Path]::GetFullPath($path)
+    return '/mnt/' + $full.Substring(0, 1).ToLower() + ($full.Substring(2) -replace '\\', '/')
+}
+# wsl.exe 自己的訊息是 UTF-16：這裡只看結束碼
+function Wsl([string[]]$argList) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & wsl.exe @argList
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($code -ne 0) { throw "wsl.exe $($argList -join ' ') 失敗（結束碼 $code）" }
+}
+function Get-WslDistros {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $names = @(& wsl.exe --list --quiet 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } | Where-Object { $_ })
+    $ErrorActionPreference = $prev
+    return $names
+}
 
 # ---------------------------------------------------------------- 0. 檢查
 Say '檢查這台電腦'
-foreach ($cmd in 'git', 'uv', 'npm', 'ollama') {
+foreach ($cmd in 'git', 'uv', 'npm', 'ollama', 'wsl') {
     if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "找不到 $cmd：打包要在已經裝好整套系統的電腦上跑" }
 }
 if ((Test-Path $Out) -and (Get-ChildItem $Out -Force | Select-Object -First 1)) {
     throw "$Out 已經有東西：換一個 -Out，或確認不要了再自己刪掉"
 }
+if ((Get-WslDistros) -contains $BuildDistro) {
+    throw "WSL 已經有 $BuildDistro（上次打包中斷留下的）：確認不要了再執行 wsl --unregister $BuildDistro"
+}
 $drive = (Split-Path -Qualifier ([IO.Path]::GetFullPath($Out))).TrimEnd(':')
 $freeGb = [math]::Round((Get-PSDrive $drive).Free / 1GB, 1)
-if ($freeGb -lt 25) { throw "$($drive): 只剩 $freeGb GB，離線包約 17 GB，打包過程還要暫存空間（至少 25 GB）" }
+if ($freeGb -lt 40) { throw "$($drive): 只剩 $freeGb GB，離線包約 25 GB，打包過程還要暫存空間（至少 40 GB）" }
 
 $commit = (git rev-parse --short HEAD).Trim()
 if (git status --porcelain --untracked-files=no) { Note "注意：有還沒 commit 的修改，不會打包進去（打包的是 $commit）" }
@@ -56,36 +88,99 @@ $ollamaModels = if ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { Join-Path 
 $hfHub = if ($env:HF_HUB_CACHE) { $env:HF_HUB_CACHE }
     elseif ($env:HF_HOME) { Join-Path $env:HF_HOME 'hub' }
     else { Join-Path $env:USERPROFILE '.cache\huggingface\hub' }
+# Ortho2CAD 模型不進 Git：這個資料夾沒有就到主要工作區找（在 git worktree 裡打包時）
+$mainRepo = Split-Path (Resolve-Path (git rev-parse --git-common-dir)).Path -Parent
+$ortho2cad = @((Join-Path $Repo 'models\ortho2cad'), (Join-Path $mainRepo 'models\ortho2cad')) |
+    Where-Object { Test-Path (Join-Path $_ 'mmproj-ortho2cad-f16.gguf') } | Select-Object -First 1
+if (-not $ortho2cad) { throw '找不到 models\ortho2cad（先跑 pipelines\setup_ortho2cad.py）' }
+# llama.cpp：和 start-services.ps1 同一套找法
+$llamaServer = if ($env:LLAMA_SERVER) { $env:LLAMA_SERVER } else { Resolve-Exe 'llama-server' }
+if (-not $llamaServer) {
+    $llamaServer = Get-ChildItem (Join-Path $env:USERPROFILE 'tools\llama.cpp-*\llama-server.exe') -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $llamaServer -or -not (Get-ChildItem (Split-Path $llamaServer) -Filter 'ggml-cuda*.dll')) {
+    throw '找不到 CUDA 版的 llama-server（docs\5070ti-host.md「第一次安裝」第 6 步）'
+}
+$javaHome = if ($env:JAVA_HOME) { $env:JAVA_HOME } else { Split-Path (Split-Path (Resolve-Exe 'java') -Parent) -Parent }
+if (-not (Test-Path (Join-Path $javaHome 'bin\java.exe'))) { throw '找不到 Java 21（winget install Microsoft.OpenJDK.21）' }
+
 Note "版本：$commit"
 Note "Ollama：$ollamaProgram（模型 $ollamaModels）"
 Note "Hugging Face 快取：$hfHub"
+Note "Ortho2CAD：$ortho2cad；llama-server：$llamaServer"
+Note "Java：$javaHome"
 Note "輸出：$Out（$($drive): 剩 $freeGb GB）"
 
 $App = Join-Path $Out 'app'
 $Offline = Join-Path $Out 'offline'
-New-Item -ItemType Directory -Force $App, $Offline | Out-Null
+$Tmp = Join-Path $Out 'tmp'
+New-Item -ItemType Directory -Force $App, $Offline, $Tmp, (Join-Path $Offline 'wsl') | Out-Null
 
 # ---------------------------------------------------------------- 1. 原始碼
 Say "原始碼（git archive $commit）"
-$zip = Join-Path $Out 'source.zip'
+$zip = Join-Path $Tmp 'source.zip'
 Run 'git' @('archive', '--format=zip', '-o', $zip, 'HEAD')
 Expand-Archive -Path $zip -DestinationPath $App
 Remove-Item $zip
 
-# ---------------------------------------------------------------- 2. 前端
+# ---------------------------------------------------------------- 2. WSL 環境（取代 Docker）
+# 從乾淨的 Ubuntu 建：和這台自己的 WSL 發行版完全分開，不會帶到個人檔案
+Say 'WSL 環境：Ubuntu 24.04＋PostgreSQL／pgvector、Redis、CadQuery'
+$rootfs = Join-Path $Tmp $RootfsName
+Invoke-WebRequest -UseBasicParsing "$RootfsBase/$RootfsName" -OutFile $rootfs
+$sums = (Invoke-WebRequest -UseBasicParsing "$RootfsBase/SHA256SUMS").Content
+$expect = ($sums -split "`n" | Where-Object { $_ -match [regex]::Escape($RootfsName) } | Select-Object -First 1) -split '\s+' | Select-Object -First 1
+$actual = (Get-FileHash $rootfs -Algorithm SHA256).Hash.ToLower()
+if (-not $expect -or $actual -ne $expect.ToLower()) { throw "Ubuntu 映像的 SHA-256 不符（$actual ≠ $expect）" }
+Note '✓ SHA-256 驗證通過'
+Wsl @('--import', $BuildDistro, (Join-Path $Tmp 'wsl-build'), $rootfs, '--version', '2')
+try {
+    Wsl @('-d', $BuildDistro, '-u', 'root', '--exec', '/bin/bash', (ConvertTo-WslPath (Join-Path $App 'deploy\offline\wsl-setup.sh')))
+    Wsl @('--terminate', $BuildDistro)
+    Wsl @('--export', $BuildDistro, (Join-Path $Offline 'wsl\artrag.tar'))
+} finally {
+    # 暫時的建置環境：匯出之後就不需要了（它是這支腳本自己 import 的）
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    wsl.exe --unregister $BuildDistro *> $null
+    $ErrorActionPreference = $prev
+}
+Remove-Item $rootfs
+
+# 沒有 WSL 的電腦用：WSL 的離線安裝程式（GitHub 上 microsoft/WSL 最新的正式版）
+$release = Invoke-RestMethod -UseBasicParsing 'https://api.github.com/repos/microsoft/WSL/releases/latest'
+$msi = $release.assets | Where-Object { $_.name -like '*x64.msi' } | Select-Object -First 1
+if (-not $msi) { throw "microsoft/WSL $($release.tag_name) 找不到 x64.msi" }
+Invoke-WebRequest -UseBasicParsing $msi.browser_download_url -OutFile (Join-Path $Offline "wsl\$($msi.name)")
+Note "✓ WSL 離線安裝程式：$($msi.name)"
+
+# ---------------------------------------------------------------- 3. 前端
 # 裝的電腦不用 Node.js：這裡建置好，node_modules 不帶走
 Say '建置前端'
 Push-Location (Join-Path $App 'frontend')
 try { Run 'npm' @('ci'); Run 'npm' @('run', 'build') } finally { Pop-Location }
 Remove-Item -Recurse -Force (Join-Path $App 'frontend\node_modules')
 
-# ---------------------------------------------------------------- 3. Python 與套件
+# ---------------------------------------------------------------- 4. 排程服務（Timefold）與 Java
+Say '排程服務（Maven 建置）與 Java 21'
+$env:JAVA_HOME = $javaHome
+Run 'uv' @('run', '--no-project', '--with', 'httpx', 'python', (Join-Path $App 'pipelines\setup_scheduler.py'), '--skip-tests')
+# 裝的電腦只要 scheduler.jar；.java-home 安裝時改成離線包的 Java
+Get-ChildItem (Join-Path $App 'scheduler\target\*') -Exclude 'scheduler.jar' | Remove-Item -Recurse -Force
+foreach ($leftover in '.maven', '.java-home') {
+    $p = Join-Path $App "scheduler\$leftover"
+    if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+}
+Copy-Item -Recurse $javaHome (Join-Path $Offline 'jdk')
+
+# ---------------------------------------------------------------- 5. Python 與套件
 # 虛擬環境不能搬（裡面寫死路徑）：把 Python 與 uv.lock 的套件放進離線包自己的快取，裝的電腦用快取重建
 Say 'Python 3.12 與套件（照 backend\uv.lock）'
 $env:UV_PYTHON_INSTALL_DIR = Join-Path $Offline 'python'
 $env:UV_CACHE_DIR = Join-Path $Offline 'uv-cache'
 $env:UV_PYTHON_PREFERENCE = 'only-managed'
-$env:UV_PROJECT_ENVIRONMENT = Join-Path $Out 'tmp-venv'
+$env:UV_PROJECT_ENVIRONMENT = Join-Path $Tmp 'venv'
 Run 'uv' @('python', 'install', '3.12')
 Push-Location (Join-Path $App 'backend')
 try { Run 'uv' @('sync', '--frozen') } finally { Pop-Location }
@@ -98,7 +193,7 @@ foreach ($name in 'uv', 'uvx') {
     if ($exe) { Copy-Item $exe (Join-Path $Offline "uv\$name.exe") }
 }
 
-# ---------------------------------------------------------------- 4. 模型與 Ollama
+# ---------------------------------------------------------------- 6. 模型與 Ollama、Ortho2CAD
 Say '模型與 Ollama（從這台複製）'
 $bundleArgs = @('run', '--no-project', 'python', (Join-Path $App 'deploy\offline\bundle.py'),
     '--out', $Offline, '--models-yaml', (Join-Path $App 'shared\models.yaml'),
@@ -106,17 +201,27 @@ $bundleArgs = @('run', '--no-project', 'python', (Join-Path $App 'deploy\offline
 foreach ($m in $Models) { $bundleArgs += @('--model', $m) }
 Run 'uv' $bundleArgs
 
-# ---------------------------------------------------------------- 5. 點兩下用的檔案、完成標記
+Say 'Ortho2CAD 模型與 llama.cpp（CUDA 版）'
+# start-services.ps1、deploy\llama-router.ini 都從 app\models\ortho2cad 讀
+$ortho2cadOut = Join-Path $App 'models\ortho2cad'
+New-Item -ItemType Directory -Force $ortho2cadOut | Out-Null
+Get-ChildItem $ortho2cad -Filter '*.gguf' | Copy-Item -Destination $ortho2cadOut
+Copy-Item -Recurse (Split-Path $llamaServer -Parent) (Join-Path $Offline 'llama.cpp')
+
+# ---------------------------------------------------------------- 7. 點兩下用的檔案、完成標記
 Say '安裝、啟動、停止的捷徑檔'
 foreach ($name in '安裝.cmd', '啟動.cmd', '停止.cmd', '使用說明.txt') {
     Copy-Item (Join-Path $App "deploy\offline\$name") (Join-Path $Out $name)
 }
+Remove-Item -Recurse -Force $Tmp
 # offline.json 最後才寫：有它才算完整的離線包（offline-env.ps1 靠它判斷）
 $info = [ordered]@{
     commit = $commit
     created = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ssK')
     models = $Models
     ollama_port = 11435
+    wsl_distro = 'artrag'
+    wsl_installer = $msi.name
 }
 [IO.File]::WriteAllText((Join-Path $Offline 'offline.json'), ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
 
