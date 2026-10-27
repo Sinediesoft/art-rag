@@ -17,6 +17,7 @@
 
 import json
 import secrets
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -24,7 +25,7 @@ from functools import lru_cache
 
 from fastapi import Request, Response
 
-from app.core import jwt
+from app.core import jwt, passwords
 from app.core.config import get_access_config, get_settings
 from app.core.errors import AppError
 
@@ -33,9 +34,10 @@ ISSUER = "art-rag"
 TW = timezone(timedelta(hours=8))
 ALL = "*"  # access.yaml 的 warehouses／customers／artworks 寫 "*"＝全部（docs/adr/036）
 # 不用憑證的端點：健康檢查（只回存活與就緒）、取得憑證
-# （/auth/accounts 沒有有效憑證時發一般員工的憑證）。
+# （/auth/accounts 沒有有效憑證時發一般員工的憑證）、
+# 帳號密碼登入（憑證過期也要能直接登入，docs/adr/045）。
 # 切換身分不在這裡：沒有憑證就在閘道 401（docs/adr/030）
-PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts"}
+PUBLIC_PATHS = {"/api/v1/health", "/api/v1/auth/accounts", "/api/v1/auth/login"}
 
 
 @dataclass(frozen=True)
@@ -191,7 +193,9 @@ def _secret() -> str:
     return get_settings().jwt_secret or secrets.token_urlsafe(32)
 
 
-def issue(acc: Account, now: float | None = None) -> str:
+def issue(acc: Account, now: float | None = None, amr: tuple[str, ...] = ()) -> str:
+    """amr：這張憑證怎麼取得的（pwd＝帳號密碼登入、demo＝展示模式切換、空＝預設的一般員工），
+    只給頁首顯示，權限一樣照 access.yaml 重查（docs/adr/045）。"""
     now = int(now or time.time())
     claims = {
         "iss": ISSUER,
@@ -201,6 +205,7 @@ def issue(acc: Account, now: float | None = None) -> str:
         "dept": acc.dept,
         "depts": list(acc.depts),
         "clearance": acc.clearance,
+        "amr": list(amr),
         "iat": now,
         "exp": now + get_settings().jwt_ttl_min * 60,
     }
@@ -349,6 +354,74 @@ def switch(request: Request, response: Response, account_id: str) -> Auth:
     require_demo(request, "切換身分")
     auth_of(request)  # 閘道已擋沒有憑證的請求；直接呼叫函式時也一樣要有
     acc = get_account(account_id)
+    token = issue(acc, amr=("demo",))
+    _set_cookie(response, token)
+    return Auth(acc, jwt.peek(token), token, "cookie")
+
+
+# 登入失敗次數：(帳號, 來源) → (連續失敗次數, 暫停到什麼時候)。展示版單一後端行程，記憶體就夠；
+# 多台後端要改放 Redis（和交接票一樣，docs/adr/030）
+_failures: dict[tuple[str, str], tuple[int, float]] = {}
+_failures_lock = threading.Lock()
+LOGIN_FAILED_MESSAGE = "帳號或密碼不對"
+
+
+def login_accounts() -> list[str]:
+    """.env 設了密碼雜湊、而且還在 access.yaml 裡的帳號：前端只列這些讓人登入。"""
+    hashes = get_settings().account_password_hashes
+    return [aid for aid in accounts() if aid in hashes]
+
+
+def _locked_for(key: tuple[str, str], now: float) -> int:
+    with _failures_lock:
+        _, until = _failures.get(key, (0, 0.0))
+    return int(until - now) + 1 if until > now else 0
+
+
+def _record_failure(key: tuple[str, str], now: float) -> None:
+    s = get_settings()
+    with _failures_lock:
+        count, until = _failures.get(key, (0, 0.0))
+        # 暫停時間過了就重新計數，不然第 6 次錯又馬上鎖住
+        count = 0 if until and until <= now else count
+        count += 1
+        until = now + s.login_lock_s if count >= s.login_max_failures else 0.0
+        _failures[key] = (count, until)
+
+
+def login(request: Request, response: Response, account_id: str, password: str) -> Auth:
+    """帳號密碼登入（docs/adr/045）：驗過就簽和切換身分一樣的 JWT，第 2～7 段完全不變。
+    帳號不存在、沒設密碼、密碼錯都回同一句話，也一樣算一次 scrypt，不透露哪些帳號能登入。"""
+    key = (account_id, client_host(request))
+    now = time.monotonic()
+    if wait := _locked_for(key, now):
+        raise AppError("LOGIN_LOCKED", f"登入失敗太多次，請 {wait} 秒後再試（{account_id}）", 429)
+    acc = accounts().get(account_id)
+    encoded = get_settings().account_password_hashes.get(account_id) if acc else None
+    matched = passwords.verify_password(password, encoded or passwords.DUMMY_HASH)
+    if not (matched and encoded):
+        _record_failure(key, now)
+        from app.agent import guard  # guard 會 import 這個模組，放這裡避免循環 import
+
+        guard.log_block(
+            1,
+            "登入失敗",
+            None,
+            f"帳號 {account_id} 密碼登入失敗，來源 {client_host(request)}",
+            getattr(request.state, "request_id", ""),
+            "登入（帳號密碼）",
+        )
+        raise AppError("LOGIN_FAILED", LOGIN_FAILED_MESSAGE, 401)
+    with _failures_lock:
+        _failures.pop(key, None)
+    token = issue(acc, amr=("pwd",))
+    _set_cookie(response, token)
+    return Auth(acc, jwt.peek(token), token, "cookie")
+
+
+def logout(response: Response) -> Auth:
+    """登出：直接改發預設帳號（一般員工）的憑證，和沒登入時一樣能查公開資料。"""
+    acc = get_account(get_access_config()["default_account"])
     token = issue(acc)
     _set_cookie(response, token)
     return Auth(acc, jwt.peek(token), token, "cookie")

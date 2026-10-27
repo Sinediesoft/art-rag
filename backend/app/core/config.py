@@ -126,6 +126,14 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     jwt_ttl_min: int = 480
 
+    # 帳號密碼登入（docs/adr/045）：{"帳號 ID": "scrypt$..."}，
+    # 用 python -m app.core.passwords 產生；放 .env 不進 git，
+    # 沒列到的帳號不能用密碼登入（一般員工不用登入）
+    account_password_hashes: dict[str, str] = {}
+    # 同一個帳號＋來源連續登入失敗幾次就暫停多久（秒），擋暴力猜密碼
+    login_max_failures: int = 5
+    login_lock_s: int = 300
+
     data_dir: Path = REPO_ROOT / "data"
 
     # 測試用：把 shared/（access.yaml 等設定）換成另一份副本，讓 API 與 worker 行程一起看到「撤權」

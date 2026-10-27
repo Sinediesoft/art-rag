@@ -46,6 +46,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login
+         * @description 帳號密碼登入（docs/adr/045）：密碼雜湊在 .env 的 ACCOUNT_PASSWORD_HASHES。
+         *     不用先有憑證（過期也能直接登入）；帳號不存在和密碼錯回同一個 401 LOGIN_FAILED，
+         *     連錯太多次回 429 LOGIN_LOCKED。
+         */
+        post: operations["login_api_v1_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout
+         * @description 登出：改發一般員工的憑證（沒登入時本來就是一般員工），不是清空成沒有憑證。
+         */
+        post: operations["logout_api_v1_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -1772,6 +1814,12 @@ export interface components {
             accounts: components["schemas"]["Account"][];
             /** Demo Controls */
             demo_controls: boolean;
+            /**
+             * Login Accounts
+             * @description 能用帳號密碼登入的帳號 ID（.env 設了 ACCOUNT_PASSWORD_HASHES 的，docs/adr/045）
+             * @default []
+             */
+            login_accounts: string[];
             /**
              * Pending Approvals
              * @description 待核准單數量（主管看得到要處理幾件）
@@ -3676,6 +3724,13 @@ export interface components {
              */
             histogram: number[];
         };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Account Id */
+            account_id: string;
+            /** Password */
+            password: string;
+        };
         /** MachineInfo */
         MachineInfo: {
             /** Machine Id */
@@ -5489,7 +5544,7 @@ export interface components {
         TokenInfo: {
             /**
              * Claims
-             * @description JWT payload：iss、sub、name、roles、dept、depts、clearance、iat、exp
+             * @description JWT payload：iss、sub、name、roles、dept、depts、clearance、amr（pwd＝帳號密碼登入、demo＝展示切換，docs/adr/045）、iat、exp
              */
             claims: {
                 [key: string]: unknown;
@@ -5625,6 +5680,68 @@ export interface operations {
                 "application/json": components["schemas"]["SwitchAccountRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login_api_v1_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout_api_v1_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

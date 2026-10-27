@@ -109,10 +109,11 @@ export const account = (id = "warehouse", over: Partial<Account> = {}): Account 
   ...over,
 });
 
-export const accounts = (current = "warehouse", demo = true): AccountsResponse => ({
+export const accounts = (current = "warehouse", demo = true, loginAccounts: string[] = []): AccountsResponse => ({
   current: account(current),
   accounts: [account("guest"), account("warehouse"), account("manager")],
   demo_controls: demo,
+  login_accounts: loginAccounts,
   pending_approvals: 0,
   pending_region_drafts: 0,
   token: {

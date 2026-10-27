@@ -7,7 +7,7 @@ import { formatTaipei } from "./lib/format";
 import { readMarks, STORAGE_KEY, UNCONFIRMED_PREFIX } from "./shell/persist";
 import { ShellProvider } from "./shell/store";
 import { viewport } from "./test/setup";
-import { account, accounts, baseHandlers, done, factoryRoute, jobSse, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
+import { account, accounts, apiError, baseHandlers, done, factoryRoute, jobSse, json, liveSse, mockTransport, route, sources, sse } from "./test/transport";
 
 // 照片前處理用 canvas，jsdom 沒有：直接把檔案交給上傳
 vi.mock("./lib/image", () => ({ preprocessImage: async (f: File) => f }));
@@ -178,6 +178,65 @@ describe("入口：對話紀錄欄與抽屜", () => {
     expect(within(foot).getByRole("menuitemradio", { name: /一般員工/ })).toBeTruthy();
     fireEvent.click(screen.getByLabelText("收合對話紀錄"));
     expect(document.querySelector(".side.is-mini .side__status .topbar__account")).not.toBeNull();
+  });
+});
+
+describe("帳號密碼登入（ADR 045）", () => {
+  it("沒開展示模式也能用密碼登入；密碼錯顯示後端那句話、密碼欄清空；登入後可以登出回一般員工", async () => {
+    const t = mockTransport();
+    baseHandlers(t);
+    let current = "guest";
+    let amr: string[] = [];
+    const me = () => {
+      const r = accounts(current, false, ["manager"]);
+      return json({ ...r, token: { ...r.token, claims: { ...r.token.claims, amr } } });
+    };
+    t.on("GET", "/auth/accounts", me);
+    t.on("POST", "/auth/login", ({ body }) => {
+      const b = body as { account_id: string; password: string };
+      if (b.password !== "right-pass") return apiError(401, "LOGIN_FAILED", "帳號或密碼不對");
+      current = b.account_id;
+      amr = ["pwd"];
+      return me();
+    });
+    t.on("POST", "/auth/logout", () => {
+      current = "guest";
+      amr = [];
+      return me();
+    });
+    renderApp();
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("一般員工"));
+    fireEvent.click(document.querySelector(".topbar__account")!);
+    // 沒開展示模式：沒有切換清單，只有登入表單；帳號只列設了密碼的
+    expect(screen.queryByRole("menuitemradio")).toBeNull();
+    const form = document.querySelector("form.login") as HTMLFormElement;
+    expect([...form.querySelectorAll("option")].map((o) => o.textContent)).toEqual(["主管（manager）"]);
+    const pwd = within(form).getByLabelText("密碼") as HTMLInputElement;
+    fireEvent.change(pwd, { target: { value: "wrong-pass" } });
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    await waitFor(() => expect(form.textContent).toContain("帳號或密碼不對"));
+    expect(pwd.value).toBe("");
+    expect(document.querySelector(".topbar__account")?.textContent).toContain("一般員工");
+    fireEvent.change(pwd, { target: { value: "right-pass" } });
+    await act(async () => {
+      fireEvent.submit(form);
+    });
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("主管"));
+    expect(t.calls.filter((c) => c.path === "/auth/login").map((c) => c.body)).toEqual([
+      { account_id: "manager", password: "wrong-pass" },
+      { account_id: "manager", password: "right-pass" },
+    ]);
+    // 登入後選單顯示「密碼登入」與登出
+    fireEvent.click(document.querySelector(".topbar__account")!);
+    expect(document.querySelector(".acct__jwt")?.textContent).toContain("密碼登入");
+    expect(document.querySelector("form.login")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /登出/ }));
+    });
+    await waitFor(() => expect(document.querySelector(".topbar__account")?.textContent).toContain("一般員工"));
+    expect(t.calls.some((c) => c.method === "POST" && c.path === "/auth/logout")).toBe(true);
   });
 });
 

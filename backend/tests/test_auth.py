@@ -5,10 +5,12 @@ import base64
 import json
 import time
 
+import pytest
 from conftest import DEFAULT_ACCOUNT, as_account
 from fastapi.testclient import TestClient
 
-from app.core import jwt
+from app.core import jwt, passwords
+from app.core.config import get_settings
 from app.main import app
 from app.repositories.logs_repo import get_logs_repo
 from app.services import identity
@@ -130,3 +132,109 @@ def test_accounts_endpoint_replaces_a_stale_token_and_says_why(monkeypatch):
     assert r.status_code == 200 and body["current"]["id"] == "guest"
     issued = body["token"]["checks"][0]
     assert issued["key"] == "issued" and "舊的簽章金鑰" in issued["detail"]
+
+
+# ---- 帳號密碼登入（docs/adr/045）----
+
+PASSWORD = "correct-horse-42"
+
+
+@pytest.fixture
+def passwords_set(monkeypatch):
+    """主管、倉管設了密碼；業務、藝術家沒設。登入失敗次數每個測試從頭算。"""
+    hashed = passwords.hash_password(PASSWORD)
+    monkeypatch.setattr(
+        get_settings(), "account_password_hashes", {"manager": hashed, "warehouse": hashed}
+    )
+    identity._failures.clear()
+    yield
+    identity._failures.clear()
+
+
+def _login(c: TestClient, account_id: str, password: str = PASSWORD):
+    return c.post("/api/v1/auth/login", json={"account_id": account_id, "password": password})
+
+
+def test_password_hash_roundtrip_and_malformed_hashes_never_match():
+    h = passwords.hash_password("s3cret-pass")
+    assert h.startswith("scrypt$") and passwords.verify_password("s3cret-pass", h)
+    assert not passwords.verify_password("s3cret-pasS", h)
+    assert passwords.hash_password("s3cret-pass") != h  # 每次的鹽不一樣
+    for bad in ["", "plain-text", "bcrypt$1$2$3$4$5", "scrypt$x$8$1$AA$AA"]:
+        assert not passwords.verify_password("s3cret-pass", bad)
+
+
+def test_login_issues_a_token_for_that_account_without_a_previous_token(passwords_set):
+    fresh = TestClient(app)  # 沒有 cookie：登入不用先有憑證
+    r = _login(fresh, "manager")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["current"]["id"] == "manager" and body["token"]["claims"]["amr"] == ["pwd"]
+    assert sorted(body["login_accounts"]) == ["manager", "warehouse"]
+    assert identity.COOKIE in fresh.cookies
+    # 之後的請求照主管的權限（access.yaml 重查），不是照 JWT 裡寫的
+    assert fresh.get("/api/v1/auth/accounts").json()["current"]["id"] == "manager"
+    assert fresh.get("/api/v1/approvals").status_code == 200
+
+
+def test_login_works_with_an_expired_token(passwords_set):
+    fresh = TestClient(app)
+    old = identity.issue(identity.get_account("guest"), now=time.time() - 10 * 3600)
+    r = fresh.post(
+        "/api/v1/auth/login",
+        json={"account_id": "warehouse", "password": PASSWORD},
+        headers={"Authorization": f"Bearer {old}"},
+    )
+    assert r.status_code == 200 and r.json()["current"]["id"] == "warehouse"
+
+
+@pytest.mark.parametrize(
+    ("account_id", "password"),
+    [("manager", "wrong-password"), ("nobody", PASSWORD), ("sales", PASSWORD)],
+    ids=["wrong-password", "unknown-account", "no-password-set"],
+)
+def test_failed_logins_look_the_same_and_are_logged_without_the_password(
+    passwords_set, account_id, password
+):
+    fresh = TestClient(app)
+    r = _login(fresh, account_id, password)
+    err = r.json()["error"]
+    assert r.status_code == 401 and err["code"] == "LOGIN_FAILED"
+    assert err["message"] == identity.LOGIN_FAILED_MESSAGE  # 三種情況同一句話
+    assert identity.COOKIE not in fresh.cookies  # 沒有簽發任何憑證
+    log = get_logs_repo().recent_security(1)[0]
+    assert log["stage"] == 1 and log["rule"] == "登入失敗" and account_id in log["text"]
+    assert password not in log["text"]
+
+
+def test_repeated_failures_lock_the_account_for_that_source(passwords_set, monkeypatch):
+    monkeypatch.setattr(get_settings(), "login_max_failures", 3)
+    fresh = TestClient(app)
+    for _ in range(3):
+        assert _login(fresh, "manager", "wrong-password").status_code == 401
+    r = _login(fresh, "manager")  # 鎖住時連正確的密碼也不收
+    assert r.status_code == 429 and r.json()["error"]["code"] == "LOGIN_LOCKED"
+    assert _login(fresh, "warehouse").status_code == 200  # 只鎖那一個帳號
+    # 暫停時間過了重新計數（TestClient 的來源主機是 testclient）
+    key = ("manager", "testclient")
+    count, _ = identity._failures[key]
+    identity._failures[key] = (count, time.monotonic() - 1)
+    assert _login(fresh, "manager").status_code == 200
+    assert key not in identity._failures  # 成功就清掉失敗紀錄
+
+
+def test_logout_goes_back_to_the_default_account(passwords_set):
+    fresh = TestClient(app)
+    assert _login(fresh, "manager").status_code == 200
+    r = fresh.post("/api/v1/auth/logout")
+    assert r.status_code == 200
+    body = r.json()
+    # access.yaml 的 default_account（一般員工），不是 conftest 讓測試預設用的帳號
+    assert body["current"]["id"] == "guest" and body["token"]["claims"]["amr"] == []
+    assert fresh.get("/api/v1/auth/accounts").json()["current"]["id"] == "guest"
+
+
+def test_demo_switch_is_marked_as_demo_in_the_token(client):
+    me = client.post("/api/v1/auth/switch", json={"account_id": "sales"}).json()
+    assert me["token"]["claims"]["amr"] == ["demo"]
+    as_account(client, DEFAULT_ACCOUNT)

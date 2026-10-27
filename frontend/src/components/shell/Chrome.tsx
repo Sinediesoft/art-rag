@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { scopeLabel, type Account, type AccountsResponse, type MemoryStatus } from "../../api/client";
-import { useAccounts, useCanView, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
+import { useAccounts, useCanView, useLogin, useLogout, useSecurityLogs, useStatus, useSwitchAccount } from "../../api/hooks";
 import { acknowledgeWrite, dismissOrphans, useWrites } from "../../api/writes";
 import { formatTaipei } from "../../lib/format";
 import { Icon } from "./Icons";
@@ -46,24 +46,83 @@ export const pendingCount = (data?: AccountsResponse) =>
 
 const hhmm = (iso: string) => iso.slice(11, 16);
 
+/** 憑證怎麼取得的（JWT 的 amr，docs/adr/045）：只給人看，權限一樣照伺服器重查的帳號 */
+const amrText = (amr: unknown) =>
+  Array.isArray(amr) && amr.includes("pwd") ? "密碼登入" : Array.isArray(amr) && amr.includes("demo") ? "展示切換" : "未登入";
+
+/**
+ * 帳號密碼登入（docs/adr/045）：只列 .env 設了密碼的帳號。登入成功和切換展示身分一樣換掉 JWT、清掉舊身分的資料；
+ * 密碼只放在這個元件的 state，送出後就清空。
+ */
+function LoginForm({ data, onDone }: { data: AccountsResponse; onDone: () => void }) {
+  const login = useLogin();
+  const writing = useWrites().some((w) => w.status === "pending");
+  const choices = data.accounts.filter((a) => (data.login_accounts ?? []).includes(a.id));
+  const [accountId, setAccountId] = useState(choices[0]?.id ?? "");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (!choices.length) return null;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!accountId || !password) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await login(accountId, password);
+      onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setPassword("");
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="login" onSubmit={(e) => void submit(e)}>
+      <p className="menu__label">帳號密碼登入</p>
+      <label className="login__field">
+        <span>帳號</span>
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} disabled={busy}>
+          {choices.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}（{a.role_label}）
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="login__field">
+        <span>密碼</span>
+        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
+      </label>
+      {err && <p className="menu__label is-error">{err}</p>}
+      <button type="submit" className="btn btn--primary login__submit" disabled={busy || writing || !password}>
+        {busy ? "登入中…" : "登入"}
+      </button>
+    </form>
+  );
+}
+
 /**
  * 身分：JWT 放在 HttpOnly cookie（JavaScript 讀不到），第 1 段由 API 閘道驗簽章與效期（docs/adr/015）。
- * 只有後端開了展示模式（DEMO_CONTROLS，docs/adr/030）才能不用密碼切換身分；沒開時只顯示目前身分。
+ * 沒登入是一般員工；.env 設了密碼的帳號可以用帳號密碼登入（docs/adr/045）。
+ * 只有後端開了展示模式（DEMO_CONTROLS，docs/adr/030）才能不用密碼切換身分。
  */
 export function AccountMenu({ onClose }: { onClose: () => void }) {
   const { data } = useAccounts();
   const switchAccount = useSwitchAccount();
+  const logout = useLogout();
   const writing = useWrites().some((w) => w.status === "pending");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (!data) return <p className="menu__label">讀取身分中…</p>;
   const me = data.current;
-  const change = async (id: string) => {
-    if (id === me.id) return onClose();
+  const loggedIn = amrText(data.token.claims.amr) === "密碼登入";
+  const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setErr(null);
     try {
-      await switchAccount(id);
+      await action();
       onClose();
     } catch (e) {
       setErr((e as Error).message);
@@ -71,16 +130,27 @@ export function AccountMenu({ onClose }: { onClose: () => void }) {
       setBusy(false);
     }
   };
+  const change = (id: string) => (id === me.id ? onClose() : void run(() => switchAccount(id)));
   return (
     <>
       <div className="acct">
         <p className="acct__name">{me.label}</p>
         <p className="acct__scope">{scopeText(me)}</p>
         <p className="acct__jwt num">
-          JWT {data.token.alg}・clearance {me.clearance}・{me.dept}・到 {hhmm(data.token.expires_at)}
+          JWT {data.token.alg}・{amrText(data.token.claims.amr)}・clearance {me.clearance}・{me.dept}・到 {hhmm(data.token.expires_at)}
         </p>
         {data.demo_controls && <p className="acct__warn">展示模式・不可用於正式環境</p>}
       </div>
+      {loggedIn ? (
+        <button type="button" className="menu__item" disabled={busy || writing} onClick={() => void run(logout)}>
+          <span className="menu__text">
+            登出
+            <small>回到一般員工</small>
+          </span>
+        </button>
+      ) : (
+        <LoginForm data={data} onDone={onClose} />
+      )}
       {data.demo_controls ? (
         <>
           <p className="menu__label">切換展示身分・權限由伺服器依 JWT 判定</p>
@@ -104,7 +174,7 @@ export function AccountMenu({ onClose }: { onClose: () => void }) {
           ))}
         </>
       ) : (
-        <p className="menu__label">正式模式：身分由登入決定，畫面上不能切換</p>
+        !(data.login_accounts ?? []).length && <p className="menu__label">正式模式：身分由登入決定，畫面上不能切換</p>
       )}
       {err && <p className="menu__label is-error">{err}</p>}
       <Link to="/approvals" className="menu__item" onClick={onClose}>
@@ -203,7 +273,8 @@ export function useTokenRenewal() {
   useEffect(() => {
     const on = (e: Event) => {
       const code = (e as CustomEvent<string>).detail;
-      setRenewed(code === "TOKEN_EXPIRED" ? "憑證過期" : code === "TOKEN_STALE" ? "後端重啟過，舊憑證失效" : "沒有憑證");
+      // 重新取得的一律是一般員工：用密碼登入過的要再登入一次
+      setRenewed(code === "TOKEN_EXPIRED" ? "憑證過期，請重新登入" : code === "TOKEN_STALE" ? "後端重啟過，舊憑證失效" : "沒有憑證");
       void qc.invalidateQueries();
     };
     window.addEventListener("artrag:token-renewed", on);

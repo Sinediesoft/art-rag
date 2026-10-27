@@ -244,6 +244,8 @@ docker exec artrag-db-1 pg_restore -U artrag -d artrag_logs_from_teammate /tmp/a
 而且已經有憑證時開放，頁首會標「展示模式・不可用於正式環境」。從別台電腦（例如手機）展示時，把那台的位址加進 `DEMO_TRUSTED_HOSTS`。
 入口首頁的「試試防護架構」與「展示腳本」按鈕會自動切換身分並送出（展示腳本只有展示模式才出現）；
 也可以在右上角的身分選單手動切換，對話裡會留一行「已切換身分為〈…〉」，其他身分查到的內部資料會收起來。
+不開展示模式時，可以用帳號密碼登入（docs/adr/045）：在 `.env` 設 `ACCOUNT_PASSWORD_HASHES`（`cd backend && uv run python -m app.core.passwords` 產生雜湊），
+身分選單會出現登入表單，只列設了密碼的帳號；登入後同一個選單有「登出」，回到一般員工。
 系統狀態頁（最近的問答、SQL、路由紀錄、模型端點）、拒絕並記錄、稽核紀錄只有主管看得到。
 身分選單上方列出「JWT · clearance · 部門 · 到期時間」；JWT 在 HttpOnly cookie，畫面與瀏覽器紀錄都讀不到、不保存。
 每則回覆上方的處理軌跡列出七段（認證授權 › Jev Choice › Metadata Filter › Jev Noul › Jev Score › 生成閘門 › 本地 LLM）與外送量，

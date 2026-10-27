@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
-import { api, ApiError, type DrawingSearchResponse, type ImageSearchResponse } from "./client";
+import { api, ApiError, type AccountsResponse, type DrawingSearchResponse, type ImageSearchResponse } from "./client";
 import { writesInFlight } from "./writes";
 
 /**
@@ -207,9 +207,9 @@ export const ACCOUNT_EVENTS = {
  * 切換展示身分：舊身分快取的資料先清掉（resetQueries 會把 data 清空再重抓，看不到的就停在 403，
  * 不會繼續顯示舊身分讀到的內容），其他查詢（帳號、待核准、庫存、排程…）全部重抓
  */
-export function useSwitchAccount() {
+function useChangeIdentity<A extends unknown[]>(call: (...args: A) => Promise<AccountsResponse>) {
   const qc = useQueryClient();
-  return async (accountId: string) => {
+  return async (...args: A) => {
     // 寫入送出後還沒收到結果：伺服器可能已經寫好了，這時候換身分會讓結果接不回原畫面——等結果回來再切換
     if (writesInFlight()) throw new ApiError("WRITE_IN_FLIGHT", "有寫入還沒收到結果，等結果回來再切換身分", "", 0);
     window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.switching));
@@ -217,7 +217,7 @@ export function useSwitchAccount() {
     await qc.cancelQueries({ queryKey: ["accounts"] });
     let res;
     try {
-      res = await api.switchAccount(accountId);
+      res = await call(...args);
     } catch (e) {
       window.dispatchEvent(new CustomEvent(ACCOUNT_EVENTS.failed));
       throw e;
@@ -226,6 +226,12 @@ export function useSwitchAccount() {
     await qc.resetQueries({ predicate: identityBound });
   };
 }
+
+export const useSwitchAccount = () => useChangeIdentity(api.switchAccount);
+
+/** 帳號密碼登入、登出（docs/adr/045）：和切換展示身分走同一套流程，舊身分的資料一樣先清掉 */
+export const useLogin = () => useChangeIdentity(api.login);
+export const useLogout = () => useChangeIdentity(api.logout);
 
 export const useApprovals = () =>
   useScopedQuery({ queryKey: ["approvals"], queryFn: api.approvals, refetchInterval: 10_000 });

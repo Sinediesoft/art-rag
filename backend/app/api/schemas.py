@@ -1247,7 +1247,8 @@ class TokenInfo(BaseModel):
     """第 1 段的身分憑證（JWT，HS256）：內容、到期時間、從哪裡帶來。簽章不回傳。"""
 
     claims: dict = Field(
-        description="JWT payload：iss、sub、name、roles、dept、depts、clearance、iat、exp"
+        description="JWT payload：iss、sub、name、roles、dept、depts、clearance、"
+        "amr（pwd＝帳號密碼登入、demo＝展示切換，docs/adr/045）、iat、exp"
     )
     expires_at: str
     via: Literal["cookie", "header"]
@@ -1260,6 +1261,11 @@ class AccountsResponse(BaseModel):
     current: Account
     accounts: list[Account]
     demo_controls: bool
+    login_accounts: list[str] = Field(
+        default=[],
+        description="能用帳號密碼登入的帳號 ID"
+        "（.env 設了 ACCOUNT_PASSWORD_HASHES 的，docs/adr/045）",
+    )
     pending_approvals: int = Field(description="待核准單數量（主管看得到要處理幾件）")
     pending_region_drafts: int = Field(
         description="待收錄的區域解說草稿數量（docs/adr/029，含收錄失敗待重試的）"
@@ -1273,6 +1279,12 @@ class AccountsResponse(BaseModel):
 
 class SwitchAccountRequest(BaseModel):
     account_id: str
+
+
+class LoginRequest(BaseModel):
+    account_id: str = Field(max_length=64)
+    # 上限擋超長字串讓 scrypt 白算；密碼不會出現在任何紀錄
+    password: str = Field(min_length=1, max_length=256)
 
 
 class System1Status(BaseModel):

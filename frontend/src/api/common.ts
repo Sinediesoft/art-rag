@@ -43,6 +43,10 @@ export const commonApi = {
   // 智慧助理：身分（JWT，放在 HttpOnly cookie，瀏覽器自動帶）、路由
   accounts: () => request<AccountsResponse>("/auth/accounts"),
   switchAccount: (accountId: string) => request<AccountsResponse>("/auth/switch", json({ account_id: accountId })),
+  // 帳號密碼登入（docs/adr/045）：登出改發一般員工的憑證
+  login: (accountId: string, password: string) =>
+    request<AccountsResponse>("/auth/login", json({ account_id: accountId, password })),
+  logout: () => request<AccountsResponse>("/auth/logout", { method: "POST" }),
   /** token：示範「竄改過的憑證」時才給（放在 Authorization 標頭，閘道優先看它） */
   route: (body: RouteRequest, token?: string, signal?: AbortSignal) => {
     const init: RequestInit = { ...json(body), signal };

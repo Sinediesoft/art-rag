@@ -99,6 +99,9 @@ NEW = [
     # 3D 重建結果快取（TASK-20261014-002，docs/adr/042）：作廢、採用
     ("POST", "/api/v1/cad/jobs/{job_id}/cache/reject"),
     ("POST", "/api/v1/cad/jobs/{job_id}/cache/adopt"),
+    # 帳號密碼登入（docs/adr/045）
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/logout"),
 ]
 
 

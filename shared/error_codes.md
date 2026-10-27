@@ -65,7 +65,9 @@
 | `LEASE_EXPIRED` | 工作 `error.code` | worker 連續多次中斷（租約過期），已停止重試 |
 | `PERMISSION_REVOKED` | 403／工作 `error.code` | 提交工作的帳號已不存在或被撤銷；其他撤權（操作、領域、圖紙、照片）依原因回 `PERMISSION_DENIED`／`DATA_SCOPE_DENIED`／`IMAGE_NOT_FOUND`，工作在領取後、執行前、寫回前各驗一次，失敗就不讀圖、不呼叫模型、不寫入 |
 | `INPUT_BLOCKED` | 403 | 工具入口（`POST /inventory/ask`）的共用輸入防護：命中第 2 段的地端 hard-block 規則，不呼叫模型、不查資料，記一筆拒絕並記錄（ADR 041） |
-| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts` 例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得一般員工的憑證後重送 |
+| `UNAUTHENTICATED` | 401 | 沒有身分憑證（JWT）。七段權限控管第 1 段（ADR 015）：所有 `/api/v1` 請求都要帶，只有 `/health`、`/auth/accounts`、`/auth/login`（2026-10-28 起，ADR 045）例外（2026-10-06 起 `/auth/switch` 也要憑證，ADR 030）；前端會向 `/auth/accounts` 取得一般員工的憑證後重送 |
+| `LOGIN_FAILED` | 401 | 帳號密碼登入（`POST /auth/login`，ADR 045）失敗：帳號不存在、這個帳號沒在 `.env` 的 `ACCOUNT_PASSWORD_HASHES` 設密碼、密碼錯，三種一律回同一句「帳號或密碼不對」；寫進拒絕並記錄（第 1 段「登入失敗」，不記密碼），不簽發憑證 |
+| `LOGIN_LOCKED` | 429 | 同一個帳號＋來源連續登入失敗 `LOGIN_MAX_FAILURES`（預設 5）次，暫停 `LOGIN_LOCK_S`（預設 300 秒），暫停期間連正確的密碼也不收（ADR 045） |
 | `TOKEN_INVALID` | 401 | 憑證的簽章不符、格式不對、`alg` 不是 HS256、簽發者不對（被竄改或偽造）。寫進拒絕並記錄（第 1 段「憑證無效」），前端不重送 |
 | `TOKEN_EXPIRED` | 401 | 憑證過期（預設 8 小時，`JWT_TTL_MIN`）；前端自動重新取得 |
 | `TOKEN_STALE` | 401 | 憑證是舊的簽章金鑰簽發的（`JWT_SECRET` 留空時後端每次啟動換金鑰），或簽章相符但帳號已經從 `access.yaml` 拿掉（2026-10-13 起，ADR 036）；前端自動重新取得、不記錄 |

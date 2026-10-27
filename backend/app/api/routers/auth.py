@@ -19,6 +19,7 @@ def _accounts(auth: identity.Auth, request: Request) -> dict:
         "accounts": [a.public() for a in identity.accounts().values()],
         # 前端照這個決定要不要顯示切換身分：展示模式開啟而且是本機來的請求
         "demo_controls": identity.demo_allowed(request),
+        "login_accounts": identity.login_accounts(),
         "pending_approvals": len(get_production_repo().approvals(status="待核准")),
         "pending_region_drafts": region_service.pending_count(),
         "token": auth.public(),
@@ -38,3 +39,17 @@ def switch_account(body: S.SwitchAccountRequest, request: Request, response: Res
     """展示版切換身分：不用密碼簽發新的 JWT，所以只在展示模式（DEMO_CONTROLS=true）、
     本機（DEMO_TRUSTED_HOSTS）而且已經有有效憑證時開放；否則 401／403（docs/adr/030）。"""
     return _accounts(identity.switch(request, response, body.account_id), request)
+
+
+@router.post("/auth/login", response_model=S.AccountsResponse, tags=["agent"])
+def login(body: S.LoginRequest, request: Request, response: Response):
+    """帳號密碼登入（docs/adr/045）：密碼雜湊在 .env 的 ACCOUNT_PASSWORD_HASHES。
+    不用先有憑證（過期也能直接登入）；帳號不存在和密碼錯回同一個 401 LOGIN_FAILED，
+    連錯太多次回 429 LOGIN_LOCKED。"""
+    return _accounts(identity.login(request, response, body.account_id, body.password), request)
+
+
+@router.post("/auth/logout", response_model=S.AccountsResponse, tags=["agent"])
+def logout(request: Request, response: Response):
+    """登出：改發一般員工的憑證（沒登入時本來就是一般員工），不是清空成沒有憑證。"""
+    return _accounts(identity.logout(response), request)

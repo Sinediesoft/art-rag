@@ -80,6 +80,80 @@
         }
       }
     },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Login",
+        "description": "帳號密碼登入（docs/adr/045）：密碼雜湊在 .env 的 ACCOUNT_PASSWORD_HASHES。\n不用先有憑證（過期也能直接登入）；帳號不存在和密碼錯回同一個 401 LOGIN_FAILED，\n連錯太多次回 429 LOGIN_LOCKED。",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Logout",
+        "description": "登出：改發一般員工的憑證（沒登入時本來就是一般員工），不是清空成沒有憑證。",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsResponse"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Client Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/images": {
       "post": {
         "tags": [
@@ -3949,6 +4023,15 @@
           "demo_controls": {
             "type": "boolean",
             "title": "Demo Controls"
+          },
+          "login_accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Login Accounts",
+            "description": "能用帳號密碼登入的帳號 ID（.env 設了 ACCOUNT_PASSWORD_HASHES 的，docs/adr/045）",
+            "default": []
           },
           "pending_approvals": {
             "type": "integer",
@@ -8607,6 +8690,27 @@
         ],
         "title": "LightnessStats"
       },
+      "LoginRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Account Id"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
       "MachineInfo": {
         "properties": {
           "machine_id": {
@@ -13237,7 +13341,7 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Claims",
-            "description": "JWT payload：iss、sub、name、roles、dept、depts、clearance、iat、exp"
+            "description": "JWT payload：iss、sub、name、roles、dept、depts、clearance、amr（pwd＝帳號密碼登入、demo＝展示切換，docs/adr/045）、iat、exp"
           },
           "expires_at": {
             "type": "string",
