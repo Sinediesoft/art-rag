@@ -205,7 +205,7 @@ if ($Mode -eq 'mock' -and -not (Has 'ollama')) {
         Start-Sleep 3
         try { Invoke-RestMethod http://127.0.0.1:8000/api/v1/health -TimeoutSec 10 | Out-Null; $ok = $true; break } catch {}
     }
-    if (-not $ok) { throw "後端沒起來，看 $logsackend.log" }
+    if (-not $ok) { throw "後端沒起來，看 $logs\backend.log" }
     Say "完成：打開 http://127.0.0.1:8000（方案 mock：只能看介面與流程）"
     exit 0
 }
