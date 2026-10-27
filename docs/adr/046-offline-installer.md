@@ -25,7 +25,8 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`，還要自己開 PowerShel
   `shared/models.yaml` 釘選版本的 snapshot 與 `.no_exist` 記號（離線時 transformers 靠它跳過不存在的 safetensors）；
   Ollama 程式拿掉 AMD 的 ROCm（約 1 GB）、系統匣與解除安裝程式
 - **Python 環境不直接打包**：虛擬環境裡寫死路徑、不能搬。改帶 uv 的套件快取，裝的電腦用 `uv sync`
-  （`UV_OFFLINE`、`UV_FROZEN`）重建；快取和環境在同一顆磁碟時 uv 用硬連結，不會再佔一份空間
+  （`UV_OFFLINE`）重建；不設 `UV_FROZEN`：uv.lock 和 pyproject 一致時檢查不用連網，設了反而每次 `uv run --no-project`
+  都印一行警告；快取和環境在同一顆磁碟時 uv 用硬連結，不會再佔一份空間
 - **Ollama 用離線包自己的、連接埠 11435**：對方電腦原本裝的 Ollama（11434）不受影響，也不用把 9 GB 模型複製到它的資料夾；
   `.env` 的 `HYBRID_BASE_URL` 指到 11435，後端與記憶體管理本來就照這個位址找 Ollama
 - `offline-env.ps1`：`start-services.ps1`、`install-offline.ps1` 都 dot-source 它，偵測到 `..\offline\offline.json`

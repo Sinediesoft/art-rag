@@ -12,14 +12,14 @@ $OfflineOllamaPort = 11435
 
 if ($IsOfflineBundle) {
     $env:Path = (Join-Path $OfflineDir 'uv') + ';' + (Join-Path $OfflineDir 'ollama') + ';' + $env:Path
-    # Python 與套件都從離線包拿；UV_FROZEN：照 uv.lock 裝，不重新解析版本（離線也無從解析）
+    # Python 與套件都從離線包拿。不設 UV_FROZEN：uv.lock 和 pyproject 一致時檢查不用連網，
+    # 設了反而每次 uv run --no-project（診斷、寫 .env）都印一行「--frozen has no effect」的警告
     $env:UV_CACHE_DIR = Join-Path $OfflineDir 'uv-cache'
     $env:UV_PYTHON_INSTALL_DIR = Join-Path $OfflineDir 'python'
     $env:UV_PYTHON_DOWNLOADS = 'never'
     # 這台另外裝的 Python 3.12 不用：套件快取是照離線包那份 Python 準備的
     $env:UV_PYTHON_PREFERENCE = 'only-managed'
     $env:UV_OFFLINE = '1'
-    $env:UV_FROZEN = '1'
     $env:HF_HOME = Join-Path $OfflineDir 'hf'
     $env:HF_HUB_OFFLINE = '1'
     $env:OLLAMA_MODELS = Join-Path $OfflineDir 'ollama-models'
