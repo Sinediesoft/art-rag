@@ -86,9 +86,12 @@ def load_artworks() -> list[dict]:
 
 
 def card_text(a: dict) -> str:
+    # 英文名可省略（臺灣民間藝術沒有英文名），寫法同 app/rag/chunking.py
+    title_en = f"（{a['title']['en']}）" if a["title"].get("en") else ""
+    artist_en = f"（{a['artist']['en']}）" if a["artist"].get("en") else ""
     return (
-        f"作品資料：標題〈{a['title']['zh']}〉（{a['title']['en']}）；"
-        f"作者{a['artist']['zh']}（{a['artist']['en']}）；年代 {a['date_text']}；"
+        f"作品資料：標題〈{a['title']['zh']}〉{title_en}；"
+        f"作者{a['artist']['zh']}{artist_en}；年代 {a['date_text']}；"
         f"媒材 {a.get('medium', '')}；尺寸 {a.get('dimensions', '')}；典藏 {a['collection']}；"
         f"風格標籤 {'、'.join(a.get('style_tags', []))}。"
     )
