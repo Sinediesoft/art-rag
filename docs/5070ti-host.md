@@ -28,7 +28,8 @@ uv run --no-project python deploy\diagnose.py --log data\logs\backend.log --no-l
 ```
 
 離線安裝包（ADR 046）也在這台打包：需要這台的 Ollama 有 qwen3-vl 8B／4B、Hugging Face 快取有釘選版本的
-bge-m3 與 Chinese-CLIP（建過索引就有）。輸出約 17.5 GB，C 槽空間不夠，預設輸出到 D 槽：
+bge-m3 與 Chinese-CLIP（建過索引就有）、`models\ortho2cad`、CUDA 版 llama-server、Java 21、WSL2。
+打包時會暫時匯入一個 `artrag-build` WSL 環境，做完自動移除。輸出約 25.5 GB，C 槽空間不夠，預設輸出到 D 槽：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1

@@ -1,51 +1,69 @@
-# ADR 046：離線安裝包（安裝過程不連網）
+# ADR 046：離線安裝包（完整功能、安裝過程不連網）
 
 - 日期：2026-10-27
-- 狀態：採用（`deploy/offline/`：`pack.ps1`、`install-offline.ps1`、`offline-env.ps1`、`bundle.py`、`安裝.cmd`／`啟動.cmd`／`停止.cmd`）
+- 狀態：採用（`deploy/offline/`：`pack.ps1`、`install-offline.ps1`、`offline-env.ps1`、`bundle.py`、`wsl-setup.sh`、
+  `安裝.cmd`／`啟動.cmd`／`停止.cmd`）
 - 編號：本分支最大是 045（dev 已有 042–044），接著用 046
 
 ## 背景
-目標是「每個人都能輕鬆部署」。一鍵安裝（`deploy/install.ps1`）要連網：winget 裝工具、`ollama pull` 下載模型、
-Hugging Face 下載 embedding、`uv sync`、`npm ci`，還要自己開 PowerShell 打指令。專題主打地端與資料隱私，
-展示現場、評審或組員的電腦不一定能連網，也不一定會用終端機。
+目標是「每個人都能輕鬆部署，裝完就能用全部功能」。一鍵安裝（`deploy/install.ps1`）要連網：winget 裝工具、`ollama pull`、
+Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 llama.cpp、Ortho2CAD 模型、WSL 裡的 CadQuery，
+背景工作要 Docker 的 PostgreSQL 與 Redis。專題主打地端與資料隱私，展示現場、評審或組員的電腦不一定能連網，也不一定會用終端機。
 
 ## 決定
 - **兩段**：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次 `deploy\offline\pack.ps1` 產生離線包資料夾；
-  複製到別台 Windows 電腦後點兩下 `安裝.cmd`，**安裝過程不連網**
+  複製到別台 Windows 電腦後點兩下 `安裝.cmd`，**安裝過程不連網，裝完全部功能都能用**（畫作、圖紙、庫存、3D 重建、排程）
+- **用一個專用的 WSL 環境取代 Docker**：3D 重建產生的程式碼本來就要在 Linux 沙箱執行（ADR 027），
+  所以 PostgreSQL＋pgvector、Redis 也放進同一個 WSL 環境 `artrag`，對方電腦不用 Docker Desktop。
+  打包時從 Ubuntu 官方的 24.04 WSL 映像（核對 SHA-256）建一個暫時的環境，跑 `wsl-setup.sh` 裝好之後 `wsl --export`；
+  和打包那台自己的 WSL 發行版完全分開，不會帶到個人檔案。帳密和 Docker 版相同（`artrag`，只綁本機）
 - 離線包的結構：
   ```
   art-rag-offline\
     安裝.cmd 啟動.cmd 停止.cmd 使用說明.txt
-    app\        git archive HEAD（不含 .env、data\）＋建置好的 frontend\dist（裝的電腦不用 Node.js）
+    app\        git archive HEAD（不含 .env、data\）＋建置好的 frontend\dist＋models\ortho2cad＋scheduler\target\scheduler.jar
     offline\    offline.json（完成標記）、uv\、python\（可攜版 3.12）、uv-cache\（照 uv.lock 的套件）、
-                ollama\（程式）、ollama-models\（qwen3-vl 8B＋4B）、hf\（bge-m3、Chinese-CLIP 釘選版本）
+                ollama\、ollama-models\（qwen3-vl 8B＋4B）、hf\（bge-m3、Chinese-CLIP 釘選版本）、
+                llama.cpp\（CUDA 版）、jdk\（Java 21）、wsl\artrag.tar（WSL 環境）＋WSL 離線安裝程式
+    wsl-data\   安裝時匯入的 WSL 環境的虛擬磁碟
   ```
-- 實測大小（這台的資料）：Ollama 程式 1.9 GB、模型 9.4 GB、bge-m3 2.3 GB、Chinese-CLIP 0.75 GB，加 Python 套件約 17.5 GB
+- 實測大小 25.5 GB：Ollama 模型 9.4 GB、Ortho2CAD 6.2 GB、bge-m3 2.3 GB、Ollama 1.9 GB、Chinese-CLIP 0.75 GB、
+  llama.cpp 0.7 GB、Java 0.3 GB、WSL 環境與 Python 套件約 4 GB
 - **只挑需要的檔案**（`bundle.py`，標準函式庫）：Ollama 只帶兩個模型的 manifest 與 blob；Hugging Face 只帶
   `shared/models.yaml` 釘選版本的 snapshot 與 `.no_exist` 記號（離線時 transformers 靠它跳過不存在的 safetensors）；
   Ollama 程式拿掉 AMD 的 ROCm（約 1 GB）、系統匣與解除安裝程式
-- **Python 環境不直接打包**：虛擬環境裡寫死路徑、不能搬。改帶 uv 的套件快取，裝的電腦用 `uv sync`
-  （`UV_OFFLINE`）重建；不設 `UV_FROZEN`：uv.lock 和 pyproject 一致時檢查不用連網，設了反而每次 `uv run --no-project`
-  都印一行警告；快取和環境在同一顆磁碟時 uv 用硬連結，不會再佔一份空間
+- **Python 環境不直接打包**：虛擬環境裡寫死路徑、不能搬。改帶 uv 的套件快取，裝的電腦用 `uv sync`（`UV_OFFLINE`）重建；
+  不設 `UV_FROZEN`：uv.lock 和 pyproject 一致時檢查不用連網，設了反而每次 `uv run --no-project` 都印一行警告
 - **Ollama 用離線包自己的、連接埠 11435**：對方電腦原本裝的 Ollama（11434）不受影響，也不用把 9 GB 模型複製到它的資料夾；
   `.env` 的 `HYBRID_BASE_URL` 指到 11435，後端與記憶體管理本來就照這個位址找 Ollama
+- **WSL2 的準備**：安裝時先看 BIOS 虛擬化（`HypervisorPresent` 或 `VirtualizationFirmwareEnabled`）與 `wsl --status`。
+  沒有 WSL2 就以系統管理員權限（UAC 一次）用 dism 啟用「虛擬機器平台」「Windows 子系統 Linux 版」兩個內建功能、
+  裝離線包裡的 WSL msi，請使用者重新開機後再點一次 `安裝.cmd`；全程不連網
+- WSL 環境的服務由 `artrag-services`（PostgreSQL 在背景、Redis 在前景）帶起來：Windows 這邊有一個隱藏的 `wsl.exe` 行程
+  帶著它，WSL 就不會把環境關掉；`-Stop` 停掉這個行程並 `wsl --terminate artrag`
 - `offline-env.ps1`：`start-services.ps1`、`install-offline.ps1` 都 dot-source 它，偵測到 `..\offline\offline.json`
-  才設環境變數（PATH、uv、`HF_HOME`、`OLLAMA_MODELS`、`OLLAMA_HOST`），**只在這個行程與子行程**，不改系統設定
-- `start-services.ps1` 的 Ollama 連接埠改成照 `.env` 的 `HYBRID_BASE_URL`（本機位址才採用，否則照舊 11434）；
-  離線包的 `-Stop` 會一起停掉自己起的 Ollama；mock 方案不預熱模型
-- 安裝完在桌面建「啟動 art-rag」「停止 art-rag」捷徑；`.cmd` 以 CRLF 存（`.gitattributes`）
-- 故障診斷（ADR 045）一起帶：uv 與 Python 在包裡，安裝一開始就能比對規則表；Ollama 起來後才能請模型解釋。
-  在離線包裡時，「HF 快取缺檔、模型沒下載、找不到 Ollama／uv」的修法改成「重新複製離線包」（沒有網路可以補下載），
-  另加一條「離線環境找不到套件」的規則
+  才設環境變數（PATH、uv、`HF_HOME`、`OLLAMA_*`、`LLAMA_SERVER`），**只在這個行程與子行程**，不改系統設定；
+  起停 WSL 環境的函式也在這裡
+- `start-services.ps1`：離線包裡用 WSL 環境取代 `docker compose`；Ollama 連接埠照 `.env` 的 `HYBRID_BASE_URL`
+  （本機位址才採用，否則照舊 11434）；mock 方案不預熱模型
+- 故障診斷（ADR 045）一起帶。在離線包裡時，缺檔的修法改成「重新複製離線包」（沒有網路可以補下載），資料庫／Redis 的修法改成
+  重啟 WSL 環境；另加「WSL2 不能用」「WSL 環境不見」「離線環境找不到套件」的規則
+
+## 實測（2026-10-27，5070 Ti，`D:\art-rag-offline`）
+- 安裝：匯入 WSL 環境、`uv sync` 115 個套件、建索引寫進 PostgreSQL，啟動後健康檢查全綠（Ollama、Ortho2CAD、Timefold、
+  兩個 worker、WSL 的 CadQuery）
+- 問答：七段流程全部地端、外送 0 bytes；3D 重建 mfg-002 35 秒、IoU 0.917、孔位校正 7 個；排程 Timefold 17 秒、0 hard
+- 全部停止後冷啟動 60 秒；停止時只停離線包自己的服務，這台原本的 Ollama 不受影響
+- 沒測到：「這台沒有 WSL2」的啟用流程（這台本來就有）
 
 ## 不包含
-- Docker（PostgreSQL、Redis）：用檔案索引＋SQLite，問答、圖紙、庫存都能用；3D 重建與排程的背景工作不能用
-- Ortho2CAD（llama.cpp）、Timefold 排程（Java）：原本就是選裝
-- macOS、AMD／Intel 顯示卡：沒有 NVIDIA 顯卡時是 mock 方案（只看介面與流程）
+- macOS、Linux、AMD／Intel 顯示卡：沒有 NVIDIA 顯卡時生成模型是 mock 方案，3D 重建會用 CPU（很慢）
+- 對外開放：資料庫、Redis、後端都只綁本機
 
 ## 注意
 - 離線包綁定打包時的 commit；要包新功能就重新打包
 - 隨身碟要 exFAT 或 NTFS：8B 模型單一個檔案超過 4 GB
+- 要移除：先點「停止」，執行 `wsl --unregister artrag`，再刪整個資料夾
 - 沒有程式碼簽章：第一次點 `安裝.cmd` 時 SmartScreen 會警告，要按「其他資訊」→「仍要執行」
-- 打包會轉散布 Ollama（MIT）、Qwen3-VL（Apache 2.0）、bge-m3（MIT）、Chinese-CLIP 與 Ollama 附的 NVIDIA CUDA 函式庫；
-  只在組內與展示使用，對外散布前要再確認授權
+- 打包會轉散布 Ollama（MIT）、Qwen3-VL（Apache 2.0）、bge-m3（MIT）、Chinese-CLIP、Ollama 與 llama.cpp 附的 NVIDIA CUDA 函式庫、
+  Microsoft OpenJDK（GPLv2＋CE）、Ubuntu 與其套件；只在組內與展示使用，對外散布前要再確認授權

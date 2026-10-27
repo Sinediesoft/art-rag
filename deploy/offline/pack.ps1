@@ -170,7 +170,7 @@ Say '排程服務（Maven 建置）與 Java 21'
 $env:JAVA_HOME = $javaHome
 Run 'uv' @('run', '--no-project', '--with', 'httpx', 'python', (Join-Path $App 'pipelines\setup_scheduler.py'), '--skip-tests')
 # 裝的電腦只要 scheduler.jar；.java-home 安裝時改成離線包的 Java
-Get-ChildItem (Join-Path $App 'scheduler\target\*') -Exclude 'scheduler.jar' | Remove-Item -Recurse -Force
+Get-ChildItem (Join-Path $App 'scheduler\target') | Where-Object { $_.Name -ne 'scheduler.jar' } | Remove-Item -Recurse -Force
 foreach ($leftover in '.maven', '.java-home') {
     $p = Join-Path $App "scheduler\$leftover"
     if (Test-Path $p) { Remove-Item -Recurse -Force $p }

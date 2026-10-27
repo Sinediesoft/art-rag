@@ -87,15 +87,17 @@ bash deploy/install.sh --dry-run    # 只列出會做什麼
 
 ### 離線安裝包（安裝過程不連網）
 
-給不能連網、或不想打指令的電腦（ADR 046）。在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 17.5 GB）：
+給不能連網、或不想打指令的電腦（ADR 046），裝完全部功能都能用（含 3D 重建、排程）。
+在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 25.5 GB）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1    # 輸出到 D:\art-rag-offline，-Out 換位置
 ```
 
 把整個資料夾複製到別台 Windows 電腦的本機磁碟（隨身碟要 exFAT／NTFS），點兩下「安裝.cmd」：
-自動判斷顯卡、從離線包建 Python 環境、建索引、在桌面建「啟動 art-rag」「停止 art-rag」，最後打開瀏覽器。
-模型與 Ollama 用離線包自己的（連接埠 11435，不影響那台原本的 Ollama）；不含 Docker、Ortho2CAD、Java 排程。
+自動判斷顯卡、匯入 WSL 環境 `artrag`（取代 Docker：PostgreSQL＋pgvector、Redis、3D 重建的沙箱）、從離線包建 Python 環境、
+建索引、在桌面建「啟動 art-rag」「停止 art-rag」，最後打開瀏覽器。Ollama、Ortho2CAD、Timefold、Java 都用離線包自己的
+（Ollama 用連接埠 11435，不影響那台原本的 Ollama）。那台還沒有 WSL2 時，會要一次系統管理員權限離線啟用，重開機後再點一次。
 
 ## 快速開始（macOS／WSL2）
 
