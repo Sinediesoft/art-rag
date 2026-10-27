@@ -129,7 +129,10 @@ Remove-Item $zip
 Say 'WSL 環境：Ubuntu 24.04＋PostgreSQL／pgvector、Redis、CadQuery'
 $rootfs = Join-Path $Tmp $RootfsName
 Invoke-WebRequest -UseBasicParsing "$RootfsBase/$RootfsName" -OutFile $rootfs
-$sums = (Invoke-WebRequest -UseBasicParsing "$RootfsBase/SHA256SUMS").Content
+# 伺服器沒給 Content-Type：PowerShell 5.1 的 .Content 會是位元組陣列，先存檔再讀成文字
+$sumsFile = Join-Path $Tmp 'SHA256SUMS'
+Invoke-WebRequest -UseBasicParsing "$RootfsBase/SHA256SUMS" -OutFile $sumsFile
+$sums = Get-Content $sumsFile -Raw
 $expect = ($sums -split "`n" | Where-Object { $_ -match [regex]::Escape($RootfsName) } | Select-Object -First 1) -split '\s+' | Select-Object -First 1
 $actual = (Get-FileHash $rootfs -Algorithm SHA256).Hash.ToLower()
 if (-not $expect -or $actual -ne $expect.ToLower()) { throw "Ubuntu 映像的 SHA-256 不符（$actual ≠ $expect）" }
