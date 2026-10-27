@@ -698,7 +698,7 @@ def test_real_mode_refuses_mock_index_without_scores(mock_index, tmp_path, monke
     assert any("embedding 模式不一致" in p for p in report["problems"])
 
 
-# ---------------------------------------------------------------- A 批：收據 image/items 與 run-id 防覆寫
+# ------------------------------------------------------- A 批：收據 image/items 與 run-id 防覆寫
 
 
 def _now_receipt(store) -> dict:
@@ -739,7 +739,15 @@ def test_execute_rejects_image_or_items_mismatch_without_evaluating(
     calls = []
     monkeypatch.setattr(rre, "evaluate", lambda *a, **k: calls.append(1))
     out = tmp_path / "out"
-    argv = ["--allow-mock", "--out-dir", str(out), "--run-id", "t-bad", "--receipt", str(receipt_path)]
+    argv = [
+        "--allow-mock",
+        "--out-dir",
+        str(out),
+        "--run-id",
+        "t-bad",
+        "--receipt",
+        str(receipt_path),
+    ]
     assert _run_main(argv) == 1
     assert calls == []
     report = json.loads((out / "t-bad-retrieval-layer-metrics.json").read_text(encoding="utf-8"))
