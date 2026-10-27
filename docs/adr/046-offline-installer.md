@@ -12,7 +12,10 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 
 
 ## 決定
 - **兩段**：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次 `deploy\offline\pack.ps1` 產生離線包資料夾；
-  複製到別台 Windows 電腦後點兩下 `安裝.cmd`，**安裝過程不連網，裝完全部功能都能用**（畫作、圖紙、庫存、3D 重建、排程）
+  複製到別台 Windows 電腦後點兩下 `安裝.cmd`，**安裝過程不連網，全部功能都裝好**（畫作、圖紙、庫存、3D 重建、排程）
+- **功能裝好、權限不開**（2026-10-27 使用者決定）：`.env` 維持 `.env.example` 的 `DEMO_CONTROLS=false`，裝完只有預設身分
+  「一般員工」（只查公開畫作，`shared/access.yaml`）。圖紙、庫存、3D 重建、排程要有權限的身分才能用，權限設定另外處理，
+  離線包不替使用者打開身分切換
 - **用一個專用的 WSL 環境取代 Docker**：3D 重建產生的程式碼本來就要在 Linux 沙箱執行（ADR 027），
   所以 PostgreSQL＋pgvector、Redis 也放進同一個 WSL 環境 `artrag`，對方電腦不用 Docker Desktop。
   打包時從 Ubuntu 官方的 24.04 WSL 映像（核對 SHA-256）建一個暫時的環境，跑 `wsl-setup.sh` 裝好之後 `wsl --export`；
@@ -53,6 +56,7 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 
 - 安裝：匯入 WSL 環境、`uv sync` 115 個套件、建索引寫進 PostgreSQL，啟動後健康檢查全綠（Ollama、Ortho2CAD、Timefold、
   兩個 worker、WSL 的 CadQuery）
 - 問答：七段流程全部地端、外送 0 bytes；3D 重建 mfg-002 35 秒、IoU 0.917、孔位校正 7 個；排程 Timefold 17 秒、0 hard
+  （3D 重建與排程要權限：只在這次測試裝的 `.env` 暫時開 `DEMO_CONTROLS=true` 切成主管，測完改回 false）
 - 全部停止後冷啟動 60 秒；停止時只停離線包自己的服務，這台原本的 Ollama 不受影響
 - 沒測到：「這台沒有 WSL2」的啟用流程（這台本來就有）
 
