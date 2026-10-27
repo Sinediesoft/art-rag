@@ -1,0 +1,291 @@
+{
+ "schema_version": "retrieval-index-receipt/1",
+ "kind": "retrieval-index-receipt",
+ "created_at": "2026-10-27T18:47:37.921627+00:00",
+ "real": true,
+ "embed_mode": "real",
+ "manifest_embed_mode": "real",
+ "index_backend": "file",
+ "manifest": {
+  "models": {
+   "image": {
+    "name": "OFA-Sys/chinese-clip-vit-base-patch16",
+    "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+    "dim": 512,
+    "dtype": "float32"
+   },
+   "text": {
+    "name": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "dim": 1024,
+    "dtype": "float32"
+   }
+  },
+  "embed_mode": "real",
+  "chunking": {
+   "min_chars": 300,
+   "max_chars": 500,
+   "overlap_chars": 50
+  },
+  "color_analysis": {
+   "method": "lab-kmeans-v1",
+   "n_colors": 6,
+   "fit_long_edge": 256,
+   "map_long_edge": 512,
+   "kmeans_max_iter": 30,
+   "seed": 0,
+   "neutral_chroma": 10.0,
+   "warm_hue_deg": [
+    340.0,
+    110.0
+   ],
+   "lightness_bands": [
+    30.0,
+    60.0
+   ],
+   "chroma_bands": [
+    10.0,
+    25.0
+   ]
+  },
+  "kb_version": "2026.10.2",
+  "kb_hash": "c4438f5eb35df694",
+  "artwork_count": 3,
+  "chunk_count": 21,
+  "part_count": 6,
+  "part_chunk_count": 34,
+  "git_commit": "e126b5d",
+  "created_at": "2026-10-27T18:47:37.740935+00:00"
+ },
+ "manifest_sha256": "ecee9a8890bcf5dcfe7646afd726eee9195c9f3126a6e9351c63fae0d0869b66",
+ "manifest_problems": [],
+ "models": {
+  "image": {
+   "name": "OFA-Sys/chinese-clip-vit-base-patch16",
+   "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+   "dim": 512,
+   "dtype": "float32"
+  },
+  "text": {
+   "name": "BAAI/bge-m3",
+   "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+   "dim": 1024,
+   "dtype": "float32"
+  }
+ },
+ "collections": {
+  "art": {
+   "owner_key": "artwork_id",
+   "item_ids": [
+    "aic-27992",
+    "met-436535",
+    "npm-000001"
+   ],
+   "item_count": 3,
+   "chunk_ids": [
+    "aic-27992#meta",
+    "aic-27992#00-0",
+    "aic-27992#01-0",
+    "aic-27992#02-0",
+    "aic-27992#03-0",
+    "aic-27992#color",
+    "met-436535#meta",
+    "met-436535#00-0",
+    "met-436535#01-0",
+    "met-436535#02-0",
+    "met-436535#03-0",
+    "met-436535#04-0",
+    "met-436535#05-0",
+    "met-436535#color",
+    "npm-000001#meta",
+    "npm-000001#00-0",
+    "npm-000001#01-0",
+    "npm-000001#02-0",
+    "npm-000001#03-0",
+    "npm-000001#04-0",
+    "npm-000001#color"
+   ],
+   "chunk_count": 21,
+   "chunks_by_owner": {
+    "aic-27992": 6,
+    "met-436535": 8,
+    "npm-000001": 7
+   },
+   "items_sha256": "9684c9ed9f967d2e2f75cc9e960726d80f55705acaf56052292b8d03ccd95c49",
+   "chunks_sha256": "55ab5100eef96d1a8dd057d5ce3bbe6aea4404fc7a58114ca322e5e30579ba8c",
+   "chunk_vecs": {
+    "shape": [
+     21,
+     1024
+    ],
+    "dtype": "float32",
+    "sha256": "bd1c0fbb9a3f12e804d624eed8fc705a55907439174e8fc33cbe71819351e339"
+   },
+   "image_vecs": {
+    "shape": [
+     3,
+     512
+    ],
+    "dtype": "float32",
+    "sha256": "39c99c053ff932d414d5d64197937550ab94422f6c26468849c6fbccfbe26984"
+   }
+  },
+  "mfg": {
+   "owner_key": "part_id",
+   "item_ids": [
+    "mfg-001",
+    "mfg-002",
+    "mfg-003",
+    "mfg-004",
+    "mfg-005",
+    "mfg-006"
+   ],
+   "item_count": 6,
+   "chunk_ids": [
+    "mfg-001#meta",
+    "mfg-001#00-0",
+    "mfg-001#01-0",
+    "mfg-001#02-0",
+    "mfg-001#03-0",
+    "mfg-002#meta",
+    "mfg-002#00-0",
+    "mfg-002#01-0",
+    "mfg-002#02-0",
+    "mfg-002#03-0",
+    "mfg-002#04-0",
+    "mfg-002#05-0",
+    "mfg-003#meta",
+    "mfg-003#00-0",
+    "mfg-003#01-0",
+    "mfg-003#02-0",
+    "mfg-003#03-0",
+    "mfg-003#04-0",
+    "mfg-004#meta",
+    "mfg-004#00-0",
+    "mfg-004#01-0",
+    "mfg-004#02-0",
+    "mfg-004#03-0",
+    "mfg-005#meta",
+    "mfg-005#00-0",
+    "mfg-005#01-0",
+    "mfg-005#02-0",
+    "mfg-005#03-0",
+    "mfg-006#meta",
+    "mfg-006#00-0",
+    "mfg-006#01-0",
+    "mfg-006#02-0",
+    "mfg-006#03-0",
+    "mfg-006#04-0"
+   ],
+   "chunk_count": 34,
+   "chunks_by_owner": {
+    "mfg-001": 5,
+    "mfg-002": 7,
+    "mfg-003": 6,
+    "mfg-004": 5,
+    "mfg-005": 5,
+    "mfg-006": 6
+   },
+   "items_sha256": "ff2e80735f61bb981c9056a127bdf727c7443be43bd3aa2415080ced3ef1dcc7",
+   "chunks_sha256": "b7c534a790834b944bea05d4e9b11a5c245263617c94c86819552343e79bd995",
+   "chunk_vecs": {
+    "shape": [
+     34,
+     1024
+    ],
+    "dtype": "float32",
+    "sha256": "f0b2f260daf3b714d09a430b0bf5cf316e90a844c1ffe3ef6cc3ad396e7e1a39"
+   },
+   "image_vecs": {
+    "shape": [
+     6,
+     512
+    ],
+    "dtype": "float32",
+    "sha256": "9584271d9e236365f95faee8b5fee7e7dc278dc59a3c8b4e20e9485b1942802b"
+   }
+  }
+ },
+ "chunk_counts": {
+  "art": 21,
+  "mfg": 34,
+  "manifest_art": 21,
+  "manifest_mfg": 34
+ },
+ "chunk_counts_match": true,
+ "kb": {
+  "version": "2026.10.2",
+  "hash_now": "c4438f5eb35df694",
+  "version_manifest": "2026.10.2",
+  "hash_manifest": "c4438f5eb35df694",
+  "match": true
+ },
+ "qa": {
+  "eval/qa.jsonl": "292ec7f1aad1f7dd3f8a5499b1d40382eb794810eea97c8280acc13f98c516d2",
+  "eval/drawing_retrieval/qa.jsonl": "37fa712273323059ed5a96dc73531b7a5b72b1af98e35522220ff3f3ace53624"
+ },
+ "config": {
+  "models_yaml_sha256": "71ee1ddf00eeb22426e332f47d641d65acb6dfac383326c2236e7338d2257381",
+  "retrieval_params": {
+   "top_k_chunks": 5.0,
+   "min_chunk_score": 0.3,
+   "relative_chunk_ratio": 0.6,
+   "global_fill_keywords": [
+    "比較",
+    "相比",
+    "差異",
+    "異同",
+    "不同",
+    "並稱",
+    "其他作品",
+    "同時代",
+    "背景",
+    "影響"
+   ],
+   "chunking": {
+    "min_chars": 300,
+    "max_chars": 500,
+    "overlap_chars": 50
+   }
+  },
+  "retrieval_params_sha256": "0614ed8e53d31ba683b666d3b0e7fe02e75d421952012e7554800ab04b81e07f"
+ },
+ "settings": {
+  "embed_mode": "real",
+  "embed_device": "cpu",
+  "llm_mode": "real",
+  "hf_offline": true,
+  "memory_guard": false,
+  "jev_enabled": false,
+  "allow_cloud": false,
+  "rearrange": "",
+  "artrag_shared_dir": "/tmp/retrieval-step2-e126b5d.kq0vLl/review/shared",
+  "data_dir": "/tmp/retrieval-step2-e126b5d.kq0vLl/data",
+  "index_dir": "/tmp/retrieval-step2-e126b5d.kq0vLl/data/index",
+  "index_backend": "file",
+  "database_url_set": false
+ },
+ "code": {
+  "head": "e126b5da8eb9b3e58eaf0b3c484fdbc4997346f6",
+  "dirty": false,
+  "dirty_paths": [],
+  "error": null
+ },
+ "isolation": {
+  "env_file_disabled": true,
+  "env_file_before": ".env",
+  "settings_were_loaded": false,
+  "preloaded_app_modules": [],
+  "strict": true
+ },
+ "index_build": {
+  "invoked": true,
+  "command": "pipelines/build_index.py",
+  "exit_code": 0,
+  "error": null,
+  "started_at": "2026-10-27T18:47:21.569319+00:00",
+  "finished_at": "2026-10-27T18:47:37.741475+00:00",
+  "seconds": 16.2
+ },
+ "run_id": "20261027T184737-3b67"
+}
