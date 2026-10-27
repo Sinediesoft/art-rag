@@ -80,6 +80,11 @@ bash deploy/install.sh --dry-run    # 只列出會做什麼
 指定方案：`-Mode full|light|mock`（`--mode`）；不問直接安裝：`-Yes`（`--yes`）；裝完不啟動：`-NoStart`（`--no-start`）。
 3D 重建（Ortho2CAD）與生產排程（Java 21）是選裝，沒有也能用，安裝方式見下方。
 
+安裝或啟動失敗時會自動執行 `deploy/diagnose.py`：先用規則表比對這次的 log（Docker 沒開、連接埠被佔、記憶體不夠…），
+對不上才請本地模型解釋（標明「模型推測，未驗證」）；log 只送本機或內網的模型，送出前遮掉密碼與金鑰，
+只給建議、不執行指令（ADR 045）。也可以自己跑：`uv run --no-project python deploy/diagnose.py`
+（看最近 1 小時的 log；`--no-llm` 只比對規則表）。
+
 ## 快速開始（macOS／WSL2）
 
 需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Docker](https://docs.docker.com/get-docker/)（資料庫；沒有也能跑，見下方「資料庫」）、

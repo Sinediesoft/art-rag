@@ -26,6 +26,19 @@ $ErrorActionPreference = 'Stop'
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $Repo
 
+# 失敗時交給 deploy/diagnose.py 說明原因（docs/adr/045）；uv 還沒裝好就只留原本的錯誤訊息
+$RunStart = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+$servicesStarted = $false
+trap {
+    # 啟動那一步失敗時 start-services.ps1 自己已經診斷過，不重複
+    if (-not $servicesStarted -and (Get-Command uv -ErrorAction SilentlyContinue)) {
+        $ErrorActionPreference = 'Continue'
+        & uv run --no-project python (Join-Path $Repo 'deploy\diagnose.py') --since $RunStart `
+            --message $_.Exception.Message
+    }
+    break
+}
+
 function Say([string]$text) { Write-Host "`n▶ $text" -ForegroundColor Cyan }
 function Note([string]$text) { Write-Host "  $text" }
 function Has([string]$cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
@@ -213,5 +226,6 @@ $startArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $Repo 'deploy\w
 # 3D 重建、排程是選裝：沒有 llama.cpp 或 Java 就跳過，那兩頁會提示怎麼啟動
 if (-not ($env:LLAMA_SERVER -or (Has 'llama-server'))) { $startArgs += '-SkipOrtho2cad' }
 if (-not (Has 'java')) { $startArgs += '-SkipScheduler' }
+$servicesStarted = $true
 Run 'powershell' $startArgs
 Say "完成：打開 http://127.0.0.1:8000（方案 $Mode）"

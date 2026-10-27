@@ -12,7 +12,7 @@
 #   mock  沒有可用的顯卡：不呼叫生成模型，只能看介面與流程
 # 沒有 Docker 時資料庫改用檔案索引＋SQLite（功能相同）。3D 重建（Ortho2CAD）與排程（Java）是選裝，見 README。
 # 缺少 uv、Node.js、Ollama 時會先列出來，問過才安裝（--yes 不問）；Docker 只提示怎麼裝。
-set -euo pipefail
+set -Eeuo pipefail
 
 MODE=auto
 YES=0
@@ -36,6 +36,19 @@ cd "$REPO"
 say() { printf '\n\033[36m▶ %s\033[0m\n' "$1"; }
 note() { printf '  %s\n' "$1"; }
 has() { command -v "$1" >/dev/null 2>&1; }
+
+# 失敗時交給 deploy/diagnose.py 說明原因（docs/adr/045）；uv 還沒裝好就只留原本的錯誤訊息
+RUN_START="$(date +%s)"
+diagnose() {
+  has uv || return 0
+  uv run --no-project python deploy/diagnose.py --since "$RUN_START" --message "$1" || true
+}
+on_error() {
+  local code=$? line=${BASH_LINENO[0]} cmd=$BASH_COMMAND
+  trap - ERR
+  diagnose "安裝在 install.sh 第 ${line} 行失敗（結束碼 ${code}）：${cmd}"
+}
+trap on_error ERR
 ask() {
   [ "$YES" = 1 ] && return 0
   read -r -p "$1 [y/N] " answer
@@ -201,4 +214,5 @@ for _ in $(seq 1 60); do
   kill -0 "$SERVER" 2>/dev/null || break
 done
 echo "後端沒起來，看 data/logs/backend.log"
+diagnose "後端沒起來"
 exit 1

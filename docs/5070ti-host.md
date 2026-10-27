@@ -18,6 +18,15 @@ powershell -ExecutionPolicy Bypass -File deploy\windows\start-services.ps1
 
 已經在跑的會略過，最後印出健康檢查；`-Stop` 停掉（Ollama 除外）。紀錄在 `data\logs\`。
 
+啟動失敗或健康檢查有 ✗ 時，最後會多一段「故障診斷」（ADR 045）：先比對規則表（Docker Desktop 沒開、連接埠被佔、
+記憶體不夠、`HF_OFFLINE` 但模型沒下載、Redis、WSL 的 CadQuery…），對不上才請本地 Qwen3-VL 讀 log 解釋。
+只給建議，不會自己改設定或執行指令；不要診斷就加 `-NoDiagnose`。事後要再看一次：
+
+```powershell
+uv run --no-project python deploy\diagnose.py                       # 最近 1 小時寫過的 log
+uv run --no-project python deploy\diagnose.py --log data\logs\backend.log --no-llm
+```
+
 這台的 `.env`（不進 Git）和 `.env.example` 不同的地方：
 
 ```

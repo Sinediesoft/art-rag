@@ -13,12 +13,14 @@
 - 紀錄寫在 data\logs\（不進 Git）
 - 直接在 Windows 跑時，3D 重建產生的程式碼要在 WSL2 執行（.env 設 CAD_WSL_PYTHON，docs/adr/027）；
   這個腳本最後會檢查並預熱 WSL 裡的 CadQuery 環境，做法見 docs/5070ti-host.md
+- 啟動失敗或健康檢查有 ✗ 時，deploy/diagnose.py 會看這次的 log 說明原因與修法（docs/adr/045；-NoDiagnose 關掉）
 #>
 param(
     [string]$LlamaServer = $env:LLAMA_SERVER,
     [switch]$SkipOrtho2cad,
     [switch]$SkipScheduler,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$NoDiagnose
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +28,27 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Logs = Join-Path $Repo 'data\logs'
 New-Item -ItemType Directory -Force $Logs | Out-Null
 Set-Location $Repo
+
+# 診斷只看這次執行之後寫的 log：上次留下的舊錯誤不算
+$RunStart = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+$problems = @()
+
+function Invoke-Diagnose([string]$Message) {
+    if ($NoDiagnose -or -not (Get-Command uv -ErrorAction SilentlyContinue)) { return }
+    $diagArgs = @('run', '--no-project', 'python', (Join-Path $Repo 'deploy\diagnose.py'), '--since', $RunStart)
+    # Windows PowerShell 5.1 會把空字串參數整個吃掉，--message 後面就沒有值了
+    if ($Message) { $diagArgs += @('--message', $Message) }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & uv @diagArgs
+    $ErrorActionPreference = $prev
+}
+
+# 中途 throw（資料庫、migration、找不到 Ollama）：先診斷，再照原本的錯誤結束
+trap {
+    Invoke-Diagnose $_.Exception.Message
+    break
+}
 
 function Test-Port([int]$Port) {
     [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -110,7 +133,9 @@ else {
     $ollama = (Get-Command ollama -ErrorAction SilentlyContinue).Source
     if (-not $ollama) { throw '找不到 ollama，請先安裝 Ollama' }
     Start-Hidden 'ollama' $ollama @('serve')
-    "… 啟動 Ollama：$(Wait-Http 'http://127.0.0.1:11434/api/tags' 30)"
+    $code = Wait-Http 'http://127.0.0.1:11434/api/tags' 30
+    "… 啟動 Ollama：$code"
+    if ($code -eq '000') { $problems += '啟動 Ollama：000（30 秒內沒有回應）' }
 }
 
 # 2. Timefold 排程服務（沒有也能跑：排程頁改用簡易排程）
@@ -199,7 +224,10 @@ else {
     $cadOk = $LASTEXITCODE -eq 0
     $ErrorActionPreference = 'Stop'
     if ($cadOk) { '✓ 3D 重建執行環境（WSL2 的 CadQuery）' }
-    else { "✗ WSL 裡的 CadQuery 不能用，3D 重建會失敗：看 $Logs\cad-wsl.log（環境做法見 docs/5070ti-host.md）" }
+    else {
+        "✗ WSL 裡的 CadQuery 不能用，3D 重建會失敗：看 $Logs\cad-wsl.log（環境做法見 docs/5070ti-host.md）"
+        $problems += 'WSL 裡的 CadQuery 不能用'
+    }
 }
 
 # 6. 健康檢查
@@ -217,10 +245,13 @@ try {
     foreach ($k in 'hybrid', 'hybrid_fallback', 'ortho2cad') {
         $s = $st.strategies.$k
         if ($s) { "  {0,-16} {1} {2}" -f $k, (& $mark $s.available), $s.model }
+        # Ortho2CAD 是選裝，略過時本來就不可用，不算問題
+        if ($s -and -not $s.available -and $k -ne 'ortho2cad') { $problems += "$k 模型不可用：$($s.model)" }
     }
     if ($st.memory.gpu) { "  顯示記憶體       $($st.memory.gpu.percent)%（$($st.memory.gpu.name)）" }
 } catch {
     "✗ 後端沒有回應，看 $Logs\backend.log"
+    $problems += "後端沒有回應（$($_.Exception.Message)）"
 }
 
 # 後端沒有排程引擎的狀態，直接問排程服務；連不上時排程頁改用簡易排程
@@ -247,7 +278,10 @@ if ($jobsOn -and $web) {
         "worker gpu $(& $mark ('gpu' -in $queues)) schedule $(& $mark ('schedule' -in $queues))"
     if (-not (('gpu' -in $queues) -and ('schedule' -in $queues))) {
         "  ✗ worker 沒有登記，3D 重建或排程會一直排隊：看 $Logs\worker-gpu.log、worker-schedule.log"
+        $problems += 'worker 沒有登記'
     }
 }
+# 沒有中斷、但健康檢查有 ✗：一起交給診斷
+if ($problems) { Invoke-Diagnose ($problems -join '；') }
 ''
 '打開 http://localhost:8000'
