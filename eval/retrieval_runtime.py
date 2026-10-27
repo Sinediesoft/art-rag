@@ -411,6 +411,15 @@ def verify_index_receipt(
                 "sha256"
             ):
                 problems.append(f"{d} 索引的段落向量和收據不同")
+            if a.get("items_sha256") != b.get("items_sha256"):
+                problems.append(f"{d} 索引的 items_sha256 和收據不同")
+            for name, label in (("chunk_vecs", "段落向量"), ("image_vecs", "圖片向量")):
+                da, db = a.get(name) or {}, b.get(name) or {}
+                for field in ("shape", "dtype", "sha256"):
+                    if name == "chunk_vecs" and field == "sha256":
+                        continue  # 上面已用原訊息比較
+                    if da.get(field) != db.get(field):
+                        problems.append(f"{d} 索引的{label} {field} 和收據不同")
     return problems
 
 
@@ -779,6 +788,11 @@ def main(argv: list[str] | None = None) -> int:
         if is_official_runs_dir(out_dir):
             print("mock 收據不能寫進 eval/runs，請用 --out-dir 指到暫存目錄", file=sys.stderr)
             return 2
+    run_id = args.run_id or new_run_id()
+    out = out_dir / f"{run_id}-retrieval-index.json"
+    if out.exists():  # 先擋同 out-dir／同 ID，免得白做昂貴的重建
+        print(f"{repo_relative(out)} 已存在：不覆寫既有收據，請換 --run-id", file=sys.stderr)
+        return 2
     build = {"invoked": False}
     if args.command == "build-index":
         build = run_build_index()
@@ -799,10 +813,14 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print("收據檢查失敗，不寫檔：\n- " + "\n- ".join(problems), file=sys.stderr)
         return 1
-    receipt["run_id"] = args.run_id or new_run_id()
+    receipt["run_id"] = run_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{receipt['run_id']}-retrieval-index.json"
-    out.write_text(json.dumps(receipt, ensure_ascii=False, indent=1), encoding="utf-8")
+    try:
+        with out.open("x", encoding="utf-8") as f:  # 排他建立：檢查後才出現的同名檔不被覆寫
+            f.write(json.dumps(receipt, ensure_ascii=False, indent=1))
+    except FileExistsError:
+        print(f"{repo_relative(out)} 已存在：不覆寫既有收據", file=sys.stderr)
+        return 2
     print(f"索引收據：{repo_relative(out)}（real={receipt['real']}）")
     return 0
 
