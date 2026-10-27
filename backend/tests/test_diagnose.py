@@ -97,6 +97,10 @@ def test_message_from_script_is_matched_too(repo, capsys):
         ("uv : The term 'uv' is not recognized as the name of a cmdlet", "uv-missing"),
         ("Error: Unable to access jarfile scheduler/target/scheduler.jar", "scheduler"),
         ("OSError: [Errno 28] No space left on device", "disk-full"),
+        (
+            "Network connectivity is disabled, but the requested data wasn't found in the cache",
+            "offline-missing",
+        ),
     ],
 )
 def test_each_rule_matches_its_example(line, rule_id):
@@ -187,3 +191,18 @@ def test_mock_profile_and_no_llm_skip_the_model(repo, capsys, monkeypatch):
 )
 def test_is_local_url(url, local):
     assert diagnose.is_local_url(url) is local
+
+
+def test_offline_bundle_gets_offline_fixes(tmp_path, capsys, monkeypatch):
+    # 離線包：app\ 旁邊有 offline\offline.json，沒有網路可以補下載，修法改成重新複製離線包
+    app = tmp_path / "app"
+    app.mkdir()
+    (tmp_path / "offline").mkdir()
+    (tmp_path / "offline" / "offline.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(diagnose, "REPO", app)
+    log = write_log(
+        app, "backend.log", "LocalEntryNotFoundError: Cannot find the requested files\n"
+    )
+    out = run(app, capsys, "--log", str(log))
+    assert "重新複製整個資料夾" in out
+    assert "HF_OFFLINE 暫時改成 false" not in out

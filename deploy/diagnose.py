@@ -102,6 +102,13 @@ RULES: list[tuple[str, str, str, str]] = [
         "關掉這個視窗、開一個新的再重跑；還是不行就重跑 deploy/install.ps1",
     ),
     (
+        "offline-missing",
+        r"Network connectivity is disabled|(was not|wasn't) found in the cache",
+        "離線環境找不到需要的 Python 套件或 Python",
+        "離線包和這份程式碼的 uv.lock 對不上，或複製時漏了檔案：用同一個 commit 重新打包"
+        "（deploy/offline/pack.ps1），整個資料夾重新複製",
+    ),
+    (
         "scheduler",
         r"UnsupportedClassVersionError|Unable to access jarfile|scheduler\.jar",
         "排程服務（Timefold）需要 Java 21 和建好的 scheduler.jar",
@@ -120,6 +127,15 @@ RULES: list[tuple[str, str, str, str]] = [
         "回報前端組；暫時可以用之前建好的 frontend/dist",
     ),
 ]
+
+# 離線包（docs/adr/046）沒有網路可以補下載、Ollama 也是包裡附的：這幾種改成請對方重新複製離線包
+OFFLINE_FIXES = {
+    "hf-offline": "離線包的 offline\\hf 缺檔：從原本的離線包重新複製整個資料夾",
+    "model-missing": "離線包的 offline\\ollama-models 缺檔：從原本的離線包重新複製整個資料夾",
+    "ollama-missing": "離線包的 offline\\ollama 缺檔，或連接埠 11435 被佔："
+    "重新複製離線包、確認沒有別的程式用 11435",
+    "uv-missing": "離線包的 offline\\uv 缺檔：從原本的離線包重新複製整個資料夾",
+}
 
 # PowerShell 5.1 把原生程式寫到 stderr 的內容包成 NativeCommandError：就算成功，db.log 也有這幾行
 _PS_NOISE = re.compile(r"^\s*(At .*:\d+ char:\d+|\+ .*)$")
@@ -310,7 +326,10 @@ def main(argv: list[str] | None = None) -> int:
     print("\n── 故障診斷 ──")
     print("看了：" + ("、".join(logs) if logs else "（沒有這次執行之後寫的 log）"))
     found = match_rules(args.message, logs)
-    for _, cause, fix, evidence in found:
+    offline_bundle = (REPO.parent / "offline" / "offline.json").is_file()
+    for rule_id, cause, fix, evidence in found:
+        if offline_bundle:
+            fix = OFFLINE_FIXES.get(rule_id, fix)
         print(f"✗ {cause}")
         print(f"  修法：{fix}")
         print(f"  依據（{evidence}）")

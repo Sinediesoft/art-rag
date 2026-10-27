@@ -27,6 +27,13 @@ uv run --no-project python deploy\diagnose.py                       # 最近 1 �
 uv run --no-project python deploy\diagnose.py --log data\logs\backend.log --no-llm
 ```
 
+離線安裝包（ADR 046）也在這台打包：需要這台的 Ollama 有 qwen3-vl 8B／4B、Hugging Face 快取有釘選版本的
+bge-m3 與 Chinese-CLIP（建過索引就有）。輸出約 17.5 GB，C 槽空間不夠，預設輸出到 D 槽：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1
+```
+
 這台的 `.env`（不進 Git）和 `.env.example` 不同的地方：
 
 ```

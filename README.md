@@ -85,6 +85,18 @@ bash deploy/install.sh --dry-run    # 只列出會做什麼
 只給建議、不執行指令（ADR 045）。也可以自己跑：`uv run --no-project python deploy/diagnose.py`
 （看最近 1 小時的 log；`--no-llm` 只比對規則表）。
 
+### 離線安裝包（安裝過程不連網）
+
+給不能連網、或不想打指令的電腦（ADR 046）。在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 17.5 GB）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1    # 輸出到 D:\art-rag-offline，-Out 換位置
+```
+
+把整個資料夾複製到別台 Windows 電腦的本機磁碟（隨身碟要 exFAT／NTFS），點兩下「安裝.cmd」：
+自動判斷顯卡、從離線包建 Python 環境、建索引、在桌面建「啟動 art-rag」「停止 art-rag」，最後打開瀏覽器。
+模型與 Ollama 用離線包自己的（連接埠 11435，不影響那台原本的 Ollama）；不含 Docker、Ortho2CAD、Java 排程。
+
 ## 快速開始（macOS／WSL2）
 
 需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Docker](https://docs.docker.com/get-docker/)（資料庫；沒有也能跑，見下方「資料庫」）、

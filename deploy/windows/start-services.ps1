@@ -14,6 +14,8 @@
 - 直接在 Windows 跑時，3D 重建產生的程式碼要在 WSL2 執行（.env 設 CAD_WSL_PYTHON，docs/adr/027）；
   這個腳本最後會檢查並預熱 WSL 裡的 CadQuery 環境，做法見 docs/5070ti-host.md
 - 啟動失敗或健康檢查有 ✗ 時，deploy/diagnose.py 會看這次的 log 說明原因與修法（docs/adr/045；-NoDiagnose 關掉）
+- 在離線包裡執行時（docs/adr/046），uv、Python、Ollama、模型都用離線包裡的；Ollama 用 .env 的 HYBRID_BASE_URL
+  那個連接埠（離線包是 :11435），-Stop 也會停掉它
 #>
 param(
     [string]$LlamaServer = $env:LLAMA_SERVER,
@@ -28,6 +30,7 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Logs = Join-Path $Repo 'data\logs'
 New-Item -ItemType Directory -Force $Logs | Out-Null
 Set-Location $Repo
+. (Join-Path $Repo 'deploy\offline\offline-env.ps1')
 
 # 診斷只看這次執行之後寫的 log：上次留下的舊錯誤不算
 $RunStart = [DateTimeOffset]::Now.ToUnixTimeSeconds()
@@ -75,15 +78,20 @@ function Get-Worker([string]$Queue) {
 }
 
 if ($Stop) {
-    foreach ($p in 8000, 8081, 8082) {
+    $ports = @(8000, 8081, 8082)
+    # 離線包的 Ollama 是這個腳本自己起的 ollama serve，不是常駐服務：一起停
+    if ($IsOfflineBundle) { $ports += $OfflineOllamaPort }
+    foreach ($p in $ports) {
         Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
             ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false; "已停止 :$p（pid $($_.OwningProcess)）" }
     }
     Get-Worker | ForEach-Object {
         Stop-Process -Id $_.ProcessId -Force -Confirm:$false -ErrorAction SilentlyContinue; "已停止 worker（pid $($_.ProcessId)）"
     }
-    '（資料庫與 Redis 容器不停：docker compose -f deploy/docker-compose.yml stop）'
-    '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
+    if (-not $IsOfflineBundle) {
+        '（資料庫與 Redis 容器不停：docker compose -f deploy/docker-compose.yml stop）'
+        '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
+    }
     return
 }
 
@@ -127,14 +135,19 @@ if ($jobsOn) {
     if ($migOk) { '✓ 背景工作資料表' } else { throw "背景工作的 migration 失敗，看 $Logs\jobs-migrate.log" }
 }
 
-# 1. Ollama
-if (Test-Port 11434) { '✓ Ollama 已在執行' }
+# 1. Ollama：連接埠照 .env 的 HYBRID_BASE_URL（離線包是 11435）；指到別台主機時照舊在本機起 :11434
+$ollamaPort = 11434
+if ($envVars['HYBRID_BASE_URL'] -match '^https?://(127\.0\.0\.1|localhost):(\d+)') { $ollamaPort = [int]$Matches[2] }
+$ollamaRoot = "http://127.0.0.1:$ollamaPort"
+if (Test-Port $ollamaPort) { "✓ Ollama 已在執行（:$ollamaPort）" }
 else {
     $ollama = (Get-Command ollama -ErrorAction SilentlyContinue).Source
     if (-not $ollama) { throw '找不到 ollama，請先安裝 Ollama' }
+    # 使用者自己設了 OLLAMA_HOST（例如開放給組員）就照他的
+    if (-not $env:OLLAMA_HOST -and $ollamaPort -ne 11434) { $env:OLLAMA_HOST = "127.0.0.1:$ollamaPort" }
     Start-Hidden 'ollama' $ollama @('serve')
-    $code = Wait-Http 'http://127.0.0.1:11434/api/tags' 30
-    "… 啟動 Ollama：$code"
+    $code = Wait-Http "$ollamaRoot/api/tags" 30
+    "… 啟動 Ollama（:$ollamaPort）：$code"
     if ($code -eq '000') { $problems += '啟動 Ollama：000（30 秒內沒有回應）' }
 }
 
@@ -204,12 +217,16 @@ $model = if ($envVars['HYBRID_MODEL']) { $envVars['HYBRID_MODEL'] } else { 'qwen
 $keep = if ($envVars['MODEL_KEEP_ALIVE']) { $envVars['MODEL_KEEP_ALIVE'] } else { '5m' }
 # 用 Invoke-RestMethod：Windows PowerShell 5.1 把 JSON 傳給 curl.exe 時會吃掉雙引號（HTTP 400）
 $warm = @{ model = $model; keep_alive = $keep } | ConvertTo-Json -Compress
-try {
-    Invoke-RestMethod -Method Post -Uri http://127.0.0.1:11434/api/generate -ContentType 'application/json' `
-        -Body ([Text.Encoding]::UTF8.GetBytes($warm)) -TimeoutSec 120 | Out-Null
-    "… 預熱 $model（keep_alive $keep）：✓"
-} catch {
-    "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+# mock 方案不呼叫生成模型：預熱只會白白佔記憶體（沒有顯卡時是系統記憶體）
+if ($envVars['LLM_MODE'] -eq 'mock') { '－ mock 方案：不預熱模型' }
+else {
+    try {
+        Invoke-RestMethod -Method Post -Uri "$ollamaRoot/api/generate" -ContentType 'application/json' `
+            -Body ([Text.Encoding]::UTF8.GetBytes($warm)) -TimeoutSec 120 | Out-Null
+        "… 預熱 $model（keep_alive $keep）：✓"
+    } catch {
+        "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+    }
 }
 
 # 5b. 3D 重建的執行環境（docs/adr/027）：產生的程式碼在 WSL2 執行；順便讓 WSL 開機，第一次 3D 重建不用多等
