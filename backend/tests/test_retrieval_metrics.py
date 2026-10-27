@@ -688,3 +688,134 @@ def test_bootstrap_disables_env_file_and_settings_stop_reading_it(settings_sandb
     assert config.get_settings().model_keep_alive == ""
     assert opened == []
     assert rr.env_file_disabled() is True
+
+
+# ---------------------------------------------------------------- 收據完整 digest 比對（A 批）
+
+
+def _vec(shape=(21, 4), dtype="float32", sha="v"):
+    return {"shape": list(shape), "dtype": dtype, "sha256": sha}
+
+
+def full_coll(n: int, tag: str) -> dict:
+    return {
+        "chunk_count": n,
+        "chunks_sha256": f"c-{tag}",
+        "items_sha256": f"i-{tag}",
+        "chunk_vecs": _vec((n, 4), sha=f"cv-{tag}"),
+        "image_vecs": _vec((3, 2), sha=f"iv-{tag}"),
+    }
+
+
+def full_receipt(**over) -> dict:
+    over = {"collections": {"art": full_coll(21, "a"), "mfg": full_coll(34, "m")}} | over
+    return receipt(**over)
+
+
+def _changed(domain: str, mutate) -> dict:
+    colls = {"art": full_coll(21, "a"), "mfg": full_coll(34, "m")}
+    mutate(colls[domain])
+    return full_receipt(collections=colls)
+
+
+def test_full_matching_receipt_passes_with_current():
+    assert rr.verify_index_receipt(full_receipt(), current=full_receipt()) == []
+
+
+@pytest.mark.parametrize("domain", ["art", "mfg"])
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda c: c.update(items_sha256="other"), "{d} 索引的 items_sha256 和收據不同"),
+        (
+            lambda c: c["image_vecs"].update(sha256="other"),
+            "{d} 索引的圖片向量 sha256 和收據不同",
+        ),
+        (
+            lambda c: c["image_vecs"].update(shape=[9, 9]),
+            "{d} 索引的圖片向量 shape 和收據不同",
+        ),
+        (
+            lambda c: c["image_vecs"].update(dtype="float64"),
+            "{d} 索引的圖片向量 dtype 和收據不同",
+        ),
+        (
+            lambda c: c["chunk_vecs"].update(shape=[9, 9]),
+            "{d} 索引的段落向量 shape 和收據不同",
+        ),
+        (
+            lambda c: c["chunk_vecs"].update(dtype="float64"),
+            "{d} 索引的段落向量 dtype 和收據不同",
+        ),
+        (
+            lambda c: c["chunk_vecs"].update(sha256="other"),
+            "{d} 索引的段落向量和收據不同",
+        ),
+    ],
+)
+def test_each_collection_description_difference_is_rejected_alone(domain, mutate, message):
+    problems = rr.verify_index_receipt(full_receipt(), current=_changed(domain, mutate))
+    assert problems == [message.format(d=domain)]
+
+
+def test_image_only_change_with_same_shape_and_dtype_is_caught():
+    # 圖片向量內容不同、其他全部相同：只有 image sha 能抓到
+    cur = _changed("art", lambda c: c["image_vecs"].update(sha256="swapped"))
+    assert rr.verify_index_receipt(full_receipt(), current=cur) == [
+        "art 索引的圖片向量 sha256 和收據不同"
+    ]
+
+
+def test_multiple_mismatches_keep_domain_then_field_order():
+    cur = full_receipt(
+        collections={
+            "art": full_coll(21, "a")
+            | {
+                "chunks_sha256": "x",
+                "items_sha256": "x",
+                "chunk_vecs": _vec((21, 4), sha="x"),
+                "image_vecs": _vec((9, 9), "float64", "x"),
+            },
+            "mfg": full_coll(34, "m") | {"items_sha256": "x"},
+        }
+    )
+    assert rr.verify_index_receipt(full_receipt(), current=cur) == [
+        "art 索引的 chunks_sha256 和收據不同",
+        "art 索引的段落向量和收據不同",
+        "art 索引的 items_sha256 和收據不同",
+        "art 索引的圖片向量 shape 和收據不同",
+        "art 索引的圖片向量 dtype 和收據不同",
+        "art 索引的圖片向量 sha256 和收據不同",
+        "mfg 索引的 items_sha256 和收據不同",
+    ]
+
+
+def test_absent_or_null_descriptions_equal_each_other_but_not_a_present_one():
+    bare = receipt()  # 收據與現況都沒有 items／image 描述
+    assert rr.verify_index_receipt(bare, current=receipt()) == []
+    nulled = receipt(
+        collections={
+            "art": {"chunk_count": 21, "chunks_sha256": "c1", "chunk_vecs": {"sha256": "v1"}}
+            | {"items_sha256": None, "image_vecs": None},
+            "mfg": {"chunk_count": 34, "chunks_sha256": "c2", "chunk_vecs": {"sha256": "v2"}},
+        }
+    )
+    assert rr.verify_index_receipt(bare, current=nulled) == []
+    # 收據缺、現況有：不能當成相符
+    present = verify = rr.verify_index_receipt(bare, current=full_receipt())
+    assert "art 索引的 items_sha256 和收據不同" in present
+    assert "art 索引的圖片向量 shape 和收據不同" in verify
+
+
+def test_non_current_problems_keep_their_order_before_collection_checks():
+    r = full_receipt(
+        settings={"embed_mode": "mock", "index_backend": "file"},
+        manifest_problems=["m"],
+        isolation={"env_file_disabled": False},
+    )
+    cur = _changed("art", lambda c: c.update(items_sha256="x"))
+    problems = rr.verify_index_receipt(r, current=cur)
+    assert problems[0].startswith("不是真模型索引")
+    assert problems[1] == "索引與設定不一致：m"
+    assert problems[2] == "沒有關閉 env_file（可能讀了 .env）"
+    assert problems[-1] == "art 索引的 items_sha256 和收據不同"

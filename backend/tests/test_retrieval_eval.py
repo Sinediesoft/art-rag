@@ -698,6 +698,318 @@ def test_real_mode_refuses_mock_index_without_scores(mock_index, tmp_path, monke
     assert any("embedding 模式不一致" in p for p in report["problems"])
 
 
+# ---------------------------------------------------------------- A 批：收據 image/items 與 run-id 防覆寫
+
+
+def _now_receipt(store) -> dict:
+    return rr.collect_index_receipt(store, isolation={"env_file_disabled": True})
+
+
+@pytest.mark.parametrize("domain", ["art", "mfg"])
+@pytest.mark.parametrize("field", ["items_sha256", "image_vecs"])
+def test_receipt_image_or_items_mismatch_blocks_text_provenance(mock_index, domain, field):
+    import copy
+
+    now = _now_receipt(mock_index.write())
+    assert rre.provenance_problems(now, copy.deepcopy(now), mock=True) == []
+    bad = copy.deepcopy(now)
+    if field == "items_sha256":
+        bad["collections"][domain][field] = "0" * 64
+        needle = f"索引收據：{domain} 索引的 items_sha256 和收據不同"
+    else:
+        bad["collections"][domain][field]["sha256"] = "0" * 64
+        needle = f"索引收據：{domain} 索引的圖片向量 sha256 和收據不同"
+    assert rre.provenance_problems(now, bad, mock=True) == [needle]
+
+
+@pytest.mark.parametrize("field", ["items_sha256", "image_vecs"])
+def test_execute_rejects_image_or_items_mismatch_without_evaluating(
+    mock_index, tmp_path, monkeypatch, field
+):
+    import copy
+
+    now = _now_receipt(mock_index.write())
+    bad = copy.deepcopy(now)
+    if field == "items_sha256":
+        bad["collections"]["mfg"][field] = "f" * 64
+    else:
+        bad["collections"]["mfg"][field]["sha256"] = "f" * 64
+    receipt_path = tmp_path / "bad-retrieval-index.json"
+    receipt_path.write_text(json.dumps(bad), encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(rre, "evaluate", lambda *a, **k: calls.append(1))
+    out = tmp_path / "out"
+    argv = ["--allow-mock", "--out-dir", str(out), "--run-id", "t-bad", "--receipt", str(receipt_path)]
+    assert _run_main(argv) == 1
+    assert calls == []
+    report = json.loads((out / "t-bad-retrieval-layer-metrics.json").read_text(encoding="utf-8"))
+    assert report["status"] == "failed" and report["official"] is False
+    assert report["groups"] == [] and report["summary"] == {}
+    assert any(p.startswith("索引收據：mfg 索引的") for p in report["problems"])
+
+
+# 以替身驗 retrieval_runtime.main／run_build_index 的編排（不載模型、不重建索引）
+
+
+class FakeStore:
+    def __init__(self, error: Exception | None = None):
+        self.error, self.loaded = error, 0
+
+    def load(self):
+        self.loaded += 1
+        if self.error:
+            raise self.error
+
+
+def good_receipt(real: bool = True) -> dict:
+    mode = "real" if real else "mock"
+    coll = lambda n, t: {  # noqa: E731
+        "chunk_count": n,
+        "chunks_sha256": f"c{t}",
+        "items_sha256": f"i{t}",
+        "chunk_vecs": {"shape": [n, 2], "dtype": "float32", "sha256": f"v{t}"},
+        "image_vecs": {"shape": [1, 2], "dtype": "float32", "sha256": f"m{t}"},
+    }
+    return rr.assemble_index_receipt(
+        manifest={"embed_mode": mode, "chunk_count": 3, "part_chunk_count": 4},
+        manifest_problems=[],
+        collections={"art": coll(3, "a"), "mfg": coll(4, "m")},
+        settings={"embed_mode": mode, "index_backend": "file"},
+        models={},
+        retrieval_params={},
+        models_yaml_sha256="y",
+        kb={"version": "v", "hash_now": "h", "hash_manifest": "h"},
+        qa={"q": "h"},
+        code={"head": "abc", "dirty": False},
+        isolation={"env_file_disabled": True},
+        index_build={"invoked": True, "exit_code": 0},
+        created_at="2026-10-28T00:00:00+00:00",
+    )
+
+
+@pytest.fixture
+def rt(monkeypatch, tmp_path):
+    """retrieval_runtime.main 的替身環境：mode、store、build、collect 都可由測試調整。"""
+    from types import SimpleNamespace
+
+    from app.core import config
+    from app.repositories import index_store
+
+    st = SimpleNamespace(
+        mode="real",
+        store=FakeStore(),
+        build={"invoked": True, "exit_code": 0},
+        receipt=good_receipt(),
+        built=0,
+        collect_args=[],
+        out=tmp_path / "out",
+    )
+
+    def build():
+        st.built += 1
+        return st.build
+
+    def collect(store, **kw):
+        st.collect_args.append(kw)
+        return st.receipt
+
+    monkeypatch.setattr(rr, "bootstrap", lambda strict=True: {"env_file_disabled": True})
+    monkeypatch.setattr(rr, "run_build_index", build)
+    monkeypatch.setattr(rr, "collect_index_receipt", collect)
+    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(embed_mode=st.mode))
+    monkeypatch.setattr(index_store, "get_store", lambda: st.store)
+    return st
+
+
+def _rt_main(rt, *extra, command="build-index", run_id="r1"):
+    return rr.main([command, "--out-dir", str(rt.out), "--run-id", run_id, *extra])
+
+
+def test_runtime_main_rejects_mock_without_allow_mock(rt, capsys):
+    rt.mode = "mock"
+    assert _rt_main(rt) == 2
+    assert "只接受 real" in capsys.readouterr().err
+    assert rt.built == 0 and not rt.out.exists()
+
+
+def test_runtime_main_rejects_mock_into_official_runs(rt, capsys):
+    rt.mode = "mock"
+    rt.out = ROOT / "eval" / "runs"
+    before = set(rt.out.iterdir())
+    assert _rt_main(rt, "--allow-mock") == 2
+    assert "不能寫進 eval/runs" in capsys.readouterr().err
+    assert rt.built == 0 and set(rt.out.iterdir()) == before
+
+
+@pytest.mark.parametrize("command", ["build-index", "receipt"])
+def test_runtime_main_success_writes_receipt(rt, command, capsys):
+    rt.receipt = good_receipt(real=False)
+    rt.mode = "mock"
+    assert _rt_main(rt, "--allow-mock", command=command) == 0
+    out = rt.out / "r1-retrieval-index.json"
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert saved["run_id"] == "r1" and saved["real"] is False
+    assert rt.built == (1 if command == "build-index" else 0)
+    assert rt.collect_args[0]["index_build"] == (
+        rt.build if command == "build-index" else {"invoked": False}
+    )
+    assert "索引收據：" in capsys.readouterr().out
+
+
+def test_runtime_main_real_mode_success(rt):
+    assert _rt_main(rt, command="receipt") == 0
+    assert json.loads((rt.out / "r1-retrieval-index.json").read_text())["real"] is True
+
+
+def test_runtime_main_build_failure_stops_before_collect_and_write(rt, capsys):
+    rt.build = {"invoked": True, "exit_code": 3, "error": "boom"}
+    assert _rt_main(rt) == 1
+    assert "建索引失敗" in capsys.readouterr().err
+    assert rt.collect_args == [] and rt.store.loaded == 0 and not rt.out.exists()
+
+
+def test_runtime_main_index_mismatch_writes_nothing(rt, capsys):
+    from app.repositories.index_store import IndexMismatch
+
+    rt.store = FakeStore(IndexMismatch("壞了"))
+    assert _rt_main(rt, command="receipt") == 1
+    assert "索引不能用：壞了" in capsys.readouterr().err
+    assert rt.collect_args == [] and not rt.out.exists()
+
+
+def test_runtime_main_rejected_receipt_writes_nothing(rt, capsys):
+    rt.receipt = good_receipt() | {"kb": {"match": False}}
+    assert _rt_main(rt, command="receipt") == 1
+    err = capsys.readouterr().err
+    assert "收據檢查失敗，不寫檔" in err and "KB 的 hash" in err
+    assert not rt.out.exists()
+
+
+def test_runtime_main_qa_default_and_repeated(rt):
+    assert _rt_main(rt, command="receipt") == 0
+    assert rt.collect_args[0]["qa_paths"] == list(rr.DEFAULT_QA)
+    assert rt.collect_args[0]["isolation"] == {"env_file_disabled": True}
+    rt.out = rt.out.parent / "out2"
+    assert _rt_main(rt, "--qa", "a.jsonl", "--qa", "b.jsonl", command="receipt") == 0
+    assert rt.collect_args[1]["qa_paths"] == [Path("a.jsonl"), Path("b.jsonl")]
+
+
+@pytest.mark.parametrize("command", ["build-index", "receipt"])
+def test_runtime_main_existing_receipt_is_kept_and_build_not_started(rt, command, capsys):
+    rt.out.mkdir()
+    old = rt.out / "r1-retrieval-index.json"
+    old.write_bytes(b"old-bytes")
+    assert _rt_main(rt, command=command) == 2
+    assert "已存在" in capsys.readouterr().err
+    assert old.read_bytes() == b"old-bytes"
+    assert rt.built == 0 and rt.collect_args == [] and rt.store.loaded == 0
+
+
+def test_runtime_main_second_run_with_same_id_fails_and_keeps_first(rt):
+    assert _rt_main(rt, command="receipt") == 0
+    out = rt.out / "r1-retrieval-index.json"
+    first = out.read_bytes()
+    rt.receipt = good_receipt() | {"embed_mode": "changed"}
+    assert _rt_main(rt, command="receipt") == 2
+    assert out.read_bytes() == first
+
+
+def test_runtime_main_default_id_collision_fails_clearly(rt, monkeypatch, capsys):
+    monkeypatch.setattr(rr, "new_run_id", lambda: "fixed")
+    rt.out.mkdir()
+    (rt.out / "fixed-retrieval-index.json").write_bytes(b"keep")
+    assert rr.main(["build-index", "--out-dir", str(rt.out)]) == 2
+    assert "已存在" in capsys.readouterr().err
+    assert rt.built == 0
+    assert (rt.out / "fixed-retrieval-index.json").read_bytes() == b"keep"
+
+
+def test_runtime_main_race_after_check_does_not_overwrite(rt, monkeypatch, capsys):
+    """檢查時不存在，最終寫入前被別人建立同名檔：排他寫入拒絕、競爭檔保留。"""
+    racer = rt.out / "r1-retrieval-index.json"
+    inner = rt.receipt
+
+    def collect(store, **kw):
+        rt.out.mkdir(exist_ok=True)
+        racer.write_bytes(b"racer")
+        return inner
+
+    monkeypatch.setattr(rr, "collect_index_receipt", collect)
+    assert _rt_main(rt, command="receipt") == 2
+    assert "已存在" in capsys.readouterr().err
+    assert racer.read_bytes() == b"racer"
+
+
+@pytest.fixture
+def fake_pipeline(monkeypatch):
+    """替身 build_index 模組與已 bootstrap 狀態。"""
+    import types
+
+    mod = types.ModuleType("build_index")
+    mod.calls = []
+    mod.behaviour = lambda: 0
+
+    def main(argv):
+        mod.calls.append(argv)
+        return mod.behaviour()
+
+    mod.main = main
+    monkeypatch.setitem(sys.modules, "build_index", mod)
+    monkeypatch.setattr(rr, "env_file_disabled", lambda: True)
+    return mod
+
+
+def test_run_build_index_requires_bootstrap(monkeypatch, fake_pipeline):
+    monkeypatch.setattr(rr, "env_file_disabled", lambda: False)
+    with pytest.raises(rr.RuntimeIsolationError):
+        rr.run_build_index()
+    assert fake_pipeline.calls == []
+
+
+@pytest.mark.parametrize("ret", [0, 4])
+def test_run_build_index_records_pipeline_return_value(fake_pipeline, ret):
+    fake_pipeline.behaviour = lambda: ret
+    r = rr.run_build_index()
+    assert fake_pipeline.calls == [[]]
+    assert r["invoked"] is True and r["command"] == "pipelines/build_index.py"
+    assert r["exit_code"] == ret and r["error"] is None
+    assert r["started_at"] <= r["finished_at"] and isinstance(r["seconds"], float)
+
+
+def _raise(exc):
+    def f():
+        raise exc
+
+    return f
+
+
+def test_run_build_index_systemexit_int_keeps_code(fake_pipeline):
+    fake_pipeline.behaviour = _raise(SystemExit(7))
+    r = rr.run_build_index()
+    assert r["exit_code"] == 7 and r["error"] is None
+
+
+def test_run_build_index_systemexit_text_becomes_code_one_with_message(fake_pipeline):
+    fake_pipeline.behaviour = _raise(SystemExit("mfg-001 標準模型執行失敗"))
+    r = rr.run_build_index()
+    assert r["exit_code"] == 1 and r["error"] == "mfg-001 標準模型執行失敗"
+
+
+def test_run_build_index_other_exceptions_propagate(fake_pipeline):
+    fake_pipeline.behaviour = _raise(ValueError("x"))
+    with pytest.raises(ValueError):
+        rr.run_build_index()
+
+
+def test_run_build_index_sys_path_inserted_once(monkeypatch, fake_pipeline):
+    pipelines = str(ROOT / "pipelines")
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != pipelines])
+    rr.run_build_index()
+    assert sys.path[0] == pipelines
+    rr.run_build_index()
+    assert sys.path.count(pipelines) == 1
+
+
 # 子程序：先裝 audit hook 記下所有打開 .env 的動作，再把 env_file 指到暫存的哨兵 .env；
 # control 直接讀設定（證明 hook 抓得到），cli 照一般方式執行評估腳本
 WRAPPER = r"""
