@@ -4,8 +4,12 @@
 數字都是手算：多正解、短列表、重複 ID、未命中、空結果、expected_empty 與照片 route miss。
 """
 
+import json
 import math
+import os
+import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -585,6 +589,20 @@ def test_receipt_problems_block_official_results(over):
     assert rr.verify_index_receipt(receipt(**over))
 
 
+@pytest.mark.parametrize(
+    ("error_fields", "message"),
+    [
+        ({"error": "build failed detail"}, "建索引失敗：exit_code=1 build failed detail"),
+        ({"error": None}, "建索引失敗：exit_code=1 "),
+        ({}, "建索引失敗：exit_code=1 "),
+    ],
+    ids=["detail", "null", "missing"],
+)
+def test_failed_build_receipt_preserves_exact_reason(error_fields, message):
+    failed = receipt(index_build={"invoked": True, "exit_code": 1, **error_fields})
+    assert rr.verify_index_receipt(failed, require_build=True) == [message]
+
+
 def test_mock_receipt_allowed_only_when_not_requiring_real():
     mock = receipt(
         settings={"embed_mode": "mock", "index_backend": "file"},
@@ -649,6 +667,102 @@ def test_mock_artifacts_cannot_land_in_tracked_runs():
 
 
 # ---------------------------------------------------------------- 不讀 .env 的 bootstrap
+
+
+@pytest.mark.parametrize("preload_api", [False, True], ids=["allowed-only", "app-api"])
+def test_strict_bootstrap_checks_preloaded_modules_with_empty_settings_cache(
+    tmp_path, preload_api, record_property,
+):
+    """新程序只載入 config／可選的 app.api，避免已讀設定的 guard 掩蓋模組檢查。"""
+    script = textwrap.dedent(
+        """
+        import json, sys
+        from pathlib import Path
+
+        def refuse_secrets(event, args):
+            if event == "open" and args and isinstance(args[0], (str, bytes)):
+                path = Path(args[0].decode() if isinstance(args[0], bytes) else args[0])
+                if path.name == ".env" or path.suffix in {".key", ".pem"}:
+                    raise AssertionError(f"unexpected secret read: {path.name}")
+        sys.addaudithook(refuse_secrets)
+
+        from app.core import config
+        if sys.argv[1] == "api":
+            import app.api
+        import retrieval_runtime as rr
+
+        allowed = {"app", "app.core", "app.core.config"}
+        modules = {m for m in sys.modules if m == "app" or m.startswith("app.")}
+        assert modules == allowed | ({"app.api"} if sys.argv[1] == "api" else set())
+        cached = (config.get_settings, config.get_models_config, config.get_agent_config)
+        before_cache = [f.cache_info() for f in cached]
+        assert all(c.currsize == 0 and c.hits == 0 and c.misses == 0 for c in before_cache)
+        before_config = dict(config.Settings.model_config)
+        assert before_config["env_file"] is not None
+
+        try:
+            info = rr.bootstrap(strict=True)
+        except rr.RuntimeIsolationError as exc:
+            assert config.Settings.model_config == before_config
+            assert [f.cache_info() for f in cached] == before_cache
+            result = {"error": str(exc), "settings_unchanged": True}
+        else:
+            assert config.Settings.model_config == {**before_config, "env_file": None}
+            assert [f.cache_info() for f in cached] == before_cache
+            result = {"error": None, "isolation": info}
+        result["settings_cache_before"] = before_cache[0].currsize
+        result["settings_cache_after"] = config.get_settings.cache_info().currsize
+        result["app_modules"] = sorted(modules)
+        print(json.dumps(result, ensure_ascii=False))
+        """
+    )
+    env = {
+        "PATH": os.defpath,
+        "HOME": str(tmp_path),
+        "TMPDIR": str(tmp_path),
+        "PYTHONPATH": os.pathsep.join([str(ROOT / "backend"), str(ROOT / "eval")]),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONNOUSERSITE": "1",
+        "EMBED_MODE": "mock",
+        "LLM_MODE": "mock",
+        "SCHEDULER_MODE": "mock",
+        "MEMORY_GUARD": "false",
+        "DATA_DIR": str(tmp_path / "data"),
+        "DATABASE_URL": "",
+        "JOBS_DATABASE_URL": "",
+        "REDIS_URL": "",
+        "ALLOW_CLOUD": "false",
+        "JEV_ENABLED": "false",
+        "JEV_API_KEY": "",
+        "HF_OFFLINE": "true",
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+        "HF_HOME": str(tmp_path / "model-cache-disabled"),
+    }
+    proc = subprocess.run(
+        [sys.executable, "-B", "-c", script, "api" if preload_api else "allowed"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    result = json.loads(proc.stdout)
+    record_property("subprocess_isolation", proc.stdout.strip())
+    assert result["settings_cache_before"] == result["settings_cache_after"] == 0
+    if preload_api:
+        assert result["app_modules"] == ["app", "app.api", "app.core", "app.core.config"]
+        assert result["error"] == (
+            "bootstrap 要在第一次讀設定之前呼叫：已載入 app.api 等 app 模組"
+        )
+        assert result["settings_unchanged"] is True
+    else:
+        assert result["app_modules"] == ["app", "app.core", "app.core.config"]
+        assert result["error"] is None
+        assert result["isolation"] == {
+            "env_file_disabled": True,
+            "env_file_before": rr.repo_relative(ROOT / ".env"),
+            "settings_were_loaded": False,
+            "preloaded_app_modules": [],
+            "strict": True,
+        }
 
 
 @pytest.fixture

@@ -333,6 +333,82 @@ QC = "哪一幅畫最早完成？"  # 沒指定畫作時會附知識庫目錄
 Q4 = "步進馬達安裝板的板厚要求是多少？"
 
 
+@pytest.mark.parametrize(
+    ("domain", "mode", "call_kind", "has_fill_cohorts"),
+    [
+        ("art", rre.PRODUCTION, rre.GLOBAL, False),
+        ("mfg", rre.DIAGNOSTIC, rre.GLOBAL, False),
+        ("art", rre.PRODUCTION, rre.SPECIFIED, True),
+    ],
+    ids=["production-global", "diagnostic-global", "production-specified"],
+)
+def test_global_fill_cohorts_apply_only_to_production_specified(
+    domain, mode, call_kind, has_fill_cohorts,
+):
+    """以固定檢索回傳走真的 run_group／計分，global 不應產生指定模式的分母。"""
+    owner_key = rr.DOMAINS[domain]["owner_key"]
+    chunks = [
+        {"chunk_id": f"doc-{i}#00-0", owner_key: f"doc-{i}", "topic": "技法"}
+        for i in (1, 2)
+    ]
+    resolved = rre.resolve_domain(
+        domain,
+        [
+            {"id": "own", owner_key: "doc-1", "question": QA, "topics": ["技法"]},
+            {"id": "fill", owner_key: "doc-1", "question": QB, "topics": ["技法"]},
+        ],
+        kb_docs={f"doc-{i}": {"descriptions": [{"topic": "技法"}]} for i in (1, 2)},
+        chunks=chunks,
+        staging_ids=(),
+    )
+    assert resolved["excluded"] == [] and len(resolved["included"]) == 2
+
+    def call(case):
+        sources = [{**chunks[0], "score": 0.9}]
+        if case["case_id"] == "fill":
+            sources.append({**chunks[1], "score": 0.8})
+        return {"sources": sources, "call": {"function": "controlled-retrieval"}}
+
+    g = rre.run_group(
+        rre.group_spec(domain, mode, call_kind, None),
+        [rr.apply_visibility(c, None) for c in resolved["included"]],
+        call,
+        owner_of=rr.chunk_owner_map(chunks, owner_key),
+        visible=None,
+        keywords=["背景"],
+        catalog_id="catalog",
+    )
+    own, fill = g["rows"]
+    summary = g["summary"]
+    assert summary["n_scored"] == 2 and summary["n_errors"] == 0
+    assert own["global_fill_keywords_hit"] == []
+    assert fill["global_fill_keywords_hit"] == ["背景"]
+    assert fill["cross_document_ids"] == ["doc-2#00-0"]
+    base = {"all", "reviewed_gold_only"}
+    if has_fill_cohorts:
+        assert set(summary["cohorts"]) == base | {"owner_only", "global_fill_triggered"}
+        assert set(own["cohorts"]) == base | {"owner_only"}
+        assert set(fill["cohorts"]) == base | {"global_fill_triggered"}
+        assert summary["cohorts"]["owner_only"]["case_ids"] == ["own"]
+        assert summary["cohorts"]["global_fill_triggered"]["case_ids"] == ["fill"]
+        assert own["global_fill_triggered"] is False and fill["global_fill_triggered"] is True
+        assert summary["global_fill_triggered"] == {
+            "rate": 0.5, "numerator": 1, "denominator": 2,
+        }
+        assert summary["owner_only_cross_document_case_ids"] == []
+    else:
+        assert set(summary["cohorts"]) == base
+        assert all(set(row["cohorts"]) == base for row in g["rows"])
+        assert all(row["global_fill_triggered"] is None for row in g["rows"])
+        assert summary["global_fill_triggered"] is None
+        assert summary["owner_only_cross_document_case_ids"] is None
+    for name in base:
+        assert summary["cohorts"][name]["case_ids"] == ["own", "fill"]
+        assert summary["cohorts"][name]["answerable"]["metrics"]["recall@1"] == {
+            "mean": 1.0, "numerator": 2.0, "denominator": 2,
+        }
+
+
 def test_domain_modes_call_retrieve_without_generation(mock_index, retrieve_spy):
     from app.agent import catalog
 
