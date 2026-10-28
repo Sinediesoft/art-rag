@@ -1191,3 +1191,378 @@ def test_cli_make_entrypoints_and_config_isolation(mock_index, tmp_path):
             ]
             want = rm.aggregate_text_cases(scores)
             assert {k: cohort[k] for k in want} == want, (g["group_id"], name)
+
+
+# ---------------------------------------------------------------- C 批：execute 與收據讀取／比對
+
+
+def c_coll(tag: str, n: int) -> dict:
+    return {
+        "chunk_count": n,
+        "chunks_sha256": f"c{tag}",
+        "items_sha256": f"i{tag}",
+        "chunk_vecs": {"shape": [n, 2], "dtype": "float32", "sha256": f"v{tag}"},
+        "image_vecs": {"shape": [1, 2], "dtype": "float32", "sha256": f"m{tag}"},
+    }
+
+
+C_PARAMS = {"top_k_chunks": 5}
+C_MODELS = {"text": {"name": "bge", "revision": "r1", "dim": 4, "dtype": "float32"}}
+
+
+def c_receipt(*, real: bool = True, built: bool = False, **over) -> dict:
+    """assemble_index_receipt 組出的收據；built＝像 build-index 產生的、模型與設定可覆寫。"""
+    mode = "real" if real else "mock"
+    parts = {
+        "manifest": {"embed_mode": mode, "chunk_count": 3, "part_chunk_count": 4},
+        "manifest_problems": [],
+        "collections": {"art": c_coll("a", 3), "mfg": c_coll("m", 4)},
+        "settings": {"embed_mode": mode, "index_backend": "file"},
+        "models": C_MODELS,
+        "retrieval_params": C_PARAMS,
+        "models_yaml_sha256": "y",
+        "kb": {"version": "v", "hash_now": "h", "hash_manifest": "h"},
+        "qa": {"q": "h"},
+        "code": {"head": "abc", "dirty": False},
+        "isolation": {"env_file_disabled": True},
+        "index_build": {"invoked": True, "exit_code": 0} if built else None,
+        "created_at": "2026-10-28T00:00:00+00:00",
+    }
+    return rr.assemble_index_receipt(**{**parts, **over}) | {"run_id": "rid"}
+
+
+# ---- load_receipt
+
+
+@pytest.fixture
+def runs(monkeypatch, tmp_path):
+    d = tmp_path / "runs"
+    d.mkdir()
+    monkeypatch.setattr(rr, "RUNS_DIR", d)
+    return d
+
+
+def _put(d: Path, name: str, payload: dict) -> Path:
+    p = d / name
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    return p
+
+
+def test_load_receipt_mock_without_argument_uses_no_receipt(runs):
+    _put(runs, "20261028T000000-aaaa-retrieval-index.json", {"x": 1})
+    assert rre.load_receipt(None, mock=True) == (None, None, [])
+
+
+def test_load_receipt_mock_explicit_latest_differs_from_omitted(runs):
+    assert rre.load_receipt("latest", mock=True) == (None, None, [])  # 空目錄
+    _put(runs, "20261028T000000-aaaa-retrieval-index.json", {"n": "old"})
+    newest = _put(runs, "20261028T010000-bbbb-retrieval-index.json", {"n": "new"})
+    assert rre.load_receipt("latest", mock=True) == (newest, {"n": "new"}, [])
+    assert rre.load_receipt(None, mock=True) == (None, None, [])
+
+
+@pytest.mark.parametrize("arg", [None, "latest"])
+def test_load_receipt_real_default_and_latest_pick_newest_name(runs, arg):
+    assert rre.load_receipt(arg, mock=False) == (None, None, [])  # 空目錄：交給 provenance 拒絕
+    _put(runs, "20261028T010000-bbbb-retrieval-index.json", {"n": 2})
+    _put(runs, "20261027T230000-cccc-retrieval-index.json", {"n": 1})
+    _put(runs, "20261029T000000-zzzz-retrieval-layer-metrics.json", {"n": 99})  # 不是收據
+    path, content, problems = rre.load_receipt(arg, mock=False)
+    assert path.name == "20261028T010000-bbbb-retrieval-index.json"
+    assert content == {"n": 2} and problems == []
+
+
+@pytest.mark.parametrize("mock", [True, False])
+def test_load_receipt_explicit_path_wins_over_latest(runs, tmp_path, mock):
+    _put(runs, "20261029T000000-zzzz-retrieval-index.json", {"n": "latest"})
+    mine = _put(tmp_path, "mine.json", {"n": "mine"})
+    assert rre.load_receipt(str(mine), mock=mock) == (mine, {"n": "mine"}, [])
+
+
+@pytest.mark.parametrize("kind", ["missing", "bad-json", "directory"])
+def test_load_receipt_unreadable_keeps_path_and_reports(runs, tmp_path, kind):
+    p = tmp_path / "r.json"
+    if kind == "bad-json":
+        p.write_text("{not json", encoding="utf-8")
+    elif kind == "directory":
+        p.mkdir()
+    path, content, problems = rre.load_receipt(str(p), mock=False)
+    assert path == p and content is None
+    assert len(problems) == 1 and problems[0].startswith("讀不到索引收據 ")
+    assert str(p) in problems[0]
+
+
+# ---- provenance_problems
+
+
+def test_provenance_without_receipt_mock_may_skip_real_must_refuse():
+    now = c_receipt(real=False)
+    assert rre.provenance_problems(now, None, mock=True) == []
+    now_real = c_receipt()
+    problems = rre.provenance_problems(now_real, None, mock=False)
+    assert len(problems) == 1 and problems[0].startswith("沒有 real 索引收據")
+
+
+def test_provenance_current_own_problems_get_prefix_and_come_first():
+    now = c_receipt(isolation={"env_file_disabled": False})
+    assert rre.provenance_problems(now, None, mock=True) == [
+        "目前索引：沒有關閉 env_file（可能讀了 .env）"
+    ]
+    problems = rre.provenance_problems(now, c_receipt(built=True), mock=False)
+    assert problems[0] == "目前索引：沒有關閉 env_file（可能讀了 .env）"
+
+
+def test_provenance_matching_built_real_receipt_passes():
+    assert rre.provenance_problems(c_receipt(), c_receipt(built=True), mock=False) == []
+
+
+def test_provenance_receipt_must_come_from_a_build_unless_mock():
+    receipt = c_receipt(index_build={"invoked": False})
+    assert rre.provenance_problems(c_receipt(), receipt, mock=False) == [
+        "索引收據：收據不是這次重建索引產生的"
+    ]
+    mock_receipt = c_receipt(real=False, index_build={"invoked": False})
+    assert rre.provenance_problems(c_receipt(real=False), mock_receipt, mock=True) == []
+
+
+@pytest.mark.parametrize(
+    ("over", "key"),
+    [
+        ({"retrieval_params": {"top_k_chunks": 9}}, "retrieval_params_sha256"),
+        ({"models_yaml_sha256": "other"}, "models_yaml_sha256"),
+    ],
+)
+def test_provenance_config_hashes_each_checked(over, key):
+    receipt = c_receipt(built=True, **over)
+    assert rre.provenance_problems(c_receipt(), receipt, mock=False) == [
+        f"索引收據：{key} 和目前設定不同"
+    ]
+
+
+@pytest.mark.parametrize(
+    "change", [{"name": "other"}, {"revision": "r2"}, {"dim": 8}], ids=["name", "revision", "dim"]
+)
+def test_provenance_model_name_revision_dim_each_checked(change):
+    receipt = c_receipt(built=True, models={"text": C_MODELS["text"] | change})
+    assert rre.provenance_problems(c_receipt(), receipt, mock=False) == [
+        "索引收據：模型 name／revision／dim 和目前 shared/models.yaml 不同"
+    ]
+
+
+def test_provenance_dedupes_repeated_problems_keeping_first_order():
+    now = c_receipt(manifest_problems=["m", "n", "m"])
+    assert rre.provenance_problems(now, c_receipt(built=True), mock=False) == [
+        "目前索引：索引與設定不一致：m",
+        "目前索引：索引與設定不一致：n",
+    ]
+
+
+# ---- execute
+
+
+@pytest.fixture
+def ex(monkeypatch, tmp_path, runs):
+    """execute 的受控依賴：不載模型、不讀 .env，記錄 evaluate 與各依賴的呼叫。"""
+    from types import SimpleNamespace
+
+    from app.core import config
+    from app.repositories import index_store
+
+    st = SimpleNamespace(
+        now=c_receipt(index_build=None),
+        store=FakeStore(),
+        evaluate_calls=[],
+        loaded_qa=[],
+        collect_calls=0,
+        store_calls=0,
+        ev_problems=[],
+        tmp=tmp_path,
+    )
+
+    def get_store():
+        st.store_calls += 1
+        return st.store
+
+    def collect(store, **kw):
+        st.collect_calls += 1
+        st.collect_kw = kw
+        return st.now
+
+    def evaluate(store, **kw):
+        st.evaluate_calls.append(kw)
+        return {
+            "gold": {d: {"cases": 1} for d in kw["domains"]},
+            "accounts": {a: {} for a in kw["accounts"]},
+            "groups": [{"group_id": "g1", "summary": {"n": 1}}],
+            "problems": list(st.ev_problems),
+        }
+
+    def load_jsonl(path):
+        st.loaded_qa.append(Path(path))
+        return [{"path": str(path)}]
+
+    monkeypatch.setattr(config, "get_models_config", lambda: object())
+    monkeypatch.setattr(index_store, "get_store", get_store)
+    monkeypatch.setattr(rr, "retrieval_params", lambda cfg: dict(C_PARAMS))
+    monkeypatch.setattr(rr, "collect_index_receipt", collect)
+    monkeypatch.setattr(rr, "load_jsonl", load_jsonl)
+    monkeypatch.setattr(rre, "evaluate", evaluate)
+    monkeypatch.setattr(rre, "corpus_snapshot", lambda now: {"snap": True})
+    qa_art, qa_mfg = tmp_path / "qa-art.jsonl", tmp_path / "qa-mfg.jsonl"
+    qa_art.write_text("A", encoding="utf-8")
+    qa_mfg.write_text("M", encoding="utf-8")
+    st.gold = tmp_path / "gold.json"
+    st.gold.write_text(json.dumps({"accounts": ["manager", "sales"]}), encoding="utf-8")
+    st.qa = {"art": qa_art, "mfg": qa_mfg}
+    st.receipt_path = tmp_path / "receipt.json"
+    return st
+
+
+def c_report(mode: str = "mock", domains=("art", "mfg")) -> dict:
+    return {
+        "embed_mode": mode,
+        "domains": list(domains),
+        "problems": [],
+        "provenance": {},
+        "real": False,
+        "corpus": {},
+        "gold": {},
+        "accounts": {},
+        "groups": [],
+        "summary": {},
+    }
+
+
+def c_args(ex, *, domains="art,mfg", accounts=None, receipt=None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        domains=domains,
+        accounts=accounts,
+        receipt=receipt,
+        qa_art=str(ex.qa["art"]),
+        qa_mfg=str(ex.qa["mfg"]),
+        gold=str(ex.gold),
+    )
+
+
+def c_run(ex, report, args):
+    rre.execute(report, args, {"env_file_disabled": True})
+    return report
+
+
+def assert_no_scores(report):
+    assert report["groups"] == [] and report["summary"] == {} and report["gold"] == {}
+    assert report["accounts"] == {}
+
+
+@pytest.mark.parametrize("domains", [[], ["art", "nope"]])
+def test_execute_rejects_empty_or_unknown_domains_before_touching_anything(ex, domains):
+    report = c_run(ex, c_report(domains=domains), c_args(ex, domains=",".join(domains)))
+    assert report["problems"] == [f"--domains 只能是 art、mfg：{','.join(domains)}"]
+    assert ex.store_calls == 0 and ex.collect_calls == 0 and ex.evaluate_calls == []
+    assert "retrieval_params" not in report["provenance"]
+
+
+def test_execute_index_mismatch_does_not_collect_or_evaluate(ex):
+    from app.repositories.index_store import IndexMismatch
+
+    ex.store = FakeStore(IndexMismatch("索引壞了"))
+    report = c_run(ex, c_report(), c_args(ex))
+    assert report["problems"] == ["索引不能用：索引壞了"]
+    assert report["provenance"]["retrieval_params"] == C_PARAMS and report["k"] == 5
+    assert ex.collect_calls == 0 and ex.evaluate_calls == []
+    assert_no_scores(report)
+
+
+def test_execute_real_without_any_receipt_is_refused_without_scores(ex):
+    ex.now = c_receipt()
+    report = c_run(ex, c_report("real"), c_args(ex))  # runs 目錄是空的
+    info = report["provenance"]["index_receipt"]
+    assert info["path"] is None and info["run_id"] is None and info["real"] is None
+    assert any(p.startswith("沒有 real 索引收據") for p in report["problems"])
+    assert report["problems"][-len(info["problems"]) :] == info["problems"]
+    assert report["real"] is False and ex.evaluate_calls == []
+    assert_no_scores(report)
+
+
+@pytest.mark.parametrize("kind", ["corrupt", "mismatch"])
+def test_execute_corrupt_or_mismatched_receipt_keeps_failure_contract(ex, kind):
+    ex.now = c_receipt()
+    if kind == "corrupt":
+        ex.receipt_path.write_text("{oops", encoding="utf-8")
+        needle = "讀不到索引收據"
+    else:
+        other = c_receipt(built=True, manifest={"embed_mode": "real", "chunk_count": 3, "x": 1})
+        ex.receipt_path.write_text(json.dumps(other), encoding="utf-8")
+        needle = "目前載入的索引 manifest 和收據不同"
+    report = c_run(ex, c_report("real"), c_args(ex, receipt=str(ex.receipt_path)))
+    info = report["provenance"]["index_receipt"]
+    assert info["path"] == str(ex.receipt_path) or info["path"].endswith("receipt.json")
+    assert any(needle in p for p in report["problems"])
+    # real 只看「目前索引與收據都是 real」；有問題時照樣不評估、不留成績
+    assert report["real"] is (kind == "mismatch") and ex.evaluate_calls == []
+    assert report["provenance"]["index_now"] is ex.now and report["corpus"] == {"snap": True}
+    assert_no_scores(report)
+
+
+def test_execute_real_flag_needs_real_current_index_and_real_build_receipt(ex):
+    ex.now = c_receipt()
+    ex.receipt_path.write_text(json.dumps(c_receipt(built=True)), encoding="utf-8")
+    ok = c_run(ex, c_report("real"), c_args(ex, receipt=str(ex.receipt_path)))
+    assert ok["problems"] == [] and ok["real"] is True
+    info = ok["provenance"]["index_receipt"]
+    assert info["run_id"] == "rid" and info["real"] is True and info["problems"] == []
+    assert info["index_build"] == {"invoked": True, "exit_code": 0}
+    assert info["sha256"] == rr.sha256_file(ex.receipt_path)
+
+    # mock 模式即使收據是 real，也不會標 real
+    ex.now = c_receipt(real=False)
+    mock = c_run(ex, c_report("mock"), c_args(ex, receipt=str(ex.receipt_path)))
+    assert mock["real"] is False
+
+
+def test_execute_real_receipt_that_is_not_real_blocks_and_clears_flag(ex):
+    ex.now = c_receipt()
+    ex.receipt_path.write_text(json.dumps(c_receipt(real=False, built=True)), encoding="utf-8")
+    report = c_run(ex, c_report("real"), c_args(ex, receipt=str(ex.receipt_path)))
+    assert report["real"] is False and report["problems"] and ex.evaluate_calls == []
+    assert_no_scores(report)
+
+
+def test_execute_mock_without_receipt_evaluates_with_gold_accounts(ex):
+    report = c_run(ex, c_report(), c_args(ex))
+    assert report["problems"] == []
+    (call,) = ex.evaluate_calls
+    assert call["accounts"] == ["manager", "sales"]
+    assert call["domains"] == ["art", "mfg"] and call["params"] == C_PARAMS
+    assert call["catalog_id"]  # 來自 catalog.CHUNK_ID
+    assert ex.collect_kw["qa_paths"] == [ex.qa["art"], ex.qa["mfg"]]
+
+
+def test_execute_explicit_accounts_override_gold_and_keep_order(ex):
+    c_run(ex, c_report(), c_args(ex, accounts=" sales , manager ,"))
+    assert ex.evaluate_calls[0]["accounts"] == ["sales", "manager"]
+
+
+def test_execute_reads_only_selected_domain_qa_and_wires_results_back(ex):
+    ex.ev_problems = ["第 2 題錯誤"]
+    ex.qa["mfg"].unlink()  # 沒選 mfg：不該被讀
+    report = c_run(ex, c_report(domains=["art"]), c_args(ex, domains="art"))
+    assert ex.loaded_qa == [ex.qa["art"]]
+    (call,) = ex.evaluate_calls
+    assert call["qa"] == {"art": [{"path": str(ex.qa["art"])}]}
+    assert list(call["qa"]) == ["art"]
+    gold = report["gold"]["art"]
+    assert gold["qa_path"] == rr.repo_relative(ex.qa["art"])
+    assert gold["qa_sha256"] == rr.sha256_file(ex.qa["art"]) and gold["cases"] == 1
+    assert report["accounts"] == {"manager": {}, "sales": {}}
+    assert report["groups"] == [{"group_id": "g1", "summary": {"n": 1}}]
+    assert report["summary"] == {"g1": {"n": 1}}
+    assert report["problems"] == ["第 2 題錯誤"]
+
+
+def test_execute_domains_keep_given_order_in_evaluate_call(ex):
+    c_run(ex, c_report(domains=["mfg", "art"]), c_args(ex, domains="mfg,art"))
+    assert ex.evaluate_calls[0]["domains"] == ["mfg", "art"]
+    assert [p.name for p in ex.loaded_qa] == ["qa-mfg.jsonl", "qa-art.jsonl"]
