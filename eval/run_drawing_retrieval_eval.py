@@ -376,7 +376,8 @@ def write_report(report: dict, out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{report['run_id']}-drawing-retrieval.json"
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+    with out.open("x", encoding="utf-8") as f:  # 排他建立：不覆寫既有結果，FileExistsError 往上丟
+        f.write(json.dumps(report, ensure_ascii=False, indent=1))
     return out
 
 
@@ -481,6 +482,10 @@ def main(argv: list[str] | None = None) -> int:
             f"EMBED_MODE={settings.embed_mode}：mock 成績不能寫進 eval/runs，"
             "請用 --out-dir 指到暫存目錄"
         )
+    run_id = args.run_id or rr.new_run_id()
+    existing = out_dir / f"{run_id}-drawing-retrieval.json"
+    if existing.exists():  # 先擋同 out-dir／同 ID，不開始評估
+        return _fail(f"{rr.repo_relative(existing)} 已存在：不覆寫既有結果，請換 --run-id")
     gold_path = Path(args.gold)
     gold = json.loads(gold_path.read_text(encoding="utf-8"))
     store = get_store()
@@ -497,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = photo_cases(gold, part_ids)
     accounts = args.accounts.split(",") if args.accounts else gold["accounts"]
     report = {
-        "run_id": args.run_id or rr.new_run_id(),
+        "run_id": run_id,
         "kb_version": kb_version(),
         "accounts": {},
         # 以下是 TASK-20261027-001 新增的 provenance
@@ -550,7 +555,10 @@ def main(argv: list[str] | None = None) -> int:
             "scope_text": scope.text,
         }
     code = finalize(report)
-    out = write_report(report, out_dir)
+    try:
+        out = write_report(report, out_dir)
+    except FileExistsError:
+        return _fail(f"{run_id}-drawing-retrieval.json 已存在（評估期間被建立）：不覆寫既有結果")
     print(f"\n結果：{rr.repo_relative(out)}（{'real' if report['real'] else 'mock'}）")
     return code
 
