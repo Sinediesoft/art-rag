@@ -276,9 +276,9 @@ def test_diagnostics_fields_are_recorded_when_manager_is_evaluated(env):
     assert prov["eval_controls"] is True and prov["manifest"] == {"kb_version": "kb-fixed-17"}
 
 
-def test_new_artifact_does_not_break_eval_runs_endpoint(env, client, monkeypatch):
-    """GET /eval/runs 對沒有列入排除清單的檔名一律當 RAGAS run 讀（EvalRun 五個必填欄位）。
-    新產物頂層保留這個形狀，所以放在 eval/runs 底下也不會讓端點 500，且歷史 run 照常列出。"""
+def test_new_artifact_is_excluded_from_eval_runs_endpoint(env, client, monkeypatch):
+    """新產物掉進 eval/runs 後，GET /eval/runs 因 -generation-accounts.json 在排除清單而不列出它，
+    歷史 RAGAS run 照常列出。"""
     from app.api.routers import system
 
     runs = env.tmp / "eval-root" / "eval" / "runs"
@@ -298,7 +298,9 @@ def test_new_artifact_does_not_break_eval_runs_endpoint(env, client, monkeypatch
     r = client.get("/api/v1/eval/runs")
     assert r.status_code == 200, r.text
     ids = [x["run_id"] for x in r.json()["runs"]]
-    assert ragas["run_id"] in ids and art["run_id"] in ids
+    assert ragas["run_id"] in ids
+    assert art["run_id"] not in ids
+    assert ids == [ragas["run_id"]]
 
 
 def test_artifact_top_level_keeps_legacy_run_shape(env):
