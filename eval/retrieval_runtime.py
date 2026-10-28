@@ -394,32 +394,49 @@ def verify_index_receipt(
         if not (collections.get(d) or {}).get("chunk_count"):
             problems.append(f"{d} 領域沒有任何段落")
     if current is not None:
-        if current.get("manifest_sha256") != receipt.get("manifest_sha256"):
-            problems.append("目前載入的索引 manifest 和收據不同")
-        if current.get("embed_mode") != receipt.get("embed_mode"):
-            problems.append(
-                f"EMBED_MODE 和收據不同：現在={current.get('embed_mode')}，"
-                f"收據={receipt.get('embed_mode')}"
-            )
-        now = current.get("collections") or {}
-        for d in DOMAINS:
-            a, b = collections.get(d) or {}, now.get(d) or {}
-            for key in ("chunk_count", "chunks_sha256"):
-                if a.get(key) != b.get(key):
-                    problems.append(f"{d} 索引的 {key} 和收據不同")
-            if (a.get("chunk_vecs") or {}).get("sha256") != (b.get("chunk_vecs") or {}).get(
-                "sha256"
-            ):
-                problems.append(f"{d} 索引的段落向量和收據不同")
-            if a.get("items_sha256") != b.get("items_sha256"):
-                problems.append(f"{d} 索引的 items_sha256 和收據不同")
-            for name, label in (("chunk_vecs", "段落向量"), ("image_vecs", "圖片向量")):
-                da, db = a.get(name) or {}, b.get(name) or {}
-                for field in ("shape", "dtype", "sha256"):
-                    if name == "chunk_vecs" and field == "sha256":
-                        continue  # 上面已用原訊息比較
-                    if da.get(field) != db.get(field):
-                        problems.append(f"{d} 索引的{label} {field} 和收據不同")
+        problems += _current_index_problems(receipt, current, collections)
+    return problems
+
+
+def _current_index_problems(
+    receipt: dict, current: dict, collections: Mapping[str, dict]
+) -> list[str]:
+    """先比對 manifest／模式，再依 DOMAINS 順序比對各領域的索引描述。"""
+    problems = []
+    if current.get("manifest_sha256") != receipt.get("manifest_sha256"):
+        problems.append("目前載入的索引 manifest 和收據不同")
+    if current.get("embed_mode") != receipt.get("embed_mode"):
+        problems.append(
+            f"EMBED_MODE 和收據不同：現在={current.get('embed_mode')}，"
+            f"收據={receipt.get('embed_mode')}"
+        )
+    now = current.get("collections") or {}
+    for d in DOMAINS:
+        a, b = collections.get(d) or {}, now.get(d) or {}
+        problems += _collection_receipt_problems(d, a, b)
+    return problems
+
+
+def _collection_receipt_problems(domain: str, recorded: dict, current: dict) -> list[str]:
+    """比對單一領域的全部 digest；保留段落向量 sha256 原訊息的位置與文字。"""
+    problems = []
+    for key in ("chunk_count", "chunks_sha256"):
+        if recorded.get(key) != current.get(key):
+            problems.append(f"{domain} 索引的 {key} 和收據不同")
+    if (recorded.get("chunk_vecs") or {}).get("sha256") != (current.get("chunk_vecs") or {}).get(
+        "sha256"
+    ):
+        problems.append(f"{domain} 索引的段落向量和收據不同")
+    if recorded.get("items_sha256") != current.get("items_sha256"):
+        problems.append(f"{domain} 索引的 items_sha256 和收據不同")
+    for name, label, fields in (
+        ("chunk_vecs", "段落向量", ("shape", "dtype")),
+        ("image_vecs", "圖片向量", ("shape", "dtype", "sha256")),
+    ):
+        a, b = recorded.get(name) or {}, current.get(name) or {}
+        for field in fields:
+            if a.get(field) != b.get(field):
+                problems.append(f"{domain} 索引的{label} {field} 和收據不同")
     return problems
 
 
