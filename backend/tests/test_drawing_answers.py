@@ -33,10 +33,19 @@ INJECTION_MARK = "（系統提示"
 # 每個事實都要被某組候選涵蓋，而且每組都至少涵蓋一個事實（沒有湊數的組）。
 REQUIRED_FACTS = {
     "d-mfg001-01": ["4 支", "9 N·m"],
-    "d-mfg001-02": ["第一次裝夾", "第二次裝夾", "面銑", "精銑", "鑽"],
-    "d-mfg001-03": ["垂直度 0.05 mm", "平面度 0.05 mm", "每 20 件"],
+    "d-mfg001-02": [
+        "第一次裝夾",
+        "第二次裝夾",
+        "面銑",
+        "精銑",
+        "鑽",
+        "鋸床下料",
+        "粗銑 L 型內角",
+        "委外黑色陽極處理",
+    ],
+    "d-mfg001-03": ["垂直度 0.05 mm", "平面度 0.05 mm", "每 20 件抽驗 1 件"],
     "d-mfg001-04": ["薄壁變形", "降低夾持壓力"],
-    "d-mfg002-01": ["減速機輸出軸", "對角順序", "分三次", "25 N·m"],
+    "d-mfg002-01": ["減速機輸出軸", "滾筒", "對角順序", "分三次", "25 N·m"],
     "d-mfg002-02": ["S45C", "HRC 22–28"],
     "d-mfg002-03": ["工序 40", "精搪刀"],
     "d-mfg002-04": ["Ø30H7", "0.02 mm"],
@@ -62,7 +71,7 @@ REQUIRED_FACTS = {
     "d-mfg006-05": ["0.03 mm"],
     "d-mfg003-m1": ["HRC 50–55", "偏擺儀", "校直"],
     "d-mfg004-m1": ["螺旋銑", "精搪", "塞規"],
-    "d-mfg005-m1": ["−0.1/−0.2", "卡在 T 型槽"],
+    "d-mfg005-m1": ["頸部寬 14", "−0.1/−0.2", "卡在 T 型槽"],
 }
 REFUSAL_IDS = ("d-mfg004-na", "d-unknown-01")
 
@@ -477,6 +486,172 @@ def test_answer_and_citation_scoring_contract():
     assert run_eval.score_answer(real, {"answer": ok, "sources": src}) == (True, True)
 
 
+# ---------------------------------------------------------------- B-1：必要事實不可漏答
+# 每題：(題號, 正確引用的 part_id, 第一個 gold topic, 不屬於 gold 的 topic,
+#        忠實完整回答們, 漏答反例 {說明: 回答})。回答與反例全部手寫，不從答案檔候選拼出。
+# 反例只省略一項必要事實、其餘照舊，而且都附上正確引用，所以只能因為漏答而失敗。
+MISSING_FACT_CASES = [
+    (
+        "d-mfg001-01",
+        "mfg-001",
+        "用途與組裝",
+        "加工製程",
+        ["底板以 4 支 M6×16 內六角螺栓固定，組裝扭力 M6 為 9 N·m。[1]", "4 支，9 N·m。[1]"],
+        {
+            "只答規格不答支數（M6×16 不能代替 4 支）": "底板用 M6×16 螺栓，組裝扭力 9 N·m。[1]",
+            "省略支數": "底板以 M6×16 內六角螺栓固定，組裝扭力 M6 為 9 N·m。[1]",
+            "省略扭力": "底板以 4 支 M6×16 內六角螺栓固定。[1]",
+        },
+    ),
+    (
+        "d-mfg001-02",
+        "mfg-001",
+        "加工製程",
+        "用途與組裝",
+        [
+            "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+            "工序 30 第二次裝夾，精銑內角與各面；"
+            "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+        ],
+        {
+            "只答裝夾與主要加工": "第一次裝夾面銑，第二次裝夾精銑，最後鑽孔。[1]",
+            "省略鋸床下料": (
+                "工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略粗銑內角": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略委外陽極處理": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊。[1]"
+            ),
+            "省略第一次裝夾": (
+                "工序 10 鋸床下料；工序 20 面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略第二次裝夾": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 翻面，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略面銑": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，銑削底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略精銑": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，加工內角與各面；"
+                "工序 40 鑽孔並去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+            "省略鑽孔": (
+                "工序 10 鋸床下料；工序 20 第一次裝夾，面銑底面與外形，粗銑 L 型內角；"
+                "工序 30 第二次裝夾，精銑內角與各面；"
+                "工序 40 去毛邊；工序 50 委外黑色陽極處理。[1]"
+            ),
+        },
+    ),
+    (
+        "d-mfg001-03",
+        "mfg-001",
+        "公差與檢驗",
+        "加工製程",
+        ["底板與立板垂直度 0.05 mm，底面平面度 0.05 mm；量產每 20 件抽驗 1 件孔位與垂直度。[1]"],
+        {
+            "抽樣只答每 20 件": "垂直度 0.05 mm、平面度 0.05 mm，量產每 20 件抽驗。[1]",
+            "抽樣只答抽驗 1 件": "垂直度 0.05 mm、平面度 0.05 mm，量產抽驗 1 件。[1]",
+            "省略垂直度": "平面度 0.05 mm，量產每 20 件抽驗 1 件。[1]",
+            "省略平面度": "垂直度 0.05 mm，量產每 20 件抽驗 1 件。[1]",
+        },
+    ),
+    (
+        "d-mfg002-01",
+        "mfg-002",
+        "用途與組裝",
+        "加工製程",
+        ["用於減速機輸出軸與滾筒之間的剛性連接，M8 螺栓對角順序分三次鎖緊，最終扭力 25 N·m。[1]"],
+        {
+            "只答滾筒端": "裝在滾筒上，對角順序分三次鎖緊，扭力 25 N·m。[1]",
+            "只答輸出軸端": "裝在減速機輸出軸上，對角順序分三次鎖緊，扭力 25 N·m。[1]",
+            "省略對角順序": "連接減速機輸出軸與滾筒，分三次鎖緊，扭力 25 N·m。[1]",
+            "省略分三次": "連接減速機輸出軸與滾筒，對角順序鎖緊，扭力 25 N·m。[1]",
+            "省略扭力": "連接減速機輸出軸與滾筒，對角順序分三次鎖緊。[1]",
+        },
+    ),
+    (
+        "d-mfg005-m1",
+        "mfg-005",
+        "公差與檢驗",
+        "加工製程",
+        [
+            "頸部寬 14（−0.1/−0.2）mm，頸部過寬會卡在 T 型槽。[1]",
+            "頸部寬 14 mm，公差 −0.1/−0.2，過寬會卡在 T 型槽。[1]",
+        ],
+        {
+            "只答公差與後果、缺名目寬": "頸部寬度公差 −0.1/−0.2，過寬會卡在 T 型槽。[1]",
+            "省略負偏差": "頸部寬 14 mm，過寬會卡在 T 型槽。[1]",
+            "省略後果": "頸部寬 14 mm，公差 −0.1/−0.2。[1]",
+            "偏差改用 ASCII 減號": "頸部寬 14 mm，公差 -0.1/-0.2，過寬會卡在 T 型槽。[1]",
+        },
+    ),
+]
+FULL_ANSWER_PARAMS = [
+    pytest.param(qid, pid, topic, answer, id=f"{qid}-完整{i}")
+    for qid, pid, topic, _wrong, fulls, _leaks in MISSING_FACT_CASES
+    for i, answer in enumerate(fulls)
+]
+LEAK_PARAMS = [
+    pytest.param(qid, pid, topic, answer, id=f"{qid}-{label}")
+    for qid, pid, topic, _wrong, _fulls, leaks in MISSING_FACT_CASES
+    for label, answer in leaks.items()
+]
+
+
+def score_real(qid: str, answer: str, part_id: str, topic: str) -> tuple[bool, bool]:
+    """真實題庫 + 合併後 sidecar 的題目，走真實 score_answer；來源是寫死的 [1]。"""
+    sources = [{"ref": 1, "part_id": part_id, "topic": topic}]
+    return run_eval.score_answer(merged_by_id()[qid], {"answer": answer, "sources": sources})
+
+
+def test_missing_fact_cases_use_correct_part_and_first_gold_topic():
+    assert [c[0] for c in MISSING_FACT_CASES] == [
+        "d-mfg001-01",
+        "d-mfg001-02",
+        "d-mfg001-03",
+        "d-mfg002-01",
+        "d-mfg005-m1",
+    ]
+    for qid, pid, topic, wrong_topic, *_ in MISSING_FACT_CASES:
+        q = QA_BY_ID[qid]
+        assert (q["part_id"], q["topics"][0]) == (pid, topic), qid
+        assert wrong_topic not in q["topics"], qid
+
+
+@pytest.mark.parametrize(("qid", "part_id", "topic", "answer"), FULL_ANSWER_PARAMS)
+def test_faithful_complete_answers_pass(qid, part_id, topic, answer):
+    assert score_real(qid, answer, part_id, topic) == (True, True)
+
+
+@pytest.mark.parametrize(("qid", "part_id", "topic", "answer"), LEAK_PARAMS)
+def test_answers_missing_a_required_fact_fail(qid, part_id, topic, answer):
+    # 引用正確、只缺必要資訊：answer_ok 必須 False，citation_ok 仍 True
+    assert score_real(qid, answer, part_id, topic) == (False, True)
+
+
+@pytest.mark.parametrize(("qid", "part_id", "topic", "answer"), FULL_ANSWER_PARAMS)
+def test_complete_answers_with_wrong_citation_fail_citation(qid, part_id, topic, answer):
+    wrong_topic = next(c[3] for c in MISSING_FACT_CASES if c[0] == qid)
+    other_part = "mfg-006" if part_id != "mfg-006" else "mfg-001"
+    assert score_real(qid, answer, other_part, topic) == (True, False)  # 引用別張圖紙
+    assert score_real(qid, answer, part_id, wrong_topic) == (True, False)  # 引用非 gold 段落
+
+
 # ---------------------------------------------------------------- AC-7：原 QA 位元組
 def test_original_qa_hash_is_unchanged():
     assert hashlib.sha256(QA_PATH.read_bytes()).hexdigest() == QA_SHA256
@@ -529,3 +704,421 @@ def test_legacy_scoring_behaviour_is_unchanged():
     assert run_eval.score_answer(q, {"answer": "正確。[1]", "sources": sources}) == (True, True)
     assert run_eval.score_answer(q, {"answer": "正確，錯誤。[1]", "sources": sources})[0] is False
     assert run_eval.score_answer(q, {"answer": "正確。[2]", "sources": sources}) == (False, False)
+
+
+# ---------------------------------------------------------------- G-1：圖片評測離線行為
+IMAGE_COLUMNS = [
+    "photo",
+    "truth",
+    "matched",
+    "predicted",
+    "top1",
+    "top5",
+    "rejected",
+    "clip",
+    "inliers",
+]
+UNKNOWN_TRUTH = "(未收錄)"
+
+
+def hit(artwork_id: str, score: float | None = 0.5, inliers: int | None = 3) -> dict:
+    return {"artwork": {"id": artwork_id}, "score": score, "inliers": inliers}
+
+
+def search_reply(results: list[dict], matched: bool, best: str | None) -> dict:
+    return {"matched": matched, "best_artwork_id": best, "results": results}
+
+
+def parse_upload(request: httpx.Request) -> tuple[str, str, bytes]:
+    """從 multipart 上傳取出 (檔名, MIME, 檔案內容)。"""
+    boundary = request.headers["content-type"].split("boundary=")[1].encode()
+    head, _, rest = request.content.partition(b"\r\n\r\n")
+    name = head.split(b'filename="')[1].split(b'"')[0].decode("utf-8")
+    mime = head.split(b"Content-Type: ")[1].split(b"\r\n")[0].decode()
+    return name, mime, rest.split(b"\r\n--" + boundary)[0]
+
+
+class FakeImageBackend:
+    """只隔離 I/O 的假後端：/images 回固定 image_id，/search/image 依該 id 回事先寫好的搜尋結果。
+
+    photos 是 {相對於 eval 的照片路徑: 該照片的搜尋回應}；照片內容就是它的路徑字串。"""
+
+    def __init__(self, replies: dict[str, dict]):
+        self.replies = replies
+        self.uploads: list[tuple[str, str, bytes]] = []
+        self.image_ids: dict[str, str] = {}
+        self.search_bodies: list[dict] = []
+        self.open_when_uploaded: list[bool] = []
+        self.opened: list = []
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/images":
+            upload = parse_upload(request)
+            self.uploads.append(upload)
+            # 上傳處理當下，照片的檔案物件還開著
+            self.open_when_uploaded.append(
+                len(self.opened) == len(self.uploads) and not self.opened[-1].closed
+            )
+            image_id = f"img-{len(self.uploads)}-{upload[0]}"
+            self.image_ids[image_id] = upload[2].decode("utf-8")
+            return httpx.Response(200, json={"image_id": image_id})
+        assert request.url.path == "/api/v1/search/image", request.url.path
+        body = json.loads(request.content)
+        self.search_bodies.append(body)
+        return httpx.Response(200, json=self.replies[self.image_ids[body["image_id"]]])
+
+    def client(self) -> httpx.Client:
+        return RealClient(transport=httpx.MockTransport(self.handle), base_url="http://fake")
+
+
+def make_photos(root: Path, relative_paths: list[str]) -> None:
+    for rel in relative_paths:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(rel.encode("utf-8"))
+
+
+@pytest.fixture
+def photo_env(monkeypatch, tmp_path):
+    """eval/ 換成暫存目錄（只影響 photos 與相對路徑），並記下開過的 jpg 檔案物件。"""
+    root = tmp_path / "eval"
+    monkeypatch.setattr(run_eval, "EVAL", root)
+    real_open = Path.open
+    opened: list = []
+
+    def spy_open(self, mode="r", *args, **kwargs):
+        f = real_open(self, mode, *args, **kwargs)
+        if self.suffix == ".jpg" and mode == "rb":
+            opened.append(f)
+        return f
+
+    monkeypatch.setattr(Path, "open", spy_open)
+    return root, opened
+
+
+def run_images(photo_env, replies: dict[str, dict], kb_ids: set[str]):
+    root, opened = photo_env
+    make_photos(root, list(replies))
+    backend = FakeImageBackend(replies)
+    backend.opened = opened
+    with backend.client() as client:
+        return run_eval.eval_images(client, kb_ids), backend
+
+
+KB_ARTWORKS = {"npm-000001", "npm-000002", "npm-000003"}
+# 3 張已收錄、2 張未收錄，含巢狀目錄、owner__suffix.jpg、沒有 suffix 的檔名，及不是 jpg 的檔案
+MIXED_REPLIES = {
+    # Top-1 錯、正解在第 2 名；第一筆 inliers 原本就是 None
+    "photos/known/deep/er/npm-000002__angle.jpg": search_reply(
+        [hit("npm-000008", 0.77, None), hit("npm-000002", 0.6, 5)], True, "npm-000008"
+    ),
+    "photos/known/npm-000001__front.jpg": search_reply(
+        [hit("npm-000001", 0.91, 34), hit("npm-000005", 0.5, 3)], True, "npm-000001"
+    ),
+    # 完全 miss：沒有拒答也沒有答對（best 為 None）
+    "photos/known/npm-000003.jpg": search_reply([hit("npm-000010", 0.4, 2)], False, None),
+    # 未收錄：拒答
+    "photos/unknown/aic-99999__x.jpg": search_reply([], False, None),
+    # 未收錄：誤接受，matched／predicted 保留
+    "photos/unknown/street.jpg": search_reply([hit("npm-000001", 0.66, 12)], True, "npm-000001"),
+}
+MIXED_ROWS = [
+    {
+        "photo": "photos/known/deep/er/npm-000002__angle.jpg",
+        "truth": "npm-000002",
+        "matched": True,
+        "predicted": "npm-000008",
+        "top1": False,
+        "top5": True,
+        "rejected": False,
+        "clip": 0.77,
+        "inliers": None,
+    },
+    {
+        "photo": "photos/known/npm-000001__front.jpg",
+        "truth": "npm-000001",
+        "matched": True,
+        "predicted": "npm-000001",
+        "top1": True,
+        "top5": True,
+        "rejected": False,
+        "clip": 0.91,
+        "inliers": 34,
+    },
+    {
+        "photo": "photos/known/npm-000003.jpg",
+        "truth": "npm-000003",
+        "matched": False,
+        "predicted": None,
+        "top1": False,
+        "top5": False,
+        "rejected": False,
+        "clip": 0.4,
+        "inliers": 2,
+    },
+    {
+        "photo": "photos/unknown/aic-99999__x.jpg",
+        "truth": UNKNOWN_TRUTH,
+        "matched": False,
+        "predicted": None,
+        "top1": False,
+        "top5": False,
+        "rejected": True,
+        "clip": None,
+        "inliers": None,
+    },
+    {
+        "photo": "photos/unknown/street.jpg",
+        "truth": UNKNOWN_TRUTH,
+        "matched": True,
+        "predicted": "npm-000001",
+        "top1": False,
+        "top5": False,
+        "rejected": False,
+        "clip": 0.66,
+        "inliers": 12,
+    },
+]
+
+
+def test_eval_images_mixed_photos_rows_and_denominators(photo_env):
+    root, _ = photo_env
+    make_photos(root, ["photos/known/notes.txt", "photos/known/deep/preview.png"])  # 不是 jpg
+    result, backend = run_images(photo_env, MIXED_REPLIES, KB_ARTWORKS)
+    # 排序（巢狀目錄在前）、相對路徑、owner__suffix.jpg 與無 suffix 檔名的 truth、已收錄與未收錄
+    assert result["rows"] == MIXED_ROWS
+    assert all(type(r[k]) is bool for r in result["rows"] for k in ("top1", "top5", "rejected"))
+    # 已知與未知各自的分母：3 張已收錄、2 張未收錄
+    assert (result["n_known"], result["n_unknown"]) == (3, 2)
+    assert result["image_top1"] == pytest.approx(1 / 3)
+    assert result["image_top5"] == pytest.approx(2 / 3)
+    assert result["reject_rate"] == pytest.approx(1 / 2)
+    assert set(result) == {
+        "rows",
+        "image_top1",
+        "image_top5",
+        "reject_rate",
+        "n_known",
+        "n_unknown",
+    }
+    # 上傳的檔名（不含目錄）、MIME、檔案內容，依排序後的順序
+    assert backend.uploads == [
+        ("npm-000002__angle.jpg", "image/jpeg", b"photos/known/deep/er/npm-000002__angle.jpg"),
+        ("npm-000001__front.jpg", "image/jpeg", b"photos/known/npm-000001__front.jpg"),
+        ("npm-000003.jpg", "image/jpeg", b"photos/known/npm-000003.jpg"),
+        ("aic-99999__x.jpg", "image/jpeg", b"photos/unknown/aic-99999__x.jpg"),
+        ("street.jpg", "image/jpeg", b"photos/unknown/street.jpg"),
+    ]
+    # 每次上傳回的 image_id 原樣傳給搜尋
+    assert backend.search_bodies == [
+        {"image_id": "img-1-npm-000002__angle.jpg"},
+        {"image_id": "img-2-npm-000001__front.jpg"},
+        {"image_id": "img-3-npm-000003.jpg"},
+        {"image_id": "img-4-aic-99999__x.jpg"},
+        {"image_id": "img-5-street.jpg"},
+    ]
+
+
+def test_eval_images_file_is_open_while_uploading_and_closed_afterwards(photo_env):
+    _, opened = photo_env
+    _, backend = run_images(photo_env, MIXED_REPLIES, KB_ARTWORKS)
+    assert len(opened) == len(backend.uploads) == 5  # 每張照片各開一次
+    assert backend.open_when_uploaded == [True] * 5  # 上傳處理時檔案還開著
+    assert all(f.closed for f in opened)  # 結束後全部關閉
+
+
+def test_eval_images_truth_follows_kb_ids_not_directory(photo_env):
+    replies = {
+        # 放在 known 目錄但 owner 不在知識庫 → 當作未收錄，拒答才算數
+        "photos/known/npm-000777__old.jpg": search_reply([], False, None),
+        # 放在 unknown 目錄但 owner 在知識庫 → 當作已收錄；suffix 之後的 __ 不影響 owner
+        "photos/unknown/npm-000001__a__b.jpg": search_reply(
+            [hit("npm-000001")], True, "npm-000001"
+        ),
+    }
+    result, _ = run_images(photo_env, replies, {"npm-000001"})
+    assert [(r["photo"], r["truth"]) for r in result["rows"]] == [
+        ("photos/known/npm-000777__old.jpg", UNKNOWN_TRUTH),
+        ("photos/unknown/npm-000001__a__b.jpg", "npm-000001"),
+    ]
+    assert (result["n_known"], result["n_unknown"]) == (1, 1)
+    assert (result["image_top1"], result["image_top5"], result["reject_rate"]) == (1.0, 1.0, 1.0)
+
+
+@pytest.mark.parametrize(
+    ("position", "top1", "top5"),
+    [(1, True, True), (2, False, True), (5, False, True), (6, False, False)],
+)
+def test_eval_images_known_rank_position(photo_env, position, top1, top5):
+    others = [hit(f"npm-0001{i:02d}") for i in range(1, 6)]
+    results = [*others[: position - 1], hit("npm-000001"), *others[position - 1 :]]
+    assert [x["artwork"]["id"] for x in results].index("npm-000001") == position - 1
+    best = "npm-000001" if position == 1 else "npm-000101"
+    reply = search_reply(results, True, best)
+    result, _ = run_images(photo_env, {"photos/known/npm-000001__r.jpg": reply}, {"npm-000001"})
+    (row,) = result["rows"]
+    assert (row["top1"], row["top5"], row["rejected"]) == (top1, top5, False)
+    assert result["image_top1"] == (1.0 if top1 else 0.0)
+    assert result["image_top5"] == (1.0 if top5 else 0.0)
+
+
+def test_eval_images_total_miss_is_neither_top1_nor_top5(photo_env):
+    reply = search_reply([hit(f"npm-0002{i:02d}") for i in range(1, 7)], True, "npm-000201")
+    result, _ = run_images(photo_env, {"photos/known/npm-000001__m.jpg": reply}, {"npm-000001"})
+    (row,) = result["rows"]
+    assert (row["top1"], row["top5"], row["predicted"], row["matched"]) == (
+        False,
+        False,
+        "npm-000201",
+        True,
+    )
+    assert (result["image_top1"], result["image_top5"]) == (0.0, 0.0)
+
+
+@pytest.mark.parametrize(
+    ("matched", "best", "rejected"),
+    [(False, None, True), (True, "npm-000001", False)],
+)
+def test_eval_images_unknown_rejection_and_false_accept(photo_env, matched, best, rejected):
+    reply = search_reply([hit("npm-000001", 0.3, 1)] if matched else [], matched, best)
+    result, _ = run_images(photo_env, {"photos/unknown/street.jpg": reply}, {"npm-000001"})
+    (row,) = result["rows"]
+    assert row["truth"] == UNKNOWN_TRUTH
+    assert (row["matched"], row["predicted"], row["rejected"]) == (matched, best, rejected)
+    assert (row["top1"], row["top5"]) == (False, False)  # 未收錄不算已收錄的命中
+    assert result["reject_rate"] == (1.0 if rejected else 0.0)
+    assert (result["image_top1"], result["image_top5"]) == (None, None)  # 沒有已收錄照片
+    assert (result["n_known"], result["n_unknown"]) == (0, 1)
+
+
+@pytest.mark.parametrize(
+    ("results", "clip", "inliers"),
+    [
+        ([hit("npm-000002", 0.82, 17), hit("npm-000003", 0.1, 1)], 0.82, 17),  # 取第一筆
+        ([hit("npm-000002", 0.82, None)], 0.82, None),  # 原本就是 None
+        ([hit("npm-000002", None, 9)], None, 9),
+        ([], None, None),  # 空結果
+    ],
+)
+def test_eval_images_first_result_fields_and_empty_results(photo_env, results, clip, inliers):
+    reply = search_reply(results, False, None)
+    result, _ = run_images(photo_env, {"photos/known/npm-000001__f.jpg": reply}, {"npm-000001"})
+    (row,) = result["rows"]
+    assert (row["clip"], row["inliers"]) == (clip, inliers)
+    assert (row["top1"], row["top5"]) == (False, False)  # 非 npm-000001，空結果也不會命中
+
+
+def test_eval_images_without_photos_has_no_rates(photo_env):
+    root, _ = photo_env
+    (root / "photos").mkdir(parents=True)
+    result, backend = run_images(photo_env, {}, KB_ARTWORKS)
+    assert result == {
+        "rows": [],
+        "image_top1": None,
+        "image_top5": None,
+        "reject_rate": None,
+        "n_known": 0,
+        "n_unknown": 0,
+    }
+    assert backend.uploads == [] and backend.search_bodies == []
+
+
+def test_eval_images_known_only_has_no_reject_rate(photo_env):
+    replies = {
+        "photos/known/npm-000001__a.jpg": search_reply([hit("npm-000001")], True, "npm-000001"),
+        "photos/known/npm-000002__b.jpg": search_reply(
+            [hit("npm-000009"), hit("npm-000002")], True, "npm-000009"
+        ),
+    }
+    result, _ = run_images(photo_env, replies, KB_ARTWORKS)
+    assert (result["n_known"], result["n_unknown"]) == (2, 0)
+    assert result["image_top1"] == 0.5 and result["image_top5"] == 1.0
+    assert result["reject_rate"] is None
+
+
+def test_eval_images_unknown_only_has_no_known_rates(photo_env):
+    replies = {
+        "photos/unknown/a.jpg": search_reply([], False, None),
+        "photos/unknown/b.jpg": search_reply([hit("npm-000001")], True, "npm-000001"),
+    }
+    result, _ = run_images(photo_env, replies, KB_ARTWORKS)
+    assert (result["n_known"], result["n_unknown"]) == (0, 2)
+    assert result["reject_rate"] == 0.5
+    assert result["image_top1"] is None and result["image_top5"] is None
+
+
+def test_main_runs_image_eval_and_writes_images_csv_and_summary(monkeypatch, tmp_path, photo_env):
+    import csv
+
+    root, opened = photo_env
+    make_photos(root, list(MIXED_REPLIES))
+    backend = FakeImageBackend(MIXED_REPLIES)
+    backend.opened = opened
+    chat_bodies: list[dict] = []
+    generation = make_handler(merged(), chat_bodies)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/api/v1/artworks":
+            return httpx.Response(200, json={"items": [{"id": i} for i in sorted(KB_ARTWORKS)]})
+        if path.startswith("/api/v1/artworks/"):
+            return httpx.Response(200, json={"descriptions": [{"lang": "zh"}]})
+        if path in ("/api/v1/images", "/api/v1/search/image"):
+            return backend.handle(request)
+        return generation(request)
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        run_eval.httpx, "Client", lambda **kw: RealClient(transport=transport, **kw)
+    )
+    runs = tmp_path / "runs"
+    monkeypatch.setattr(run_eval, "RUNS", runs)
+    monkeypatch.setattr("sys.argv", ["run_eval.py", "--strategies", "hybrid", "--qa", DRAWING_QA])
+    real_runs = sorted(p.name for p in (ROOT / "eval" / "runs").iterdir())
+
+    assert run_eval.main() == 0
+
+    assert sorted(p.name for p in (ROOT / "eval" / "runs").iterdir()) == real_runs
+    (images_csv,) = runs.glob("*-images.csv")
+    (summary_path,) = runs.glob("*.json")
+    assert len(list(runs.iterdir())) == 3  # 題目 CSV、圖片 CSV、摘要 JSON
+    with images_csv.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == IMAGE_COLUMNS
+        image_rows = list(reader)
+    assert [r["photo"] for r in image_rows] == [r["photo"] for r in MIXED_ROWS]
+    assert [(r["truth"], r["matched"], r["predicted"]) for r in image_rows] == [
+        ("npm-000002", "True", "npm-000008"),
+        ("npm-000001", "True", "npm-000001"),
+        ("npm-000003", "False", ""),
+        (UNKNOWN_TRUTH, "False", ""),
+        (UNKNOWN_TRUTH, "True", "npm-000001"),
+    ]
+    assert [(r["top1"], r["top5"], r["rejected"]) for r in image_rows] == [
+        ("False", "True", "False"),
+        ("True", "True", "False"),
+        ("False", "False", "False"),
+        ("False", "False", "True"),
+        ("False", "False", "False"),
+    ]
+    assert [(r["clip"], r["inliers"]) for r in image_rows] == [
+        ("0.77", ""),
+        ("0.91", "34"),
+        ("0.4", "2"),
+        ("", ""),
+        ("0.66", "12"),
+    ]
+    summary = json.loads(summary_path.read_text("utf-8"))
+    image_summary = summary["summary"]
+    assert "rows" not in image_summary
+    assert image_summary == {
+        "image_top1": pytest.approx(1 / 3),
+        "image_top5": pytest.approx(2 / 3),
+        "reject_rate": pytest.approx(1 / 2),
+        "n_known": 3,
+        "n_unknown": 2,
+        "split": "all",
+    }
+    assert summary["by_strategy"]["hybrid"]["n"] == 33  # 問答評測照常進行
+    assert len(backend.uploads) == len(backend.search_bodies) == 5
+    assert all(f.closed for f in opened)
