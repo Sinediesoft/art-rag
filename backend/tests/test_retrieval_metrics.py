@@ -671,7 +671,9 @@ def test_mock_artifacts_cannot_land_in_tracked_runs():
 
 @pytest.mark.parametrize("preload_api", [False, True], ids=["allowed-only", "app-api"])
 def test_strict_bootstrap_checks_preloaded_modules_with_empty_settings_cache(
-    tmp_path, preload_api, record_property,
+    tmp_path,
+    preload_api,
+    record_property,
 ):
     """新程序只載入 config／可選的 app.api，避免已讀設定的 guard 掩蓋模組檢查。"""
     script = textwrap.dedent(
@@ -741,7 +743,11 @@ def test_strict_bootstrap_checks_preloaded_modules_with_empty_settings_cache(
     }
     proc = subprocess.run(
         [sys.executable, "-B", "-c", script, "api" if preload_api else "allowed"],
-        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30,
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     result = json.loads(proc.stdout)
@@ -749,9 +755,7 @@ def test_strict_bootstrap_checks_preloaded_modules_with_empty_settings_cache(
     assert result["settings_cache_before"] == result["settings_cache_after"] == 0
     if preload_api:
         assert result["app_modules"] == ["app", "app.api", "app.core", "app.core.config"]
-        assert result["error"] == (
-            "bootstrap 要在第一次讀設定之前呼叫：已載入 app.api 等 app 模組"
-        )
+        assert result["error"] == ("bootstrap 要在第一次讀設定之前呼叫：已載入 app.api 等 app 模組")
         assert result["settings_unchanged"] is True
     else:
         assert result["app_modules"] == ["app", "app.core", "app.core.config"]

@@ -343,14 +343,14 @@ Q4 = "步進馬達安裝板的板厚要求是多少？"
     ids=["production-global", "diagnostic-global", "production-specified"],
 )
 def test_global_fill_cohorts_apply_only_to_production_specified(
-    domain, mode, call_kind, has_fill_cohorts,
+    domain,
+    mode,
+    call_kind,
+    has_fill_cohorts,
 ):
     """以固定檢索回傳走真的 run_group／計分，global 不應產生指定模式的分母。"""
     owner_key = rr.DOMAINS[domain]["owner_key"]
-    chunks = [
-        {"chunk_id": f"doc-{i}#00-0", owner_key: f"doc-{i}", "topic": "技法"}
-        for i in (1, 2)
-    ]
+    chunks = [{"chunk_id": f"doc-{i}#00-0", owner_key: f"doc-{i}", "topic": "技法"} for i in (1, 2)]
     resolved = rre.resolve_domain(
         domain,
         [
@@ -393,7 +393,9 @@ def test_global_fill_cohorts_apply_only_to_production_specified(
         assert summary["cohorts"]["global_fill_triggered"]["case_ids"] == ["fill"]
         assert own["global_fill_triggered"] is False and fill["global_fill_triggered"] is True
         assert summary["global_fill_triggered"] == {
-            "rate": 0.5, "numerator": 1, "denominator": 2,
+            "rate": 0.5,
+            "numerator": 1,
+            "denominator": 2,
         }
         assert summary["owner_only_cross_document_case_ids"] == []
     else:
@@ -405,7 +407,9 @@ def test_global_fill_cohorts_apply_only_to_production_specified(
     for name in base:
         assert summary["cohorts"][name]["case_ids"] == ["own", "fill"]
         assert summary["cohorts"][name]["answerable"]["metrics"]["recall@1"] == {
-            "mean": 1.0, "numerator": 2.0, "denominator": 2,
+            "mean": 1.0,
+            "numerator": 2.0,
+            "denominator": 2,
         }
 
 
