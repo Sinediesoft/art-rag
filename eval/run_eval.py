@@ -23,12 +23,16 @@ LoRA 不檢索對照組（lora_norag，docs/adr/043，make eval-lora）：done �
       [--strategies hybrid,hybrid_norag,hybrid_plain,hybrid_rearrange,api_nokb,api_kb,mock,
                     lora_norag]
       [--split dev|test|all] [--qa qa.jsonl,qa_visual.jsonl] [--outside-kb] [--skip-images]
+      圖紙段落題庫：--qa drawing_retrieval/qa.jsonl（make eval EVAL_QA=同左），
+      答案在旁附檔 drawing_retrieval/answers.jsonl，讀題時依 id 合併，不改原題庫
       hybrid_plain／hybrid_rearrange：檢索段落篩選（MIRA 的 Rearrange）關／開的對照
 """
 
 import argparse
+import copy
 import csv
 import json
+import posixpath
 import re
 import statistics
 import sys
@@ -41,6 +45,14 @@ import httpx
 
 EVAL = Path(__file__).resolve().parent
 ROOT = EVAL.parent
+RUNS = EVAL / "runs"
+
+# 圖紙段落題庫：原 QA 位元組固定（SHA256 記在 TASK-20261027-001 的收據），答案放旁附檔、讀題時合併
+DRAWING_QA = "drawing_retrieval/qa.jsonl"
+DRAWING_ANSWERS = "answers.jsonl"
+ANSWER_FIELDS = ("keywords", "review_status", "review_note", "no_answer_reason")
+SIDECAR_FIELDS = {"id", "expect_refusal", *ANSWER_FIELDS}
+REVIEW_STATUSES = ("unreviewed",)
 
 STRATEGY_BODY = {
     "hybrid": {"strategy": "hybrid"},
@@ -142,6 +154,86 @@ def run_chat(client: httpx.Client, body: dict) -> dict:
                 elif event == "error":
                     out["error"] = data
     return out
+
+
+def check_keywords(qid: str, keywords) -> None:
+    ok = (
+        isinstance(keywords, list)
+        and keywords
+        and all(
+            isinstance(g, list) and g and all(isinstance(k, str) and k.strip() for k in g)
+            for g in keywords
+        )
+    )
+    if not ok:
+        raise ValueError(f"{qid}：keywords 要是非空的「AND 組 → OR 候選字串」，不可有空組或空字串")
+
+
+def merge_answers(questions: list[dict], answers: list[dict]) -> list[dict]:
+    """把旁附答案依 id 合併進題目（回傳新 list，不改傳入的題目）。
+
+    只合併 ANSWER_FIELDS；題目、part_id、topics、type 與拒答意圖都以原題為準，
+    旁附檔寫了不同的值就報錯。缺漏、重複、未知 id、不合法 keywords 一律 ValueError。"""
+    by_id: dict[str, dict] = {}
+    for a in answers:
+        aid = a.get("id")
+        if not isinstance(aid, str) or not aid:
+            raise ValueError(f"答案紀錄缺 id：{a}")
+        if aid in by_id:
+            raise ValueError(f"答案 id 重複：{aid}")
+        by_id[aid] = a
+    qids = [q["id"] for q in questions]
+    if len(set(qids)) != len(qids):
+        raise ValueError("題庫 id 重複")
+    if unknown := sorted(set(by_id) - set(qids)):
+        raise ValueError(f"答案檔有未知題號：{', '.join(unknown)}")
+    if missing := [i for i in qids if i not in by_id]:
+        raise ValueError(f"答案檔缺漏題號：{', '.join(missing)}")
+    merged = []
+    for q in questions:
+        a = by_id[q["id"]]
+        if extra := sorted(set(a) - SIDECAR_FIELDS):
+            raise ValueError(
+                f"{q['id']}：答案檔不可帶欄位 {', '.join(extra)}（只能合併答案與審核註記）"
+            )
+        refusal = bool(q.get("expect_refusal"))
+        if "expect_refusal" in a and bool(a["expect_refusal"]) != refusal:
+            raise ValueError(f"{q['id']}：答案檔的 expect_refusal 與原題不同")
+        if refusal:
+            if a.get("keywords"):
+                raise ValueError(f"{q['id']}：拒答題不可帶 keywords")
+            if not isinstance(a.get("no_answer_reason"), str) or not a["no_answer_reason"].strip():
+                raise ValueError(f"{q['id']}：拒答題要有 no_answer_reason")
+        else:
+            check_keywords(q["id"], a.get("keywords"))
+            if "no_answer_reason" in a:
+                raise ValueError(f"{q['id']}：可答題不可帶 no_answer_reason")
+        if "review_status" in a:
+            if a["review_status"] not in REVIEW_STATUSES:
+                raise ValueError(f"{q['id']}：review_status 只接受 {'、'.join(REVIEW_STATUSES)}")
+            if not isinstance(a.get("review_note"), str) or not a["review_note"].strip():
+                raise ValueError(f"{q['id']}：有 review_status 就要有 review_note 說明")
+        merged.append(copy.deepcopy(q) | {k: copy.deepcopy(a[k]) for k in ANSWER_FIELDS if k in a})
+    return merged
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(x) for x in path.read_text("utf-8").splitlines() if x.strip()]
+
+
+def load_questions(names: list[str], base: Path = EVAL) -> list[dict]:
+    """依序讀題目檔；只有圖紙段落題庫（drawing_retrieval/qa.jsonl）會合併旁附答案，
+    並在記憶體補 split=test（原檔沒有 split、不寫回）。其他題庫照原樣。"""
+    drawing = (base / DRAWING_QA).resolve()
+    questions = []
+    for name in names:
+        path = base / name
+        rows = read_jsonl(path)
+        if posixpath.normpath(name) == DRAWING_QA or path.resolve() == drawing:
+            rows = merge_answers(rows, read_jsonl(path.with_name(DRAWING_ANSWERS)))
+            rows = [{"split": "test"} | q for q in rows]
+        questions.extend(rows)
+    return questions
 
 
 def owner_of(q: dict) -> str | None:
@@ -263,12 +355,11 @@ def main() -> int:
         print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
     # 工廠圖紙題（part_id，docs/adr/020）：圖紙多是機密，切成主管才看得到全部
-    all_questions = [
-        json.loads(x)
-        for name in args.qa.split(",")
-        for x in (EVAL / name).read_text("utf-8").splitlines()
-        if x.strip()
-    ]
+    try:
+        all_questions = load_questions(args.qa.split(","))
+    except ValueError as e:
+        print(f"題庫讀取失敗：{e}")
+        return 1
     if any(q.get("part_id") for q in all_questions):
         client.post("/api/v1/auth/switch", json={"account_id": "manager"}).raise_for_status()
         kb_ids |= {p["id"] for p in client.get("/api/v1/parts").json()["items"]}
@@ -298,7 +389,8 @@ def main() -> int:
         if args.split != "all" and q["split"] != args.split:
             continue
         owner = owner_of(q)
-        if owner is None or owner in kb_ids:
+        # 標了拒答的未知圖紙題（mfg-099）要保留，不然會被 kb_ids 篩掉、不進分母
+        if owner is None or owner in kb_ids or (q.get("part_id") and q.get("expect_refusal")):
             questions.append(q)
         elif args.outside_kb and not q.get("part_id"):
             questions.append({**q, "type": "outside_kb"})
@@ -337,6 +429,8 @@ def main() -> int:
                 "fallback": fallback,
                 "kb_version": manifest["kb_version"],
                 "prompt_version": done.get("prompt_version", ""),
+                # 未審核資料的題目（圖紙外包廠回報）：只評是否忠實轉述，非事實正確性保證
+                "review_status": q.get("review_status", ""),
                 "answer_ok": answer_ok,
                 "citation_ok": citation_ok,
                 "n_sources": len(res["sources"]),
@@ -369,7 +463,8 @@ def main() -> int:
             rows.append(row)
             results.append(row)
             mark = "✓" if answer_ok else "✗"
-            print(f"  [{strat}] {mark} {q['id']} {row['answer'][:60]}")
+            tag = f"（{q['review_status']}）" if q.get("review_status") else ""
+            print(f"  [{strat}] {mark} {q['id']}{tag} {row['answer'][:60]}")
         ok = [r for r in results if not r["error"]]
         injected = [r for r in ok if r["distractor_kept"] != ""]
         no_kb_rows = [r for r in results if r["type"] in NO_KB_ANSWER_TYPES]
@@ -424,7 +519,7 @@ def main() -> int:
             else None,
         }
 
-    runs = EVAL / "runs"
+    runs = RUNS
     runs.mkdir(exist_ok=True)
     with (runs / f"{run_id}.csv").open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["question_id"])

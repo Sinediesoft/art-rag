@@ -22,7 +22,7 @@ help:
 	@echo "make index-db    不重算向量，把現有的 data/index/ 寫進資料庫"
 	@echo "make demo        建置前端並啟動展示伺服器 http://localhost:8000"
 	@echo "make dev         開發模式：後端 8000（熱重載）＋前端 5173"
-	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/"
+	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/；EVAL_QA=drawing_retrieval/qa.jsonl 改評圖紙段落題庫"
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-art-resolve 智慧助理判斷沒說畫名的畫作問題是哪一幅（ADR 038；需後端在執行）"
@@ -199,8 +199,10 @@ openapi:
 	cd backend && uv run python -m app.export_openapi
 	cd frontend && npm run gen:api
 
+# EVAL_QA 指定 eval/ 下的題目檔（逗號分隔），不指定就用 run_eval.py 預設的 qa.jsonl；
+# 圖紙段落題庫：make eval EVAL_QA=drawing_retrieval/qa.jsonl（自動合併旁附 answers.jsonl）
 eval:
-	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag
+	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag$(if $(EVAL_QA), --qa $(EVAL_QA))
 
 eval-cloud:
 	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag,api_nokb,api_kb
