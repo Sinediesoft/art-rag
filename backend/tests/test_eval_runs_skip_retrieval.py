@@ -1,4 +1,4 @@
-"""GET /eval/runs 排除全部 16 種非 RAGAS suffix，保留正常與近似檔名並依檔名倒序。"""
+"""GET /eval/runs 排除全部 17 種非 RAGAS suffix，保留正常與近似檔名並依檔名倒序。"""
 
 import json
 
@@ -36,6 +36,7 @@ NON_RAGAS_SUFFIXES = (
     "-drawing-retrieval.json",
     "-retrieval-index.json",
     "-retrieval-layer-metrics.json",
+    "-generation-accounts.json",
     "-cad.json",
     "-router.json",
     "-sql.json",
@@ -102,3 +103,45 @@ def test_eval_runs_keeps_similar_but_nonmatching_suffixes(client, runs_dir, suff
 
     assert response.status_code == 200, response.text
     assert response.json()["runs"] == [near_match, RAGAS]
+
+
+GENERATION_ACCOUNTS = {
+    # 新生成帳號 run 的真形狀：頂層刻意缺 EvalRun 必填欄位也不能讓 /eval/runs 出錯
+    "schema_version": "generation-accounts/1",
+    "kind": "generation-accounts",
+    "run_id": "20261029T120000-gen1",
+    "created_at": "2026-10-29T12:00:00+00:00",
+    "real": True,
+    "rows": [],
+}
+
+
+def test_eval_runs_mixed_ragas_generation_accounts_and_retrieval(client, runs_dir):
+    ragas_old = {**RAGAS, "run_id": "20261006T010101-old1"}
+    ragas_new = {**RAGAS, "run_id": "20261028T010101-new1"}
+    files = {
+        f"{ragas_old['run_id']}.json": ragas_old,
+        f"{ragas_new['run_id']}.json": ragas_new,
+        f"{GENERATION_ACCOUNTS['run_id']}-generation-accounts.json": GENERATION_ACCOUNTS,
+        f"{RETRIEVAL_INDEX['run_id']}-retrieval-index.json": RETRIEVAL_INDEX,
+        f"{RETRIEVAL_LAYER_METRICS['run_id']}-retrieval-layer-metrics.json": (
+            RETRIEVAL_LAYER_METRICS
+        ),
+    }
+    for name, body in files.items():
+        (runs_dir / name).write_text(json.dumps(body), encoding="utf-8")
+    before = {p.name: p.read_bytes() for p in runs_dir.iterdir()}
+
+    response = client.get("/api/v1/eval/runs")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["runs"] == [ragas_new, ragas_old]
+    assert {p.name: p.read_bytes() for p in runs_dir.iterdir()} == before  # 不重寫任何歷史檔
+
+
+def test_eval_runs_only_generation_accounts_file_gives_empty_list(client, runs_dir):
+    name = f"{GENERATION_ACCOUNTS['run_id']}-generation-accounts.json"
+    (runs_dir / name).write_text(json.dumps(GENERATION_ACCOUNTS), encoding="utf-8")
+    response = client.get("/api/v1/eval/runs")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"runs": []}
