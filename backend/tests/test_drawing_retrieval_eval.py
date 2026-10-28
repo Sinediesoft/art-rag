@@ -875,3 +875,397 @@ def test_cli_never_opens_env_file(mock_index, tmp_path):
     assert seen2["opened"] and all(Path(p).name == ".env" for p in seen2["opened"])
     assert proc2.returncode == 2 and "bootstrap" in proc2.stderr
     assert not out2.exists()
+
+
+# ---------------------------------------------------------------- B 批：照片 run-id 防覆寫與編排
+
+
+def test_write_report_is_exclusive_and_keeps_existing_bytes(tmp_path):
+    out_dir = tmp_path / "out"
+    out = dre.write_report({"run_id": "r1", "accounts": {}}, out_dir)
+    first = out.read_bytes()
+    with pytest.raises(FileExistsError):
+        dre.write_report({"run_id": "r1", "accounts": {"x": {}}}, out_dir)
+    assert out.read_bytes() == first
+
+
+def full_coll(tag: str, n: int) -> dict:
+    return {
+        "chunk_count": n,
+        "chunks_sha256": f"c{tag}",
+        "items_sha256": f"i{tag}",
+        "chunk_vecs": {"shape": [n, 2], "dtype": "float32", "sha256": f"v{tag}"},
+        "image_vecs": {"shape": [1, 2], "dtype": "float32", "sha256": f"m{tag}"},
+    }
+
+
+def full_receipt(**over) -> dict:
+    colls = {"art": full_coll("a", 21), "mfg": full_coll("m", 34)}
+    return receipt(**({"collections": colls} | over))
+
+
+class FakeStore:
+    parts = [{"id": "mfg-004"}, {"id": "mfg-005"}, {"id": "mfg-006"}]
+
+    def __init__(self, error: Exception | None = None):
+        self.error, self.loaded = error, 0
+
+    def load(self):
+        self.loaded += 1
+        if self.error:
+            raise self.error
+
+
+class Env:
+    """dre.main 的受控替身環境：不載模型、不讀 .env，記錄是否開始了照片／文字查詢。"""
+
+    def __init__(self, tmp_path: Path):
+        self.mode = "real"
+        self.store = FakeStore()
+        self.current = full_receipt(index_build=None)
+        self.out = tmp_path / "out"
+        self.gold = tmp_path / "gold.json"
+        self.gold.write_text(
+            json.dumps({"photos": [], "texts": [], "accounts": ["manager", "sales"]}),
+            encoding="utf-8",
+        )
+        self.receipt_path = tmp_path / "20261027T000000-abcd-retrieval-index.json"
+        self.write_receipt(full_receipt())
+        self.photo_calls: list[str] = []
+        self.text_calls: list[str] = []
+        self.accounts_seen: list[str] = []
+        self.photo_rows = lambda acc: [
+            row(case("mfg-006", "reported"), identified(hit("mfg-006", verified=True)))
+        ]
+        self.text_rows = lambda acc: [text("MTP-4004", "mfg-004", ["mfg-004"])]
+        self.bootstrap_error: Exception | None = None
+
+    def write_receipt(self, r: dict) -> None:
+        self.receipt_path.write_text(json.dumps(r, ensure_ascii=False), encoding="utf-8")
+
+    def run(self, *extra: str, run_id: str | None = "r1") -> int:
+        argv = ["--gold", str(self.gold), "--out-dir", str(self.out)]
+        argv += ["--index-receipt", str(self.receipt_path)]
+        if run_id:
+            argv += ["--run-id", run_id]
+        return dre.main([*argv, *extra])
+
+    @property
+    def started(self) -> bool:
+        return bool(self.photo_calls or self.text_calls)
+
+
+@pytest.fixture
+def env(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from app.agent import guard
+    from app.core import config
+    from app.repositories import index_store
+    from app.services import identity
+
+    e = Env(tmp_path)
+
+    def bootstrap(strict=True):
+        if e.bootstrap_error:
+            raise e.bootstrap_error
+        return {"env_file_disabled": True}
+
+    class MetaFilter:
+        @staticmethod
+        def of(acc, domain):
+            return SimpleNamespace(text=f"scope:{acc.id}")
+
+    def run_photos(cases, visible):
+        e.photo_calls.append(e.accounts_seen[-1])
+        return e.photo_rows(e.accounts_seen[-1])
+
+    def run_texts(gold, visible, scope_text):
+        e.text_calls.append(e.accounts_seen[-1])
+        return e.text_rows(e.accounts_seen[-1])
+
+    def get_account(acc_id):
+        e.accounts_seen.append(acc_id)
+        return SimpleNamespace(id=acc_id, label=acc_id.upper())
+
+    monkeypatch.setattr(rr, "bootstrap", bootstrap)
+    monkeypatch.setattr(rr, "collect_index_receipt", lambda store, **kw: e.current)
+    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(embed_mode=e.mode))
+    monkeypatch.setattr(
+        config, "get_models_config", lambda: SimpleNamespace(drawing_retrieval={"k": 1})
+    )
+    monkeypatch.setattr(config, "kb_version", lambda: "kb-test")
+    monkeypatch.setattr(index_store, "get_store", lambda: e.store)
+    monkeypatch.setattr(identity, "get_account", get_account)
+    monkeypatch.setattr(identity, "visible_part_ids", lambda acc, parts: set(VISIBLE))
+    monkeypatch.setattr(guard, "MetaFilter", MetaFilter)
+    monkeypatch.setattr(dre, "photo_cases", lambda gold, ids: [case("mfg-006", "reported")])
+    monkeypatch.setattr(dre, "run_photos", run_photos)
+    monkeypatch.setattr(dre, "run_texts", run_texts)
+    return e
+
+
+def _saved_report(env_: Env, run_id: str = "r1") -> dict:
+    path = env_.out / f"{run_id}-drawing-retrieval.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_main_success_writes_report_and_exits_zero(env, capsys):
+    assert env.run() == 0
+    report = _saved_report(env)
+    assert report["run_id"] == "r1" and report["stop"]["exit_code"] == 0
+    assert report["real"] is True and report["kb_version"] == "kb-test"
+    assert list(report["accounts"]) == ["manager", "sales"]
+    assert "結果：" in capsys.readouterr().out
+
+
+def test_main_isolation_failure_starts_nothing(env, capsys):
+    env.bootstrap_error = rr.RuntimeIsolationError("讀了 .env")
+    assert env.run() == 2
+    assert "讀了 .env" in capsys.readouterr().err
+    assert env.store.loaded == 0 and not env.started and not env.out.exists()
+
+
+def test_main_mock_into_official_runs_is_refused(env, capsys):
+    env.mode = "mock"
+    env.out = ROOT / "eval" / "runs"
+    before = official_runs()
+    assert env.run() == 2
+    assert "不能寫進 eval/runs" in capsys.readouterr().err
+    assert env.store.loaded == 0 and not env.started and official_runs() == before
+
+
+def test_main_index_mismatch_starts_nothing(env, capsys):
+    from app.repositories.index_store import IndexMismatch
+
+    env.store = FakeStore(IndexMismatch("壞了"))
+    assert env.run() == 2
+    assert "索引不能用：壞了" in capsys.readouterr().err
+    assert not env.started and not env.out.exists()
+
+
+def test_main_provenance_failure_starts_nothing(env, capsys):
+    env.write_receipt(full_receipt(kb={"version": "v", "hash_now": "a", "hash_manifest": "b"}))
+    assert env.run() == 2
+    assert "索引收據檢查失敗" in capsys.readouterr().err
+    assert not env.started and not env.out.exists()
+
+
+@pytest.mark.parametrize("domain", ["art", "mfg"])
+@pytest.mark.parametrize("field", ["items_sha256", "image_vecs"])
+def test_main_gate_rejects_image_or_items_mismatch(env, capsys, domain, field):
+    colls = {"art": full_coll("a", 21), "mfg": full_coll("m", 34)}
+    if field == "items_sha256":
+        colls[domain][field] = "0" * 64
+        needle = f"{domain} 索引的 items_sha256 和收據不同"
+    else:
+        colls[domain][field]["sha256"] = "0" * 64
+        needle = f"{domain} 索引的圖片向量 sha256 和收據不同"
+    env.write_receipt(full_receipt(collections=colls))
+    assert env.run() == 2
+    assert needle in capsys.readouterr().err
+    assert env.store.loaded == 1 and not env.started and not env.out.exists()
+
+
+def test_main_existing_output_is_refused_before_evaluating(env, capsys):
+    env.out.mkdir()
+    old = env.out / "r1-drawing-retrieval.json"
+    old.write_bytes(b"old-json")
+    assert env.run() == 2
+    assert "已存在" in capsys.readouterr().err
+    assert old.read_bytes() == b"old-json"
+    assert env.store.loaded == 0 and not env.started
+
+
+def test_main_same_run_id_retry_fails_and_keeps_first_json(env):
+    assert env.run() == 0
+    out = env.out / "r1-drawing-retrieval.json"
+    first = out.read_bytes()
+    env.photo_calls.clear()
+    assert env.run() == 2
+    assert out.read_bytes() == first and not env.photo_calls
+
+
+def test_main_default_run_id_collision_fails_clearly(env, monkeypatch, capsys):
+    monkeypatch.setattr(rr, "new_run_id", lambda: "fixed")
+    env.out.mkdir()
+    (env.out / "fixed-drawing-retrieval.json").write_bytes(b"keep")
+    assert env.run(run_id=None) == 2
+    assert "已存在" in capsys.readouterr().err
+    assert (env.out / "fixed-drawing-retrieval.json").read_bytes() == b"keep"
+    assert not env.started
+
+
+def test_main_write_race_does_not_overwrite(env, capsys):
+    racer = env.out / "r1-drawing-retrieval.json"
+    original = env.text_rows
+
+    def rows(acc):
+        env.out.mkdir(exist_ok=True)
+        racer.write_bytes(b"racer")
+        return original(acc)
+
+    env.text_rows = rows
+    assert env.run() == 2
+    assert "已存在" in capsys.readouterr().err
+    assert racer.read_bytes() == b"racer"
+
+
+def test_main_default_accounts_follow_gold_order(env):
+    assert env.run() == 0
+    assert env.accounts_seen == ["manager", "sales"]
+
+
+def test_main_explicit_accounts_keep_given_order(env):
+    assert env.run("--accounts", "sales,manager") == 0
+    assert env.accounts_seen == ["sales", "manager"]
+    assert list(_saved_report(env)["accounts"]) == ["sales", "manager"]
+
+
+def test_main_route_miss_is_reported_but_does_not_stop(env):
+    env.photo_rows = lambda acc: [
+        row(case("mfg-006", "reported"), identified(hit("mfg-006", verified=True))),
+        row(case("mfg-004", "blur"), None, domain="art"),
+    ]
+    assert env.run() == 0
+    a = _saved_report(env)["accounts"]["manager"]
+    assert a["stop_reasons"] == []
+    assert a["summary"]["candidate_ranking"]["n_route_miss"] == 1
+
+
+def test_main_wrong_answer_exits_one_but_still_writes_json(env):
+    env.photo_rows = lambda acc: [
+        row(case("mfg-006", "reported"), identified(hit("mfg-006", verified=True))),
+        row(case("mfg-004"), identified(hit("mfg-005", verified=True))),
+    ]
+    assert env.run() == 1
+    report = _saved_report(env)
+    assert report["stop"]["exit_code"] == 1
+    assert report["accounts"]["manager"]["stop_reasons"] == ["photo_wrong"]
+
+
+def test_main_stop_rule_text_failure_exits_one(env):
+    env.text_rows = lambda acc: [text("MTP-4004", "mfg-004", ["mfg-005"])]
+    assert env.run() == 1
+    assert _saved_report(env)["stop"]["failed_accounts"] == ["manager", "sales"]
+
+
+# ---------------------------------------------------------------- photo_cases 程序內展開
+
+
+@pytest.fixture
+def pc(monkeypatch, tmp_path):
+    """photo_cases 的替身環境：ROOT 指到暫存目錄，uploaded／view_crop 只記錄參數。"""
+    from types import SimpleNamespace
+
+    calls = SimpleNamespace(uploaded=[], crops=[], root=tmp_path)
+    monkeypatch.setattr(dre, "ROOT", tmp_path)
+
+    def uploaded(raw):
+        calls.uploaded.append(raw)
+        return ("img", raw)
+
+    def view_crop(path, box, factor=1.3):
+        calls.crops.append((Path(path).name, tuple(box), factor))
+        return ("crop", Path(path).name, tuple(box), factor)
+
+    monkeypatch.setattr(dre, "uploaded", uploaded)
+    monkeypatch.setattr(dre, "view_crop", view_crop)
+    return calls
+
+
+def _touch(root: Path, *names: str, data: bytes = b"raw") -> None:
+    for n in names:
+        f = root / n
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+
+
+def test_photo_cases_path_spec_uses_file_bytes_and_given_expectation(pc):
+    _touch(pc.root, "shots/a.png", data=b"A")
+    spec = {"path": "shots/a.png", "expect": "mfg-006", "variant": "reported"}
+    out = dre.photo_cases({"photos": [spec]}, set())
+    assert out == [
+        {"name": "a.png", "variant": "reported", "expect": "mfg-006", "image": ("img", b"A")}
+    ]
+    assert pc.uploaded == [b"A"]
+
+
+def test_photo_cases_views_order_boxes_and_expect_none_for_unknown_stem(pc):
+    _touch(pc.root, "kb/mfg-004.png", "kb/mfg-001.png", "other/unk.png")
+    gold = {"photos": [{"generate": "views", "from": ["kb/*.png", "other/*.png"]}]}
+    out = dre.photo_cases(gold, {"mfg-004"})
+    assert [(c["name"], c["expect"]) for c in out] == [
+        ("mfg-001__view_right", None),
+        ("mfg-001__view_front", None),
+        ("mfg-001__view_top", None),
+        ("mfg-004__view_right", "mfg-004"),
+        ("mfg-004__view_front", "mfg-004"),
+        ("mfg-004__view_top", "mfg-004"),
+        ("unk__view_right", None),
+        ("unk__view_front", None),
+        ("unk__view_top", None),
+    ]
+    assert [c["variant"] for c in out[:3]] == ["view_right", "view_front", "view_top"]
+    assert pc.crops[:3] == [
+        ("mfg-001.png", dre.VIEWS["view_right"], 1.3),
+        ("mfg-001.png", dre.VIEWS["view_front"], 1.3),
+        ("mfg-001.png", dre.VIEWS["view_top"], 1.3),
+    ]
+    assert out[0]["image"] == ("img", ("crop", "mfg-001.png", dre.VIEWS["view_right"], 1.3))
+
+
+def test_photo_cases_patches_nest_stem_then_variant_then_factor(pc):
+    _touch(pc.root, "kb/mfg-004.png", "kb/mfg-005.png")
+    gold = {"photos": [{"generate": "patches", "from": ["kb/*.png"], "factors": [2.0, 1.5]}]}
+    out = dre.photo_cases(gold, {"mfg-005"})
+    names = [c["name"] for c in out]
+    assert names[:6] == [
+        "mfg-004__patch_right_x2",
+        "mfg-004__patch_right_x1.5",
+        "mfg-004__patch_front_x2",
+        "mfg-004__patch_front_x1.5",
+        "mfg-004__patch_top_x2",
+        "mfg-004__patch_top_x1.5",
+    ]
+    assert len(out) == 12 and names[6].startswith("mfg-005__patch_right")
+    assert [c["expect"] for c in out] == [None] * 6 + ["mfg-005"] * 6
+    assert pc.crops[0] == ("mfg-004.png", dre.PATCHES["patch_right"], 2.0)
+    assert pc.crops[1] == ("mfg-004.png", dre.PATCHES["patch_right"], 1.5)
+
+
+def test_photo_cases_crop_spec_names_box_and_factor(pc):
+    _touch(pc.root, "kb/mfg-005.png", "kb/zzz.png")
+    spec = {"crop": "kb/mfg-005.png", "box": [1, 2, 3, 4], "factor": 1.3, "variant": "review"}
+    unknown = {"crop": "kb/zzz.png", "box": [5, 6, 7, 8], "factor": 2, "variant": "review"}
+    out = dre.photo_cases({"photos": [spec, unknown]}, {"mfg-005"})
+    assert [(c["name"], c["variant"], c["expect"]) for c in out] == [
+        ("mfg-005__crop[1, 2, 3, 4]_x1.3", "review", "mfg-005"),
+        ("zzz__crop[5, 6, 7, 8]_x2", "review", None),
+    ]
+    assert pc.crops == [("mfg-005.png", (1, 2, 3, 4), 1.3), ("zzz.png", (5, 6, 7, 8), 2)]
+
+
+def test_photo_cases_glob_filename_variant_beats_spec_variant(pc):
+    _touch(pc.root, "p/mfg-004__blur.png", "p/mfg-005.png", "p/zz__glare.png")
+    out = dre.photo_cases({"photos": [{"glob": "p/*.png", "variant": "original"}]}, {"mfg-004"})
+    assert [(c["name"], c["variant"], c["expect"]) for c in out] == [
+        ("mfg-004__blur.png", "blur", "mfg-004"),
+        ("mfg-005.png", "original", None),
+        ("zz__glare.png", "glare", None),
+    ]
+
+
+def test_photo_cases_missing_file_or_failed_image_makes_no_fake_cases(pc, monkeypatch):
+    spec = {"path": "nope.png", "expect": "mfg-006", "variant": "reported"}
+    with pytest.raises(FileNotFoundError):
+        dre.photo_cases({"photos": [spec]}, set())
+    assert dre.photo_cases({"photos": [{"glob": "none/*.png", "variant": "x"}]}, set()) == []
+    _touch(pc.root, "kb/mfg-004.png")
+
+    def boom(raw):
+        raise ValueError("壞圖")
+
+    monkeypatch.setattr(dre, "uploaded", boom)
+    with pytest.raises(ValueError):
+        dre.photo_cases({"photos": [{"glob": "kb/*.png", "variant": "original"}]}, {"mfg-004"})
