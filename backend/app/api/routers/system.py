@@ -63,12 +63,14 @@ def eval_runs(request: Request):
         # 畫作卡推測（-style、線性分類頭的訓練報告 -style-head）
         # 與以圖搜圖同系列不同版本（-versions）、觀眾實拍照（-met-photos）、
         # 圖紙文字與照片檢索（-drawing-retrieval）、分層檢索的索引收據（-retrieval-index）
-        # 與檢索層指標（-retrieval-layer-metrics）的評估另有格式
+        # 與檢索層指標（-retrieval-layer-metrics）、圖紙生成層多帳號評測（-generation-accounts）
+        # 的評估另有格式
         if not p.name.endswith(
             (
                 "-drawing-retrieval.json",
                 "-retrieval-index.json",
                 "-retrieval-layer-metrics.json",
+                "-generation-accounts.json",
                 "-cad.json",
                 "-router.json",
                 "-sql.json",

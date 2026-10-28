@@ -22,7 +22,7 @@ help:
 	@echo "make index-db    不重算向量，把現有的 data/index/ 寫進資料庫"
 	@echo "make demo        建置前端並啟動展示伺服器 http://localhost:8000"
 	@echo "make dev         開發模式：後端 8000（熱重載）＋前端 5173"
-	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/；EVAL_QA=drawing_retrieval/qa.jsonl 改評圖紙段落題庫"
+	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/；EVAL_QA=drawing_retrieval/qa.jsonl 改評圖紙段落題庫；EVAL_ACCOUNTS=manager,sales 改跑圖紙生成層多帳號評測（只跑 hybrid、不跑圖片）"
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-art-resolve 智慧助理判斷沒說畫名的畫作問題是哪一幅（ADR 038；需後端在執行）"
@@ -201,8 +201,14 @@ openapi:
 
 # EVAL_QA 指定 eval/ 下的題目檔（逗號分隔），不指定就用 run_eval.py 預設的 qa.jsonl；
 # 圖紙段落題庫：make eval EVAL_QA=drawing_retrieval/qa.jsonl（自動合併旁附 answers.jsonl）
+# EVAL_ACCOUNTS 指定圖紙生成層多帳號評測的帳號（逗號分隔，須在 eval/drawing_retrieval/gold.json 的 accounts）：
+#   make eval EVAL_ACCOUNTS=manager,sales   → run_eval.py --accounts manager,sales --strategies hybrid --skip-images
+# 不指定就是原本的畫作／圖片評測，展開的命令與以前完全相同。結束碼由 run_eval.py 原樣傳出
+# （1＝輸入錯誤，2＝環境／身分／覆寫失敗，3＝有外洩但產物已寫入）
+EVAL_MODE_ARGS = $(if $(EVAL_ACCOUNTS),--accounts $(EVAL_ACCOUNTS) --strategies hybrid --skip-images,--strategies hybrid,hybrid_norag)
+
 eval:
-	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag$(if $(EVAL_QA), --qa $(EVAL_QA))
+	$(PY) eval/run_eval.py $(EVAL_MODE_ARGS)$(if $(EVAL_QA), --qa $(EVAL_QA))
 
 eval-cloud:
 	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag,api_nokb,api_kb
