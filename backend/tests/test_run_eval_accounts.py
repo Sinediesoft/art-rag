@@ -168,7 +168,18 @@ class FakeBackend:
                 },
             )
         if path == "/api/v1/status":
-            return httpx.Response(200, json={"eval_controls": True, "llm_mode": self.llm_mode})
+            return httpx.Response(200, json={"eval_controls": True})
+        if path == "/api/v1/admin/diagnostics":
+            if self.current != "manager":
+                return httpx.Response(403, json={"error": {"code": "FORBIDDEN"}})
+            body = {
+                "embed_mode": "real",
+                "eval_controls": True,
+                "manifest": {"kb_version": self.kb_version},
+            }
+            if self.llm_mode is not None:
+                body["llm_mode"] = self.llm_mode
+            return httpx.Response(200, json=body)
         if path == "/api/v1/chat":
             body = json.loads(request.content)
             self.chats.append((self.current, body))
@@ -567,7 +578,8 @@ def hidden_row(env, events):
     backend = FakeBackend(
         responder=lambda a, b: events if b["part_id"] == "p-hid" else stage1_events()
     )
-    assert env.run(backend, accounts="sales") == 0
+    # 有外洩證據的列結束碼是 3（產物照寫）；沒外洩是 0
+    assert env.run(backend, accounts="sales") in (0, 3)
     return env.rows()[("sales", "hybrid", "q-hid")]
 
 
@@ -710,7 +722,8 @@ def test_errors_and_fallbacks_remain_in_denominators(env, failure):
     assert code == 0 and len(art["rows"]) == len(QUESTIONS)
     assert row["answer_ok"] is False and row["citation_ok"] is False and row["refused"] is False
     group = art["groups"]["manager"]["hybrid"]["visible_answerable"]
-    assert group["n"] == 3 and group["answer_ok"]["den"] == 3 and group["answer_ok"]["num"] == 1
+    # 主管可見且可答的只有 q-ok、q-hid 兩題：q-ok 被破壞，q-hid 只回降級訊息，沒有一題答對
+    assert group["n"] == 2 and group["answer_ok"]["den"] == 2 and group["answer_ok"]["num"] == 0
     if failure in ("http500", "transport", "stream_error"):
         assert row["error"] and group["errors"] == 1
     if failure == "fallback":

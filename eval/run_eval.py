@@ -26,15 +26,25 @@ LoRA 不檢索對照組（lora_norag，docs/adr/043，make eval-lora）：done �
       圖紙段落題庫：--qa drawing_retrieval/qa.jsonl（make eval EVAL_QA=同左），
       答案在旁附檔 drawing_retrieval/answers.jsonl，讀題時依 id 合併，不改原題庫
       hybrid_plain／hybrid_rearrange：檢索段落篩選（MIRA 的 Rearrange）關／開的對照
+
+圖紙生成層多帳號評測（--accounts，TASK-20261029-001）：
+      python eval/run_eval.py --accounts manager,sales [--strategies hybrid] [--run-id ID]
+      逐帳號切換身分、由後端 GET /parts 取可見圖紙快照，再把圖紙題庫的每一題都送進
+      /chat（不剔除看不到的圖紙）；看不到的圖紙要在第 1 段就降級（沒有來源、沒有 token）。
+      產物只有 <out-dir>/<run-id>-generation-accounts.json（不覆寫既有檔案、mock 不進 eval/runs）；
+      有外洩列結束碼 3，不能寫或連線／身分／快照失敗結束碼 2，輸入錯誤 1。
 """
 
 import argparse
+import contextlib
 import copy
 import csv
+import hashlib
 import json
 import posixpath
 import re
 import statistics
+import subprocess
 import sys
 import time
 import uuid
@@ -46,6 +56,9 @@ import httpx
 EVAL = Path(__file__).resolve().parent
 ROOT = EVAL.parent
 RUNS = EVAL / "runs"
+OFFICIAL_RUNS = EVAL / "runs"  # 正式成績目錄：mock 產物不可寫進來（和 RUNS 分開，測試會各自換掉）
+GOLD_PATH = EVAL / "drawing_retrieval" / "gold.json"
+KB_PARTS_DIR = ROOT / "kb" / "parts"
 
 # 圖紙段落題庫：原 QA 位元組固定（SHA256 記在 TASK-20261027-001 的收據），答案放旁附檔、讀題時合併
 DRAWING_QA = "drawing_retrieval/qa.jsonl"
@@ -326,7 +339,11 @@ def judge(q: dict, res: dict) -> tuple[bool, bool, bool, dict]:
 def _parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8000")
-    ap.add_argument("--strategies", default="hybrid,hybrid_norag")
+    ap.add_argument(
+        "--strategies",
+        default=None,
+        help="預設：舊模式 hybrid,hybrid_norag；--accounts 模式 hybrid",
+    )
     ap.add_argument("--split", default="all", choices=["dev", "test", "all"])
     ap.add_argument("--qa", default="qa.jsonl", help="eval/ 下的題目檔，逗號分隔")
     ap.add_argument(
@@ -335,6 +352,13 @@ def _parse_args() -> argparse.Namespace:
         help="問知識庫外畫作的題目改成不帶畫作送出，算亂編率（預設跳過這些題目）",
     )
     ap.add_argument("--skip-images", action="store_true", help="不跑以圖搜圖評估")
+    ap.add_argument(
+        "--accounts",
+        default=None,
+        help="圖紙生成層多帳號評測：逗號分隔的帳號（要在 gold.json 的 accounts 內）；不給＝舊模式",
+    )
+    ap.add_argument("--out-dir", default=None, help="--accounts 模式的輸出目錄（預設 eval/runs）")
+    ap.add_argument("--run-id", default=None, help="--accounts 模式的 run 識別碼（預設依時間產生）")
     return ap.parse_args()
 
 
@@ -571,6 +595,9 @@ def _exit_code(rows: list[dict]) -> int:
 
 def main() -> int:
     args = _parse_args()
+    if args.accounts is not None:
+        return _main_accounts(args)
+    strategies = args.strategies or "hybrid,hybrid_norag"
 
     client = httpx.Client(base_url=args.base, timeout=60)
     try:
@@ -585,7 +612,7 @@ def main() -> int:
     manifest = client.get("/api/v1/admin/diagnostics").json()["manifest"]
     if not client.get("/api/v1/status").json()["eval_controls"] and any(
         STRATEGY_BODY.get(s, {}).get("use_retrieval") is False or s in ("api_nokb", "mock")
-        for s in args.strategies.split(",")
+        for s in strategies.split(",")
     ):
         print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
     kb_ids = {a["id"] for a in client.get("/api/v1/artworks").json()["items"]}
@@ -620,13 +647,672 @@ def main() -> int:
 
     questions = _select_questions(all_questions, kb_ids, args.split, args.outside_kb)
     rows, by_strategy, prompt_version = _evaluate_questions(
-        client, questions, args.strategies.split(","), source_lang, manifest["kb_version"]
+        client, questions, strategies.split(","), source_lang, manifest["kb_version"]
     )
     _write_results(
         run_id, rows, img, manifest["kb_version"], prompt_version, args.split, by_strategy
     )
     _print_results(run_id, by_strategy)
     return _exit_code(rows)
+
+
+# ====================================================================================
+# 圖紙生成層多帳號評測（--accounts，TASK-20261029-001）
+# 可見性一律來自後端 GET /parts（用該帳號的憑證）；評測器不宣告任何角色權限。
+# 只碰 health、auth/accounts、auth/switch、parts、status、chat。
+# ====================================================================================
+
+ACCOUNTS_SCHEMA = "generation-accounts/1"
+ACCOUNTS_SUFFIX = "-generation-accounts.json"
+SUBSETS = ("visible_answerable", "permission_degraded", "no_answer", "missing_part")
+_RUN_ID_OK = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+CLASSIFICATIONS = {
+    "visible_answerable": ("answer", "圖紙在這個帳號的可見清單內，題目有答案"),
+    "no_answer": ("refusal", "圖紙在這個帳號的可見清單內，但題目標為拒答（圖紙沒有這個資訊）"),
+    "permission_degraded": ("stage1_degrade", "圖紙存在但不在這個帳號的可見清單內，第 1 段應降級"),
+    "missing_part": ("refusal", "圖紙不存在於知識庫，應拒答"),
+}
+
+
+class AccountsRunError(Exception):
+    """連線、身分或可見性快照失敗：整個 run 不產出任何成績。"""
+
+
+def _git_provenance() -> dict:
+    """執行時的程式版本 {head, dirty, dirty_paths, error}（做法同 retrieval_runtime）。"""
+    git = ["git", "-C", str(ROOT), "-c", "core.quotePath=false"]
+    try:
+        head = subprocess.run(
+            [*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        status = subprocess.run(
+            [*git, "status", "--porcelain=v1"], capture_output=True, text=True, check=True
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as e:
+        return {"head": None, "dirty": None, "dirty_paths": [], "error": str(e)}
+    paths = [line[3:] for line in status.splitlines() if line.strip()]
+    return {"head": head, "dirty": bool(paths), "dirty_paths": paths, "error": None}
+
+
+def load_gold_accounts(path: Path | None = None) -> list[str]:
+    data = json.loads(Path(path or GOLD_PATH).read_text("utf-8"))
+    accounts = data.get("accounts") if isinstance(data, dict) else None
+    if (
+        not isinstance(accounts, list)
+        or not accounts
+        or not all(isinstance(a, str) and a for a in accounts)
+    ):
+        raise ValueError("gold.json 沒有可用的 accounts 名單")
+    return accounts
+
+
+def parse_accounts(raw: str, allowed: list[str]) -> list[str]:
+    """逗號分隔的帳號；空字串、空組、重複、不在 gold 名單的一律 ValueError。"""
+    names = [x.strip() for x in raw.split(",")]
+    if not names or any(not n for n in names):
+        raise ValueError("--accounts 不可有空的帳號")
+    if len(set(names)) != len(names):
+        raise ValueError("--accounts 有重複的帳號")
+    if unknown := [n for n in names if n not in allowed]:
+        raise ValueError(f"帳號不在 gold.json 的 accounts：{', '.join(unknown)}")
+    return names
+
+
+def _sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _json_body(resp: httpx.Response):
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+
+def _flatten_keywords(keywords) -> list[str]:
+    """keywords 是「AND 組 → OR 候選」；外洩證據只看字串有沒有出現，依原順序展平。"""
+    out: list[str] = []
+    for item in keywords or []:
+        out.extend(_flatten_keywords(item) if isinstance(item, list) else [item])
+    return [k for k in out if isinstance(k, str) and k]
+
+
+def _sources_events(events: list[dict]) -> list[dict]:
+    return [
+        e["data"] for e in events if e.get("event") == "sources" and isinstance(e.get("data"), dict)
+    ]
+
+
+def leak_reasons(q: dict, answer: str, events: list[dict]) -> list[str]:
+    """看不到的圖紙回答裡的外洩證據：有來源、有引用標記、出現題目的答案關鍵字。
+    拒答字樣不能抵銷證據；順序固定為 sources_returned、citation_marker、keyword_hit。"""
+    reasons = []
+    if any(s.get("sources") for s in _sources_events(events)):
+        reasons.append("sources_returned")
+    if re.search(r"\[\d+\]", answer):
+        reasons.append("citation_marker")
+    seen = set()
+    for kw in _flatten_keywords(q.get("keywords")):
+        if kw in answer and kw not in seen:
+            seen.add(kw)
+            reasons.append(f"keyword_hit:{kw}")
+    return reasons
+
+
+def _pure_refusal(answer: str) -> bool:
+    """降級訊息這種「只有一句查無資料」：不帶引用、數字與英文字母，長度有限。"""
+    text = answer.strip()
+    sentences = [x for x in re.split(r"[。！？!?\n]", text) if x.strip()]
+    return (
+        text.startswith("查無資料")
+        and len(sentences) <= 1
+        and not re.search(r"\[\d+\]", text)
+        and not re.search(r"[0-9A-Za-z]", text)
+        and len(text) <= 60
+    )
+
+
+def _stage1_failures(
+    events: list[dict], done: dict | None, error: str, fallback: bool
+) -> list[str]:
+    """第 1 段純降級要同時成立的條件；回傳沒成立的原因（空 list＝純降級）。"""
+    failures = []
+    if not done:
+        failures.append("沒有 done 事件")
+    pipelines = [s["pipeline"] for s in _sources_events(events) if "pipeline" in s]
+    if isinstance(done, dict) and "pipeline" in done:
+        pipelines.append(done["pipeline"])
+    if not pipelines:
+        failures.append("沒有 pipeline 可證明停在第 1 段")
+    for pipe in pipelines:
+        items = [p for p in pipe if isinstance(p, dict)] if isinstance(pipe, list) else []
+        if not any(p.get("stage") == 1 and p.get("status") == "block" for p in items):
+            failures.append("pipeline 沒有第 1 段 block")
+        if any(isinstance(p.get("stage"), int) and p["stage"] > 1 for p in items):
+            failures.append("pipeline 有第 1 段之後的步驟")
+    if any(s.get("sources") for s in _sources_events(events)):
+        failures.append("sources 不是空的")
+    if isinstance(done, dict):
+        if done.get("degraded") is not True:
+            failures.append("done.degraded 不是 True")
+        tokens = done.get("tokens") if isinstance(done.get("tokens"), dict) else {}
+        if tokens.get("input") != 0 or tokens.get("output") != 0:
+            failures.append("done.tokens 不是 0")
+        egress = done.get("egress") if isinstance(done.get("egress"), dict) else {}
+        if egress.get("images") != 0 or egress.get("chunks") != 0:
+            failures.append("done.egress 的 images／chunks 不是 0")
+    if error:
+        failures.append(f"有錯誤 {error}")
+    if fallback:
+        failures.append("改用了備援模型")
+    return list(dict.fromkeys(failures))
+
+
+def run_chat_raw(client: httpx.Client, body: dict) -> dict:
+    """送一題 /chat，事件原樣保存（含 token、heartbeat；key 順序不動）。出錯不丟例外。"""
+    out = {
+        "events": [],
+        "answer": "",
+        "sources_state": "absent",
+        "done": None,
+        "error": "",
+        "error_event": None,
+        "request_id": "",
+    }
+    events = out["events"]
+    invalid = None
+    try:
+        with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
+            if resp.status_code != 200:
+                resp.read()
+                payload = _json_body(resp)
+                err = payload.get("error") if isinstance(payload, dict) else None
+                code = err.get("code") if isinstance(err, dict) else None
+                out["error"] = str(code) if code else f"HTTP {resp.status_code}"
+                out["error_event"] = {"http_status": resp.status_code, "error": err}
+            else:
+                name = None
+                for line in resp.iter_lines():
+                    if not line:
+                        name = None
+                    elif line.startswith(":"):
+                        continue  # keepalive 註解不算事件
+                    elif line.startswith("event:"):
+                        name = line[6:].strip()
+                    elif line.startswith("data:"):
+                        raw = line[5:].strip()
+                        item = {"seq": len(events), "event": name or "message"}
+                        try:
+                            item["data"] = json.loads(raw)
+                        except ValueError:
+                            item |= {"data": None, "raw": raw, "invalid_json": True}
+                            invalid = invalid or item["seq"]
+                        events.append(item)
+    except httpx.HTTPError as e:
+        out["error"] = "TRANSPORT_ERROR"
+        out["error_event"] = {
+            "code": "TRANSPORT_ERROR",
+            "type": type(e).__name__,
+            "message": str(e),
+        }
+
+    srcs = []
+    for e in events:
+        data = e["data"]
+        if e["event"] == "token" and isinstance(data, dict) and isinstance(data.get("text"), str):
+            out["answer"] += data["text"]
+        elif e["event"] == "sources":
+            srcs.append(data)
+        elif e["event"] == "done":
+            out["done"] = data
+        elif e["event"] == "error":
+            out["error_event"] = data
+            code = data.get("code") if isinstance(data, dict) else None
+            out["error"] = str(code) if code else "STREAM_ERROR"
+    if srcs:
+        out["sources_state"] = (
+            "empty"
+            if all(not (s.get("sources") if isinstance(s, dict) else None) for s in srcs)
+            else "present"
+        )
+    if invalid is not None and not out["error"]:
+        out["error"] = "STREAM_PARSE_ERROR"
+        out["error_event"] = {"code": "STREAM_PARSE_ERROR", "seq": invalid}
+    for cand in (out["error_event"], out["done"], srcs[-1] if srcs else None):
+        rid = cand.get("request_id") if isinstance(cand, dict) else None
+        if rid:
+            out["request_id"] = rid
+            break
+    return out
+
+
+def _last_sources_list(events: list[dict]) -> list:
+    sources = _sources_events(events)
+    last = sources[-1].get("sources") if sources else None
+    return last if isinstance(last, list) else []
+
+
+def classify(q: dict, visible: set[str], existing: set[str]) -> tuple[str, str, str, bool]:
+    """(classification, expected_outcome, classification_reason, visible)，互斥且有優先序。"""
+    pid = q["part_id"]
+    if pid in visible:
+        cls = "no_answer" if q.get("expect_refusal") else "visible_answerable"
+    elif pid in existing:
+        cls = "permission_degraded"
+    else:
+        cls = "missing_part"
+    expected, reason = CLASSIFICATIONS[cls]
+    return cls, expected, reason, pid in visible
+
+
+def _score_row(q: dict, cls: str, chat: dict) -> dict:
+    """新模式判分：只用逐題紀錄裡的證據，可由 events／answer 重算。"""
+    events, answer, done = chat["events"], chat["answer"], chat["done"]
+    error = chat["error"]
+    fallback = bool((done or {}).get("fallback"))
+    broken = bool(error) or fallback
+    refused = None
+    score = {
+        "answer_ok": False,
+        "citation_ok": False if cls == "visible_answerable" else None,
+        "stage1_only": None,
+        "stage1_failures": [],
+        "leaked": False,
+        "leak_reasons": [],
+    }
+    if cls == "permission_degraded":
+        failures = _stage1_failures(events, done, error, fallback)
+        reasons = leak_reasons(q, answer, events)
+        score |= {
+            "stage1_only": not failures,
+            "stage1_failures": failures,
+            "leaked": bool(reasons),
+            "leak_reasons": reasons,
+            "answer_ok": not failures and _pure_refusal(answer) and not reasons,
+        }
+    refused = False if broken else bool(REFUSAL.search(answer))
+    if not broken and cls in ("no_answer", "missing_part"):
+        score["answer_ok"] = refused
+    elif not broken and cls == "visible_answerable":
+        res = {
+            "answer": answer,
+            "sources": _last_sources_list(events),
+            "done": done,
+            "error": None,
+        }
+        # 來源格式不對：保守算錯，不讓整個 run 中斷
+        with contextlib.suppress(KeyError, TypeError, ValueError):
+            score["answer_ok"], score["citation_ok"] = score_answer(q, res)
+    return score | {"refused": refused}
+
+
+def _group(rows: list[dict]) -> dict:
+    def rate(num: int, den: int) -> dict:
+        return {"num": num, "den": den, "rate": num / den if den else None}
+
+    cited = [r for r in rows if r["citation_ok"] is not None]
+    hidden = [r for r in rows if r["classification"] == "permission_degraded"]
+    return {
+        "n": len(rows),
+        "errors": sum(bool(r["error"]) for r in rows),
+        "fallbacks": sum(bool(r["fallback"]) for r in rows),
+        "answer_ok": rate(sum(r["answer_ok"] is True for r in rows), len(rows)),
+        "citation_ok": rate(sum(r["citation_ok"] is True for r in cited), len(cited)),
+        "refusal": rate(sum(r["refused"] is True for r in rows), len(rows)),
+        "leak": rate(sum(r["leaked"] is True for r in hidden), len(hidden)),
+    }
+
+
+def summarize_rows(rows: list[dict]) -> dict:
+    """{帳號: {策略: {子集: 群組}}}；只用逐題欄位算，錯誤與備援都留在分母。"""
+    out: dict = {}
+    for account in sorted({r["account"] for r in rows}):
+        mine = [r for r in rows if r["account"] == account]
+        out[account] = {}
+        for strategy in sorted({r["strategy"] for r in mine}):
+            sel = [r for r in mine if r["strategy"] == strategy]
+            out[account][strategy] = {"overall": _group(sel)} | {
+                name: _group([r for r in sel if r["classification"] == name]) for name in SUBSETS
+            }
+    return out
+
+
+def _switch_account(client: httpx.Client, account: str) -> dict:
+    """切換並雙重驗證身分（切換回應與 GET /auth/accounts 都要是該帳號）；回傳切換回應。"""
+    resp = client.post("/api/v1/auth/switch", json={"account_id": account})
+    if resp.status_code != 200:
+        raise AccountsRunError(f"{account}：切換身分失敗（HTTP {resp.status_code}）")
+    body = _json_body(resp)
+    current = body.get("current") if isinstance(body, dict) else None
+    if not isinstance(current, dict) or current.get("id") != account:
+        raise AccountsRunError(f"{account}：切換回應的身分不是 {account}")
+    check = client.get("/api/v1/auth/accounts")
+    check_body = _json_body(check) if check.status_code == 200 else None
+    shown = check_body.get("current") if isinstance(check_body, dict) else None
+    if not isinstance(shown, dict) or shown.get("id") != account:
+        raise AccountsRunError(f"{account}：切換後 /auth/accounts 的實際身分不是 {account}")
+    return body
+
+
+def _snapshot_account(client: httpx.Client, account: str) -> dict:
+    switched = _switch_account(client, account)
+    kb_version = switched.get("kb_version")
+    if not isinstance(kb_version, str) or not kb_version:
+        raise AccountsRunError(f"{account}：切換回應沒有 kb_version")
+    resp = client.get("/api/v1/parts")
+    if resp.status_code != 200:
+        raise AccountsRunError(f"{account}：取得可見圖紙失敗（HTTP {resp.status_code}）")
+    body = _json_body(resp)
+    items = body.get("items") if isinstance(body, dict) else None
+    hidden = body.get("hidden") if isinstance(body, dict) else None
+    if (
+        not isinstance(items, list)
+        or not all(isinstance(i, dict) and isinstance(i.get("id"), str) for i in items)
+        or not isinstance(hidden, int)
+        or isinstance(hidden, bool)
+    ):
+        raise AccountsRunError(f"{account}：/parts 回應格式異常，不能當成空清單")
+    return {
+        "identity": switched["current"],
+        "visible_part_ids": sorted({i["id"] for i in items}),
+        "hidden": hidden,
+        "kb_version": kb_version,
+        "fetched_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _status_controls(client: httpx.Client) -> bool | None:
+    """/status 只剩 eval_controls 當備援；llm_mode 不在這裡（StatusResponse 沒有）。"""
+    resp = client.get("/api/v1/status")
+    body = _json_body(resp) if resp.status_code == 200 else None
+    controls = body.get("eval_controls") if isinstance(body, dict) else None
+    return controls if isinstance(controls, bool) else None
+
+
+def _try_diagnostics(client: httpx.Client) -> dict | None:
+    """嘗試讀管理診斷（只有主管讀得到）；非 200、例外、非物件都當未知，不讓評測失敗。"""
+    try:
+        resp = client.get("/api/v1/admin/diagnostics")
+        body = _json_body(resp) if resp.status_code == 200 else None
+    except httpx.HTTPError:
+        return None
+    return body if isinstance(body, dict) else None
+
+
+def _merge_diagnostics(found: dict, body: dict | None) -> None:
+    """每個欄位以第一個讀得到、型別正確的帳號為準。"""
+    if body is None:
+        return
+    for key, kind in (
+        ("llm_mode", str),
+        ("embed_mode", str),
+        ("eval_controls", bool),
+        ("manifest", dict),
+    ):
+        if found.get(key) is None and isinstance(body.get(key), kind):
+            found[key] = body[key]
+
+
+def _load_accounts_questions(args) -> tuple[list[str], list[dict], list[Path]] | None:
+    """解析帳號與題庫；任何輸入錯誤印訊息回傳 None（呼叫端回 1）。"""
+    if args.split != "all" or args.outside_kb:
+        print("--accounts 模式不能用 --split／--outside-kb：所有題目都要跑，不剔除任何一題")
+        return None
+    try:
+        accounts = parse_accounts(args.accounts, load_gold_accounts())
+    except (ValueError, OSError) as e:
+        print(f"帳號名單錯誤：{e}")
+        return None
+    qa_arg = DRAWING_QA if args.qa == "qa.jsonl" else args.qa
+    names = [n.strip() for n in qa_arg.split(",")]
+    try:
+        questions = load_questions(names)
+        for q in questions:
+            if not isinstance(q.get("id"), str) or not isinstance(q.get("question"), str):
+                raise ValueError("每題都要有字串的 id 與 question")
+            if not isinstance(q.get("part_id"), str) or not q["part_id"]:
+                raise ValueError(f"{q.get('id')}：--accounts 模式只收圖紙題（要有 part_id）")
+            if not q.get("expect_refusal"):
+                check_keywords(q["id"], q.get("keywords"))
+                if not isinstance(q.get("topics"), list):
+                    raise ValueError(f"{q['id']}：可答題要有 topics")
+        if len({q["id"] for q in questions}) != len(questions):
+            raise ValueError("題庫 id 重複")
+        if not questions:
+            raise ValueError("題庫是空的")
+    except (ValueError, OSError) as e:
+        print(f"題庫讀取失敗：{e}")
+        return None
+    return accounts, questions, [EVAL / n for n in names]
+
+
+def _kb_parts_sha256() -> str:
+    lines = "".join(
+        f"{p.name}:{_sha256(p.read_bytes())}\n" for p in sorted(KB_PARTS_DIR.glob("*.json"))
+    )
+    return _sha256(lines.encode())
+
+
+def _qa_hashes(paths: list[Path]) -> tuple[str, str | None]:
+    qa = _sha256(b"".join(p.read_bytes() for p in paths))
+    drawing = (EVAL / DRAWING_QA).resolve()
+    for p in paths:
+        if p.resolve() == drawing or posixpath.normpath(p.as_posix()) == DRAWING_QA:
+            return qa, _sha256(p.with_name(DRAWING_ANSWERS).read_bytes())
+    return qa, None
+
+
+def _account_row(
+    account: str, strat: str, q: dict, body: dict, chat: dict, visible: set[str], existing: set[str]
+) -> dict:
+    cls, expected, reason, is_visible = classify(q, visible, existing)
+    score = _score_row(q, cls, chat)
+    done = chat["done"] if isinstance(chat["done"], dict) else {}
+    return {
+        "account": account,
+        "strategy": strat,
+        "question_id": q["id"],
+        "part_id": q["part_id"],
+        "question": q["question"],
+        "topics": q.get("topics"),
+        "expected_keywords": None if q.get("expect_refusal") else q.get("keywords"),
+        "review_status": q.get("review_status", ""),
+        "no_answer_reason": q.get("no_answer_reason"),
+        "classification": cls,
+        "expected_outcome": expected,
+        "classification_reason": reason,
+        "visible": is_visible,
+        "request": body,
+        "request_id": chat["request_id"],
+        "answer": chat["answer"],
+        "events": chat["events"],
+        "sources_state": chat["sources_state"],
+        "done": chat["done"],
+        "error": chat["error"],
+        "error_event": chat["error_event"],
+        "fallback": bool(done.get("fallback")),
+        **score,
+    }
+
+
+def _print_account_summary(groups: dict) -> None:
+    def fmt(m: dict) -> str:
+        return f"{m['num']}/{m['den']}（{m['rate']:.0%}）" if m["rate"] is not None else "n/a"
+
+    for account, by_strategy in groups.items():
+        for strategy, subsets in by_strategy.items():
+            g = subsets["overall"]
+            print(
+                f"[{account}/{strategy}] answer_ok {fmt(g['answer_ok'])}，"
+                f"citation_ok {fmt(g['citation_ok'])}，拒答 {fmt(g['refusal'])}，"
+                f"外洩 {fmt(g['leak'])}，錯誤 {g['errors']}，備援 {g['fallbacks']}"
+            )
+
+
+def _main_accounts(args: argparse.Namespace) -> int:
+    loaded = _load_accounts_questions(args)
+    if loaded is None:
+        return 1
+    accounts, questions, qa_paths = loaded
+    strategies = [s.strip() for s in (args.strategies or "hybrid").split(",")]
+    if (
+        not all(strategies)
+        or len(set(strategies)) != len(strategies)
+        or any(s not in STRATEGY_BODY for s in strategies)
+    ):
+        print(f"策略錯誤：{args.strategies}（要是逗號分隔、不重複、已知的策略）")
+        return 1
+    run_id = args.run_id or datetime.now(UTC).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:4]
+    if not _RUN_ID_OK.fullmatch(run_id):
+        print(f"--run-id 只能用英數、點、底線、連字號：{run_id}")
+        return 1
+    out_dir = Path(args.out_dir) if args.out_dir else Path(RUNS)
+
+    client = httpx.Client(base_url=args.base, timeout=60)
+    try:
+        return _run_accounts(
+            client, args, accounts, questions, qa_paths, strategies, run_id, out_dir
+        )
+    except (AccountsRunError, httpx.HTTPError) as e:
+        print(f"評測中止（沒有寫任何產物）：{e}")
+        return 2
+    finally:
+        client.close()
+
+
+def _run_accounts(
+    client, args, accounts, questions, qa_paths, strategies, run_id: str, out_dir: Path
+) -> int:
+    try:
+        client.get("/api/v1/health").raise_for_status()
+    except httpx.HTTPError:
+        print(f"連不上後端 {args.base}，請先執行 make dev 或 make demo")
+        return 2
+    client.get("/api/v1/auth/accounts").raise_for_status()  # 先取一張訪客憑證（docs/adr/015）
+
+    # 第一輪：逐帳號切換、驗身分、取可見圖紙快照；任何一個失敗就整個 run 作廢
+    snapshots = {}
+    diag: dict = {}
+    for a in accounts:
+        snapshots[a] = _snapshot_account(client, a)
+        _merge_diagnostics(diag, _try_diagnostics(client))
+    if len({s["kb_version"] for s in snapshots.values()}) != 1:
+        raise AccountsRunError("各帳號看到的 kb_version 不一致")
+    kb_version = snapshots[accounts[0]]["kb_version"]
+    llm_mode = diag.get("llm_mode")
+    eval_controls = diag.get("eval_controls")
+    if eval_controls is None:
+        eval_controls = _status_controls(client)
+    mock_reasons = []
+    if llm_mode == "mock":
+        mock_reasons.append("後端 llm_mode=mock")
+    mock_reasons += [f"策略 {s} 含 mock" for s in strategies if "mock" in s]
+    mock = bool(mock_reasons)
+    real = llm_mode == "real" and not mock
+    if eval_controls is False and any(
+        STRATEGY_BODY[s].get("use_retrieval") is False or s in ("api_nokb", "mock")
+        for s in strategies
+    ):
+        print("提醒：後端沒開 EVAL_CONTROLS，關檢索與 mock 對照組會被生成閘門降級（docs/adr/030）")
+
+    # 開跑前先確定寫得下去：不覆寫既有 run、mock 不進正式 run 目錄
+    path = out_dir / f"{run_id}{ACCOUNTS_SUFFIX}"
+    if mock and out_dir.resolve() == Path(OFFICIAL_RUNS).resolve():
+        print(f"mock 結果不能寫進正式 run 目錄 {out_dir}：{'；'.join(mock_reasons)}")
+        return 2
+    if path.exists():
+        print(f"{path} 已存在，不覆寫；請換 --run-id")
+        return 2
+
+    existing = {p.stem for p in KB_PARTS_DIR.glob("*.json")}
+    for snap in snapshots.values():
+        existing |= set(snap["visible_part_ids"])
+    qa_sha, answers_sha = _qa_hashes(qa_paths)
+    print(f"評測 {run_id}：{len(accounts)} 帳號 × {len(strategies)} 策略 × {len(questions)} 題")
+
+    # 第二輪：每個帳號重新切換並驗身分，再跑全部策略 × 題目（不剔除看不到的圖紙）
+    rows = []
+    for account in accounts:
+        switched = _switch_account(client, account)
+        if switched.get("kb_version") != kb_version:
+            raise AccountsRunError(f"{account}：評測途中 kb_version 變了")
+        visible = set(snapshots[account]["visible_part_ids"])
+        for strat in strategies:
+            for q in questions:
+                body = _chat_body(q, strat)
+                row = _account_row(
+                    account, strat, q, body, run_chat_raw(client, body), visible, existing
+                )
+                rows.append(row)
+                mark = "✓" if row["answer_ok"] else "✗"
+                print(f"  [{account}/{strat}] {mark} {q['id']} {row['classification']}")
+
+    groups = summarize_rows(rows)
+    created_at = datetime.now(UTC).isoformat()
+    done_events = [r["done"] for r in rows if isinstance(r["done"], dict)]
+    prompt_version = next((d["prompt_version"] for d in done_events if d.get("prompt_version")), "")
+    models = sorted({d["model"] for d in done_events if d.get("model")})
+    provenance = {
+        "git": _git_provenance(),
+        "hashes": {
+            "qa_sha256": qa_sha,
+            "answers_sha256": answers_sha,
+            "gold_sha256": _sha256(Path(GOLD_PATH).read_bytes()),
+            "kb_version": kb_version,
+            "kb_parts_sha256": _kb_parts_sha256(),
+        },
+        "strategies": strategies,
+        "accounts": accounts,
+        "question_ids": [q["id"] for q in questions],
+        "models": models,
+        "llm_mode": llm_mode,
+        "embed_mode": diag.get("embed_mode"),
+        "eval_controls": eval_controls,
+        "manifest": diag.get("manifest"),
+        "base_url": args.base,
+        "qa_files": [str(p) for p in qa_paths],
+        "created_at": created_at,
+    }
+    artifact = {
+        # 頂層保留舊 run 的形狀：GET /eval/runs 把沒排除的 .json 都當 EvalRun 讀
+        "run_id": run_id,
+        "created_at": created_at,
+        "kb_version": kb_version,
+        "prompt_version": prompt_version,
+        "summary": {
+            "mode": "generation-accounts",
+            "accounts": accounts,
+            "strategies": strategies,
+            "n_rows": len(rows),
+        },
+        "by_strategy": {},
+        "schema_version": ACCOUNTS_SCHEMA,
+        "kind": "generation-accounts",
+        "real": real,
+        "mock": mock,
+        "mock_reasons": mock_reasons,
+        "accounts": accounts,
+        "strategies": strategies,
+        "snapshots": snapshots,
+        "provenance": provenance,
+        "groups": groups,
+        "rows": rows,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8") as f:
+            json.dump(artifact, f, ensure_ascii=False, indent=2)
+    except FileExistsError:
+        print(f"{path} 已存在，不覆寫；請換 --run-id")
+        return 2
+    _print_account_summary(groups)
+    print(f"結果已寫入 {path}")
+    leaked = [f"{r['account']} {r['question_id']}" for r in rows if r["leaked"]]
+    if leaked:
+        print("看不到的圖紙有外洩證據：" + "、".join(leaked))
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

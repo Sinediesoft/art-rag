@@ -248,6 +248,34 @@ def test_unknown_llm_mode_is_not_treated_as_real(env):
     assert art["provenance"]["llm_mode"] is None
 
 
+def test_llm_mode_unknown_without_manager_diagnostics(env):
+    """只評 sales：diagnostics 回 403，llm_mode 未知，不假裝成真 run，仍正常完成。"""
+    assert env.run(FakeBackend(), accounts="sales") == 0
+    art = env.artifact()
+    assert art["real"] is False and art["mock"] is False and art["mock_reasons"] == []
+    assert art["provenance"]["llm_mode"] is None
+    assert art["provenance"]["manifest"] is None and art["provenance"]["embed_mode"] is None
+    assert len(art["rows"]) > 0
+
+
+def test_diagnostics_without_llm_mode_field_is_unknown(env):
+    backend = FakeBackend()
+    backend.llm_mode = None  # diagnostics 回 200 但省略 llm_mode
+    assert env.run(backend) == 0
+    art = env.artifact()
+    assert art["real"] is False and art["mock"] is False and art["mock_reasons"] == []
+    prov = art["provenance"]
+    assert prov["llm_mode"] is None
+    assert prov["manifest"] == {"kb_version": "kb-fixed-17"}  # 其他欄位照樣保留
+
+
+def test_diagnostics_fields_are_recorded_when_manager_is_evaluated(env):
+    assert env.run(FakeBackend()) == 0
+    prov = env.artifact()["provenance"]
+    assert prov["llm_mode"] == "real" and prov["embed_mode"] == "real"
+    assert prov["eval_controls"] is True and prov["manifest"] == {"kb_version": "kb-fixed-17"}
+
+
 def test_new_artifact_does_not_break_eval_runs_endpoint(env, client, monkeypatch):
     """GET /eval/runs 對沒有列入排除清單的檔名一律當 RAGAS run 讀（EvalRun 五個必填欄位）。
     新產物頂層保留這個形狀，所以放在 eval/runs 底下也不會讓端點 500，且歷史 run 照常列出。"""
