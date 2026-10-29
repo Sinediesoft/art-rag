@@ -5,7 +5,7 @@
  "status": "derived_from_run",
  "real": false,
  "is_new_model_run": false,
- "created_at": "2026-10-29T13:17:35.120281+00:00",
+ "created_at": "2026-10-29T14:16:50.761930+00:00",
  "note": "由已保存的正式 run 離線重算的衍生指標；不是新的 real_run，沒有重跑模型，原 run 的 provenance 原樣揭露在 derived_from_run.provenance。",
  "derived_from_run": {
   "run_id": "20261027T184738-52cd",
@@ -427,17 +427,25 @@
   "program": {
    "cli": {
     "path": "eval/derive_retrieval_metrics.py",
-    "sha256": "d0bed8d6a388891b2c70f77c985dd774c48ef6ed7b4237b16e700a534c3ce691"
+    "sha256": "63d2fa28a2a08fbd74ce0449b5c6e4c025c1c910b758454346a3641740bc4427"
    },
    "lib": {
     "path": "eval/retrieval_derived_metrics.py",
     "sha256": "aae7b505d1c560d6da2ee284f2b53f5ff134e6e0a520b7ed2f00e0691ba3feb9"
-   }
+   },
+   "commit": "6d3015ac25e57f92ffe694b6e5a791f131e77c7e"
   },
   "rule_version": "retrieval-derived-rules/1",
-  "command": "python eval/derive_retrieval_metrics.py",
-  "argv": [],
-  "created_at": "2026-10-29T13:17:35.120281+00:00",
+  "command": "python eval/derive_retrieval_metrics.py --run eval/runs/20261027T184738-52cd-retrieval-layer-metrics.json --answers eval/drawing_retrieval/answers.jsonl --out '/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/reports/TASK-20261029-002-retrieval-derived-metrics/step3/20261027T184738-52cd-derived-6d3015ac.json'",
+  "argv": [
+   "--run",
+   "eval/runs/20261027T184738-52cd-retrieval-layer-metrics.json",
+   "--answers",
+   "eval/drawing_retrieval/answers.jsonl",
+   "--out",
+   "/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/reports/TASK-20261029-002-retrieval-derived-metrics/step3/20261027T184738-52cd-derived-6d3015ac.json"
+  ],
+  "created_at": "2026-10-29T14:16:50.761930+00:00",
   "offline": true
  },
  "definitions": {

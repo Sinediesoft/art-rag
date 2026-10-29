@@ -749,6 +749,9 @@ v2 問「瀑布是什麼顏色」只留下色彩分析、丟掉寫到瀑布的�
 - 產物：`eval/runs/retrieval-derived/20261027T184738-52cd-derived.json`（子目錄，不在 `eval/runs` 根目錄，避免產品 API 與舊證據測試的非遞迴 glob 誤讀）；
   程式 `eval/retrieval_derived_metrics.py`（純函式）與 `eval/derive_retrieval_metrics.py`（離線 CLI：只讀保存的 run 與 answers，已存在的輸出不覆寫）。
   重現：`python eval/derive_retrieval_metrics.py --out /tmp/derived.json`（預設輸出路徑已存在，會拒絕）。
+  計算版本 commit：`6d3015ac25e57f92ffe694b6e5a791f131e77c7e`（記於 `derivation.program.commit`）；
+  CLI SHA256：`63d2fa28a2a08fbd74ce0449b5c6e4c025c1c910b758454346a3641740bc4427`；純函式 library SHA256：`aae7b505d1c560d6da2ee284f2b53f5ff134e6e0a520b7ed2f00e0691ba3feb9`。
+  計算版本記錄實際執行的已提交程式；稍後保存產物的 commit 與計算版本不同是正常的，無須為了追上產物 commit 再重生，避免自引用循環。
 
 <!-- 以下是 backend/tests/test_retrieval_derived_evidence.py 解析的衍生表，欄位固定 12 欄；數字寫 4 位小數，— 表示 null（不適用）。 -->
 <!-- retrieval-derived-table:start -->
