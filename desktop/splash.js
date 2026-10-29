@@ -79,7 +79,12 @@ function postDiagnosis() {
   const text = logEl.textContent;
   const at = text.lastIndexOf('── 故障診斷 ──');
   if (at < 0) return;
-  const body = text.slice(at + '── 故障診斷 ──'.length).trim();
+  // 「看了哪些紀錄」「依據（整行錯誤）」是給工程師看的，助理這邊只留原因與修法
+  const body = text
+    .slice(at + '── 故障診斷 ──'.length)
+    .split('\n')
+    .filter((line) => line.trim() && !line.startsWith('看了：') && !/^\s*依據（/.test(line))
+    .join('\n');
   if (!body || body === postedDiagnosis) return;
   postedDiagnosis = body;
   addMsg('bot', `我看了這次的紀錄：\n${body}\n\n還有不清楚的地方可以直接問我。`, 'AI 助理・故障診斷');
