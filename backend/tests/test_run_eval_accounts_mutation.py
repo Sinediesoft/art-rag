@@ -331,9 +331,7 @@ def test_accounts_artifact_preserves_snapshot_counts_and_stage1_applicability(en
 
 
 @pytest.mark.parametrize("kb_version", ["", 7], ids=["empty", "non-string"])
-def test_accounts_reject_invalid_snapshot_version_after_confirmed_identity(
-    env, capsys, kb_version
-):
+def test_accounts_reject_invalid_snapshot_version_after_confirmed_identity(env, capsys, kb_version):
     class VersionBackend(FakeBackend):
         def __init__(self):
             super().__init__()
