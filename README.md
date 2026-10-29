@@ -841,6 +841,50 @@ make eval-drawing-retrieval PY=backend/.venv/bin/python # eval/runs/<run_id>-dra
 - 交回的檔案：三份 JSON（`*-retrieval-index.json`、`*-retrieval-layer-metrics.json`、新版 `*-drawing-retrieval.json`）與終端機日誌。
   收到後依 `backend/tests/test_retrieval_evidence.py` 核對 HEAD、real／模型 revision、索引收據、題庫與設定 hash，再把待代跑列改成真 run 的數字。
 
+### 圖紙生成層多帳號評測（真模型 run，2026-10-29）
+
+與上方檢索層表分開：這裡是模型回答的生成層成績，兩者不混算。
+
+<!-- generation-accounts-table:start -->
+**執行資訊**（數字與 hash 前綴取自主 JSON 的 `provenance`，完整值在 JSON 內）
+
+- 日期：2026-10-29，run_id `20261029T130000-ga01`，策略：hybrid（只量 hybrid）
+- 帳號：manager、sales，每帳號 33 題、共 66 列；圖紙題數 33 題（`question_ids` 33 個唯一）
+- KB 版本：2026.10.2
+- 題庫 hash 前綴：answers `70c249da`、gold `7127d1d9`
+- 模型：`qwen3-vl:4b-instruct`（llm_mode=real）；66 列中 41 列有生成 token，其餘 25 列為零生成 token，稽核已逐列核對
+- 執行 SHA：`905be832284682dea209facd7acdc7129d83310e`（dirty=false）
+
+**結果表**（分母即子集題數，數字皆對回主 JSON 的 `groups.<帳號>.hybrid`）
+
+| 帳號 | 整體 answer_ok | 可答子集 answer_ok | 可答子集 citation_ok | 要求拒答子集 answer_ok | 整體 REFUSAL | 整體 leak |
+|---|---|---|---|---|---|---|
+| manager | 24/33 | 22/31 | 30/31 | 2/2 | 8/33 | 0/0（n/a，rate=null） |
+| sales | 31/33 | 8/10 | 10/10 | 23/23 | 25/33 | 0/21 |
+
+- 三組子集：「整體」是全部 33 題；「可答子集」是看得到正解、應該回答的題（manager 31 題、sales 10 題）；「要求拒答子集」是 expected_outcome 不是 answer 的題，manager 2 題（無答案 1、不存在 1），sales 23 題（權限降級 21、無答案 1、不存在 1）。整體 ＝ 可答 ＋ 要求拒答，兩者不重疊。
+- 整體 answer_ok 把要求拒答題答對也算進來，所以 sales 整體 31/33 是可答 8/10 加上拒答 23/23 得來的，不能因此說 sales 生成比較準。兩帳號可見題目不同（manager 可見 mfg-001～006，sales 只看得到 mfg-004、005），分母也不同，不直接相比。
+- answer_ok、citation_ok 是既定的關鍵字與引用**代理指標**，由程式判分，不是人工判斷；本次沒有以語義改分。
+- REFUSAL 是**拒答字樣命中**，不等於純拒答，可能與 answer_ok 同時為 true。稽核找到 7 題可見回答既有實質內容與引用、又含拒答字樣；REFUSAL 也不是 1 減 answer_ok。
+- 外洩 0/21（sales 權限降級題）只代表既定的 sources、citation、keyword 偵測規則沒有抓到，**不代表已證明所有語意外洩都不存在**。manager 沒有權限降級題，leak 分母為 0，寫 n/a。
+- 與上方「分層檢索指標總表」（TASK-20261027-001）的檢索層成績分開，不混算，也不在此做錯誤歸因分析。
+- 新產物以 `-generation-accounts.json` 後綴存放，`GET /eval/runs` 刻意不列出（既定設計），舊 RAGAS 列表不受影響。
+
+**逐題與證據連結**
+
+- 逐題資料（66 列，含 events 與摘要獨立重算）：[eval/runs/20261029T130000-ga01-generation-accounts.json](eval/runs/20261029T130000-ga01-generation-accounts.json)
+- 索引收據：[eval/runs/20261029T130000-ri01-retrieval-index.json](eval/runs/20261029T130000-ri01-retrieval-index.json)
+- 證據目錄（交接 hash、driver 日誌等）：[eval/runs/20261029T130000-ga01-generation-accounts-evidence/](eval/runs/20261029T130000-ga01-generation-accounts-evidence/)
+- 稽核報告 real-run-audit（純文字路徑）：`/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/reports/TASK-20261029-001-drawing-generation-accounts/step2/real-run-audit.md`
+- bash32-tee-fix 報告（純文字路徑）：`/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/reports/TASK-20261029-001-drawing-generation-accounts/step2/bash32-tee-fix/report.md`
+
+**結束碼照實揭露**
+
+- 真 run 的 `final_exit=22` 原樣保留，**沒有改成 0**。評測 eval=0、eval tee=0、verify=0、stop=0、restore=0、collect=0；唯一非零是 driver tee wait=127。這是 macOS Bash 3.2 收尾時 process substitution 的 PID 無法 wait（not a child）造成的收尾缺陷，**不是評測失敗**。
+- Sherlock 稽核已接受本次資料作為真生成證據（主檔與收據 hash、交接 hash、66 題原始事件與獨立重算、後端停止與 demo 索引重建皆相符）。這項裁定不代表 step2 或任務已通過。
+- 原始 22 的當次腳本（SHA256 `05efd558…`）與日誌完整封存；修正版腳本（SHA256 `597b8ce3…`）見 bash32-tee-fix 報告。**修正版沒有實際跑過本次 run**，上表與結束碼仍是原樣那次的結果。
+<!-- generation-accounts-table:end -->
+
 ### 工廠機械加工圖（`make eval-cad`）
 
 需要後端與 Ortho2CAD 都在執行；約 20 分鐘。2026-09-30 在 MacBook Air M5 16 GB 上的結果：
