@@ -126,7 +126,7 @@ def validate_answers(entries: Sequence[Mapping]) -> tuple[dict, list[str]]:
     return by_id, problems
 
 
-def validate_rows(run: Mapping, answers_by_id: Mapping) -> list[str]:  # noqa: C901
+def validate_rows(run: Mapping, answers_by_id: Mapping) -> list[str]:
     """保存的 run 結構、ID 與順序、原分數重算、cohort 成員與原彙總是否自洽。"""
     p: list[str] = []
     if run.get("kind") != "retrieval-layer-metrics" or run.get("status") != "ok":
@@ -139,42 +139,60 @@ def validate_rows(run: Mapping, answers_by_id: Mapping) -> list[str]:  # noqa: C
         return [*p, "來源 run 缺 groups 或 summary"]
     mfg_case_ids = set()
     for g in groups:
-        missing = [k for k in REQUIRED_GROUP if k not in g]
-        if missing:
-            p.append(f"{_label(g)}：缺欄位 {missing}")
-            continue
-        cohorts = (summary.get(g["group_id"]) or {}).get("cohorts")
-        if not isinstance(cohorts, Mapping) or "all" not in cohorts:
-            p.append(f"{_label(g)}：summary 缺 cohorts.all")
-            continue
-        seen = set()
-        for r in g["rows"]:
-            lab = _label(g, r)
-            missing = [k for k in REQUIRED_ROW if k not in r]
-            if missing:
-                p.append(f"{lab}：缺必要欄位 {missing}")
-                continue
-            if r["case_id"] in seen:
-                p.append(f"{lab}：題號重複")
-            seen.add(r["case_id"])
-            if g["domain"] in ANSWER_DOMAINS:
-                mfg_case_ids.add(r["case_id"])
-            p += _validate_row(g, r, cohorts)
-            if (
-                g["domain"] in ANSWER_DOMAINS
-                and r["gold_chunk_ids"]
-                and r["owner_visible"]
-                and r["case_id"] not in answers_by_id
-            ):
-                p.append(f"{lab}：answers 沒有這題（原 G 非空的圖紙題必須有答案關鍵字）")
-        order = [r.get("case_id") for r in g["rows"]]
-        if order != cohorts["all"].get("case_ids"):
-            p.append(f"{_label(g)}：逐題順序與 summary.cohorts.all.case_ids 不同")
-        p += _validate_cohort_summaries(g, cohorts)
+        group_problems, group_case_ids = _validate_group(g, summary, answers_by_id)
+        p += group_problems
+        mfg_case_ids.update(group_case_ids)
     extra = sorted(set(answers_by_id) - mfg_case_ids)
     if extra:
         p.append(f"answers 有 run 裡沒有的圖紙題：{extra}")
     return p
+
+
+def _validate_group(
+    g: Mapping, summary: Mapping, answers_by_id: Mapping
+) -> tuple[list[str], set[str]]:
+    """先確認 group 與 cohorts 完整，再依序驗證逐題、題號順序與原彙總。"""
+    missing = [k for k in REQUIRED_GROUP if k not in g]
+    if missing:
+        return [f"{_label(g)}：缺欄位 {missing}"], set()
+    cohorts = (summary.get(g["group_id"]) or {}).get("cohorts")
+    if not isinstance(cohorts, Mapping) or "all" not in cohorts:
+        return [f"{_label(g)}：summary 缺 cohorts.all"], set()
+
+    p, mfg_case_ids = _validate_group_rows(g, cohorts, answers_by_id)
+    order = [r.get("case_id") for r in g["rows"]]
+    if order != cohorts["all"].get("case_ids"):
+        p.append(f"{_label(g)}：逐題順序與 summary.cohorts.all.case_ids 不同")
+    p += _validate_cohort_summaries(g, cohorts)
+    return p, mfg_case_ids
+
+
+def _validate_group_rows(
+    g: Mapping, cohorts: Mapping, answers_by_id: Mapping
+) -> tuple[list[str], set[str]]:
+    """逐題檢查必要欄位、重複 ID、保存的結果與答案，並收集完整圖紙題號。"""
+    p: list[str] = []
+    seen, mfg_case_ids = set(), set()
+    for r in g["rows"]:
+        lab = _label(g, r)
+        missing = [k for k in REQUIRED_ROW if k not in r]
+        if missing:
+            p.append(f"{lab}：缺必要欄位 {missing}")
+            continue
+        if r["case_id"] in seen:
+            p.append(f"{lab}：題號重複")
+        seen.add(r["case_id"])
+        if g["domain"] in ANSWER_DOMAINS:
+            mfg_case_ids.add(r["case_id"])
+        p += _validate_row(g, r, cohorts)
+        if (
+            g["domain"] in ANSWER_DOMAINS
+            and r["gold_chunk_ids"]
+            and r["owner_visible"]
+            and r["case_id"] not in answers_by_id
+        ):
+            p.append(f"{lab}：answers 沒有這題（原 G 非空的圖紙題必須有答案關鍵字）")
+    return p, mfg_case_ids
 
 
 def _validate_row(g: Mapping, r: Mapping, cohorts: Mapping) -> list[str]:  # noqa: C901
