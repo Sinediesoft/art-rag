@@ -74,6 +74,71 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+var
+  JevPage: TInputQueryWizardPage;
+
+procedure InitializeWizard;
+begin
+  JevPage := CreateInputQueryPage(wpSelectDir, 'Jev API key（選填）', '要不要用 Jev 判斷提問的意圖？',
+    'Jev 是 TypeSafe 的雲端服務：要連網，只會收到代號化的文字（docs/adr/011）。' + #13#10 +
+    '不填也能用：改由這台電腦上的本地路由判斷，其他功能照常。' + #13#10 +
+    '之後要補，在安裝資料夾的 app\.env 填 JEV_API_KEY，再從系統匣「重新啟動服務」。' + #13#10#13#10 +
+    '已經裝過、這次留空：保留原本的設定。');
+  JevPage.Add('API key：', True);
+end;
+
+// key 只會是一般的英數符號：擋掉中文、空白等貼錯的內容，寫進 .env 才不會壞掉
+function IsPlainKey(Key: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := True;
+  for I := 1 to Length(Key) do
+    if (Ord(Key[I]) < 33) or (Ord(Key[I]) > 126) then
+    begin
+      Result := False;
+      Exit;
+    end;
+end;
+
+// 用原始位元組改 .env：裡面有中文註解，逐行讀寫會被轉成系統字碼頁
+function WriteJevKey(Key: String): Boolean;
+var
+  EnvFile: String;
+  Text: AnsiString;
+  P, E: Integer;
+begin
+  Result := False;
+  EnvFile := ExpandConstant('{app}\app\.env');
+  // 第一次裝還沒有 .env：和 configure_env.py 一樣從 .env.example 複製，它之後只補自己要的設定，不會動這個 key
+  if not FileExists(EnvFile) then
+    if not CopyFile(ExpandConstant('{app}\app\.env.example'), EnvFile, True) then Exit;
+  if not LoadStringFromFile(EnvFile, Text) then Exit;
+  P := Pos(#10 + 'JEV_API_KEY=', Text);
+  if P = 0 then
+    Text := Text + #10 + 'JEV_API_KEY=' + AnsiString(Key) + #10
+  else
+  begin
+    P := P + Length(#10 + 'JEV_API_KEY=');
+    E := P;
+    while (E <= Length(Text)) and (Text[E] <> #10) and (Text[E] <> #13) do
+      E := E + 1;
+    Delete(Text, P, E - P);
+    Insert(AnsiString(Key), Text, P);
+  end;
+  Result := SaveStringToFile(EnvFile, Text, False);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  Key: String;
+begin
+  if CurStep <> ssPostInstall then Exit;
+  Key := Trim(JevPage.Values[0]);
+  if (Key <> '') and not WriteJevKey(Key) then
+    MsgBox('Jev API key 沒有寫進設定檔，請在 ' + ExpandConstant('{app}\app\.env') + ' 手動填 JEV_API_KEY。', mbError, MB_OK);
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
@@ -101,6 +166,14 @@ begin
     else if Copy(Dir, 1, 2) = '\\' then
     begin
       MsgBox('請裝在這台電腦的本機磁碟，不要裝在網路磁碟。', mbError, MB_OK);
+      Result := False;
+    end;
+  end
+  else if CurPageID = JevPage.ID then
+  begin
+    if not IsPlainKey(Trim(JevPage.Values[0])) then
+    begin
+      MsgBox('API key 裡有空白或中文等字元，請確認貼上的內容。', mbError, MB_OK);
       Result := False;
     end;
   end;
