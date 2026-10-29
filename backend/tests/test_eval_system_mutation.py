@@ -6,6 +6,7 @@ from datetime import timedelta, timezone
 
 import pytest
 from conftest import as_account
+from test_system_diagnostics import diagnostics_env as diagnostics_env
 
 
 @pytest.fixture(autouse=True)
@@ -246,3 +247,84 @@ def test_health_reports_db_index_and_real_mode_ping_independently(
     assert body["kb_version"] == "test-kb"
     assert ping_calls == (["http://localhost:11434/v1"] if mode == "real" else [])
     assert result.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("demo_enabled", [True, False])
+def test_health_and_status_report_demo_warning_for_server_switch(
+    client, diagnostics_env, monkeypatch, demo_enabled
+):
+    from app.api.routers import system as routes
+
+    as_account(client, "manager")
+    settings = diagnostics_env.settings
+    settings.demo_controls = demo_enabled
+    monkeypatch.setattr(routes.identity, "get_settings", lambda: settings)
+    expected_warning = routes.DEMO_WARNING if demo_enabled else None
+
+    for endpoint in ("/api/v1/health", "/api/v1/status"):
+        response = client.get(endpoint)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["demo_controls"] is demo_enabled
+        assert body["demo_warning"] == expected_warning
+
+
+@pytest.mark.parametrize("hybrid_ok", [True, False])
+def test_status_availability_detail_matches_probed_service(client, diagnostics_env, hybrid_ok):
+    diagnostics_env.settings.llm_mode = "real"
+    diagnostics_env.hybrid_ok = hybrid_ok
+
+    response = client.get("/api/v1/status")
+
+    assert response.status_code == 200, response.text
+    hybrid = response.json()["strategies"]["hybrid"]
+    assert hybrid["available"] is hybrid_ok
+    assert hybrid["detail"] == ("可以使用" if hybrid_ok else "目前無法使用")
+
+
+@pytest.mark.parametrize("ortho_ok", [True, False])
+def test_diagnostics_ortho2cad_start_hint_tracks_service_failure(
+    client, diagnostics_env, monkeypatch, ortho_ok
+):
+    from app.api.routers import system as routes
+
+    settings = diagnostics_env.settings
+    settings.llm_mode = "real"
+
+    async def ping_ollama(base_url, simulate_outage=True):
+        return (ortho_ok if base_url == settings.ortho2cad_base_url else True), "probe result"
+
+    monkeypatch.setattr(routes.providers, "ping_ollama", ping_ollama)
+    response = client.get("/api/v1/admin/diagnostics")
+
+    assert response.status_code == 200, response.text
+    ortho = response.json()["strategies"]["ortho2cad"]
+    assert ortho["available"] is ortho_ok
+    assert ("請執行 make ortho2cad" in ortho["detail"]) is (not ortho_ok)
+
+
+@pytest.mark.parametrize("inventory_ok", [True, False])
+def test_diagnostics_inventory_preserves_public_fields(
+    client, diagnostics_env, monkeypatch, inventory_ok
+):
+    from types import SimpleNamespace
+
+    from app.api.routers import system as routes
+
+    inventory = SimpleNamespace(
+        ping=lambda: inventory_ok,
+        as_of="2026-10-29",
+        manifest={"tables": {"parts": {"rows": 7}}},
+        problems=[] if inventory_ok else ["inventory snapshot unavailable"],
+    )
+    monkeypatch.setattr(routes, "get_inventory_repo", lambda: inventory)
+
+    response = client.get("/api/v1/admin/diagnostics")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["inventory"] == {
+        "ok": inventory_ok,
+        "as_of": "2026-10-29",
+        "tables": {"parts": {"rows": 7}},
+        "problems": inventory.problems,
+    }

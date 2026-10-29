@@ -1,6 +1,8 @@
 """針對多帳號 eval 缺口驗證外部可見行為，不替換被測函式。"""
 
+import json
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -296,3 +298,91 @@ def test_accounts_artifact_exposes_question_snapshot_and_status_fallback(env):
     assert row["topics"] == [] and row["visible"] is True
     assert row["request"]["question"] == row["question"]
     assert row["classification"] == "no_answer"
+
+
+def test_accounts_artifact_preserves_snapshot_counts_and_stage1_applicability(env):
+    backend = FakeBackend()
+    assert env.run(backend) == 0
+    art = env.artifact()
+
+    assert set(art["snapshots"]) == {"manager", "sales"}
+    for account, snapshot in art["snapshots"].items():
+        assert snapshot["identity"] == {"id": account, "label": account}
+        assert snapshot["visible_part_ids"] == sorted(backend.visible[account])
+        assert snapshot["hidden"] == 1
+        assert snapshot["kb_version"] == backend.kb_version
+        assert datetime.fromisoformat(snapshot["fetched_at"]).utcoffset() is not None
+        assert "" not in snapshot
+
+    assert {row["classification"] for row in art["rows"]} == {
+        "visible_answerable",
+        "permission_degraded",
+        "no_answer",
+        "missing_part",
+    }
+    for row in art["rows"]:
+        assert not row["error"] and row["done"] is not None
+        if row["classification"] == "permission_degraded":
+            assert row["stage1_only"] is True
+        else:
+            assert row["stage1_only"] is None
+        assert row["stage1_failures"] == []
+        assert "" not in row
+
+
+@pytest.mark.parametrize("kb_version", ["", 7], ids=["empty", "non-string"])
+def test_accounts_reject_invalid_snapshot_version_after_confirmed_identity(
+    env, capsys, kb_version
+):
+    class VersionBackend(FakeBackend):
+        def __init__(self):
+            super().__init__()
+            self.kb_version = kb_version
+            self.identities = []
+
+        def handle(self, request):
+            response = super().handle(request)
+            if request.url.path in ("/api/v1/auth/switch", "/api/v1/auth/accounts"):
+                self.identities.append(response.json()["current"]["id"])
+            return response
+
+    backend = VersionBackend()
+    assert env.run(backend, accounts="manager") == 2
+    assert backend.current == "manager"
+    assert backend.identities[-2:] == ["manager", "manager"]
+    assert ("GET", "/api/v1/parts") not in backend.requests
+    assert backend.chats == [] and env.no_artifacts()
+    assert "kb_version" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("invalid_member", ["", 7], ids=["empty", "non-string"])
+def test_accounts_cli_rejects_invalid_gold_member_before_requests(env, capsys, invalid_member):
+    env.gold.write_text(json.dumps({"accounts": ["manager", invalid_member]}), "utf-8")
+    backend = FakeBackend()
+
+    assert env.run(backend, accounts="manager") == 1
+    assert backend.requests == [] and backend.chats == []
+    assert env.no_artifacts()
+    assert "帳號名單錯誤" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("field", ["id", "question"])
+def test_accounts_cli_validates_each_question_string_before_requests(env, capsys, field):
+    question = {**QUESTIONS[0], field: 123}
+    env.qa.write_text(json.dumps(question, ensure_ascii=False) + "\n", "utf-8")
+    backend = FakeBackend()
+
+    assert env.run(backend, accounts="manager") == 1
+    assert backend.requests == [] and backend.chats == []
+    assert env.no_artifacts()
+    assert "題庫讀取失敗" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("strategies", ["hybrid,hybrid", "unknown_strategy", "hybrid,"])
+def test_accounts_cli_rejects_invalid_strategy_list_before_requests(env, capsys, strategies):
+    backend = FakeBackend()
+
+    assert env.run(backend, accounts="manager", strategies=strategies) == 1
+    assert backend.requests == [] and backend.chats == []
+    assert env.no_artifacts()
+    assert "策略錯誤" in capsys.readouterr().out
