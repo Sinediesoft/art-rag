@@ -25,9 +25,6 @@ ADR 046 的離線包裝完是一個資料夾、幾個 `.cmd` 與瀏覽器網址�
   - 預設裝到 `C:\LaiWen`，可以改（資料夾與執行檔用英文名：uv、WSL、PostgreSQL 的路徑都經過它）。不放 Program Files：程式執行時要在安裝資料夾裡寫 `.env`、紀錄、Python 環境與
     WSL 的虛擬磁碟；一般使用者權限就能裝（`PrivilegesRequired=lowest`）
   - 開始功能表、桌面捷徑（可取消）、「新增或移除程式」；覆蓋安裝新版前先停止服務
-  - 選填 Jev API key 的一頁（使用者要求，2026-10-29）：離線包不帶任何金鑰，沒有這頁時 `JEV_API_KEY` 只能裝完再手動改 `.env`。
-    有填才寫：還沒有 `.env` 就先從 `.env.example` 複製（和 `configure_env.py` 一樣），只換 `JEV_API_KEY=` 那一行；
-    `configure_env.py` 只改還是預設值的設定，不會蓋掉。用原始位元組改檔（`.env` 有中文註解）；留空就保留原本的值
   - 解除安裝：`uninstall.ps1` 關程式、停服務、`wsl --unregister artrag`（虛擬磁碟在安裝資料夾裡才移除），再刪整個安裝資料夾
   - 介面語言用 Inno Setup 官方 repo 的正體中文翻譯（`ChineseTraditional.isl`，is-6_7_3；安裝程式本身沒附）
 - **名稱與圖示**：程式叫「萊問」（使用者決定，2026-10-27），圖示是使用者指定的 LAIWEN 萊問 標誌（黑底、米白的門＋問號、琥珀點 #B99005），目前是照圖片重畫的近似版；
