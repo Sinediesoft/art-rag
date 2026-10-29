@@ -74,6 +74,52 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+var
+  PrecheckPage: TOutputMsgMemoWizardPage;
+  PrecheckDone: Boolean;
+
+// 歡迎頁之後先檢查硬體與環境（使用者要求，2026-10-29）：不適合的電腦在複製 26 GB 之前就知道
+procedure InitializeWizard;
+begin
+  PrecheckPage := CreateOutputMsgMemoPage(wpWelcome, '檢查這台電腦', '安裝前先確認硬體與環境適不適合執行萊問',
+    '檢查結果（✓ 沒問題、• 安裝時會自動處理、⚠ 可以用但要注意、✗ 要先處理）：', '檢查中，約需幾秒…');
+end;
+
+procedure RunPrecheck;
+var
+  Script, OutFile, Text: String;
+  Lines: TArrayOfString;
+  Code, I: Integer;
+begin
+  Script := ExpandConstant('{src}\payload\app\deploy\offline\precheck.ps1');
+  OutFile := ExpandConstant('{tmp}\precheck.txt');
+  WizardForm.NextButton.Enabled := False;
+  WizardForm.Refresh;
+  Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + Script + '" -Out "' + OutFile + '"', '',
+    SW_HIDE, ewWaitUntilTerminated, Code);
+  WizardForm.NextButton.Enabled := True;
+  // precheck.ps1 寫 UTF-8（有 BOM）；第一行是摘要：OK／WARN 開頭
+  if LoadStringsFromFile(OutFile, Lines) and (GetArrayLength(Lines) > 0) then
+  begin
+    Text := Copy(Lines[0], Pos(' ', Lines[0]) + 1, Length(Lines[0])) + #13#10;
+    for I := 1 to GetArrayLength(Lines) - 1 do
+      Text := Text + #13#10 + Lines[I];
+    Text := Text + #13#10#13#10 + '第一次打開萊問時會再偵測一次，依顯示卡自動選模型。';
+  end
+  else
+    Text := '沒有辦法完成檢查（結束碼 ' + IntToStr(Code) + '），可以繼續安裝；第一次打開萊問時會再偵測一次。';
+  PrecheckPage.RichEditViewer.Lines.Text := Text;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = PrecheckPage.ID) and not PrecheckDone then
+  begin
+    PrecheckDone := True;
+    RunPrecheck;
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 begin
   Result := True;
