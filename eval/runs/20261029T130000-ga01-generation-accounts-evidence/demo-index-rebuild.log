@@ -1,0 +1,15 @@
+{"kind": "demo-index-noenv", "isolation": {"env_file_disabled": true, "env_file_before": ".env", "settings_were_loaded": false, "preloaded_app_modules": [], "strict": true}, "settings": {"embed_mode": "real", "embed_device": "cpu", "llm_mode": "real", "hf_offline": true, "memory_guard": false, "jev_enabled": false, "allow_cloud": false, "rearrange": "", "artrag_shared_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/shared", "data_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/data", "index_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/data/index", "index_backend": "file", "database_url_set": false}}
+知識庫版本 2026.10.2：畫作 3 筆、圖紙 6 筆通過驗證，0 個問題
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 86139.97it/s]
+  ✓ aic-27992  〈大碗島的星期天下午〉  色彩：以中性色為主、低彩度、以中間調為主
+  ✓ met-436535  〈有絲柏的麥田〉  色彩：冷暖並陳、中等彩度、以中間調為主
+  ✓ npm-000001  〈谿山行旅圖〉  色彩：以中性色為主、低彩度、以暗調為主
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 67159.71it/s]
+  ✓ mfg-001  L 型固定支架  80×50×60 mm, 0.137 kg
+  ✓ mfg-002  連接法蘭  100×100×22 mm, 0.775 kg
+  ✓ mfg-003  階梯傳動軸  145×30×30 mm, 0.555 kg
+  ✓ mfg-004  步進馬達安裝板  120×100×10 mm, 0.277 kg
+  ✓ mfg-005  T 型槽螺帽  24×40×17 mm, 0.092 kg
+  ✓ mfg-006  立式軸承座  120×40×72 mm, 1.165 kg
+索引完成：3 幅畫、21 個段落；6 張圖紙、34 個段落，19.9 秒 → /Users/sdl/Desktop/專題第二組新方案/art-rag/data/index
+{"invoked": true, "command": "pipelines/build_index.py", "exit_code": 0, "error": null, "started_at": "2026-10-29T00:04:17.607263+00:00", "finished_at": "2026-10-29T00:04:37.470387+00:00", "seconds": 19.9}

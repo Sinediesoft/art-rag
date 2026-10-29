@@ -1,0 +1,68 @@
+{
+  "identity": "manager",
+  "llm_mode": "real",
+  "embed_mode": "real",
+  "allow_cloud": false,
+  "outage_simulated": false,
+  "index_consistent": true,
+  "index_problems": [],
+  "kb_version": "2026.10.2",
+  "manifest": {
+    "models": {
+      "image": {
+        "name": "OFA-Sys/chinese-clip-vit-base-patch16",
+        "revision": "36e679e65c2a2fead755ae21162091293ad37834",
+        "dim": 512,
+        "dtype": "float32"
+      },
+      "text": {
+        "name": "BAAI/bge-m3",
+        "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+        "dim": 1024,
+        "dtype": "float32"
+      }
+    },
+    "embed_mode": "real",
+    "chunking": {
+      "min_chars": 300,
+      "max_chars": 500,
+      "overlap_chars": 50
+    },
+    "color_analysis": {
+      "method": "lab-kmeans-v1",
+      "n_colors": 6,
+      "fit_long_edge": 256,
+      "map_long_edge": 512,
+      "kmeans_max_iter": 30,
+      "seed": 0,
+      "neutral_chroma": 10.0,
+      "warm_hue_deg": [
+        340.0,
+        110.0
+      ],
+      "lightness_bands": [
+        30.0,
+        60.0
+      ],
+      "chroma_bands": [
+        10.0,
+        25.0
+      ]
+    },
+    "kb_version": "2026.10.2",
+    "kb_hash": "c4438f5eb35df694",
+    "artwork_count": 3,
+    "chunk_count": 21,
+    "part_count": 6,
+    "part_chunk_count": 34,
+    "git_commit": "905be83",
+    "created_at": "2026-10-29T00:00:16.688436+00:00"
+  },
+  "demo_controls": true,
+  "eval_controls": false,
+  "hybrid": {
+    "model": "qwen3-vl:4b-instruct",
+    "available": true,
+    "detail": "http://127.0.0.1:11434/v1（HTTP 200）"
+  }
+}

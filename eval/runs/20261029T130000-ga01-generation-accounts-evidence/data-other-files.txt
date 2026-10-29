@@ -1,0 +1,4 @@
+./artrag.sqlite3
+./inventory.manifest.json
+./inventory.sqlite3
+./production.sqlite3

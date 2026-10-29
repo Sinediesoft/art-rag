@@ -1,0 +1,17 @@
+Warning: you are leaving 5 commits behind, not connected to
+any of your branches:
+
+  905be83 test(eval): 生成帳號 run 改為不出現在 /eval/runs（對應新排除 suffix）
+  c115235 feat(eval): /eval/runs 排除生成帳號 run，Makefile 加 EVAL_ACCOUNTS 多帳號入口
+  a5f0415 test(eval): /eval/runs 要排除 -generation-accounts.json 並與舊 RAGAS、檢索 run 混放不出錯
+  932b763 feat(eval): run_eval 新增 --accounts 圖紙生成層多帳號評測（逐題原始事件、可重算摘要、*-generation-accounts 產物）
+  29137f3 test(eval): 圖紙生成層多帳號評測（--accounts）紅燈測試與舊模式 golden
+
+If you want to keep them by creating a new branch, this may be a good time
+to do so with:
+
+ git branch <new-branch-name> 905be83
+
+Switched to branch 'dev'
+Your branch is ahead of 'origin/dev' by 20 commits.
+  (use "git push" to publish your local commits)
