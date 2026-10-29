@@ -737,6 +737,61 @@ v2 問「瀑布是什麼顏色」只留下色彩分析、丟掉寫到瀑布的�
 | N-P2 | 辨識層（圖紙照片候選排名，現行版本） | sales：candidates Recall@1／2／3／5、MRR（幾何驗證後混合排名前 5） | 0.8065／1.0／1.0／1.0／0.9032 | 31 | `accounts.sales.summary.candidate_ranking.metrics.{recall@1／recall@2／recall@3／recall@5／mrr}.denominator` | `eval/runs/20261027T184749-81c8-drawing-retrieval.json` | `accounts.sales.summary.candidate_ranking.metrics.{recall@1／recall@2／recall@3／recall@5／mrr}.mean` | real_run |
 <!-- retrieval-layer-table:end -->
 
+### 衍生指標並列表（TASK-20261029-002，derived_from_run）
+
+原九欄總表與 N-T*／N-E* 的數字、來源與測試都不變；下面是**另外**從同一份正式 run 離線重算的三種衍生口徑，
+依 N-T1～N-T6 並列。這張表放在原 `retrieval-layer-table:end` 標記**之外**（舊的 `backend/tests/test_retrieval_evidence.py` 固定解析九欄），
+由 `backend/tests/test_retrieval_derived_evidence.py` 獨立從原始逐題資料重算並逐格對照保存的 JSON。
+
+- **狀態是 `derived_from_run`，不是新的 real_run**：未重跑模型、沒有重新檢索、沒有用現行 KB 或新索引補資料；`eval/runs/20261027T184738-52cd-retrieval-layer-metrics.json`
+  （SHA256 `834344262d75a9d64c566183b6ebf8c58bc5052e3954e0672e95575a7a620707`，原執行 SHA `e126b5da8eb9b3e58eaf0b3c484fdbc4997346f6`，原 provenance 原樣收在 `derived_from_run.provenance`）與草稿 1 的
+  `eval/drawing_retrieval/answers.jsonl`（SHA256 `70c249dac1f483f5df43d18aeab602bc38ec60ec22fc2dad126db864fe37bcfa`）都沒有被修改。
+- 產物：`eval/runs/retrieval-derived/20261027T184738-52cd-derived.json`（子目錄，不在 `eval/runs` 根目錄，避免產品 API 與舊證據測試的非遞迴 glob 誤讀）；
+  程式 `eval/retrieval_derived_metrics.py`（純函式）與 `eval/derive_retrieval_metrics.py`（離線 CLI：只讀保存的 run 與 answers，已存在的輸出不覆寫）。
+  重現：`python eval/derive_retrieval_metrics.py --out /tmp/derived.json`（預設輸出路徑已存在，會拒絕）。
+  計算版本 commit：`6d3015ac25e57f92ffe694b6e5a791f131e77c7e`（記於 `derivation.program.commit`）；
+  CLI SHA256：`63d2fa28a2a08fbd74ce0449b5c6e4c025c1c910b758454346a3641740bc4427`；純函式 library SHA256：`aae7b505d1c560d6da2ee284f2b53f5ff134e6e0a520b7ed2f00e0691ba3feb9`。
+  計算版本記錄實際執行的已提交程式；稍後保存產物的 commit 與計算版本不同是正常的，無須為了追上產物 commit 再重生，避免自引用循環。
+
+<!-- 以下是 backend/tests/test_retrieval_derived_evidence.py 解析的衍生表，欄位固定 12 欄；數字寫 4 位小數，— 表示 null（不適用）。 -->
+<!-- retrieval-derived-table:start -->
+| ID | 對應原列 | derived_from_run（run_id／來源 SHA256 前 12 碼） | 原 Precision | precision_ceiling | skip_meta：Recall@1／2／5／MRR | meta_answerable：Recall@1／2／5／MRR／Precision | meta 判定（合格／適用題數） | 分母（ceiling／skip_meta／meta_answerable） | 不適用原因 | JSON 欄位（cohort all） | 狀態 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| D-T1 | N-T1 | 20261027T184738-52cd／834344262d75 | 0.2484 | 0.2484 | 0.9524／0.9524／1.0／0.9683 | —／—／—／—／— | 0／0 | 21／21／0 | 畫作沒有草稿 1 答案：meta_answerable 不適用（`domain_without_answers` 22 題），判定 0／0、分母 0，記 —（null） | `summary.art/production_retrieve/specified.cohorts.all` | derived_from_run |
+| D-T2 | N-T2 | 20261027T184738-52cd／834344262d75 | 0.2 | 0.2 | 0.8095／0.9524／1.0／0.8905 | —／—／—／—／— | 0／0 | 21／21／0 | 畫作沒有草稿 1 答案：meta_answerable 不適用（`domain_without_answers` 22 題），判定 0／0、分母 0，記 —（null） | `summary.art/production_retrieve/global.cohorts.all` | derived_from_run |
+| D-T3 | N-T3 | 20261027T184738-52cd／834344262d75 | 0.2194 | 0.2194 | 0.7419／0.9194／1.0／0.8737 | 0.4355／0.7581／1.0／0.6973／0.2258 | 1／31 | 31／31／31 | — | `summary.mfg/production_retrieve/specified/manager.cohorts.all` | derived_from_run |
+| D-T4 | N-T4 | 20261027T184738-52cd／834344262d75 | 0.2129 | 0.2194 | 0.6774／0.8871／0.9677／0.8253 | 0.4355／0.6935／0.9677／0.6758／0.2194 | 1／31 | 31／31／31 | — | `summary.mfg/collection_global_diagnostic_postfilter/global/manager.cohorts.all` | derived_from_run |
+| D-T5 | N-T5 | 20261027T184738-52cd／834344262d75 | 0.24 | 0.24 | 0.55／0.85／1.0／0.775 | 0.55／0.6／1.0／0.72／0.24 | 0／10 | 10／10／10 | — | `summary.mfg/production_retrieve/specified/sales.cohorts.all` | derived_from_run |
+| D-T6 | N-T6 | 20261027T184738-52cd／834344262d75 | 0.24 | 0.24 | 0.55／0.85／1.0／0.775 | 0.55／0.6／1.0／0.72／0.24 | 0／10 | 10／10／10 | — | `summary.mfg/collection_global_diagnostic_postfilter/global/sales.cohorts.all` | derived_from_run |
+<!-- retrieval-derived-table:end -->
+
+**欄位對照**（`<path>` 即表中「JSON 欄位」，`<path>` 之下的欄位）：原 Precision＝`original_metrics.precision.mean`（逐題保存的原分數 macro，與 N-T* 的 Precision 相同）；
+`precision_ceiling.{mean／numerator／denominator}`；skip_meta＝`skip_meta.metrics.{recall@1／recall@2／recall@5／mrr}.mean`；
+meta_answerable＝`meta_answerable.metrics.{recall@1／recall@2／recall@5／mrr／precision}.mean`；判定題數＝`meta_answerable.{n_qualified／n_applicable}`；
+分母＝三者各自 `precision_ceiling.denominator`、`skip_meta.metrics.recall@1.denominator`、`meta_answerable.metrics.recall@1.denominator`。逐題值在 `groups[].rows[]`，
+meta 原文與來源 group／case／`raw_sources` 位置在 `meta_texts`。各 cohort（`all`、`reviewed_gold_only`、`owner_only`、`global_fill_triggered`）沿用原 run 保存的成員，各自獨立 macro。
+
+**三種衍生口徑（互相獨立，不疊加、不混用 G）**
+- `skip_meta`：先對保存的回傳 stable 去重，再移除 `chunk_id` 以精確 `#meta` 結尾的段落並重新排名（`#color`、catalog 等其他來源保留），原可見 G 不變，算 Recall@1／2／5 與 MRR。
+  這是**有限既有回傳**內的衍生重排，不代表真實重新檢索，不補查新段落，也不重抓 top 5。
+- `meta_answerable`：沿用草稿 1 `keywords`（外層 AND 組、每組 OR 候選）；每一組至少一個候選必須**逐字**（區分大小寫、不做空白／標點／Unicode／單位正規化、不做語意推論）
+  出現在同 owner `#meta` 原文，所有組都滿足才合格；不要求同組同義詞全出現，也不能人工特批。合格才令 G'＝G∪{同 owner `#meta`}（只加一次、排名不變），
+  另算 Recall@1／2／5、MRR、Precision（集合 Recall＝|前 K∩G'|／|G'|，不是 hit rate；G' 變大，分數可以下降）。僅原 G 非空、可見的圖紙題適用：
+  空答案（`unknown`／`no_answer`／`hidden`）不因別的帳號保存了 meta 而變可答，畫作沒有草稿 1 答案，分母 0、記 —。
+  同 run 有效原文逐字全組匹配的只有 `d-mfg003-02`（SCM440＋高週波），manager 兩種模式各 1 題、sales 兩種模式各 0 題；
+  `d-mfg002-02` 缺 `HRC 22–28`（只有 S45C 不算），`d-mfg004-03` 缺 `10±0.05 mm` 與 `平面度 0.1 mm`，都不特批。
+- `precision_ceiling`：逐題 min(|G|,|R|)/|R|（原可見 G、原去重 R；不除固定 5、不先 skip_meta、不用 G'），再按題 macro 平均；G 非空但回傳為空記 0 並留在分母，
+  G 空記 null 並排除。manager 指定 6.8／31＝0.2193548387、sales 指定 2.4／10＝0.24（這兩組 Recall@5 都是 1.0，每題正解都在回傳內，所以等於原 Precision；全庫診斷 manager 有 1 題正解沒被回傳，所以原 Precision 0.2129 低於上限 0.2194）；
+  六組完整精度為 0.2484126984／0.2／0.2193548387／0.2193548387／0.24／0.24，有效題數 21／21／31／31／10／10。
+- 原料：同 run 共 176 題次、759 筆 `raw_sources`，其中 329 筆（兩個診斷組）省略 `text`；省略不算衝突、也不覆蓋有效原文。meta 原文收同 run 所有列有效（非空字串）的 `text`，目前全部來自 production 列，
+  六張 `mfg-00N#meta` 有效出現次數依序 4／6／6／12／10／5，同 chunk 全部一致；缺原文或有效原文衝突時 CLI 列出受影響題後失敗，不當成未命中。
+
+**背景數字的口徑（修正）**：「首個正解未排第一」與「Recall@1 未滿 1」不是同一件事，也不能把首位命中率當集合 Recall。依逐題資料可重算：
+- manager 指定首個正解未排第一 17 題，其中 16 題第一名是同 owner 的 `#meta`；全庫診斷首個正解未排第一 17 題，其中 15 題第一名是同 owner 的 `#meta`。
+  兩者差別是 `d-mfg002-01`：指定模式第一名是 `mfg-002#meta`，全庫診斷第一名是 `mfg-004#00-0`。16／15 各屬於不同模式，不能互相套用。
+- manager 兩種模式的 Recall@1 未滿 1 共 19 題（兩者相同），比「首個正解未排第一」多出 `d-mfg003-m1` 與 `d-mfg005-m1`：這兩題有多個正解，第一名就是正解，
+  但集合 Recall@1＝0.5。
+
 **狀態欄**
 - `legacy_provenance_incomplete`：舊 run（2026-09／10），JSON 不含完整的模型 revision、執行 HEAD、題庫 hash，**不能倒填成已證實的真模型 run**；數字照原檔引用。
 - `derived_from_legacy_run`：由同一個舊 run 的 CSV 重算（L-A2：`20260929T075014-aeab-images.csv` 中 `truth` 不是「(未收錄)」的 15 張，數 `top1`、`top5` 為 True 的張數）。
@@ -767,7 +822,8 @@ v2 問「瀑布是什麼顏色」只留下色彩分析、丟掉寫到瀑布的�
     （`cross_document.case_ids`）；這些段落 sales 看得到，所以不算外洩，但對這兩題是誤回傳。
   - 全庫診斷（`collection_global_diagnostic_postfilter`）沒有「只搜這張圖紙」的概念，空答案題幾乎一定回傳別張看得到的圖紙：manager 2/2、sales 23/23（hidden 21/21）。
 - 低分照實記錄：圖紙 Recall@1 只有 0.4194（manager）／0.55（sales）。由逐題資料數（`groups[].rows[]` 的 `returned[0]` 與 `score.first_relevant_rank`，衍生計數）：
-  manager 指定模式 Recall@1 沒中的 17 題中有 16 題第一名是該圖紙的 `#meta`（基本資料）段落；gold 只含 descriptions 段落，所以 `#meta` 照規格算不相關。
+  manager 指定模式首個正解未排第一（`score.first_relevant_rank`≠1）的 17 題中有 16 題第一名是該圖紙的 `#meta`（基本資料）段落；gold 只含 descriptions 段落，所以 `#meta` 照規格算不相關
+  （「Recall@1 未滿 1」是另一個口徑，共 19 題，見上方衍生指標並列表的背景口徑說明）。
   全庫診斷 manager 有 1 題（`d-mfg006-03`）前 5 名沒有正解（Recall@5 30/31）。
 - 多正解 nDCG@5（`cohorts.all.answerable.metrics.ndcg@5`）：圖紙指定 manager 0.8301（分母 3）、全庫診斷 manager 0.8212（3）、sales 兩種模式 0.7853（2）；畫作沒有多正解題（分母 0，記 null）。
 - global-fill（`global_fill_triggered`）：畫作指定 1/22（`q-npm1-05`）、圖紙指定兩個帳號各 3/33；沒觸發的題另有 `owner_only` cohort。
