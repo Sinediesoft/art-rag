@@ -1,7 +1,8 @@
 ﻿<#
 離線安裝（docs/adr/046）：安裝過程不連網，全部功能都裝好。
 桌面程式萊問 LaiWen.exe（docs/adr/047）第一次打開時用 -NoStart -NoShortcut 呼叫，啟動交給它；也可以自己在終端機執行。
-預設身分是一般員工（.env 照 .env.example 的 DEMO_CONTROLS=false）：其他功能要有權限的身分，這裡不替使用者打開。
+預設開展示模式（第一次寫 .env 時設 DEMO_CONTROLS=true）：裝好就能不用密碼切換身分，展示全部功能；
+只接受這台電腦本機的連線（DEMO_TRUSTED_HOSTS），正式環境要改回 false。
 偵測顯卡選方案 → 確認 WSL2 → 匯入 WSL 環境（PostgreSQL、Redis、3D 重建的沙箱）→ 寫 .env → 用離線包的 Python 與套件建環境
 → 建索引 → 桌面捷徑 → 啟動全部服務並打開瀏覽器。
 重複執行沒關係：已經做好的會略過，.env 裡你自己改過的設定不會被覆蓋（資料庫、模型位址等離線包的設定除外）。
@@ -153,6 +154,8 @@ $cfgArgs = @('run', '--no-project', 'python', 'deploy/configure_env.py', '--prof
     '--set', "HYBRID_BASE_URL=$ollamaUrl", '--set', "HYBRID_FALLBACK_BASE_URL=$ollamaUrl",
     '--set', "LORA_BASE_URL=$ollamaUrl")
 if ($smallGpu) { $cfgArgs += '--small-gpu' }
+# 展示模式只在第一次建立 .env 時打開（使用者決定，2026-10-29）：之後自己改回 false，重裝新版不會被蓋掉
+if (-not (Test-Path (Join-Path $Repo '.env'))) { $cfgArgs += @('--set', 'DEMO_CONTROLS=true') }
 Run 'uv' $cfgArgs
 # 排程服務用離線包的 Java（start-services.ps1 讀這個檔）
 [IO.File]::WriteAllText((Join-Path $Repo 'scheduler\.java-home'), (Join-Path $OfflineDir 'jdk'), (New-Object Text.UTF8Encoding $false))

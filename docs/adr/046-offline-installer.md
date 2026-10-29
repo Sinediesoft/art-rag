@@ -13,9 +13,9 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 
 ## 決定
 - **兩段**：在已經裝好、可以連網的電腦（5070 Ti 主機）跑一次 `deploy\offline\pack.ps1` 產生離線包資料夾；
   複製到別台 Windows 電腦後點兩下 `安裝.cmd`，**安裝過程不連網，全部功能都裝好**（畫作、圖紙、庫存、3D 重建、排程）
-- **功能裝好、權限不開**（2026-10-27 使用者決定）：`.env` 維持 `.env.example` 的 `DEMO_CONTROLS=false`，裝完只有預設身分
-  「一般員工」（只查公開畫作，`shared/access.yaml`）。圖紙、庫存、3D 重建、排程要有權限的身分才能用，權限設定另外處理，
-  離線包不替使用者打開身分切換
+- **功能裝好、預設展示模式**（2026-10-29 使用者決定，取代 2026-10-27 的「權限不開」）：第一次寫 `.env` 時設
+  `DEMO_CONTROLS=true`，裝好就能不用密碼切換 5 個身分、展示全部功能；只接受本機連線（`DEMO_TRUSTED_HOSTS`）。
+  只在 `.env` 還不存在時設：使用者改回 false 之後，重裝新版不會被打開
 - **用一個專用的 WSL 環境取代 Docker**：3D 重建產生的程式碼本來就要在 Linux 沙箱執行（ADR 027），
   所以 PostgreSQL＋pgvector、Redis 也放進同一個 WSL 環境 `artrag`，對方電腦不用 Docker Desktop。
   打包時從 Ubuntu 官方的 24.04 WSL 映像（核對 SHA-256）建一個暫時的環境，跑 `wsl-setup.sh` 裝好之後 `wsl --export`；
