@@ -809,56 +809,33 @@ def _stage1_failures(
     return list(dict.fromkeys(failures))
 
 
-def run_chat_raw(client: httpx.Client, body: dict) -> dict:
-    """送一題 /chat，事件原樣保存（含 token、heartbeat；key 順序不動）。出錯不丟例外。"""
-    out = {
-        "events": [],
-        "answer": "",
-        "sources_state": "absent",
-        "done": None,
-        "error": "",
-        "error_event": None,
-        "request_id": "",
-    }
-    events = out["events"]
+def _read_chat_events(resp: httpx.Response, events: list[dict]) -> int | None:
+    """依收到的順序附加原始事件；中途斷線時仍保留已讀取的事件。"""
     invalid = None
-    try:
-        with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
-            if resp.status_code != 200:
-                resp.read()
-                payload = _json_body(resp)
-                err = payload.get("error") if isinstance(payload, dict) else None
-                code = err.get("code") if isinstance(err, dict) else None
-                out["error"] = str(code) if code else f"HTTP {resp.status_code}"
-                out["error_event"] = {"http_status": resp.status_code, "error": err}
-            else:
-                name = None
-                for line in resp.iter_lines():
-                    if not line:
-                        name = None
-                    elif line.startswith(":"):
-                        continue  # keepalive 註解不算事件
-                    elif line.startswith("event:"):
-                        name = line[6:].strip()
-                    elif line.startswith("data:"):
-                        raw = line[5:].strip()
-                        item = {"seq": len(events), "event": name or "message"}
-                        try:
-                            item["data"] = json.loads(raw)
-                        except ValueError:
-                            item |= {"data": None, "raw": raw, "invalid_json": True}
-                            invalid = invalid or item["seq"]
-                        events.append(item)
-    except httpx.HTTPError as e:
-        out["error"] = "TRANSPORT_ERROR"
-        out["error_event"] = {
-            "code": "TRANSPORT_ERROR",
-            "type": type(e).__name__,
-            "message": str(e),
-        }
+    name = None
+    for line in resp.iter_lines():
+        if not line:
+            name = None
+        elif line.startswith(":"):
+            continue  # keepalive 註解不算事件
+        elif line.startswith("event:"):
+            name = line[6:].strip()
+        elif line.startswith("data:"):
+            raw = line[5:].strip()
+            item = {"seq": len(events), "event": name or "message"}
+            try:
+                item["data"] = json.loads(raw)
+            except ValueError:
+                item |= {"data": None, "raw": raw, "invalid_json": True}
+                invalid = invalid or item["seq"]
+            events.append(item)
+    return invalid
 
+
+def _summarize_chat_events(out: dict, invalid: int | None) -> dict:
+    """由保存的事件彙整回答、來源狀態及關聯 ID，保留原有錯誤優先序。"""
     srcs = []
-    for e in events:
+    for e in out["events"]:
         data = e["data"]
         if e["event"] == "token" and isinstance(data, dict) and isinstance(data.get("text"), str):
             out["answer"] += data["text"]
@@ -885,6 +862,39 @@ def run_chat_raw(client: httpx.Client, body: dict) -> dict:
             out["request_id"] = rid
             break
     return out
+
+
+def run_chat_raw(client: httpx.Client, body: dict) -> dict:
+    """送一題 /chat，事件原樣保存（含 token、heartbeat；key 順序不動）。出錯不丟例外。"""
+    out = {
+        "events": [],
+        "answer": "",
+        "sources_state": "absent",
+        "done": None,
+        "error": "",
+        "error_event": None,
+        "request_id": "",
+    }
+    invalid = None
+    try:
+        with client.stream("POST", "/api/v1/chat", json=body, timeout=180) as resp:
+            if resp.status_code != 200:
+                resp.read()
+                payload = _json_body(resp)
+                err = payload.get("error") if isinstance(payload, dict) else None
+                code = err.get("code") if isinstance(err, dict) else None
+                out["error"] = str(code) if code else f"HTTP {resp.status_code}"
+                out["error_event"] = {"http_status": resp.status_code, "error": err}
+            else:
+                invalid = _read_chat_events(resp, out["events"])
+    except httpx.HTTPError as e:
+        out["error"] = "TRANSPORT_ERROR"
+        out["error_event"] = {
+            "code": "TRANSPORT_ERROR",
+            "type": type(e).__name__,
+            "message": str(e),
+        }
+    return _summarize_chat_events(out, invalid)
 
 
 def _last_sources_list(events: list[dict]) -> list:
@@ -1181,6 +1191,48 @@ def _main_accounts(args: argparse.Namespace) -> int:
         client.close()
 
 
+def _snapshot_accounts(client: httpx.Client, accounts: list[str]) -> tuple[dict, dict, str]:
+    """第一輪逐帳號驗身分、取快照與診斷；任何帳號失敗就讓整個 run 中止。"""
+    snapshots = {}
+    diag: dict = {}
+    for a in accounts:
+        snapshots[a] = _snapshot_account(client, a)
+        _merge_diagnostics(diag, _try_diagnostics(client))
+    if len({s["kb_version"] for s in snapshots.values()}) != 1:
+        raise AccountsRunError("各帳號看到的 kb_version 不一致")
+    return snapshots, diag, snapshots[accounts[0]]["kb_version"]
+
+
+def _collect_account_rows(
+    client, accounts, strategies, questions, snapshots, kb_version: str, existing: set[str]
+) -> list[dict]:
+    """第二輪重新驗身分，依帳號、策略、題目順序執行，包含所有不可見圖紙題。"""
+    rows = []
+    for account in accounts:
+        switched = _switch_account(client, account)
+        if switched.get("kb_version") != kb_version:
+            raise AccountsRunError(f"{account}：評測途中 kb_version 變了")
+        visible = set(snapshots[account]["visible_part_ids"])
+        for strat in strategies:
+            for q in questions:
+                body = _chat_body(q, strat)
+                row = _account_row(
+                    account, strat, q, body, run_chat_raw(client, body), visible, existing
+                )
+                rows.append(row)
+                mark = "✓" if row["answer_ok"] else "✗"
+                print(f"  [{account}/{strat}] {mark} {q['id']} {row['classification']}")
+    return rows
+
+
+def _account_model_versions(rows: list[dict]) -> tuple[str, list[str]]:
+    """沿用第一個非空 prompt_version，模型名稱去重後排序。"""
+    done_events = [r["done"] for r in rows if isinstance(r["done"], dict)]
+    prompt_version = next((d["prompt_version"] for d in done_events if d.get("prompt_version")), "")
+    models = sorted({d["model"] for d in done_events if d.get("model")})
+    return prompt_version, models
+
+
 def _run_accounts(
     client, args, accounts, questions, qa_paths, strategies, run_id: str, out_dir: Path
 ) -> int:
@@ -1191,15 +1243,7 @@ def _run_accounts(
         return 2
     client.get("/api/v1/auth/accounts").raise_for_status()  # 先取一張訪客憑證（docs/adr/015）
 
-    # 第一輪：逐帳號切換、驗身分、取可見圖紙快照；任何一個失敗就整個 run 作廢
-    snapshots = {}
-    diag: dict = {}
-    for a in accounts:
-        snapshots[a] = _snapshot_account(client, a)
-        _merge_diagnostics(diag, _try_diagnostics(client))
-    if len({s["kb_version"] for s in snapshots.values()}) != 1:
-        raise AccountsRunError("各帳號看到的 kb_version 不一致")
-    kb_version = snapshots[accounts[0]]["kb_version"]
+    snapshots, diag, kb_version = _snapshot_accounts(client, accounts)
     llm_mode = diag.get("llm_mode")
     eval_controls = diag.get("eval_controls")
     if eval_controls is None:
@@ -1231,28 +1275,12 @@ def _run_accounts(
     qa_sha, answers_sha = _qa_hashes(qa_paths)
     print(f"評測 {run_id}：{len(accounts)} 帳號 × {len(strategies)} 策略 × {len(questions)} 題")
 
-    # 第二輪：每個帳號重新切換並驗身分，再跑全部策略 × 題目（不剔除看不到的圖紙）
-    rows = []
-    for account in accounts:
-        switched = _switch_account(client, account)
-        if switched.get("kb_version") != kb_version:
-            raise AccountsRunError(f"{account}：評測途中 kb_version 變了")
-        visible = set(snapshots[account]["visible_part_ids"])
-        for strat in strategies:
-            for q in questions:
-                body = _chat_body(q, strat)
-                row = _account_row(
-                    account, strat, q, body, run_chat_raw(client, body), visible, existing
-                )
-                rows.append(row)
-                mark = "✓" if row["answer_ok"] else "✗"
-                print(f"  [{account}/{strat}] {mark} {q['id']} {row['classification']}")
-
+    rows = _collect_account_rows(
+        client, accounts, strategies, questions, snapshots, kb_version, existing
+    )
     groups = summarize_rows(rows)
     created_at = datetime.now(UTC).isoformat()
-    done_events = [r["done"] for r in rows if isinstance(r["done"], dict)]
-    prompt_version = next((d["prompt_version"] for d in done_events if d.get("prompt_version")), "")
-    models = sorted({d["model"] for d in done_events if d.get("model")})
+    prompt_version, models = _account_model_versions(rows)
     provenance = {
         "git": _git_provenance(),
         "hashes": {
