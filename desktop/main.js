@@ -5,6 +5,7 @@ const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } = require(
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
 const path = require('path');
 const { StringDecoder } = require('string_decoder');
 
@@ -79,22 +80,32 @@ function backendUp() {
 }
 
 // 在背景跑一段 PowerShell，逐行回報輸出；回傳結束碼與是否有 ✗。
-// 用 -EncodedCommand 避開命令列的引號問題；輸出強制 UTF-8（預設是系統的 OEM 字碼頁，英文版 Windows 會把中文變成 ?）
+// 寫成暫存的 .ps1 用 -File 跑：避開命令列的引號問題，而且 -EncodedCommand 在沒有標準輸入時
+// 會把 Write-Host、錯誤、進度全序列化成 CLIXML 寫到 stderr，紀錄裡整片 XML。
+// 輸出強制 UTF-8（預設是系統的 OEM 字碼頁，英文版 Windows 會把中文變成 ?）
 function runPowerShell(body) {
   const script = [
     '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
-    // 沒有主控台時 PowerShell 會把進度條序列化成 CLIXML 寫到 stderr，紀錄裡全是雜訊
+    // 沒有主控台時進度條只會變成紀錄裡的雜訊
     "$ProgressPreference = 'SilentlyContinue'",
     '$global:LASTEXITCODE = 0',
     `try { ${body}; if ($LASTEXITCODE -eq ${REBOOT_EXIT}) { exit ${REBOOT_EXIT} }; exit 0 }`,
     "catch { Write-Output ('✗ ' + $_.Exception.Message); exit 1 }",
   ].join('\n');
-  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const file = path.join(os.tmpdir(), `laiwen-${process.pid}-${Date.now()}.ps1`);
   return new Promise((resolve) => {
     let problems = false;
+    try {
+      // Windows PowerShell 5.1 要有 BOM 才會把腳本當 UTF-8 讀
+      fs.writeFileSync(file, `﻿${script}`, 'utf8');
+    } catch (err) {
+      log(`✗ 無法寫入暫存腳本：${err.message}`);
+      resolve({ code: 1, problems: true });
+      return;
+    }
     const child = spawn(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', file],
       {
         cwd: repo,
         windowsHide: true,
@@ -129,6 +140,7 @@ function runPowerShell(body) {
       // start-services.ps1 起的服務會繼承管線，管線不會關：結束後就不再讀
       child.stdout.destroy();
       child.stderr.destroy();
+      fs.rm(file, { force: true }, () => {});
       resolve({ code: code ?? 1, problems });
     };
     child.on('close', finish);
