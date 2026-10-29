@@ -8,12 +8,17 @@
 - 模型只准連本機／內網位址（和 backend/app/rag/providers.py 的 is_local_url 同一套判斷），
   送出前遮掉 .env 的密碼與金鑰
 - 只印建議，不執行任何指令；結束碼一律 0，不改變呼叫它的腳本成功或失敗
+- 例外：離線包（docs/adr/046）在安裝途中失敗時，模型服務還沒啟動（最後一步才起）：
+  暫時起包裡的 ollama serve 來解釋，問完就關，不動其他服務
 """
 
 import argparse
 import ipaddress
 import json
+import os
 import re
+import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -30,6 +35,7 @@ DEFAULT_WINDOW_S = 3600
 SINCE_SLACK_S = 2
 LLM_TIMEOUT_S = 60
 LLM_MAX_CHARS = 6000
+OLLAMA_START_TIMEOUT_S = 30
 
 # (代號, 錯誤樣式, 原因, 修法)；由上往下比，同一個代號只報一次
 RULES: list[tuple[str, str, str, str]] = [
@@ -102,6 +108,12 @@ RULES: list[tuple[str, str, str, str]] = [
         "關掉這個視窗、開一個新的再重跑；還是不行就重跑 deploy/install.ps1",
     ),
     (
+        "venv-broken",
+        r"is not a valid Python environment|No Python at ['\"]|did not find executable at",
+        "Python 環境（backend\\.venv）不完整：上次安裝中斷，或這個資料夾是從別台電腦複製來的",
+        "刪掉 backend\\.venv 資料夾再重跑，會重新建立",
+    ),
+    (
         "wsl-unavailable",
         r"BIOS 的虛擬化功能沒有開|HCS_E_HYPERV_NOT_INSTALLED|0x80370102|Virtual Machine Platform"
         r"|WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED",
@@ -151,10 +163,19 @@ OFFLINE_FIXES = {
     "重新複製離線包、確認沒有別的程式用 11435",
     "uv-missing": "離線包的 offline\\uv 缺檔：從原本的離線包重新複製整個資料夾",
     # 離線包沒有 Docker：資料庫與 Redis 在自己的 WSL 環境裡
-    "db-unreachable": "WSL 環境 artrag 的 PostgreSQL 沒起來：點兩下「停止」再「啟動」，"
+    "db-unreachable": "WSL 環境 artrag 的 PostgreSQL 沒起來："
+    "系統匣的萊問圖示按右鍵 →「重新啟動服務」，"
     "還是不行就看 app\\data\\logs\\wsl-services.log",
-    "redis": "WSL 環境 artrag 的 Redis 沒起來：點兩下「停止」再「啟動」，"
+    "redis": "WSL 環境 artrag 的 Redis 沒起來："
+    "系統匣的萊問圖示按右鍵 →「重新啟動服務」，"
     "還是不行就看 app\\data\\logs\\wsl-services.log",
+    "venv-broken": "刪掉安裝資料夾裡的 app\\backend\\.venv，"
+    "再按萊問視窗的「重試」（會從離線包重新建立）",
+    "wsl-unavailable": "重新打開萊問會自動啟用 WSL2"
+    "（跳出系統管理員確認時按「是」，完成後重新開機）；"
+    "還是不行就進 BIOS 開啟 Intel VT-x 或 AMD SVM",
+    "wsl-distro-missing": "按萊問視窗的「重試」會重新匯入；還是失敗就看磁碟空間，"
+    "並確認安裝資料夾的 offline\\wsl\\artrag.tar 完整（不完整就重新安裝）",
 }
 
 # PowerShell 5.1 把原生程式寫到 stderr 的內容包成 NativeCommandError：就算成功，db.log 也有這幾行
@@ -176,6 +197,14 @@ SYSTEM_PROMPT = (
     "Ortho2CAD llama-server（:8081）、後端 uvicorn（:8000）、Celery worker、WSL2 裡的 CadQuery。"
     "只根據使用者給的錯誤與 log 判斷，用正體中文回答兩段："
     "「原因：」一句話；「修法：」最多 3 步。看不出原因就直接說看不出來，不要編造檔案、設定或指令。"
+)
+# 離線包和開發機的服務不一樣：放在要問的內容前面，模型才不會叫人開 Docker 或連網下載
+OFFLINE_CONTEXT = (
+    "【環境】這台是離線安裝包裝的桌面程式「萊問」：沒有 Docker，"
+    "PostgreSQL 與 Redis 在 WSL 環境 artrag 裡；"
+    "Ollama 在 :11435；Python 環境在安裝資料夾的 app\\backend\\.venv；沒有網路可以下載。"
+    "使用者能做的操作：萊問視窗的「重試」、系統匣萊問圖示右鍵的「重新啟動服務」，"
+    "或刪掉壞掉的資料夾後重試。"
 )
 
 
@@ -292,26 +321,99 @@ def ask_model(base_url: str, model: str, api_key: str, text: str) -> str:
     return _THINK.sub("", data["choices"][0]["message"]["content"]).strip()
 
 
+def bundle_info() -> dict | None:
+    """離線包的 offline.json（app\\ 旁邊）；不是離線包時 None。"""
+    path = REPO.parent / "offline" / "offline.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+
+
+def port_open(url: str) -> bool:
+    parts = urllib.parse.urlsplit(url)
+    try:
+        with socket.create_connection((parts.hostname, parts.port or 80), timeout=1):
+            return True
+    except OSError:
+        return False
+
+
+def start_bundled_ollama(base_url: str) -> subprocess.Popen | None:
+    """起離線包裡的 ollama serve，等它回應；起不來回傳 None。
+
+    只在本機位址上起，連接埠照 base_url。"""
+    exe = REPO.parent / "offline" / "ollama" / "ollama.exe"
+    parts = urllib.parse.urlsplit(base_url)
+    if not exe.is_file() or parts.hostname not in ("127.0.0.1", "localhost") or not parts.port:
+        return None
+    env = {
+        **os.environ,
+        "OLLAMA_HOST": f"127.0.0.1:{parts.port}",
+        "OLLAMA_MODELS": str(REPO.parent / "offline" / "ollama-models"),
+    }
+    # 不給標準輸入：從桌面程式跑時不能讓子行程掛在繼承來的管線上（docs/adr/047）
+    proc = subprocess.Popen(
+        [str(exe), "serve"],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    deadline = time.time() + OLLAMA_START_TIMEOUT_S
+    while time.time() < deadline and proc.poll() is None:
+        if port_open(base_url):
+            return proc
+        time.sleep(1)
+    stop(proc)
+    return None
+
+
+def stop(proc: subprocess.Popen) -> None:
+    proc.terminate()
+    try:
+        proc.wait(10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def explain_with_model(
-    env: dict[str, str], secrets: list[str], lines: list[str]
+    env: dict[str, str], secrets: list[str], lines: list[str], bundle: dict | None = None
 ) -> tuple[str | None, str]:
     """回傳（模型的回答或 None，說明用了哪個模型／為什麼沒用）。"""
     if env.get("LLM_MODE", "").lower() == "mock":
         return None, "這台是 mock 方案，沒有生成模型"
-    base_url = env.get("HYBRID_BASE_URL") or "http://localhost:11434/v1"
+    # 離線包在寫 .env 之前就失敗時沒有設定可讀：照 offline.json 用包裡的 Ollama 與模型
+    default_url = "http://localhost:11434/v1"
+    if bundle is not None:
+        default_url = f"http://127.0.0.1:{bundle.get('ollama_port', 11435)}/v1"
+    base_url = env.get("HYBRID_BASE_URL") or default_url
     if not is_local_url(base_url):
         host = urllib.parse.urlsplit(base_url).hostname
         return None, f"HYBRID_BASE_URL 不是本機或內網位址（{host}），log 不送出"
     text = mask("\n".join(lines), secrets)[-LLM_MAX_CHARS:]
+    if bundle is not None:
+        text = OFFLINE_CONTEXT + "\n\n" + text
     models = [m for m in (env.get("HYBRID_MODEL"), env.get("HYBRID_FALLBACK_MODEL")) if m]
+    if not models and bundle is not None:
+        models = list(bundle.get("models") or [])
     if not models:
         models = ["qwen3-vl:4b-instruct"]
+    started = None
+    if bundle is not None and not port_open(base_url):
+        started = start_bundled_ollama(base_url)
+    note = "；模型服務還沒啟動，診斷時暫時開了離線包的 Ollama，問完已關閉" if started else ""
     reasons = []
-    for model in dict.fromkeys(models):
-        try:
-            return ask_model(base_url, model, env.get("HYBRID_API_KEY", ""), text), model
-        except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError) as e:
-            reasons.append(f"{model}：{getattr(e, 'reason', e)}")
+    try:
+        for model in dict.fromkeys(models):
+            try:
+                return ask_model(base_url, model, env.get("HYBRID_API_KEY", ""), text), model + note
+            except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError) as e:
+                reasons.append(f"{model}：{getattr(e, 'reason', e)}")
+    finally:
+        if started:
+            stop(started)
     return None, "本地模型叫不到（" + "；".join(str(r) for r in reasons) + "）"
 
 
@@ -346,7 +448,8 @@ def main(argv: list[str] | None = None) -> int:
     print("\n── 故障診斷 ──")
     print("看了：" + ("、".join(logs) if logs else "（沒有這次執行之後寫的 log）"))
     found = match_rules(args.message, logs)
-    offline_bundle = (REPO.parent / "offline" / "offline.json").is_file()
+    bundle = bundle_info()
+    offline_bundle = bundle is not None
     for rule_id, cause, fix, evidence in found:
         if offline_bundle:
             fix = OFFLINE_FIXES.get(rule_id, fix)
@@ -363,7 +466,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_llm:
         answer, used = None, "加了 --no-llm"
     else:
-        answer, used = explain_with_model(env, secrets, lines)
+        answer, used = explain_with_model(env, secrets, lines, bundle)
     if answer:
         print(f"規則表沒有對到，以下是本地模型（{used}）看 log 的判斷（模型推測，未驗證）：")
         print("  " + answer.replace("\n", "\n  "))

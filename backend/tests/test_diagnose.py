@@ -103,6 +103,11 @@ def test_message_from_script_is_matched_too(repo, capsys):
         ),
         ("Error code: Wsl/Service/CreateInstance/HCS_E_HYPERV_NOT_INSTALLED", "wsl-unavailable"),
         ("Error code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND", "wsl-distro-missing"),
+        (
+            "error: Project virtual environment directory `D:\\LaiWen\\app\\backend\\.venv` cannot "
+            "be used because it is not a valid Python environment (no Python executable was found)",
+            "venv-broken",
+        ),
     ],
 )
 def test_each_rule_matches_its_example(line, rule_id):
@@ -208,3 +213,67 @@ def test_offline_bundle_gets_offline_fixes(tmp_path, capsys, monkeypatch):
     out = run(app, capsys, "--log", str(log))
     assert "重新複製整個資料夾" in out
     assert "HF_OFFLINE 暫時改成 false" not in out
+
+
+@pytest.fixture
+def bundle(tmp_path, monkeypatch):
+    # 離線包剛開始安裝：還沒寫 .env、包裡的 Ollama 也還沒起
+    app = tmp_path / "app"
+    app.mkdir()
+    (tmp_path / "offline").mkdir()
+    (tmp_path / "offline" / "offline.json").write_text(
+        '{"ollama_port": 11499, "models": ["qwen3-vl:8b-instruct", "qwen3-vl:4b-instruct"]}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(diagnose, "REPO", app)
+    return app
+
+
+def test_broken_venv_in_bundle_says_delete_and_retry(bundle, capsys):
+    log = write_log(
+        bundle,
+        "desktop.log",
+        r"error: Project virtual environment directory `D:\LaiWen\app\backend\.venv` cannot be "
+        "used because it is not a valid Python environment (no Python executable was found)\n",
+    )
+    out = run(bundle, capsys, "--log", str(log))
+    assert r"Python 環境（backend\.venv）不完整" in out
+    assert r"app\backend\.venv，再按萊問視窗的「重試」" in out
+
+
+def test_bundle_without_env_starts_its_ollama_then_stops_it(bundle, capsys, monkeypatch):
+    log = write_log(bundle, "desktop.log", "ERROR: something unusual happened\n")
+    events, sent = [], {}
+
+    class Proc:
+        def terminate(self):
+            events.append("terminate")
+
+        def wait(self, timeout=None):
+            events.append("wait")
+
+    monkeypatch.setattr(diagnose, "port_open", lambda url: False)
+    monkeypatch.setattr(
+        diagnose, "start_bundled_ollama", lambda url: events.append(("start", url)) or Proc()
+    )
+
+    def fake(base_url, model, api_key, text):
+        sent.update(base_url=base_url, model=model, text=text)
+        events.append("ask")
+        return "原因：測試。\n修法：重試。"
+
+    monkeypatch.setattr(diagnose, "ask_model", fake)
+    out = run(bundle, capsys, "--log", str(log))
+    assert events == [("start", "http://127.0.0.1:11499/v1"), "ask", "terminate", "wait"]
+    assert sent["model"] == "qwen3-vl:8b-instruct"
+    assert sent["text"].startswith("【環境】") and "沒有 Docker" in sent["text"]
+    assert "暫時開了離線包的 Ollama" in out and "原因：測試" in out
+
+
+def test_bundle_with_running_ollama_does_not_start_another(bundle, capsys, monkeypatch):
+    log = write_log(bundle, "desktop.log", "ERROR: something unusual happened\n")
+    monkeypatch.setattr(diagnose, "port_open", lambda url: True)
+    monkeypatch.setattr(diagnose, "start_bundled_ollama", lambda url: pytest.fail("已經在跑"))
+    monkeypatch.setattr(diagnose, "ask_model", lambda *a: "原因：測試。")
+    out = run(bundle, capsys, "--log", str(log))
+    assert "暫時開了" not in out and "原因：測試" in out
