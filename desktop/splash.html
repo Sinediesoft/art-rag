@@ -26,7 +26,7 @@
       padding: 24px;
     }
     .card {
-      width: min(760px, 100%);
+      width: min(1180px, 100%);
       max-height: 100%;
       display: flex; flex-direction: column;
       background: var(--card);
@@ -72,6 +72,34 @@
     }
     button:hover { border-color: var(--muted); }
     button.primary { background: var(--amber); border-color: var(--amber); color: #121212; font-weight: 600; }
+    button:disabled { opacity: .5; cursor: default; }
+    /* 左邊安裝狀態、右邊 AI 助理；視窗窄時上下排 */
+    .cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 28px; min-height: 0; }
+    @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+    .status { min-width: 0; display: flex; flex-direction: column; }
+    .assistant {
+      display: flex; flex-direction: column; min-height: 440px; margin-top: 24px;
+      border-left: 1px solid var(--line); padding-left: 24px;
+    }
+    @media (max-width: 1000px) { .assistant { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
+    .a-head { display: flex; align-items: baseline; gap: 8px; font-weight: 700; font-size: 16px; }
+    .a-head::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); align-self: center; }
+    .a-head small { color: var(--muted); font-weight: 400; font-size: 12px; }
+    .msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 10px; margin: 12px 0; max-height: 52vh; }
+    .msg { padding: 10px 12px; border-radius: 10px; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+    .msg.bot { background: var(--log); border: 1px solid var(--line); }
+    .msg.me { background: #2a2617; border: 1px solid #4a3f12; align-self: flex-end; max-width: 85%; }
+    .msg.wait { color: var(--muted); }
+    .msg.err { color: var(--error); }
+    .msg .who { display: block; color: var(--amber); font-size: 12px; margin-bottom: 2px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chips button { font-size: 13px; padding: 4px 12px; border-radius: 999px; }
+    .ask { display: flex; gap: 8px; }
+    .ask input {
+      flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--log); color: var(--ink);
+    }
+    .ask input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
     button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   </style>
 </head>
@@ -84,6 +112,8 @@
         <div class="sub">全部在這台電腦上執行，資料不外送</div>
       </div>
     </header>
+    <div class="cols">
+    <section class="status">
     <h1 id="title">準備中</h1>
     <p class="detail" id="detail"></p>
     <div class="step" id="step" aria-live="polite"></div>
@@ -93,6 +123,17 @@
       <pre id="log"></pre>
     </details>
     <div class="actions" id="actions"></div>
+    </section>
+    <aside class="assistant" aria-label="AI 助理">
+      <div class="a-head">AI 助理 <small>用這台電腦的模型回答，不連網</small></div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="ask" id="ask">
+        <input id="q" maxlength="300" placeholder="有問題可以問我，例如：還要多久？" aria-label="問 AI 助理" autocomplete="off">
+        <button class="primary" id="send" type="submit">問</button>
+      </form>
+    </aside>
+    </div>
   </main>
   <script src="splash.js"></script>
 </body>

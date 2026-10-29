@@ -8,6 +8,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { StringDecoder } = require('string_decoder');
+const { createAssistant } = require('./assistant');
 
 const APP_URL = 'http://127.0.0.1:8000';
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -361,6 +362,14 @@ function createWindow() {
     }
   });
 }
+
+const assistant = createAssistant({ repo, offlineDir: path.dirname(offlineInfoPath), readJson, log });
+
+// 只有啟動畫面（file://）可以問：網頁介面本來就拿不到這個 IPC，這裡再擋一次
+ipcMain.handle('ask', (event, question) => {
+  if (!event.senderFrame || !event.senderFrame.url.startsWith('file:')) return { error: '不允許' };
+  return assistant.ask(question, { title: state.title, detail: state.detail, lines: logLines });
+});
 
 ipcMain.on('action', (_event, name) => {
   if (name === 'retry') boot();

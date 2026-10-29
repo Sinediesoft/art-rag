@@ -6,5 +6,6 @@ if (location.protocol === 'file:') {
     onLog: (cb) => ipcRenderer.on('log', (_e, line) => cb(line)),
     onState: (cb) => ipcRenderer.on('state', (_e, state) => cb(state)),
     action: (name) => ipcRenderer.send('action', name),
+    ask: (question) => ipcRenderer.invoke('ask', question),
   });
 }
