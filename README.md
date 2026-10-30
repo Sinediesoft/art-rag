@@ -61,6 +61,47 @@ security_leak_check）→ ⑤ **Jev Score** 評分重排（最多 3 段）→ �
          （Ollama keep_alive=0、llama-server router /models/unload、後端卸載 CLIP／bge-m3、JVM GC），用到時自動重新載入
 ```
 
+## 一鍵安裝
+
+新電腦用一個指令裝好並啟動：自動偵測顯卡選方案（12 GB 以上 8B、4～12 GB 4B、沒有顯卡 mock）、寫好 `.env`
+（你自己改過的設定不會被覆蓋）、裝套件、下載模型、建索引、建置前端，最後啟動並檢查。
+缺少 uv、Node.js、Ollama、Docker 時先列出來，問過才安裝；沒有 Docker 時改用檔案索引＋SQLite（功能相同）。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Windows
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1 -DryRun    # 只列出會做什麼
+```
+
+```bash
+bash deploy/install.sh              # macOS、Linux、WSL2
+bash deploy/install.sh --dry-run    # 只列出會做什麼
+```
+
+指定方案：`-Mode full|light|mock`（`--mode`）；不問直接安裝：`-Yes`（`--yes`）；裝完不啟動：`-NoStart`（`--no-start`）。
+3D 重建（Ortho2CAD）與生產排程（Java 21）是選裝，沒有也能用，安裝方式見下方。
+
+安裝或啟動失敗時會自動執行 `deploy/diagnose.py`：先用規則表比對這次的 log（Docker 沒開、連接埠被佔、記憶體不夠…），
+對不上才請本地模型解釋（標明「模型推測，未驗證」）；log 只送本機或內網的模型，送出前遮掉密碼與金鑰，
+只給建議、不執行指令（ADR 045）。也可以自己跑：`uv run --no-project python deploy/diagnose.py`
+（看最近 1 小時的 log；`--no-llm` 只比對規則表）。
+
+### 離線安裝包：桌面程式萊問（安裝過程不連網）
+
+給不能連網、或不想打指令的電腦（ADR 046、047），全部功能都裝好（含 3D 重建、排程）。
+裝完預設是展示模式（`DEMO_CONTROLS=true`，只接受本機連線）：不用密碼切換身分，展示全部功能；正式使用時改回 false。
+在已經裝好的 5070 Ti 主機打包一次（這一步會連網，約 26 GB；要有 Inno Setup 6）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File deploy\offline\pack.ps1    # 輸出到 D:\art-rag-offline，-Out 換位置
+```
+
+輸出是 `setup.exe`＋`payload\`＋`使用說明.txt`。把整個資料夾複製到別台 Windows 電腦（隨身碟要 exFAT／NTFS），
+點兩下 `setup.exe` 選安裝位置（預設 `C:\LaiWen`），裝完開始功能表與桌面有「萊問」。
+第一次打開時在程式視窗裡完成安裝：自動判斷顯卡、匯入 WSL 環境 `artrag`（取代 Docker：PostgreSQL＋pgvector、Redis、
+3D 重建的沙箱）、從離線包建 Python 環境、建索引，接著啟動服務、直接顯示介面。Ollama、Ortho2CAD、Timefold、Java
+都用離線包自己的（Ollama 用連接埠 11435，不影響那台原本的 Ollama）。那台還沒有 WSL2 時，會要一次系統管理員權限離線啟用，
+重開機後再打開萊問。關掉視窗服務仍在背景跑，從系統匣圖示「結束萊問」才停止；解除安裝在「新增或移除程式」。
+
 ## 快速開始（macOS／WSL2）
 
 需要：[uv](https://docs.astral.sh/uv/)、Node.js 24、[Docker](https://docs.docker.com/get-docker/)（資料庫；沒有也能跑，見下方「資料庫」）、

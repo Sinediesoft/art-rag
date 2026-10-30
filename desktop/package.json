@@ -1,0 +1,16 @@
+{
+  "name": "art-rag-desktop",
+  "productName": "萊問",
+  "version": "1.0.0",
+  "private": true,
+  "description": "萊問（art-rag 桌面程式）：起停本機服務、把網頁介面放進自己的視窗（docs/adr/047）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-packager . LaiWen --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=build/icon.ico --app-copyright=LaiWen --win32metadata.ProductName=萊問 --win32metadata.FileDescription=萊問 --ignore=^/dist"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.7.0"
+  }
+}
