@@ -96,6 +96,7 @@ if ($Mode -eq 'auto') {
     elseif ($vramMb -ge 4000) { $Mode = 'light' }
     else { $Mode = 'mock' }
 }
+if ((Select-OfflineLlama) -eq 'llama.cpp-vulkan') { Note '3D 重建：用 Vulkan 版（這張顯卡或驅動程式不支援 CUDA 13）' }
 $smallGpu = ($Mode -eq 'light' -and $vramMb -lt 6000)
 Note "方案：$Mode$(if ($smallGpu) { '（小顯卡，回答不附圖）' })"
 
@@ -141,6 +142,9 @@ else {
     if ($r.Code -ne 0) { throw "匯入 WSL 環境失敗：$($r.Output)" }
     Note "✓ 已匯入（$disk）"
 }
+# 已經匯入過（舊版離線包）也要改：之前用的是 5432／6379
+Set-OfflineWslPorts
+Note "✓ 資料庫用連接埠 $OfflineDbPort、Redis 用 $OfflineRedisPort"
 
 # ---------------------------------------------------------------- 3. .env
 # 資料庫與 Redis 在 WSL 環境裡（和 Docker 版同一組帳密，只綁本機）；模型走離線包自己的 Ollama（另一個連接埠）
@@ -148,8 +152,8 @@ Say '寫 .env'
 $ollamaUrl = "http://127.0.0.1:$OfflineOllamaPort/v1"
 $cfgArgs = @('run', '--no-project', 'python', 'deploy/configure_env.py', '--profile', $Mode,
     '--set', 'HF_OFFLINE=true',
-    '--set', 'DATABASE_URL=postgresql://artrag:artrag@127.0.0.1:5432/artrag',
-    '--set', 'REDIS_URL=redis://127.0.0.1:6379/0',
+    '--set', "DATABASE_URL=postgresql://artrag:artrag@127.0.0.1:$OfflineDbPort/artrag",
+    '--set', "REDIS_URL=redis://127.0.0.1:$OfflineRedisPort/0",
     '--set', 'CAD_WSL_PYTHON=/opt/artrag-cad/bin/python', '--set', "CAD_WSL_DISTRO=$OfflineWslDistro",
     '--set', "HYBRID_BASE_URL=$ollamaUrl", '--set', "HYBRID_FALLBACK_BASE_URL=$ollamaUrl",
     '--set', "LORA_BASE_URL=$ollamaUrl")
@@ -168,7 +172,7 @@ try { Run 'uv' @('sync') } finally { Pop-Location }
 # ---------------------------------------------------------------- 5. 資料庫與索引
 Say '啟動 WSL 環境裡的 PostgreSQL、Redis'
 if (-not (Start-OfflineWsl $Logs)) { throw "WSL 環境的 PostgreSQL／Redis 沒起來，看 $Logs\wsl-services.log" }
-Note '✓ PostgreSQL :5432、Redis :6379'
+Note "✓ PostgreSQL :$OfflineDbPort、Redis :$OfflineRedisPort"
 Say '建索引並寫進資料庫（用離線包裡的 bge-m3、Chinese-CLIP）'
 Push-Location backend
 try { Run 'uv' @('run', 'python', '..\pipelines\build_index.py') } finally { Pop-Location }

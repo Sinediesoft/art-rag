@@ -11,7 +11,7 @@
   Ubuntu 24.04 的 WSL 映像與裡面的 PostgreSQL／Redis／CadQuery、WSL 的離線安裝程式、Electron（desktop\package-lock.json）
 - 打包這台要有 Inno Setup 6（winget install JRSoftware.InnoSetup；-Iscc 指定 ISCC.exe），裝的電腦不用
 - 從這台複製：Ollama 與 qwen3-vl 8B／4B、Hugging Face 快取裡 shared\models.yaml 釘選的 bge-m3、Chinese-CLIP、
-  Ortho2CAD 模型與 llama.cpp（CUDA 版）、Java 21
+  Ortho2CAD 模型與 llama.cpp（CUDA 版＋給舊顯卡用的 Vulkan 版，同一個版本號）、Java 21
 - 只打包已 commit 的內容（git archive HEAD）：.env、data\ 不會帶出去
 - 輸出約 25 GB；複製到隨身碟要用 exFAT 或 NTFS（8B 模型單一個檔案超過 4 GB，FAT32 放不下）
 #>
@@ -106,6 +106,15 @@ if (-not $llamaServer) {
 if (-not $llamaServer -or -not (Get-ChildItem (Split-Path $llamaServer) -Filter 'ggml-cuda*.dll')) {
     throw '找不到 CUDA 版的 llama-server（docs\5070ti-host.md「第一次安裝」第 6 步）'
 }
+# Vulkan 版：CUDA 13 不支援 GTX 10 系列等舊卡（offline-env.ps1 的 Select-OfflineLlama）。
+# 放在 tools\llama-vulkan-* 而不是 tools\llama.cpp-*：start-services.ps1 找 CUDA 版的寫法才不會撿到它
+$llamaVulkan = if ($env:LLAMA_SERVER_VULKAN) { $env:LLAMA_SERVER_VULKAN } else {
+    Get-ChildItem (Join-Path $env:USERPROFILE 'tools\llama-vulkan-*\llama-server.exe') -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $llamaVulkan -or -not (Test-Path (Join-Path (Split-Path $llamaVulkan) 'ggml-vulkan.dll'))) {
+    throw '找不到 Vulkan 版的 llama-server：從 llama.cpp 的 GitHub release 下載和 CUDA 版同一個版本號的 win-vulkan-x64.zip，解壓到 %USERPROFILE%\tools\llama-vulkan-<版本號>'
+}
 # Inno Setup：winget 預設裝在使用者資料夾，也可能裝在 Program Files 或自訂位置
 if (-not $Iscc) {
     $Iscc = @((Resolve-Exe 'iscc'), (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
@@ -119,7 +128,7 @@ if (-not (Test-Path (Join-Path $javaHome 'bin\java.exe'))) { throw '找不到 Ja
 Note "版本：$commit"
 Note "Ollama：$ollamaProgram（模型 $ollamaModels）"
 Note "Hugging Face 快取：$hfHub"
-Note "Ortho2CAD：$ortho2cad；llama-server：$llamaServer"
+Note "Ortho2CAD：$ortho2cad；llama-server：$llamaServer（Vulkan 版 $llamaVulkan）"
 Note "Java：$javaHome"
 Note "Inno Setup：$Iscc"
 Note "輸出：$Out（$($drive): 剩 $freeGb GB）"
@@ -226,12 +235,13 @@ $bundleArgs = @('run', '--no-project', 'python', (Join-Path $App 'deploy\offline
 foreach ($m in $Models) { $bundleArgs += @('--model', $m) }
 Run 'uv' $bundleArgs
 
-Say 'Ortho2CAD 模型與 llama.cpp（CUDA 版）'
+Say 'Ortho2CAD 模型與 llama.cpp（CUDA 版、Vulkan 版）'
 # start-services.ps1、deploy\llama-router.ini 都從 app\models\ortho2cad 讀
 $ortho2cadOut = Join-Path $App 'models\ortho2cad'
 New-Item -ItemType Directory -Force $ortho2cadOut | Out-Null
 Get-ChildItem $ortho2cad -Filter '*.gguf' | Copy-Item -Destination $ortho2cadOut
 Copy-Item -Recurse (Split-Path $llamaServer -Parent) (Join-Path $Offline 'llama.cpp')
+Copy-Item -Recurse (Split-Path $llamaVulkan -Parent) (Join-Path $Offline 'llama.cpp-vulkan')
 
 # ---------------------------------------------------------------- 7. 完成標記、安裝精靈
 Copy-Item (Join-Path $App 'deploy\offline\使用說明.txt') (Join-Path $Out '使用說明.txt')

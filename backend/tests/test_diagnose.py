@@ -108,6 +108,16 @@ def test_message_from_script_is_matched_too(repo, capsys):
             "be used because it is not a valid Python environment (no Python executable was found)",
             "venv-broken",
         ),
+        (
+            'connection to server at "127.0.0.1", port 5432 failed: FATAL:  '
+            'password authentication failed for user "artrag"',
+            "db-port-taken",
+        ),
+        (
+            "連接埠 15432 被這台電腦上的其他程式（postgres）佔用，萊問的資料庫沒辦法啟動",
+            "db-port-taken",
+        ),
+        ("CUDA error: no kernel image is available for execution on the device", "llama-cuda"),
     ],
 )
 def test_each_rule_matches_its_example(line, rule_id):
@@ -239,6 +249,42 @@ def test_broken_venv_in_bundle_says_delete_and_retry(bundle, capsys):
     out = run(bundle, capsys, "--log", str(log))
     assert r"Python 環境（backend\.venv）不完整" in out
     assert r"app\backend\.venv，再按萊問視窗的「重試」" in out
+
+
+def test_wrong_password_is_port_taken_not_db_down(bundle, capsys):
+    # 2026-10-30 學校電腦：連到別人的 PostgreSQL，「重新啟動服務」修不好
+    log = write_log(
+        bundle,
+        "desktop.log",
+        "沒有寫進資料庫：連不上資料庫 127.0.0.1:5432/artrag（connection failed: connection to "
+        'server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed '
+        'for user "artrag"）\n',
+    )
+    out = run(bundle, capsys, "--log", str(log))
+    assert "連接埠被這台電腦上另外裝的程式" in out
+    assert "PostgreSQL 容器沒起來" not in out
+    assert "重新啟動服務" not in out
+
+
+def test_bundle_prints_plain_words_before_each_cause(bundle, capsys):
+    # 桌面程式靠「白話：」開頭的行決定先顯示什麼（desktop/splash.js 的 postDiagnosis）
+    log = write_log(bundle, "desktop.log", "OSError: [Errno 28] No space left on device\n")
+    lines = run(bundle, capsys, "--log", str(log)).splitlines()
+    plain = next(i for i, line in enumerate(lines) if line.startswith("白話："))
+    assert "硬碟空間不夠" in lines[plain]
+    assert lines[plain + 1].startswith("✗ 磁碟空間不夠")
+
+
+def test_plain_words_only_for_offline_bundle(repo, capsys):
+    log = write_log(repo, "x.log", "OSError: [Errno 28] No space left on device\n")
+    assert "白話：" not in run(repo, capsys, "--log", str(log))
+
+
+def test_plain_words_avoid_jargon():
+    for rule_id, text in diagnose.PLAIN.items():
+        assert rule_id in {r[0] for r in diagnose.RULES}
+        for word in ("WSL", "PostgreSQL", "Redis", ".env", "連接埠", "log"):
+            assert word not in text, f"{rule_id} 的白話有術語 {word}"
 
 
 def test_bundle_without_env_starts_its_ollama_then_stops_it(bundle, capsys, monkeypatch):

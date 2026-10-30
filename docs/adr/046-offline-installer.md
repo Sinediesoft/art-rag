@@ -27,7 +27,8 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 
     app\        git archive HEAD（不含 .env、data\）＋建置好的 frontend\dist＋models\ortho2cad＋scheduler\target\scheduler.jar
     offline\    offline.json（完成標記）、uv\、python\（可攜版 3.12）、uv-cache\（照 uv.lock 的套件）、
                 ollama\、ollama-models\（qwen3-vl 8B＋4B）、hf\（bge-m3、Chinese-CLIP 釘選版本）、
-                llama.cpp\（CUDA 版）、jdk\（Java 21）、wsl\artrag.tar（WSL 環境）＋WSL 離線安裝程式
+                llama.cpp\（CUDA 版）、llama.cpp-vulkan\（舊顯卡用）、jdk\（Java 21）、
+                wsl\artrag.tar（WSL 環境）＋WSL 離線安裝程式
     wsl-data\   安裝時匯入的 WSL 環境的虛擬磁碟
   ```
 - 實測大小 25.5 GB：Ollama 模型 9.4 GB、Ortho2CAD 6.2 GB、bge-m3 2.3 GB、Ollama 1.9 GB、Chinese-CLIP 0.75 GB、
@@ -59,6 +60,17 @@ Hugging Face 下載 embedding、`uv sync`、`npm ci`；3D 重建還要另外裝 
   （3D 重建與排程要權限：只在這次測試裝的 `.env` 暫時開 `DEMO_CONTROLS=true` 切成主管，測完改回 false）
 - 全部停止後冷啟動 60 秒；停止時只停離線包自己的服務，這台原本的 Ollama 不受影響
 - 沒測到：「這台沒有 WSL2」的啟用流程（這台本來就有）
+
+## 學校電腦試裝（2026-10-30，GTX 1050 Ti 4 GB）後的修改
+- **資料庫連到別人的**：學校電腦自己裝了 PostgreSQL、佔著 5432，WSL 的轉送讓不進來，建索引時「密碼錯誤」；
+  安裝只看連接埠連不連得上，所以還打 ✓。改成 WSL 環境匯入後把 PostgreSQL／Redis 改到 15432／16379
+  （`offline-env.ps1` 的 `Set-OfflineWslPorts`，已匯入的舊環境也會改；不用 49152 以上，Hyper-V 常保留那一段），
+  啟動前先看連接埠有沒有被別的程式聽著，有就直接說是哪個程式。故障診斷加「密碼錯誤＝連接埠被佔」，不再叫人重新啟動服務
+- **3D 重建一載入模型就閃退（HTTP 500）**：附的 llama.cpp 是 CUDA 13 版，不支援 compute capability 7.5 以下
+  （GTX 10 系列）與 580 版以前的驅動程式。多附同一個版本號的 Vulkan 版（31 MB），`Select-OfflineLlama` 依
+  `nvidia-smi` 自動選。4 GB 顯示卡放不下 Ortho2CAD 8B（約 5.9 GB），一部分在 CPU 跑，會很慢
+- **故障診斷太技術**：離線包的每條規則多一段「白話」（不用 WSL、PostgreSQL、連接埠等術語，只講要按什麼、
+  自己處理不了就找管理員），桌面程式先顯示白話，原因與修法收進「給技術人員看」
 
 ## 不包含
 - macOS、Linux、AMD／Intel 顯示卡：沒有 NVIDIA 顯卡時生成模型是 mock 方案，3D 重建會用 CPU（很慢）

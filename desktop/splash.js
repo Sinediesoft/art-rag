@@ -74,20 +74,40 @@ function showChips(kind) {
   }
 }
 
-// 失敗時把紀錄最後的「故障診斷」貼到助理這邊：不用自己去紀錄裡找
+// 失敗時把紀錄最後的「故障診斷」貼到助理這邊：不用自己去紀錄裡找。
+// 使用的人多半不懂電腦（2026-10-30 學校電腦試裝的回饋）：先講白話，原因與修法收進「給技術人員看」
+const PLAIN_FALLBACK = '我看不出是什麼問題。請先按「重試」一次；還是不行，請找電腦的管理員或技術人員，把下面「給技術人員看」的內容給他。';
 function postDiagnosis() {
   const text = logEl.textContent;
   const at = text.lastIndexOf('── 故障診斷 ──');
   if (at < 0) return;
-  // 「看了哪些紀錄」「依據（整行錯誤）」是給工程師看的，助理這邊只留原因與修法
-  const body = text
+  const lines = text
     .slice(at + '── 故障診斷 ──'.length)
     .split('\n')
-    .filter((line) => line.trim() && !line.startsWith('看了：') && !/^\s*依據（/.test(line))
-    .join('\n');
+    .filter((line) => line.trim() && !line.startsWith('看了：'));
+  const plain = [];
+  const tech = [];
+  for (const line of lines) {
+    const m = line.match(/^\s*白話：(.+)$/);
+    if (m) plain.push(m[1].trim());
+    else tech.push(line);
+  }
+  const body = tech.join('\n');
   if (!body || body === postedDiagnosis) return;
   postedDiagnosis = body;
-  addMsg('bot', `我看了這次的紀錄：\n${body}\n\n還有不清楚的地方可以直接問我。`, 'AI 助理・故障診斷');
+  const unique = [...new Set(plain)];
+  const say = unique.length === 0 ? PLAIN_FALLBACK
+    : unique.length === 1 ? unique[0]
+      : unique.map((p, i) => `${i + 1}. ${p}`).join('\n');
+  const el = addMsg('bot', `${say}\n\n看不懂或照做還是不行，可以直接在下面打字問我。`, 'AI 助理・故障診斷');
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent = '給技術人員看';
+  const pre = document.createElement('div');
+  pre.className = 'tech';
+  pre.textContent = body;
+  details.append(summary, pre);
+  el.appendChild(details);
 }
 
 $('ask').addEventListener('submit', (event) => {

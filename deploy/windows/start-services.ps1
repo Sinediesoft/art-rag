@@ -121,7 +121,7 @@ if (-not $envVars['DATABASE_URL']) { '－ 沒設 DATABASE_URL：用檔案索引�
 if (-not $jobsOn) { '－ 沒設 REDIS_URL：背景工作沒啟用，3D 重建與排程頁會回 503' }
 if ($IsOfflineBundle -and $services.Count -gt 0) {
     # 離線包沒有 Docker：PostgreSQL、Redis 跑在離線包自己的 WSL 環境（docs/adr/046、deploy/offline/wsl-setup.sh）
-    if (Start-OfflineWsl $Logs) { "✓ WSL 環境 $OfflineWslDistro：PostgreSQL :5432、Redis :6379" }
+    if (Start-OfflineWsl $Logs) { "✓ WSL 環境 $OfflineWslDistro：PostgreSQL :$OfflineDbPort、Redis :$OfflineRedisPort" }
     else { throw "WSL 環境 $OfflineWslDistro 的 PostgreSQL／Redis 沒起來，看 $Logs\wsl-services.log" }
 }
 elseif ($services.Count -gt 0) {

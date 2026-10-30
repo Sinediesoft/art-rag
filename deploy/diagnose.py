@@ -48,6 +48,15 @@ RULES: list[tuple[str, str, str, str]] = [
         "不想用 Docker 就把 .env 的 DATABASE_URL、REDIS_URL 留空",
     ),
     (
+        # 連得上卻密碼錯：連到的是這台電腦另外裝的 PostgreSQL（2026-10-30 學校電腦）
+        "db-port-taken",
+        r"password authentication failed|連接埠 \d+ 被這台電腦上的其他程式",
+        "資料庫的連接埠被這台電腦上另外裝的程式（通常是 PostgreSQL）佔走，"
+        "連到的不是這套系統的資料庫",
+        "找出佔用連接埠的程式（Get-NetTCPConnection -LocalPort <埠> -State Listen）並停掉它，"
+        "或把 .env 的 DATABASE_URL 改用別的連接埠",
+    ),
+    (
         "db-unreachable",
         r"連不上資料庫|資料庫沒起來|connection to server at .*5432|could not connect to server",
         "後端連不上資料庫（PostgreSQL 容器沒起來）",
@@ -136,6 +145,17 @@ RULES: list[tuple[str, str, str, str]] = [
         "（deploy/offline/pack.ps1），整個資料夾重新複製",
     ),
     (
+        # 離線包的 llama.cpp 是 CUDA 13 版：GTX 10 系列等舊卡、580 版以前的驅動程式不能用
+        # （2026-10-30 學校電腦）
+        "llama-cuda",
+        r"no kernel image is available|ggml_cuda_init: failed|CUDA driver version is insufficient"
+        r"|cudaErrorNoKernelImageForDevice|cudaErrorInsufficientDriver"
+        r"|unsupported gpu architecture",
+        "Ortho2CAD 的 llama-server 和這張顯示卡或驅動程式不相容，一載入模型就閃退"
+        "（3D 重建回 HTTP 500）",
+        "換用 Vulkan 版的 llama.cpp（-LlamaServer 指定），或更新 NVIDIA 驅動程式",
+    ),
+    (
         "scheduler",
         r"UnsupportedClassVersionError|Unable to access jarfile|scheduler\.jar",
         "排程服務（Timefold）需要 Java 21 和建好的 scheduler.jar",
@@ -176,7 +196,45 @@ OFFLINE_FIXES = {
     "還是不行就進 BIOS 開啟 Intel VT-x 或 AMD SVM",
     "wsl-distro-missing": "按萊問視窗的「重試」會重新匯入；還是失敗就看磁碟空間，"
     "並確認安裝資料夾的 offline\\wsl\\artrag.tar 完整（不完整就重新安裝）",
+    "db-port-taken": "錯誤訊息裡有佔用連接埠的程式名稱：停掉它（多半要系統管理員權限）再按「重試」",
+    "llama-cuda": "新版安裝包會依顯示卡自動改用 Vulkan 版：用新版安裝包重新安裝",
 }
+
+# 離線包的使用者多半不懂電腦（2026-10-30 學校電腦試裝的回饋）：每條規則另外給一段白話，
+# 不用術語、只講發生什麼事和要按什麼；桌面程式先顯示這段，原因與修法收進「給技術人員看」
+_ASK_ADMIN = "還是不行，請找電腦的管理員，把「給技術人員看」的內容給他。"
+_RESTART = "請在螢幕右下角找到萊問的圖示，按右鍵選「重新啟動服務」。"
+_REINSTALL = (
+    "安裝檔不完整，可能是複製或解壓縮時漏了檔案。請重新解壓縮安裝包，再執行一次 setup.exe。"
+)
+PLAIN = {
+    "db-port-taken": "這台電腦上有別的軟體（多半是學校或課程裝的資料庫）佔走了萊問要用的位置，"
+    "萊問的資料庫沒辦法啟動。這需要電腦的管理員處理：請找管理員，把「給技術人員看」的內容給他。",
+    "db-unreachable": "萊問的資料庫沒有順利啟動。" + _RESTART + _ASK_ADMIN,
+    "redis": "萊問的背景服務沒有順利啟動。" + _RESTART + _ASK_ADMIN,
+    "port-in-use": "有別的程式佔用了萊問需要的位置。請重新開機，再打開萊問。" + _ASK_ADMIN,
+    "out-of-memory": "這台電腦的記憶體不夠用。請關掉其他程式（特別是遊戲），再按「重試」。",
+    "hf-offline": _REINSTALL,
+    "model-missing": _REINSTALL,
+    "ollama-missing": _REINSTALL,
+    "uv-missing": _REINSTALL,
+    "offline-missing": _REINSTALL,
+    "venv-broken": "上次安裝沒有做完，留下了不完整的檔案。"
+    "請打開安裝資料夾裡的 app\\backend 資料夾，刪掉裡面的 .venv 資料夾，再按「重試」。",
+    "wsl-unavailable": "這台電腦還沒開啟萊問需要的 Windows 功能。重新打開萊問會自動開啟："
+    "跳出「是否允許變更」時按「是」，完成後重新開機。"
+    "如果跳出來的視窗要你輸入管理員密碼，代表你沒有權限，請找電腦的管理員協助。",
+    "wsl-distro-missing": "萊問的資料庫沒有建立成功。請按「重試」；還是不行，"
+    "可能是硬碟空間不夠，請清出至少 10 GB 再試。",
+    "wsl-cadquery": "3D 重建需要的元件不能用，其他功能不受影響。請重新執行一次 setup.exe。",
+    "llama-cuda": "這台電腦的顯示卡和 3D 重建的程式不相容，其他功能不受影響。"
+    "請用新版的萊問安裝包重新安裝，它會自動改用相容的版本。",
+    "scheduler": "排程功能需要的元件沒有準備好，其他功能不受影響。請重新執行一次 setup.exe。",
+    "disk-full": "硬碟空間不夠。請刪掉不需要的檔案，清出至少 10 GB，再按「重試」。",
+}
+
+# 對到前者時不再報後者：「密碼錯」那一行也有 connection to server at，會再對到「資料庫沒起來」
+SUPERSEDES = {"db-port-taken": {"db-unreachable"}}
 
 # PowerShell 5.1 把原生程式寫到 stderr 的內容包成 NativeCommandError：就算成功，db.log 也有這幾行
 _PS_NOISE = re.compile(r"^\s*(At .*:\d+ char:\d+|\+ .*)$")
@@ -205,6 +263,8 @@ OFFLINE_CONTEXT = (
     "Ollama 在 :11435；Python 環境在安裝資料夾的 app\\backend\\.venv；沒有網路可以下載。"
     "使用者能做的操作：萊問視窗的「重試」、系統匣萊問圖示右鍵的「重新啟動服務」，"
     "或刪掉壞掉的資料夾後重試。"
+    "使用者多半不懂電腦：修法用白話寫要按什麼，不用 WSL、PostgreSQL、連接埠、.env 這類術語；"
+    "需要系統管理員權限的事，請他找電腦的管理員。"
 )
 
 
@@ -257,7 +317,9 @@ def match_rules(message: str, logs: dict[str, list[str]]) -> list[tuple[str, str
             if rx.search(line):
                 found.append((rule_id, cause, fix, f"{where}：{line.strip()[:200]}"))
                 break
-    return found
+    hit = {f[0] for f in found}
+    hidden = set().union(*(SUPERSEDES.get(r, set()) for r in hit))
+    return [f for f in found if f[0] not in hidden]
 
 
 def error_lines(message: str, logs: dict[str, list[str]], per_file: int = 15) -> list[str]:
@@ -453,6 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     for rule_id, cause, fix, evidence in found:
         if offline_bundle:
             fix = OFFLINE_FIXES.get(rule_id, fix)
+            if rule_id in PLAIN:
+                print(f"白話：{PLAIN[rule_id]}")
         print(f"✗ {cause}")
         print(f"  修法：{fix}")
         print(f"  依據（{evidence}）")
