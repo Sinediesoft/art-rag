@@ -157,7 +157,7 @@ class PgCollection(Collection):
             rows = conn.execute(
                 f"SELECT id, 1 - (image_vec <=> %(q)s) FROM {self.items_table}"
                 " WHERE (%(owners)s::text[] IS NULL OR id = ANY (%(owners)s))"
-                " ORDER BY image_vec <=> %(q)s LIMIT %(k)s",
+                " ORDER BY image_vec <=> %(q)s, ord LIMIT %(k)s",
                 {"q": query, "k": k, "owners": sorted(owners) if owners is not None else None},
             ).fetchall()
         # make index 剛換上新資料、快照還沒重載時，略過快照裡沒有的項目
@@ -179,7 +179,7 @@ class PgCollection(Collection):
                 f" WHERE (%(owner)s::text IS NULL OR {self.owner_key} = %(owner)s)"
                 f" AND (%(owners)s::text[] IS NULL OR {self.owner_key} = ANY (%(owners)s))"
                 " AND chunk_id <> ALL (%(exclude)s::text[])"
-                " ORDER BY text_vec <=> %(q)s LIMIT %(k)s",
+                " ORDER BY text_vec <=> %(q)s, ord LIMIT %(k)s",
                 {
                     "q": query,
                     "k": k,

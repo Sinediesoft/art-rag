@@ -8,8 +8,10 @@ from app.api import schemas as S
 from app.api.deps import ID_PATTERN
 from app.core.errors import AppError, safe_stream
 from app.rag.text2sql import load_examples, prompt_versions
+from app.repositories.index_store import get_store
 from app.repositories.inventory_repo import get_inventory_repo
 from app.services import (
+    access_audit,
     identity,
     sql_service,
 )
@@ -42,10 +44,14 @@ def inventory_overview(request: Request):
 @router.get("/inventory/parts/{part_id}", response_model=S.PartInventory, tags=["inventory"])
 def part_inventory(request: Request, part_id: str = Path(pattern=ID_PATTERN)):
     """單一圖紙的庫存明細（固定查詢，不經模型）：各倉儲位、未完工工單、未出貨訂單、最近異動。"""
-    identity.require_domain(identity.current(request), "factory")
+    account = identity.current(request)
+    identity.require_domain(account, "factory")
     data = get_inventory_repo().part_inventory(part_id)
     if not data:
         raise AppError("PART_NOT_FOUND", f"庫存資料庫中沒有圖紙 {part_id}", 404)
+    access_audit.record(
+        account, get_store().get_part(part_id), "庫存明細", request.state.request_id
+    )
     return data
 
 

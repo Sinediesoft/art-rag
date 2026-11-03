@@ -1779,6 +1779,9 @@ small {
   font-size: 13px;
   color: var(--text-3);
 }
+.taskcard__note.is-warn {
+  color: var(--warn);
+}
 .taskcard__run {
   padding: 16px 18px;
   border-top: 1px solid var(--line);

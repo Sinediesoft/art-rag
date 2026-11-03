@@ -18,6 +18,7 @@ import httpx
 import pytest
 import yaml
 from conftest import DEFAULT_ACCOUNT, ROOT, as_account
+from jobs_support import in_process_maintenance
 
 from app.core import config
 from app.core.config import get_settings
@@ -154,6 +155,13 @@ def test_closing_the_page_does_not_cancel_the_job(env, client, live_api):
     assert types[-1] == "succeeded" and "created" not in types and "started" not in types
 
 
+def test_in_process_api_starts_no_background_maintenance(env, live_api):
+    """live_api（module scope）的 lifespan 不在測試行程開維護執行緒：否則它會留到之後的測試，
+    搶先回收過期租約，測「worker 當機後租約過期、由維護重排」的測試就看不到租約過期。"""
+    assert httpx.get(f"{live_api.base}/api/v1/health").status_code == 200
+    assert in_process_maintenance() == []
+
+
 # ============================================================ worker 當機與重啟
 def test_worker_killed_mid_run_is_recovered_and_retried_once(env, client):
     env.fake.duration = 120
@@ -161,6 +169,8 @@ def test_worker_killed_mid_run_is_recovered_and_retried_once(env, client):
     job_id = create_schedule(client)
     env.wait_until(lambda: has_event(job_id, "progress"), 60, "第一個進度事件")
     assert env.job(job_id)["status"] == "running" and env.job(job_id)["attempt"] == 1
+    # 租約只會被下面明確呼叫的維護回收：測試行程裡沒有背景維護執行緒搶先重排
+    assert in_process_maintenance() == []
     a.kill()  # kill -9：沒有機會收尾，租約也不會釋放
     # API 在 worker 掛掉期間仍可查狀態（還是 running，直到租約過期）
     as_account(client, "manager")

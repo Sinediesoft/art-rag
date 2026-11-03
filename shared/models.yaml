@@ -92,6 +92,19 @@ color_analysis:
   lightness_bands: [30, 60]
   chroma_bands: [10, 25]
 
+# 依色彩找畫（docs/adr/044，推翻 ADR 010 的「不在範圍內」）：以文搜畫的問句出現下面的詞，就改照上面色彩分析算好的數字排序。
+# 每個準則取一個 0～1 的值：warm／cool＝有色部分裡暖／冷色的比例（不算黑白灰），light／dark＝亮調／暗調占比，
+# vivid／muted＝高彩度／低彩度占比；一句提到好幾個就取平均，語意分數只用來排同分的。不影響索引，改了不用重建。
+# 分流要先把這類問句分到以文搜畫：shared/agent.yaml 的 art_search 有對應的關鍵字，加詞時兩邊一起加。
+color_search:
+  criteria:
+    warm:  {label: 有色部分暖色, terms: [暖色, 暖調, 偏暖, 溫暖]}
+    cool:  {label: 有色部分冷色, terms: [冷色, 冷調, 偏冷]}
+    light: {label: 亮調, terms: [明亮, 亮色, 亮調, 淺色]}
+    dark:  {label: 暗調, terms: [暗色, 暗調, 偏暗, 陰暗, 深色]}
+    vivid: {label: 高彩度, terms: [鮮豔, 鮮艷, 高彩度, 濃烈]}
+    muted: {label: 低彩度, terms: [素雅, 淡雅, 低彩度, 樸素]}
+
 # 畫作卡推測（借鑒 ArtSeek 的 LICN 畫作卡，見 docs/adr/018）：以圖搜圖辨識失敗（知識庫沒有這幅畫）時，
 # 用同一個 Chinese-CLIP 零樣本比對照片與下面的標籤，推測風格大類（含年代）、題材、媒材。不用訓練、不載入新模型；
 # 標籤向量＝每個標籤的別名 × 提示句平均（prompt ensembling），機率＝softmax(temperature × 餘弦相似度)。
@@ -323,6 +336,15 @@ conflict_check:
   max_tokens: 60                # 一行 JSON {"conflict": …, "refs": […]}
   timeout_s: 10                 # 超過就當成沒檢查，照常回答
 
+# 問題前提檢查（docs/adr/037 補）：至少 1 段參考資料時，先只問本地模型「問題有沒有把人、年份、東西說錯」；
+# 說錯了就在參考資料後面加提醒，回答時先更正再回答。逾時或輸出看不懂就當成沒檢查。
+# 開關優先順序：請求的 premise_check ＞ .env 的 PREMISE_CHECK ＞ 這裡
+premise_check:
+  enabled: true
+  prompt_version: premise_check_v1  # 對應 shared/prompts/premise_check_v1.md
+  max_tokens: 120               # 一行 JSON {"mismatch": …, "claim": …, "correct": …, "ref": …}
+  timeout_s: 10
+
 # 問答要不要附圖（Issue #2、docs/adr/024）：已辨識（或已指定）畫作／圖紙、檢索也開著時，答案來自段落與作品卡，
 # 圖只是補充；不送可以省約 1,070 token，4 GB 顯卡上明顯變快。關檢索的對照組照樣送圖（檢索增益靠它量）。
 # 預設 true＝和原本相同。各主機用 .env 的 SEND_IMAGE 覆寫（例如 GTX 1650 設 false），請求也可用 send_image 指定
@@ -335,7 +357,7 @@ global_fill_keywords: [比較, 相比, 差異, 異同, 不同, 並稱, 其他作
 prompt:
   version: answer_v4          # 對應 shared/prompts/answer_v4.md（v2：參考資料矛盾時要指出，ADR 020；v3／v4：附圖時看圖才知道的內容標 [畫面]，ADR 026）
   drawing_version: drawing_v2 # 工廠圖紙問答，對應 shared/prompts/drawing_v2.md（v2：參考資料矛盾時要指出，ADR 020）
-  sql_version: sql_v2         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v2.md＋sql_v2_examples.json；v2 加入機台與生產排程）
+  sql_version: sql_v3         # 工廠資料庫 Text-to-SQL：問題 → SQL（sql_v3.md＋sql_v3_examples.json；v2 加入機台與生產排程，v3「還剩幾件可以出貨」是可用庫存）
   sql_answer_version: sql_answer_v2  # 依查詢結果回答（sql_answer_v2.md；v2 只在要求修改時才提，並改指向智慧助理）
   # 照片建檔讀標題欄的提示詞版本在 intake.prompt_version（intake_v1.md）
 
@@ -366,6 +388,18 @@ cad:
   max_tokens: 4096
   temperature: 0
   exec_timeout_s: 60          # 產生的程式碼在沙箱中的執行上限
+  # 結果快取＋品質閘門（docs/adr/042）：只收知識庫圖紙的 Ortho2CAD 結果；有標準模型的零件
+  # IoU 達門檻才自動寫入，沒有標準模型的要主管（kb_intake）按「採用這個結果」
+  cache:
+    enabled: true
+    min_iou: 0.6
+  # 重抽候選：temperature＋seed 換出不同的程式碼。現場重建不自動重抽，只有按「結果不對，重新生成」
+  # （一次一個候選，下一個沒試過的 seed）與 make cad-warm 會用
+  resample:
+    temperature: 0.7
+    max_seeds: 8              # 每張圖（同一個快取 key）最多試幾個 seed（1…max_seeds）
+    warm_seeds: 3             # make cad-warm 在 greedy 不合格時依序試幾個 seed
+    time_limit_s: 900         # make cad-warm 每張圖重抽的時間上限（秒）
 
 generation:
   temperature: 0              # 評估時固定 0

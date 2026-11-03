@@ -493,24 +493,41 @@ class ProductionRepo:
             self.decide_approval(r["ap_no"], "已失效", "system", "系統", "超過 24 小時沒人處理")
         return [r["ap_no"] for r in rows]
 
-    def add_audit(self, row: dict, once: bool = False) -> None:
+    def add_audit(self, row: dict, once: bool = False, audit_id: str | None = None) -> None:
         """once：同一個（動作、操作、單號）已經有紀錄就不再寫——冪等重送、中斷後補做收尾時
-        不會重複記稽核（這些單號每個只會被寫入一次）。"""
+        不會重複記稽核（這些單號每個只會被寫入一次）。
+        audit_id：伺服器產生、一個事件一個的編號（寫在 detail.audit_id）；已經有同一個編號的紀錄
+        就不再寫——補送同一個事件不重複，不同事件（即使單號、request_id 相同）各記一筆。
+        request_id 來自呼叫端可指定的 X-Request-ID，只當追蹤欄位，不拿來去重（docs/adr/042）。"""
         with self._lock:
             conn = self._conn()
             try:
-                self._insert_audit(conn, row, once)
+                self._insert_audit(conn, row, once, audit_id)
                 conn.commit()
             finally:
                 conn.close()
 
-    def _insert_audit(self, conn: sqlite3.Connection, row: dict, once: bool = False) -> None:
+    def _insert_audit(
+        self, conn: sqlite3.Connection, row: dict, once: bool = False, audit_id: str | None = None
+    ) -> None:
         row = {**row, "at": self.now()}
+        if audit_id is not None:
+            detail = row.get("detail") if isinstance(row.get("detail"), dict) else {}
+            row["detail"] = {**detail, "audit_id": audit_id}
         if isinstance(row.get("detail"), (dict, list)):
             row["detail"] = json.dumps(row["detail"], ensure_ascii=False)
         cols = ", ".join(row)
         marks = ", ".join("?" for _ in row)
-        if once:
+        if audit_id is not None:
+            # detail 可能是一般文字（其他稽核）：CASE 先判斷是不是 JSON，才取 audit_id
+            conn.execute(
+                f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
+                " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?"
+                " AND CASE WHEN json_valid(detail)"
+                " THEN json_extract(detail, '$.audit_id') END = ?)",
+                (*row.values(), row.get("action"), row.get("op"), row.get("ref_no"), audit_id),
+            )
+        elif once:
             conn.execute(
                 f"INSERT INTO audit_log ({cols}) SELECT {marks} WHERE NOT EXISTS ("
                 " SELECT 1 FROM audit_log WHERE action = ? AND op IS ? AND ref_no IS ?)",

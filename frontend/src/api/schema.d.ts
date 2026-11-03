@@ -639,6 +639,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cad/jobs/{job_id}/cache/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Cad Result
+         * @description 「結果不對」：讀得到這個工作的人都可以作廢它的程式碼（記住雜湊，之後不命中、不寫入、
+         *     不能採用），並記稽核。只適用知識庫圖紙的 Ortho2CAD 結果（docs/adr/042）；
+         *     接著用 `POST /cad/jobs`（regenerate＝true）重抽一個候選。
+         */
+        post: operations["reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cad/jobs/{job_id}/cache/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Cad Result
+         * @description 「採用這個結果」：沒有標準模型的零件（照片建檔）由主管（kb_intake）採用後才寫入結果快取，
+         *     並記稽核（docs/adr/042）。
+         */
+        post: operations["adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/parts/{part_id}/reconstructions": {
         parameters: {
             query?: never;
@@ -1639,6 +1682,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccessRow */
+        AccessRow: {
+            /** Created At */
+            created_at: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Account Id */
+            account_id?: string | null;
+            /** Account Label */
+            account_label?: string | null;
+            /** Part Id */
+            part_id: string;
+            /** Level */
+            level?: string | null;
+            /**
+             * What
+             * @description 讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答
+             */
+            what: string;
+        };
         /** Account */
         Account: {
             /** Id */
@@ -2010,6 +2073,12 @@ export interface components {
             changes: {
                 [key: string]: unknown;
             }[];
+            /**
+             * Reads
+             * @description 最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）
+             * @default []
+             */
+            reads: components["schemas"]["AccessRow"][];
         };
         /** AuditRow */
         AuditRow: {
@@ -2120,6 +2189,39 @@ export interface components {
             /** File */
             file: string;
         };
+        /** CadCacheAdopted */
+        CadCacheAdopted: {
+            /** Job Id */
+            job_id: string;
+            /** Adopted */
+            adopted: boolean;
+            /** Created At */
+            created_at: string;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
+        };
+        /** CadCacheRejected */
+        CadCacheRejected: {
+            /** Job Id */
+            job_id: string;
+            /** Rejected */
+            rejected: boolean;
+            /**
+             * Removed
+             * @description 這次有沒有把快取裡的那一筆移除
+             */
+            removed: boolean;
+            /**
+             * Audit
+             * @description recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）
+             * @enum {string}
+             */
+            audit: "recorded" | "pending";
+        };
         /** CadEvalRunsResponse */
         CadEvalRunsResponse: {
             /** Runs */
@@ -2145,6 +2247,12 @@ export interface components {
              * @enum {string}
              */
             strategy: "ortho2cad" | "hybrid";
+            /**
+             * Regenerate
+             * @description 結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed 產生一個新候選（docs/adr/042）
+             * @default false
+             */
+            regenerate: boolean;
         };
         /** CadJobListResponse */
         CadJobListResponse: {
@@ -2357,6 +2465,11 @@ export interface components {
              */
             conflict_check?: boolean | null;
             /**
+             * Premise Check
+             * @description 回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定
+             */
+            premise_check?: boolean | null;
+            /**
              * Route Ticket
              * @description /agent/route 回的交接票（docs/adr/030）。有效才沿用第 2 段的判斷；沒帶、過期或帳號、問句、對象不符時，伺服器自己重跑第 2 段。七段權限控管每一段都由伺服器執行，請求裡沒有可以略過關卡的欄位
              */
@@ -2417,6 +2530,40 @@ export interface components {
              * @description 計算耗時；知識庫畫作為建索引時算好的，回 0
              */
             latency_ms: number;
+        };
+        /** ColorCriterion */
+        ColorCriterion: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "warm" | "cool" | "light" | "dark" | "vivid" | "muted";
+            /**
+             * Label
+             * @description 準則名稱，例如「有色部分暖色」
+             * @example 有色部分暖色
+             */
+            label: string;
+            /**
+             * Term
+             * @description 問句裡對到的詞
+             * @example 暖色
+             */
+            term: string;
+        };
+        /** ColorMatch */
+        ColorMatch: {
+            /**
+             * Score
+             * @description 0～1；問句提到好幾個準則時取平均
+             */
+            score: number;
+            /**
+             * Detail
+             * @description 排序依據，例如「有色部分暖色 56%」
+             * @example 有色部分暖色 56%
+             */
+            detail: string;
         };
         /** CompareRow */
         CompareRow: {
@@ -3732,6 +3879,13 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** NavigatePage */
+        NavigatePage: {
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+        };
         /** OkResponse */
         OkResponse: {
             /**
@@ -5026,7 +5180,8 @@ export interface components {
         /**
          * ShortCircuitInfo
          * @description 快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
-         *     或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。
+         *     或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），
+         *     或整句只是在切換模組（navigate：「進入工廠模組」）。
          */
         ShortCircuitInfo: {
             /**
@@ -5044,9 +5199,16 @@ export interface components {
              * @default chitchat
              * @enum {string}
              */
-            kind: "chitchat" | "catalog";
+            kind: "chitchat" | "catalog" | "navigate";
             /** Reply */
             reply: string;
+            /**
+             * Module
+             * @description navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null
+             */
+            module?: ("factory" | "art") | null;
+            /** @description navigate：要打開的功能頁（「打開待核准清單」） */
+            page?: components["schemas"]["NavigatePage"] | null;
         };
         /** SkippedWorkOrder */
         SkippedWorkOrder: {
@@ -5292,6 +5454,8 @@ export interface components {
             image_score: number;
             /** Text Score */
             text_score: number;
+            /** @description 問句提到冷暖、明暗、彩度時才有（docs/adr/044） */
+            color?: components["schemas"]["ColorMatch"] | null;
         };
         /** TextSearchResponse */
         TextSearchResponse: {
@@ -5299,6 +5463,11 @@ export interface components {
             query: string;
             /** Latency Ms */
             latency_ms: number;
+            /**
+             * Color Sort
+             * @description 問句提到的色彩準則；有的時候結果以色彩分析為主排序，score（語意）只排同分的（docs/adr/044）
+             */
+            color_sort?: components["schemas"]["ColorCriterion"][] | null;
             /** Results */
             results: components["schemas"]["TextSearchHit"][];
         };
@@ -6444,6 +6613,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CadJobSummary"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadCacheRejected"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CadCacheAdopted"];
                 };
             };
             /** @description Client Error */

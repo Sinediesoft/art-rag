@@ -1,0 +1,8 @@
+# 只在這個資料夾裡生效
+.tools/
+.venv/
+models/
+index/
+logs/
+__pycache__/
+claude_config_step*.json

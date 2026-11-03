@@ -59,16 +59,37 @@ class ImageSearchResponse(BaseModel):
     results: list[ImageSearchHit]
 
 
+class ColorCriterion(BaseModel):
+    key: Literal["warm", "cool", "light", "dark", "vivid", "muted"]
+    label: str = Field(description="準則名稱，例如「有色部分暖色」", examples=["有色部分暖色"])
+    term: str = Field(description="問句裡對到的詞", examples=["暖色"])
+
+
+class ColorMatch(BaseModel):
+    score: float = Field(description="0～1；問句提到好幾個準則時取平均")
+    detail: str = Field(
+        description="排序依據，例如「有色部分暖色 56%」", examples=["有色部分暖色 56%"]
+    )
+
+
 class TextSearchHit(BaseModel):
     artwork: ArtworkSummary
     score: float
     image_score: float
     text_score: float
+    color: ColorMatch | None = Field(
+        default=None, description="問句提到冷暖、明暗、彩度時才有（docs/adr/044）"
+    )
 
 
 class TextSearchResponse(BaseModel):
     query: str
     latency_ms: int
+    color_sort: list[ColorCriterion] | None = Field(
+        default=None,
+        description="問句提到的色彩準則；有的時候結果以色彩分析為主排序，"
+        "score（語意）只排同分的（docs/adr/044）",
+    )
     results: list[TextSearchHit]
 
 
@@ -411,6 +432,11 @@ class ChatRequest(BaseModel):
         description="回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒"
         "（docs/adr/028）；null＝依伺服器設定",
     )
+    premise_check: bool | None = Field(
+        default=None,
+        description="回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒"
+        "（docs/adr/037 補）；null＝依伺服器設定",
+    )
     route_ticket: str | None = Field(
         default=None,
         max_length=64,
@@ -707,6 +733,26 @@ class ReconstructRequest(BaseModel):
     strategy: Literal["ortho2cad", "hybrid"] = Field(
         default="ortho2cad", description="ortho2cad＝主模型；hybrid＝未微調的 Qwen3-VL（對照組）"
     )
+
+
+CAD_AUDIT_STATE = (
+    "recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），"
+    "稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）"
+)
+
+
+class CadCacheRejected(BaseModel):
+    job_id: str
+    rejected: bool
+    removed: bool = Field(description="這次有沒有把快取裡的那一筆移除")
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
+
+
+class CadCacheAdopted(BaseModel):
+    job_id: str
+    adopted: bool
+    created_at: str
+    audit: Literal["recorded", "pending"] = Field(description=CAD_AUDIT_STATE)
 
 
 class CadJobSummary(BaseModel):
@@ -1370,14 +1416,27 @@ class BlockedInfo(BaseModel):
     degraded: bool = Field(description="降級回應（查無資料），不是權限不足的拒絕")
 
 
+class NavigatePage(BaseModel):
+    label: str
+    path: str
+
+
 class ShortCircuitInfo(BaseModel):
     """快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），
-    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"""
+    或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），
+    或整句只是在切換模組（navigate：「進入工廠模組」）。"""
 
     stage: Literal[2]
     by: Literal["Jev", "地端"]
-    kind: Literal["chitchat", "catalog"] = "chitchat"
+    kind: Literal["chitchat", "catalog", "navigate"] = "chitchat"
     reply: str
+    module: Literal["factory", "art"] | None = Field(
+        default=None,
+        description="navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null",
+    )
+    page: NavigatePage | None = Field(
+        default=None, description="navigate：要打開的功能頁（「打開待核准清單」）"
+    )
 
 
 class RouterInfo(BaseModel):
@@ -1579,9 +1638,25 @@ class AuditRow(BaseModel):
     request_id: str | None
 
 
+class AccessRow(BaseModel):
+    created_at: str
+    request_id: str | None = None
+    account_id: str | None = None
+    account_label: str | None = None
+    part_id: str
+    level: str | None = None
+    what: str = Field(
+        description="讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+    )
+
+
 class AuditResponse(BaseModel):
     items: list[AuditRow]
     changes: list[dict] = Field(description="最近寫入的異動單")
+    reads: list[AccessRow] = Field(
+        default=[],
+        description="最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+    )
 
 
 # ---------------------------------------------------------------- 照片建檔（docs/adr/013）
@@ -1696,6 +1771,11 @@ class CadJobCreate(BaseModel):
         description="上傳的圖紙照片（要是自己的或擁有者授權的）",
     )
     strategy: Literal["ortho2cad", "hybrid"] = "ortho2cad"
+    regenerate: bool = Field(
+        default=False,
+        description="結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed "
+        "產生一個新候選（docs/adr/042）",
+    )
 
 
 class ScheduleJobCreate(BaseModel):

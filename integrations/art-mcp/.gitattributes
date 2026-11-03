@@ -1,0 +1,2 @@
+# 小組 repo 預設 eol=lf；Windows 的 .bat 一定要 CRLF，不然 goto 標籤可能失效
+*.bat text eol=crlf

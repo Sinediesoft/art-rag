@@ -60,12 +60,14 @@ export interface Output {
   meta: string;
   partId?: string;
   artworkId?: string;
+  /** 照片辨識出這幅畫（第 1 段以圖搜圖）：這一輪附的照片，藝術模組拿它做檢索結果、色溫對照與影像對位 */
+  imageId?: string;
   sql?: SqlPart;
   job?: CadJob;
   /** 排程：null＝目前的排程（/production/overview）；有值＝這一輪求解的結果 */
   solve?: SolveJob | null;
   /** 相似作品：以文搜畫的結果；search＝使用者的搜尋句，沒有就是「與〈作品〉相近」 */
-  items?: { artwork: ArtworkSummary; score: number }[];
+  items?: { artwork: ArtworkSummary; score: number; color?: string | null }[];
   search?: string;
   focus?: "技法" | "畫面";
   /** 從紀錄還原的工廠成果：只有編號，展示區以目前的 JWT 重新讀取（3D 讀 /cad/jobs、排程讀 /schedule/runs） */
@@ -194,7 +196,11 @@ export function deriveOutputs(conv: Conv | null) {
       const part = t.part;
       const results = part?.kind === "artSearch" && part.status === "done" ? part.items : t.archived?.artResults;
       if (a) {
-        add({ key: `artwork:${a.id}`, kind: "artwork", domain: d, turnId: t.id, artworkId: a.id, title: a.label, meta: "作品・知識庫" });
+        // 照片辨識出的就是這幅畫：同一幅畫＋這張照片另成一份成果（藝術模組多了檢索分數、色溫對照與影像對位）
+        const match = t.route ? t.route.photo?.kind === "art" && t.route.photo.id === a.id : !!t.archived?.photoMatch;
+        const photo = t.imageId && match ? t.imageId : undefined;
+        if (photo) add({ key: `artwork:${a.id}@${photo}`, kind: "artwork", domain: d, turnId: t.id, artworkId: a.id, imageId: photo, title: a.label, meta: "作品・比對你的照片" });
+        else add({ key: `artwork:${a.id}`, kind: "artwork", domain: d, turnId: t.id, artworkId: a.id, title: a.label, meta: "作品・知識庫" });
         if (SIMILAR_CUE.test(q))
           add({ key: `similar:${t.id}`, kind: "similar", domain: d, turnId: t.id, artworkId: a.id, title: `與〈${a.label}〉相近的作品`, meta: "以文搜畫・依風格標籤" });
         else if (DETAIL_CUE.test(q))
@@ -220,7 +226,7 @@ export function deriveOutputs(conv: Conv | null) {
           items: results,
           search: q,
           title: `「${q}」的搜尋結果`,
-          meta: `${results.length} 幅・Chinese-CLIP＋bge-m3`,
+          meta: `${results.length} 幅・${results[0]?.color ? "依色彩分析排序" : "Chinese-CLIP＋bge-m3"}`,
         });
     }
   }

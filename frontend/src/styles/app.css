@@ -204,6 +204,19 @@ body.is-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 開發者平台沒有功能頁可展開：↗ 佔和 side__modtoggle 一樣寬的 34px，抵掉 side__modgo 右邊的 4px，中心才和上面兩列的箭頭對齊 */
+.side__modext {
+  width: 34px;
+  margin-left: auto;
+  margin-right: -4px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.side__modgo:hover .side__modext {
+  color: var(--text);
+}
 .side__modtoggle {
   display: grid;
   place-items: center;

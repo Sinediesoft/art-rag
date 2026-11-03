@@ -15,7 +15,7 @@ from app.api import schemas as S
 from app.api.deps import visible_part
 from app.core.errors import AppError, safe_stream
 from app.repositories.logs_repo import get_logs_repo
-from app.services import cad_access, cad_service, identity, security
+from app.services import cad_access, cad_cache, cad_service, identity, security
 
 router = APIRouter()
 
@@ -71,6 +71,23 @@ def get_cad_job(job_id: str, request: Request):
     if d is None or not (d / "summary.json").is_file():
         raise AppError(*security.CAD_JOB_NOT_FOUND)
     return json.loads((d / "summary.json").read_text(encoding="utf-8"))
+
+
+@router.post("/cad/jobs/{job_id}/cache/reject", response_model=S.CadCacheRejected, tags=["cad"])
+def reject_cad_result(job_id: str, request: Request):
+    """「結果不對」：讀得到這個工作的人都可以作廢它的程式碼（記住雜湊，之後不命中、不寫入、
+    不能採用），並記稽核。只適用知識庫圖紙的 Ortho2CAD 結果（docs/adr/042）；
+    接著用 `POST /cad/jobs`（regenerate＝true）重抽一個候選。"""
+    account = identity.current(request)
+    return cad_cache.reject_job(account, job_id, request.state.request_id)
+
+
+@router.post("/cad/jobs/{job_id}/cache/adopt", response_model=S.CadCacheAdopted, tags=["cad"])
+def adopt_cad_result(job_id: str, request: Request):
+    """「採用這個結果」：沒有標準模型的零件（照片建檔）由主管（kb_intake）採用後才寫入結果快取，
+    並記稽核（docs/adr/042）。"""
+    account = identity.current(request)
+    return cad_cache.adopt_job(account, job_id, request.state.request_id)
 
 
 @router.get("/parts/{part_id}/reconstructions", response_model=S.CadJobListResponse, tags=["cad"])

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAccounts, useSwitchAccount } from "../api/hooks";
 import { AccountMenu, pendingCount, Popover, SecurityPanel, StatusChip, useTokenRenewal, WriteNotice, type Menu } from "../components/shell/Chrome";
 import { Composer } from "../components/shell/Composer";
-import { Home, type GUARD_EXAMPLES, type SCRIPT } from "../components/shell/Home";
+import { Home, type SCRIPT } from "../components/shell/Home";
 import { Icon } from "../components/shell/Icons";
 import { JumpCard } from "../components/shell/Jump";
 import { SettingsMenu, ThemeToggle } from "../components/shell/SettingsMenu";
@@ -15,11 +15,11 @@ import { ctaOf, deriveOutputs } from "../shell/outputs";
 import { titleOf } from "../shell/persist";
 import { useShell } from "../shell/store";
 import type { Conv } from "../shell/types";
-import { forgeToken, lockReason, useThreadActions } from "./shared";
+import { lockReason, useThreadActions } from "./shared";
 
 /**
  * 來源：ArtRAG-前端demo/source/src/views/EntryView.tsx。
- * 入口（01 Quiet 風格）：左側對話紀錄（可收合；手機是抽屜）、問候與輸入框、建議問句。
+ * 入口（01 Quiet 風格）：左側對話紀錄（可收合；手機是抽屜，目前身分在最下面）、問候與輸入框；頁首是七段防護、明暗、設定。
  * 問了之後只回簡介；七段流程分派到工廠或藝術，就在簡介下方放那個模組的按鈕（沒分派到模組就不放）。
  */
 export function EntryView({ convId, onJump }: { convId: string | null; onJump: (convId: string, domain: Domain, key?: string) => void }) {
@@ -49,7 +49,6 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
   const actions = useThreadActions(conv, "brief", (q, forced, imageId) => ask(q, imageId ?? null, forced ?? null));
   const outputs = deriveOutputs(conv);
 
-  const onGuard = (x: (typeof GUARD_EXAMPLES)[number]) => ask(x.q, null, null, x.tamper && accounts ? forgeToken(accounts.token.unsigned) : undefined);
   const onScript = async (s: (typeof SCRIPT)[number]) => {
     if (accounts?.current.id !== s.account)
       try {
@@ -72,6 +71,26 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
   const composer = (
     <div className="entry-compose" key={heroComposer ? "hero" : "dock"}>
       <Composer busy={busy} copy={COPY.entry} onSend={(t, img) => ask(t, img)} onStop={() => conv && shell.stop(conv.id)} autoFocus locked={lockReason(shell)} resetKey={shell.accountId} />
+    </div>
+  );
+  // 目前身分放在對話紀錄最下面（原型 mockups/entry.html），選單往上打開
+  const account = (
+    <div className="topbar__slot">
+      <button
+        type="button"
+        className={`topbar__btn topbar__account${menu === "account" ? " is-open" : ""}`}
+        onClick={() => setMenu(menu === "account" ? null : "account")}
+        aria-expanded={menu === "account"}
+        title={`目前身分：${accounts?.current.label ?? "讀取中"}`}
+      >
+        <span className="avatar">{(accounts?.current.label ?? "訪").slice(0, 1)}</span>
+        <span className="topbar__btn-label">{accounts?.current.label ?? "讀取中"}</span>
+        {pendingCount(accounts) > 0 && <span className="count">{pendingCount(accounts)}</span>}
+        <Icon name="chevronDown" strokeWidth={2} />
+      </button>
+      <Popover open={menu === "account"} onClose={close} className="menu--side">
+        <AccountMenu onClose={close} />
+      </Popover>
     </div>
   );
   const sidebar = (variant: "rail" | "drawer") => (
@@ -99,6 +118,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
       }}
       onDelete={remove}
       onClose={() => setDrawer(false)}
+      foot={account}
     />
   );
 
@@ -133,22 +153,6 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
               </button>
               <Popover open={menu === "security"} onClose={close} className="menu--wide menu--security">
                 <SecurityPanel />
-              </Popover>
-            </div>
-            <div className="topbar__slot">
-              <button
-                type="button"
-                className={`topbar__btn topbar__account${menu === "account" ? " is-open" : ""}`}
-                onClick={() => setMenu(menu === "account" ? null : "account")}
-                aria-expanded={menu === "account"}
-              >
-                <span className="avatar">{(accounts?.current.label ?? "訪").slice(0, 1)}</span>
-                <span className="topbar__btn-label">{accounts?.current.label ?? "讀取中"}</span>
-                {pendingCount(accounts) > 0 && <span className="count">{pendingCount(accounts)}</span>}
-                <Icon name="chevronDown" strokeWidth={2} />
-              </button>
-              <Popover open={menu === "account"} onClose={close} className="menu--right">
-                <AccountMenu onClose={close} />
               </Popover>
             </div>
             <ThemeToggle className="topbar__btn topbar__icon" />
@@ -186,7 +190,7 @@ export function EntryView({ convId, onJump }: { convId: string | null; onJump: (
         <div className="body">
           <main ref={sticky.scroller} onScroll={sticky.onScroll} className="scroll">
             {empty ? (
-              <Home composer={heroComposer ? composer : null} onPick={(p) => ask(p)} onGuard={onGuard} onScript={(s) => void onScript(s)} />
+              <Home composer={heroComposer ? composer : null} onScript={(s) => void onScript(s)} />
             ) : (
               <div ref={sticky.content} className="thread">
                 <Thread

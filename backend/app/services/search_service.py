@@ -97,9 +97,44 @@ def identify(
     }
 
 
+def _of_colored(a: float, b: float) -> float:
+    # 只比有色部分：黑白灰多的畫（水墨、點描）不會因此被當成不暖也不冷
+    return a / (a + b) if a + b > 0 else 0.0
+
+
+# 依色彩找畫（docs/adr/044）：每個準則從色彩分析（ADR 010，建索引時算好）取一個 0～1 的值
+COLOR_METRICS = {
+    "warm": lambda c: _of_colored(c["temperature"]["warm"], c["temperature"]["cool"]),
+    "cool": lambda c: _of_colored(c["temperature"]["cool"], c["temperature"]["warm"]),
+    "light": lambda c: c["lightness"]["light"],
+    "dark": lambda c: c["lightness"]["dark"],
+    "vivid": lambda c: c["chroma"]["high"],
+    "muted": lambda c: c["chroma"]["low"],
+}
+
+
+def color_criteria(q: str) -> list[dict]:
+    """問句提到的色彩準則（shared/models.yaml 的 color_search），依設定的順序、每個準則只算一次。"""
+    found = []
+    for key, spec in get_models_config().color_search.criteria.items():
+        term = next((t for t in spec.terms if t in q), None)
+        if term and key in COLOR_METRICS:
+            found.append({"key": key, "label": spec.label, "term": term})
+    return found
+
+
+def color_match(colors: dict | None, criteria: list[dict]) -> dict | None:
+    if not colors or not criteria:
+        return None
+    vals = [COLOR_METRICS[c["key"]](colors) for c in criteria]
+    parts = [f"{c['label']} {v * 100:.0f}%" for c, v in zip(criteria, vals, strict=True)]
+    return {"score": round(sum(vals) / len(vals), 4), "detail": "、".join(parts)}
+
+
 @guarded("search_text", {"clip", "bge"})
 def search_text(q: str, top_k: int | None = None) -> dict:
-    """Chinese-CLIP（文字→畫面）與 bge-m3（文字→知識段落）兩路排序，用 RRF 融合。"""
+    """Chinese-CLIP（文字→畫面）與 bge-m3（文字→知識段落）兩路排序，用 RRF 融合。
+    問句提到冷暖、明暗、彩度時改以色彩分析為主排序，RRF 只排同分的（docs/adr/044）。"""
     store = get_store()
     k = top_k or int(get_models_config().retrieval["top_k_search"])
     t0 = time.perf_counter()
@@ -107,7 +142,8 @@ def search_text(q: str, top_k: int | None = None) -> dict:
     chunk_sims = store.chunk_vecs @ embed_text([q])[0]
     text_best: dict[str, float] = {}
     for c, s in zip(store.chunks, chunk_sims, strict=True):
-        # 色彩段落只給問答用：依色彩找畫不在範圍內（ADR 010），不讓它影響以文搜圖的排名
+        # 色彩段落只給問答用：依色彩找畫看的是色彩分析的數字（ADR 044），
+        # 段落文字不影響以文搜圖的排名
         if c["chunk_id"].endswith("#color"):
             continue
         text_best[c["artwork_id"]] = max(text_best.get(c["artwork_id"], -1.0), float(s))
@@ -118,16 +154,21 @@ def search_text(q: str, top_k: int | None = None) -> dict:
     }
     text_rank = {aid: r for r, aid in enumerate(sorted(ids, key=lambda a: -text_best.get(a, -1)))}
     rrf = {aid: 1 / (60 + clip_rank[aid]) + 1 / (60 + text_rank[aid]) for aid in ids}
-    order = sorted(ids, key=lambda a: -rrf[a])[:k]
+    criteria = color_criteria(q)
+    color = {aid: color_match(store.by_id[aid].get("colors"), criteria) for aid in ids}
+    # 沒有色彩分析的畫（舊索引）排在有分數的後面
+    order = sorted(ids, key=lambda a: (-(color[a]["score"] if color[a] else -1), -rrf[a]))[:k]
     return {
         "query": q,
         "latency_ms": round((time.perf_counter() - t0) * 1000),
+        "color_sort": criteria or None,
         "results": [
             {
                 "artwork": artwork_summary(store.by_id[aid]),
                 "score": round(rrf[aid] / (2 / 60), 4),
                 "image_score": round(float(clip_sims[ids.index(aid)]), 4),
                 "text_score": round(text_best.get(aid, 0.0), 4),
+                "color": color[aid],
             }
             for aid in order
         ],

@@ -1427,6 +1427,92 @@
         }
       }
     },
+    "/api/v1/cad/jobs/{job_id}/cache/reject": {
+      "post": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Reject Cad Result",
+        "description": "「結果不對」：讀得到這個工作的人都可以作廢它的程式碼（記住雜湊，之後不命中、不寫入、\n不能採用），並記稽核。只適用知識庫圖紙的 Ortho2CAD 結果（docs/adr/042）；\n接著用 `POST /cad/jobs`（regenerate＝true）重抽一個候選。",
+        "operationId": "reject_cad_result_api_v1_cad_jobs__job_id__cache_reject_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadCacheRejected"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
+    "/api/v1/cad/jobs/{job_id}/cache/adopt": {
+      "post": {
+        "tags": [
+          "cad"
+        ],
+        "summary": "Adopt Cad Result",
+        "description": "「採用這個結果」：沒有標準模型的零件（照片建檔）由主管（kb_intake）採用後才寫入結果快取，\n並記稽核（docs/adr/042）。",
+        "operationId": "adopt_cad_result_api_v1_cad_jobs__job_id__cache_adopt_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CadCacheAdopted"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          }
+        }
+      }
+    },
     "/api/v1/parts/{part_id}/reconstructions": {
       "get": {
         "tags": [
@@ -3659,6 +3745,74 @@
   },
   "components": {
     "schemas": {
+      "AccessRow": {
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "what": {
+            "type": "string",
+            "title": "What",
+            "description": "讀了什麼：原尺寸圖紙、STEP／STL 模型、圖紙／庫存／生產明細、圖紙問答"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_at",
+          "part_id",
+          "what"
+        ],
+        "title": "AccessRow"
+      },
       "Account": {
         "properties": {
           "id": {
@@ -4586,6 +4740,15 @@
             "type": "array",
             "title": "Changes",
             "description": "最近寫入的異動單"
+          },
+          "reads": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRow"
+            },
+            "type": "array",
+            "title": "Reads",
+            "description": "最近的機密資料讀取紀錄（誰、讀了哪張圖紙的什麼；只記編號，不存內容）",
+            "default": []
           }
         },
         "type": "object",
@@ -4913,6 +5076,73 @@
         ],
         "title": "Body_upload_image_api_v1_images_post"
       },
+      "CadCacheAdopted": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "adopted": {
+            "type": "boolean",
+            "title": "Adopted"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "audit": {
+            "type": "string",
+            "enum": [
+              "recorded",
+              "pending"
+            ],
+            "title": "Audit",
+            "description": "recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "adopted",
+          "created_at",
+          "audit"
+        ],
+        "title": "CadCacheAdopted"
+      },
+      "CadCacheRejected": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "rejected": {
+            "type": "boolean",
+            "title": "Rejected"
+          },
+          "removed": {
+            "type": "boolean",
+            "title": "Removed",
+            "description": "這次有沒有把快取裡的那一筆移除"
+          },
+          "audit": {
+            "type": "string",
+            "enum": [
+              "recorded",
+              "pending"
+            ],
+            "title": "Audit",
+            "description": "recorded＝已寫進稽核紀錄；pending＝快取變更與稽核已一起存下（同一個交易），稽核資料庫暫時寫不進去，稍後自動補送（docs/adr/042）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "rejected",
+          "removed",
+          "audit"
+        ],
+        "title": "CadCacheRejected"
+      },
       "CadEvalRunsResponse": {
         "properties": {
           "runs": {
@@ -4966,6 +5196,12 @@
             ],
             "title": "Strategy",
             "default": "ortho2cad"
+          },
+          "regenerate": {
+            "type": "boolean",
+            "title": "Regenerate",
+            "description": "結果不對，重新生成：不查結果快取，用 temperature＋下一個沒試過的 seed 產生一個新候選（docs/adr/042）",
+            "default": false
           }
         },
         "type": "object",
@@ -5523,6 +5759,18 @@
             "title": "Conflict Check",
             "description": "回答前先只問本地模型「參考資料對這個問題有沒有互相矛盾」，有的話在參考資料後面加提醒（docs/adr/028）；null＝依伺服器設定"
           },
+          "premise_check": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premise Check",
+            "description": "回答前先只問本地模型「問題有沒有把人、年份、東西說錯」，錯了就在參考資料後面加更正提醒（docs/adr/037 補）；null＝依伺服器設定"
+          },
           "route_ticket": {
             "anyOf": [
               {
@@ -5675,6 +5923,68 @@
           "latency_ms"
         ],
         "title": "ColorAnalysis"
+      },
+      "ColorCriterion": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "warm",
+              "cool",
+              "light",
+              "dark",
+              "vivid",
+              "muted"
+            ],
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "準則名稱，例如「有色部分暖色」",
+            "examples": [
+              "有色部分暖色"
+            ]
+          },
+          "term": {
+            "type": "string",
+            "title": "Term",
+            "description": "問句裡對到的詞",
+            "examples": [
+              "暖色"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "term"
+        ],
+        "title": "ColorCriterion"
+      },
+      "ColorMatch": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "0～1；問句提到好幾個準則時取平均"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "排序依據，例如「有色部分暖色 56%」",
+            "examples": [
+              "有色部分暖色 56%"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "detail"
+        ],
+        "title": "ColorMatch"
       },
       "CompareRow": {
         "properties": {
@@ -8838,6 +9148,24 @@
         ],
         "title": "MetaFilterInfo",
         "description": "第 3 段的 Metadata Filter：只照 JWT 的 clearance 與 depts 產生。"
+      },
+      "NavigatePage": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "path"
+        ],
+        "title": "NavigatePage"
       },
       "OkResponse": {
         "properties": {
@@ -12202,7 +12530,8 @@
             "type": "string",
             "enum": [
               "chitchat",
-              "catalog"
+              "catalog",
+              "navigate"
             ],
             "title": "Kind",
             "default": "chitchat"
@@ -12210,6 +12539,33 @@
           "reply": {
             "type": "string",
             "title": "Reply"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "factory",
+                  "art"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module",
+            "description": "navigate：要進入的模組（前端顯示進入按鈕）；目前身分不能用這個模組時為 null"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NavigatePage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "navigate：要打開的功能頁（「打開待核准清單」）"
           }
         },
         "type": "object",
@@ -12219,7 +12575,7 @@
           "reply"
         ],
         "title": "ShortCircuitInfo",
-        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039）。"
+        "description": "快速短路回覆，不檢索、不生成：第 2 段判為無關閒聊（chitchat），\n或第 2 段放行後判為知識庫目錄題、直接列出知識庫的畫作（catalog，docs/adr/039），\n或整句只是在切換模組（navigate：「進入工廠模組」）。"
       },
       "SkippedWorkOrder": {
         "properties": {
@@ -12784,6 +13140,17 @@
           "text_score": {
             "type": "number",
             "title": "Text Score"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ColorMatch"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "問句提到冷暖、明暗、彩度時才有（docs/adr/044）"
           }
         },
         "type": "object",
@@ -12804,6 +13171,21 @@
           "latency_ms": {
             "type": "integer",
             "title": "Latency Ms"
+          },
+          "color_sort": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ColorCriterion"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Sort",
+            "description": "問句提到的色彩準則；有的時候結果以色彩分析為主排序，score（語意）只排同分的（docs/adr/044）"
           },
           "results": {
             "items": {

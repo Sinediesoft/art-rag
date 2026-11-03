@@ -6,6 +6,8 @@
 3. Ortho2CAD 生成 CadQuery 程式碼（逐字串流）
 4. 沙箱執行 → STL／STEP／回投影三視圖；知識庫零件另與標準模型比 IoU（論文的評估法）
    有標準三視圖的零件，執行前把模型畫的垂直圓孔換成 OpenCV 在俯視圖找到的孔（docs/adr/035）
+結果快取（docs/adr/042）：知識庫圖紙＋Ortho2CAD 在第 3 步之前先查快取（services/cad_cache.py），
+命中就跳過生成；合格（執行成功、實體有效、孔位校正沒失敗、IoU 達門檻）的結果才寫入。
 
 全程只連本機或內網的推論伺服器，外送資料量恆為 0。strategy="hybrid" 是對照組：
 同一張圖改給未微調的 Qwen3-VL 產生程式碼，用來展示領域微調的效果。
@@ -16,6 +18,7 @@ import base64
 import io
 import json
 import re
+import secrets
 import shutil
 import time
 import uuid
@@ -25,7 +28,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.cad.holes import hole_plan
+from app.cad.holes import DETECT_FAILED_REASON, hole_plan
 from app.cad.preprocess import model_input
 from app.cad.sandbox import WslTarget, extract_code, run_cad
 from app.core.config import REPO_ROOT, get_models_config, get_settings
@@ -35,7 +38,7 @@ from app.rag.preprocess import load_image, to_jpeg_bytes
 from app.rag.providers import ProviderUnavailable, get_provider
 from app.repositories.index_store import get_store
 from app.repositories.logs_repo import get_logs_repo
-from app.services import cad_access, memory_guard, uploads
+from app.services import cad_access, cad_cache, memory_guard, uploads
 from app.services.cad_access import JOB_FILES
 from app.services.chat_service import NO_EGRESS, sse
 from app.services.identity import Account, require_part, visible_part_ids
@@ -113,13 +116,22 @@ def hole_plan_for(part: dict | None, scale_to: dict | None, layout: str):
         return hole_plan(Image.open(REPO_ROOT / part["drawing"]), scale_to)
     except Exception as e:  # 偵測失敗不影響重建，只是不校正
         log.warning("cad_holes_failed", extra={"fields": {"part_id": part["id"], "error": str(e)}})
-        return None, "孔位偵測失敗，孔位維持模型輸出"
+        return None, DETECT_FAILED_REASON
 
 
 async def _mock_stream(code: str) -> AsyncIterator[str]:
     for i in range(0, len(code), 6):
         await asyncio.sleep(0.01)
         yield code[i : i + 6]
+
+
+OUTPUT_FILES = ("model.stl", "model.step", "reproj.png", "result.json")
+
+
+def _clear_outputs(job_dir: Path) -> None:
+    """快取命中重跑後沒過閘門、改由模型重新產生之前：清掉那次執行的產物，失敗時不會留下舊模型。"""
+    for name in OUTPUT_FILES:
+        (job_dir / name).unlink(missing_ok=True)
 
 
 def purge_jobs(ttl_days: int) -> int:
@@ -176,10 +188,18 @@ async def _reconstruct_stream(
     file_url: Callable[[str, str], str] | None = None,
     include_code: bool = True,
     checkpoint: Callable[[str], None] | None = None,
+    regenerate: bool = False,
+    candidate: cad_cache.Candidate | None = None,
+    cache_source: str = "auto",
 ) -> AsyncIterator[str]:
     """job_id／out_dir／file_url／include_code／checkpoint 是背景工作用的（services/cad_job.py）：
     工作編號與暫存資料夾由工作系統給、檔案網址指向受保護的產物端點、事件不帶程式碼、
-    階段之間檢查有沒有被取消或撤權。既有的 SSE 入口不傳這些，行為不變。"""
+    階段之間檢查有沒有被取消或撤權。既有的 SSE 入口不傳這些，行為不變。
+
+    結果快取（docs/adr/042）：知識庫圖紙＋Ortho2CAD 先查快取，命中就跳過生成、程式碼照樣經過
+    安全檢查與沙箱，重跑後再過一次閘門。regenerate＝「結果不對，重新生成」：不查快取，
+    用 temperature＋下一個沒試過的 seed 產生一個新候選。candidate、cache_source 給 make cad-warm
+    指定候選與寫入來源。檢查圖紙權限（require_part）在查快取之前。"""
     t0 = time.perf_counter()
     check = checkpoint or (lambda _stage: None)
     s, cfg, store = get_settings(), get_models_config().cad, get_store()
@@ -280,81 +300,162 @@ async def _reconstruct_stream(
     }
     yield sse("meta", meta)
 
-    # 3. 生成 CadQuery 程式碼（逐字串流）
-    check("generate")
     prompt = str(cfg["prompt"]) + (str(cfg["baseline_suffix"]) if strategy != "ortho2cad" else "")
-    messages = [
-        {
-            "role": "user",
-            "content": [_image_part(model_img), {"type": "text", "text": prompt}],
-        }
-    ]
-    if provider:
-        provider.max_tokens = int(cfg["max_tokens"])
-        provider.temperature = float(cfg["temperature"])
-        pieces = provider.stream(messages)
-    else:
-        has_gt = part is not None and "cad" in part
-        gt = (REPO_ROOT / part["cad"]).read_text(encoding="utf-8") if has_gt else MOCK_CODE
-        pieces = _mock_stream(gt)
-    t_gen = time.perf_counter()
-    answer, first_token_ms = "", None
-    try:
-        async for piece in pieces:
-            check("generate")
-            if first_token_ms is None:
-                first_token_ms = round((time.perf_counter() - t0) * 1000)
-            answer += piece
-            yield sse("token", {"text": piece})
-    except ProviderUnavailable as e:
-        hint = (
-            "Ortho2CAD 推論伺服器無法使用，請確認已執行 make ortho2cad"
-            if strategy == "ortho2cad"
-            else "本地 VLM（Ollama）無法使用"
-        )
-        yield err("STRATEGY_UNAVAILABLE", f"{hint}（{e}）；3D 重建不改走雲端。")
-        return
-    generation_ms = round((time.perf_counter() - t_gen) * 1000)
-
-    # 4. 沙箱執行
-    check("execute")
-    code = extract_code(answer)
-    (job_dir / "code.py").write_text(code, encoding="utf-8")  # 失敗（含安全檢查沒過）也留得住
-    yield sse("executing", {"generation_ms": generation_ms, "code_chars": len(code)})
-    gt_step = store.parts_dir / "gt" / f"{part['id']}.step" if part else None
+    gt_path = store.parts_dir / "gt" / f"{part['id']}.step" if part else None
+    gt_step = gt_path if gt_path and gt_path.exists() else None
     holes, hole_reason = await asyncio.to_thread(hole_plan_for, part, scale_to, layout)
-    run = await run_cad(
-        code,
-        job_dir,
-        scale_to=scale_to,
-        holes=holes,
-        gt_step=gt_step if gt_step and gt_step.exists() else None,
-        timeout_s=float(cfg["exec_timeout_s"]),
-        wsl=wsl_target(),
+    cctx = await asyncio.to_thread(
+        cad_cache.context,
+        strategy=strategy,
+        layout=layout,
+        part=part,
+        model_alias=provider.model if provider else None,
+        input_png=(job_dir / "input.png").read_bytes(),
+        prompt=prompt,
+        max_pixels=max_pixels,
+        max_tokens=int(cfg["max_tokens"]),
+        has_gt=gt_step is not None,
     )
+
+    async def execute(code: str):
+        return await run_cad(
+            code,
+            job_dir,
+            scale_to=scale_to,
+            holes=holes,
+            gt_step=gt_step,
+            timeout_s=float(cfg["exec_timeout_s"]),
+            wsl=wsl_target(),
+        )
+
+    def result_of(run, code: str) -> dict:
+        d = run.data
+        return {
+            "ok": run.ok,
+            "error": run.error if include_code else public_error(run.error),
+            **({"code": code} if include_code else {}),
+            "valid": d.get("valid"),
+            "repaired": d.get("repaired"),
+            "raw_dims": d.get("raw_dims"),
+            "dims": d.get("dims"),
+            "scale": d.get("scale"),
+            "volume": d.get("volume"),
+            "faces": d.get("faces"),
+            "iou": d.get("iou"),
+            "iou_bbox": d.get("iou_bbox"),
+            "holes": d.get("holes") or {"status": "skipped", "reason": hole_reason, "detected": 0},
+            "files": files
+            if run.ok
+            else {"code.py": files["code.py"], "input.png": files["input.png"]},
+        }
+
+    # 3. 結果快取（docs/adr/042）：命中就不生成，程式碼照樣經過安全檢查與沙箱，重跑後再過一次閘門
+    run, result, cache_info, code, answer = None, None, None, "", ""
+    first_token_ms, generation_ms = None, 0
+    hit = None
+    if cctx is not None and not regenerate and candidate is None:
+        hit = await asyncio.to_thread(cctx.lookup)
+    if hit is not None:
+        check("execute")
+        code = hit.code
+        (job_dir / "code.py").write_text(code, encoding="utf-8")
+        yield sse("executing", {"generation_ms": 0, "code_chars": len(code), "cached": True})
+        run = await execute(code)
+        result = result_of(run, code)
+        ok, why = cad_cache.regate(result, has_gt=cctx.has_gt)
+        if ok:
+            cache_info = await asyncio.to_thread(cad_cache.after_hit, cctx, job_id, hit, result)
+        else:
+            # 門檻調高、環境變了：移除這一筆，當成沒命中，改由模型重新產生
+            await asyncio.to_thread(cad_cache.get_cache().remove, cctx.key, hit.code_sha)
+            log.info(
+                "cad_cache_evicted",
+                extra={"fields": {"part_id": cctx.part_id, "reason": why}},
+            )
+            _clear_outputs(job_dir)
+            run = result = None
+
+    # 4. 生成 CadQuery 程式碼（逐字串流）
+    if run is None:
+        check("generate")
+        cand = candidate
+        if cand is None and regenerate:
+            rs = cad_cache.resample_spec()
+            if cctx is not None:
+                seed = await asyncio.to_thread(
+                    cad_cache.get_cache().next_seed, cctx.key, rs.max_seeds
+                )
+                if seed is None:
+                    yield err(
+                        "CAD_RESAMPLE_EXHAUSTED",
+                        f"這張圖紙已經試過 {rs.max_seeds} 個候選，沒有新的可以重新生成",
+                    )
+                    return
+            else:
+                seed = secrets.randbelow(2**31 - 2) + 1
+            cand = cad_cache.Candidate(rs.temperature, seed)
+        cand = cand or cad_cache.Candidate(float(cfg["temperature"]))
+        messages = [
+            {
+                "role": "user",
+                "content": [_image_part(model_img), {"type": "text", "text": prompt}],
+            }
+        ]
+        if provider:
+            provider.max_tokens = int(cfg["max_tokens"])
+            provider.temperature = cand.temperature
+            provider.seed = cand.seed
+            pieces = provider.stream(messages)
+        else:
+            has_gt = part is not None and "cad" in part
+            gt = (REPO_ROOT / part["cad"]).read_text(encoding="utf-8") if has_gt else MOCK_CODE
+            pieces = _mock_stream(gt)
+        t_gen = time.perf_counter()
+        try:
+            async for piece in pieces:
+                check("generate")
+                if first_token_ms is None:
+                    first_token_ms = round((time.perf_counter() - t0) * 1000)
+                answer += piece
+                yield sse("token", {"text": piece})
+        except ProviderUnavailable as e:
+            hint = (
+                "Ortho2CAD 推論伺服器無法使用，請確認已執行 make ortho2cad"
+                if strategy == "ortho2cad"
+                else "本地 VLM（Ollama）無法使用"
+            )
+            yield err("STRATEGY_UNAVAILABLE", f"{hint}（{e}）；3D 重建不改走雲端。")
+            return
+        generation_ms = round((time.perf_counter() - t_gen) * 1000)
+        if cctx is not None and cand.seed is not None:
+            await asyncio.to_thread(cad_cache.get_cache().mark_tried, cctx.key, cand.seed)
+
+        # 5. 沙箱執行
+        check("execute")
+        code = extract_code(answer)
+        (job_dir / "code.py").write_text(code, encoding="utf-8")  # 失敗（含安全檢查沒過）也留得住
+        yield sse("executing", {"generation_ms": generation_ms, "code_chars": len(code)})
+        run = await execute(code)
+        result = result_of(run, code)
+        check("write")
+        if cctx is not None:
+            cache_info = await asyncio.to_thread(
+                cad_cache.after_run,
+                cctx,
+                job_id=job_id,
+                code=code,
+                candidate=cand,
+                result=result,
+                source=cache_source,
+            )
+    else:
+        check("write")
     d = run.data
-    check("write")
-    result = {
-        "ok": run.ok,
-        "error": run.error if include_code else public_error(run.error),
-        **({"code": code} if include_code else {}),
-        "valid": d.get("valid"),
-        "repaired": d.get("repaired"),
-        "raw_dims": d.get("raw_dims"),
-        "dims": d.get("dims"),
-        "scale": d.get("scale"),
-        "volume": d.get("volume"),
-        "faces": d.get("faces"),
-        "iou": d.get("iou"),
-        "iou_bbox": d.get("iou_bbox"),
-        "holes": d.get("holes") or {"status": "skipped", "reason": hole_reason, "detected": 0},
-        "files": files
-        if run.ok
-        else {"code.py": files["code.py"], "input.png": files["input.png"]},
-    }
+    if cache_info is not None:
+        result["cache"] = cache_info
     yield sse("result", result)
 
-    # 5. 完成
+    # 6. 完成
     total_ms = round((time.perf_counter() - t0) * 1000)
     out_tokens = provider.usage.output_tokens if provider else len(answer) // 4
     done = {

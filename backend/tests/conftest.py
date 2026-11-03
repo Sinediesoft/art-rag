@@ -71,6 +71,14 @@ def default_identity(client):
     as_account(client, DEFAULT_ACCOUNT)
 
 
+@pytest.fixture(autouse=True)
+def reset_read_limit():
+    """機密檔案的下載計數每個測試歸零：其他測試會反覆下載同一張機密圖紙"""
+    from app.services import read_limit
+
+    read_limit.reset()
+
+
 @pytest.fixture
 def all_chunks(monkeypatch):
     """mock 向量是雜湊亂數，檢索只會留隨機 1 段；

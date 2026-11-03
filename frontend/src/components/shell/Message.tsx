@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, assetUrl } from "../../api/client";
-import { usePart, useStatus, useSwitchAccount } from "../../api/hooks";
+import { usePart, useStatus, useSwitchAccount, useWorkerOffline } from "../../api/hooks";
 import type { SourceItem } from "../../api/sse";
+import { cacheHitLabel, cacheNote } from "../../lib/cadCache";
 import { seconds, STRATEGY_LABEL } from "../../lib/format";
 import { deepActionsFor } from "../../shell/deep";
 import { canRerun, hasMark, REJECTED, writeUnconfirmed } from "../../shell/persist";
@@ -22,7 +23,8 @@ export interface ThreadActions {
   ask: (q: string, forced?: string | null, imageId?: string | null) => void;
   regenerate: () => void;
   rerun: (turnId: string) => void;
-  startReconstruct: (turnId: string) => void;
+  /** regenerate：結果不對，重新生成（docs/adr/042） */
+  startReconstruct: (turnId: string, opts?: { regenerate?: boolean }) => void;
   startSchedule: (turnId: string) => void;
   cancelTask: (turnId: string) => void;
   /** 排程「提前結束」：採用目前最佳的合法解並寫回（取消才是放棄、不寫回） */
@@ -31,6 +33,8 @@ export interface ThreadActions {
   outputsOf: (turnId: string) => Output[];
   activeOutput: string | null;
   showOutput: (key: string) => void;
+  /** 點了回答裡的引用 [n]：藝術模組跳到中間「畫作資料」的那一段（其他畫面沒有這個動作） */
+  onCite?: (source: SourceItem) => void;
 }
 
 export const ThreadContext = createContext<ThreadActions | null>(null);
@@ -193,7 +197,10 @@ function TurnBody({ turn }: { turn: Turn }) {
         <ErrorNote code={p.error?.code} message={p.error?.message ?? "搜尋失敗"} requestId={p.error?.requestId} />
       ) : (
         <div className="answer">
-          <p className="answer__lead">以文搜畫（Chinese-CLIP＋bge-m3）找到 {p.items.length} 幅{th.mode === "full" ? "，排序與比較在右側展示區" : "，前 3 名："}</p>
+          <p className="answer__lead">
+            以文搜畫（Chinese-CLIP＋bge-m3）找到 {p.items.length} 幅{p.colorSort ? `，依色彩分析排序（${p.colorSort}）` : ""}
+            {th.mode === "full" ? "，排序與比較在右側展示區" : "，前 3 名："}
+          </p>
           {th.mode === "brief" && <Works items={p.items.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
         </div>
       );
@@ -363,7 +370,17 @@ function Archived({ turn }: { turn: Turn }) {
   return (
     <div className="answer">
       {a.artworkId && th.mode === "brief" && <Subject kind="artwork" id={a.artworkId} title={a.artworkLabel ?? a.artworkId} meta="作品・知識庫" />}
-      {a.answer && <RichText text={a.answer} activeRef={cite} onCite={setCite} />}
+      {a.answer && (
+        <RichText
+          text={a.answer}
+          activeRef={cite}
+          onCite={(n) => {
+            setCite(n);
+            const s = a.sources?.find((x) => x.ref === n);
+            if (s) th.onCite?.(s);
+          }}
+        />
+      )}
       {a.sources && a.sources.length > 0 && <Sources sources={a.sources} active={cite} onActive={setCite} />}
       {a.artResults && th.mode === "brief" && <Works items={a.artResults.slice(0, 3)} onAsk={(t) => th.ask(`介紹一下〈${t}〉`)} />}
       {a.outcome === "unconfirmed" ? (
@@ -451,7 +468,18 @@ function ChatBody({ turn, part: p }: { turn: Turn; part: ChatPart }) {
           {p.target.part_id ? "；機密圖紙只用地端模型" : ""}
         </p>
       )}
-      {p.text && <RichText text={p.text.trim()} streaming={p.status === "streaming"} activeRef={cite} onCite={setCite} />}
+      {p.text && (
+        <RichText
+          text={p.text.trim()}
+          streaming={p.status === "streaming"}
+          activeRef={cite}
+          onCite={(n) => {
+            setCite(n);
+            const s = p.sources?.sources.find((x) => x.ref === n);
+            if (s) th.onCite?.(s);
+          }}
+        />
+      )}
       {p.sources?.conflict_check?.conflict && p.text && (
         <p className="answer__note is-warn">
           <Icon name="info" />
@@ -550,10 +578,10 @@ function Sources({ sources, active, onActive }: { sources: SourceItem[]; active:
   );
 }
 
-function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: string; artist_zh: string; date_text: string; thumb_url: string }; score: number }[]; onAsk: (title: string) => void }) {
+function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: string; artist_zh: string; date_text: string; thumb_url: string }; score: number; color?: string | null }[]; onAsk: (title: string) => void }) {
   return (
     <div className="works">
-      {items.map(({ artwork: a, score }, i) => (
+      {items.map(({ artwork: a, score, color }, i) => (
         <figure key={a.id} className={`work${i === 0 ? " is-best" : ""}`}>
           <button type="button" className="work__media" onClick={() => onAsk(a.title_zh)}>
             <div className="plinth">
@@ -561,11 +589,12 @@ function Works({ items, onAsk }: { items: { artwork: { id: string; title_zh: str
             </div>
           </button>
           <figcaption className="work__caption">
-            <span className="work__flag">{i === 0 ? "最符合" : `分數 ${score.toFixed(2)}`}</span>
+            <span className="work__flag">{i === 0 ? "最符合" : color ? `第 ${i + 1} 名` : `分數 ${score.toFixed(2)}`}</span>
             <span className="work__title">{a.title_zh}</span>
             <span className="work__meta">
               {a.artist_zh}・{short(a.date_text)}
             </span>
+            {color && <span className="work__meta">{color}</span>}
           </figcaption>
         </figure>
       ))}
@@ -662,8 +691,19 @@ function Specs({ items }: { items: [string, ReactNode][] }) {
 
 const CAD_STAGES = ["前處理、辨識、讀尺寸", "Ortho2CAD 產生 CadQuery 程式", "沙箱執行並輸出 STEP／STL"];
 
+/** 沒有 worker 接這類工作：仍然可以送出，工作留在佇列，worker 啟動後自動開始（docs/adr/041），
+ *  但要先講清楚，不然畫面只會一直轉「排隊中」 */
+function WorkerOfflineNote({ what, start }: { what: string; start: string }) {
+  return (
+    <p className="taskcard__note is-warn">
+      背景服務沒有啟動：{what}會先排隊，服務啟動後自動開始。請在主機執行 {start}（5070 Ti 主機用 deploy\windows\start-services.ps1）。
+    </p>
+  );
+}
+
 function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart }) {
   const th = useThread();
+  const offline = useWorkerOffline("gpu");
   const vis = visiblePart(turn);
   const [showCode, setShowCode] = useState(false);
   const source = p.imageId ? "你附的照片" : vis ? `〈${vis.label}〉的三視圖` : null;
@@ -716,6 +756,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
       )}
       {!j && !source && <p className="taskcard__note">附一張圖紙照片，或說出圖紙名稱再問一次。</p>}
       {p.cancelled && !j && <p className="taskcard__note">已取消，沒有載入模型。</p>}
+      {offline && source && (j ? j.status === "queued" : !p.cancelled) && <WorkerOfflineNote what="3D 重建" start="make worker-gpu" />}
       {j?.status === "queued" && (
         <div className="taskcard__run">
           <p className="taskcard__stats num">
@@ -808,6 +849,16 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
             <span className="taskcard__meta">全程在本機・外送 {j.done?.egress.bytes ?? 0} B</span>
           </div>
           {showCode && <pre className="code code--block code--scroll">{j.code}</pre>}
+          {res.cache && (
+            <div className="taskcard__actions">
+              <p className="taskcard__note">{cacheHitLabel(res.cache) ?? cacheNote(res.cache)}</p>
+              {res.cache.regenerable && (
+                <button type="button" className="btn btn--ghost" onClick={() => th.startReconstruct(turn.id, { regenerate: true })}>
+                  結果不對，重新生成
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -816,6 +867,7 @@ function ReconstructBody({ turn, part: p }: { turn: Turn; part: ReconstructPart 
 
 function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
   const th = useThread();
+  const offline = useWorkerOffline("schedule");
   const j = p.job;
   if (th.mode === "brief")
     return (
@@ -846,6 +898,7 @@ function ScheduleBody({ turn, part: p }: { turn: Turn; part: SchedulePart }) {
         </div>
       )}
       {p.cancelled && !j && <p className="taskcard__note">已取消。</p>}
+      {offline && (j ? j.status === "queued" : !p.cancelled) && <WorkerOfflineNote what="排程" start="make worker-schedule" />}
       {j?.status === "queued" && (
         <div className="taskcard__run">
           <p className="taskcard__stats num">

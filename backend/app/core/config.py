@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel
@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     # true／false 覆寫這台主機的設定（多一次本地模型呼叫，慢的主機可以關掉）
     conflict_check: str = ""
 
+    # 問題前提檢查（docs/adr/037 補）：留空＝shared/models.yaml 的 premise_check.enabled；
+    # true／false 覆寫這台主機的設定（多一次本地模型呼叫）
+    premise_check: str = ""
+
     # Ollama 模型閒置多久才卸載（docs/adr/025）：例如 60m；留空＝Ollama 預設 5 分鐘。
     # 只送給 hybrid／hybrid_fallback／lora；記憶體吃緊時記憶體管理照樣用 keep_alive=0 卸載
     model_keep_alive: str = ""
@@ -99,6 +103,8 @@ class Settings(BaseSettings):
 
     upload_max_mb: int = 10
     upload_ttl_days: int = 7
+    # 問答、分流、SQL 紀錄保存幾天（內容類，可能含機密文字；安全紀錄與讀取稽核不刪）
+    log_ttl_days: int = 30
 
     # 展示模式（docs/adr/030）：頁首切換身分（/auth/switch 簽發任意帳號的 JWT）、
     # 模擬斷線、展示還原。預設關閉，只能由人類在本機 .env 明確開啟；
@@ -178,6 +184,11 @@ class Settings(BaseSettings):
         return self.data_dir / "cad"
 
     @property
+    def cad_cache_dir(self) -> Path:
+        """3D 重建結果快取（docs/adr/042）：不在 cad_jobs_dir 底下，任何下載端點都讀不到。"""
+        return self.data_dir / "cad_cache"
+
+    @property
     def uploads_dir(self) -> Path:
         return self.data_dir / "uploads"
 
@@ -228,6 +239,16 @@ class ConflictCheckSpec(BaseModel):
     timeout_s: float = 10
 
 
+class PremiseCheckSpec(BaseModel):
+    """問題前提檢查（docs/adr/037 補）：問題本身把人、年份、東西說錯時，先只問本地模型哪裡錯；
+    錯了就在參考資料後面加提醒，回答時先更正再回答，不要只回「知識庫中沒有這方面的資料」"""
+
+    enabled: bool = False
+    prompt_version: str = "premise_check_v1"
+    max_tokens: int = 120
+    timeout_s: float = 10
+
+
 class ChatSpec(BaseModel):
     """問答（docs/adr/024）：已辨識、檢索開著時要不要附圖"""
 
@@ -247,6 +268,19 @@ class ColorAnalysisSpec(BaseModel):
     warm_hue_deg: list[float] = [340, 110]  # 色相角落在這段（可跨 0°）為暖色，其餘有彩色為冷色
     lightness_bands: list[float] = [30, 60]  # L*：暗調／中間調／亮調的分界
     chroma_bands: list[float] = [10, 25]  # C*：低／中／高彩度的分界
+
+
+class ColorCriterionSpec(BaseModel):
+    label: str  # 顯示在結果上的依據，例如「有色部分暖色」
+    terms: list[str]  # 問句裡出現其中一個詞就套用這個準則
+
+
+class ColorSearchSpec(BaseModel):
+    """依色彩找畫（docs/adr/044）：以文搜畫的問句提到冷暖、明暗、彩度時，改照色彩分析的數字排序。
+    鍵（warm、cool、light、dark、vivid、muted）對應 search_service.COLOR_METRICS。
+    不影響索引，改了不用重建。"""
+
+    criteria: dict[str, ColorCriterionSpec] = {}
 
 
 class GuessTaskSpec(BaseModel):
@@ -383,7 +417,8 @@ class ModelsConfig(BaseModel):
     strategies: dict[str, StrategySpec]
     # 工廠圖紙：以圖搜圖紙的門檻、Ortho2CAD 的 prompt 與影像大小
     drawing_retrieval: dict[str, float] = {}
-    cad: dict[str, str | float] = {}
+    # cache、resample 是 3D 重建結果快取與重抽候選（docs/adr/042），由 services/cad_cache 解析
+    cad: dict[str, Any] = {}
     # 工廠庫存 Text-to-SQL：生成上限、修正次數、回傳列數與執行逾時
     text2sql: dict[str, float] = {}
     # 生產排程（Timefold）：求解秒數、無改善提前結束秒數、進度更新間隔
@@ -392,8 +427,10 @@ class ModelsConfig(BaseModel):
     router: dict[str, float] = {}
     rearrange: RearrangeSpec = RearrangeSpec()
     conflict_check: ConflictCheckSpec = ConflictCheckSpec()
+    premise_check: PremiseCheckSpec = PremiseCheckSpec()
     chat: ChatSpec = ChatSpec()
     color_analysis: ColorAnalysisSpec = ColorAnalysisSpec()
+    color_search: ColorSearchSpec = ColorSearchSpec()
     style_guess: StyleGuessSpec = StyleGuessSpec()
     image_compare: ImageCompareSpec = ImageCompareSpec()
     intake: IntakeSpec = IntakeSpec()

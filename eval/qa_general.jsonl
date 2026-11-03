@@ -1,0 +1,20 @@
+{"id": "q-gen-01", "split": "test", "type": "common", "question": "〈蒙娜麗莎〉是誰畫的？", "keywords": [["達文西", "達．文西", "達·文西", "Leonardo"]], "topics": []}
+{"id": "q-gen-02", "split": "test", "type": "common", "question": "〈雅典學院〉是哪位文藝復興畫家的作品？", "keywords": [["拉斐爾", "Raphael"]], "topics": []}
+{"id": "q-gen-03", "split": "test", "type": "common", "question": "〈清明上河圖〉的作者是誰？", "keywords": [["張擇端"]], "topics": []}
+{"id": "q-gen-04", "split": "test", "type": "common", "question": "〈最後的晚餐〉畫在哪座城市的修道院牆上？", "keywords": [["米蘭", "Milan"]], "topics": []}
+{"id": "q-gen-05", "split": "test", "type": "common", "question": "〈吶喊〉的作者是哪個國家的畫家？", "keywords": [["挪威"]], "topics": []}
+{"id": "q-gen-06", "split": "test", "type": "common", "question": "「印象派」這個名稱來自哪一幅畫？", "keywords": [["日出"]], "topics": []}
+{"id": "q-gen-07", "split": "test", "type": "common", "question": "畢卡索和哪位畫家一起開創了立體派？", "keywords": [["布拉克", "Braque"]], "topics": []}
+{"id": "q-gen-08", "split": "test", "type": "common", "question": "〈戴珍珠耳環的少女〉是誰畫的？", "keywords": [["維梅爾", "維米爾", "Vermeer"]], "topics": []}
+{"id": "q-gen-09", "split": "test", "type": "common", "question": "西斯汀禮拜堂的天頂畫是誰畫的？", "keywords": [["米開朗基羅", "Michelangelo"]], "topics": []}
+{"id": "q-gen-10", "split": "test", "type": "common", "question": "〈富春山居圖〉的作者是誰？", "keywords": [["黃公望"]], "topics": []}
+{"id": "q-gen-11", "split": "test", "type": "common", "question": "畢卡索的〈格爾尼卡〉描繪的是哪個國家內戰中的轟炸？", "keywords": [["西班牙"]], "topics": []}
+{"id": "q-gen-12", "split": "test", "type": "common", "question": "〈自由領導人民〉是哪位法國浪漫主義畫家的作品？", "keywords": [["德拉克洛瓦", "德拉克羅瓦", "Delacroix"]], "topics": []}
+{"id": "q-gen-13", "split": "test", "type": "common", "question": "〈神奈川沖浪裏〉是哪位日本浮世繪畫家的作品？", "keywords": [["北齋", "北斎", "葛飾"]], "topics": []}
+{"id": "q-gen-14", "split": "test", "type": "common", "question": "畫著融化時鐘的〈記憶的堅持〉是哪位超現實主義畫家的作品？", "keywords": [["達利", "Dalí", "Dali"]], "topics": []}
+{"id": "q-gen-15", "split": "test", "type": "common", "question": "文藝復興最早在哪個國家興起？", "keywords": [["義大利", "意大利", "佛羅倫斯"]], "topics": []}
+{"id": "q-gen-16", "split": "test", "type": "common", "question": "在還沒乾的灰泥牆上作畫的技法叫什麼？", "keywords": [["濕壁畫", "fresco", "Fresco"]], "topics": []}
+{"id": "q-gen-17", "split": "test", "type": "common", "question": "國畫常說的「文房四寶」是哪四樣？", "keywords": [["筆"], ["墨"], ["紙"], ["硯"]], "topics": []}
+{"id": "q-gen-18", "split": "test", "type": "common", "question": "〈拾穗〉是哪位法國畫家的作品？", "keywords": [["米勒", "Millet"]], "topics": []}
+{"id": "q-gen-19", "split": "test", "type": "common", "question": "〈維納斯的誕生〉是誰畫的？", "keywords": [["波提且利", "波提切利", "Botticelli"]], "topics": []}
+{"id": "q-gen-20", "split": "test", "type": "common", "question": "林布蘭那幅描繪阿姆斯特丹民兵隊的大型團體肖像畫叫什麼？", "keywords": [["夜巡", "夜警", "Night Watch"]], "topics": []}

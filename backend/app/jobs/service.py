@@ -114,6 +114,8 @@ def create_cad(ctx: security.SecurityContext, body: dict, key: str | None, reque
         raise AppError("VALIDATION_ERROR", "請指定 part_id 或 image_id", 422)
     security.cad_check_create(ctx, part_id, image_id)  # 授權在建立工作之前：失敗不留任何工作
     params = {"strategy": body.get("strategy", "ortho2cad")}
+    if body.get("regenerate"):  # 「結果不對，重新生成」：不查快取、重抽一個候選（docs/adr/042）
+        params["regenerate"] = True
     # 照片來源記下照片擁有者：讀取權跟著照片的 ACL，這只在照片紀錄過期後用來認擁有者本人
     resource = {
         "part_id": part_id,

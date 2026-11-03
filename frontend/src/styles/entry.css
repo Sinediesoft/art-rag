@@ -183,14 +183,6 @@ body {
 .home__mark {
   display: none;
 }
-.home__eyebrow {
-  display: block;
-  margin-bottom: 22px;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-3);
-}
 .home__title {
   font-size: clamp(34px, 5.4vw, 54px);
   font-weight: 500;
@@ -603,13 +595,58 @@ body {
   background: var(--surface-2);
 }
 
-/* 建議卡：右上角標出會帶到哪個模組 */
-.task {
-  grid-template-areas: "title mod" "prompt go";
+/* 目前身分：放在對話紀錄最下面（原型 mockups/entry.html），整列寬、箭頭靠右 */
+.side__status {
+  display: flex;
+  padding: 8px 0 0;
 }
-.task__mod {
-  grid-area: mod;
-  justify-self: end;
+.side__status .topbar__slot {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.side__status .topbar__btn {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 8px;
+}
+.side__status .topbar__btn:hover,
+.side__status .topbar__btn.is-open {
+  background: var(--surface-2) !important;
+}
+.side__status .topbar__account .icon {
+  margin-left: auto;
+}
+/* 手機的頁首會藏起按鈕文字（core.css），紀錄欄裡照常顯示身分名稱 */
+.side__status .topbar__account .topbar__btn-label {
+  display: inline;
+}
+/* 選單往上打開（手機沿用 .menu--down 的固定在頁首下方） */
+@media (min-width: 641px) {
+  .side__status .menu--side {
+    top: auto;
+    right: auto;
+    bottom: 100%;
+    left: 0;
+    margin: 0 0 8px;
+  }
+}
+/* 收合成窄欄：只剩頭像 */
+.side.is-mini .side__status {
+  margin-top: auto;
+  padding: 0;
+}
+.side.is-mini .side__status .topbar__btn {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+.side.is-mini .side__status .topbar__account .avatar {
+  display: inline-grid;
+}
+.side.is-mini .side__status .topbar__btn-label,
+.side.is-mini .side__status .topbar__account .icon,
+.side.is-mini .side__status .count {
+  display: none;
 }
 
 /* 簡介：縮圖＋標題，和截圖一樣放在回答上方 */

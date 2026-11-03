@@ -10,7 +10,7 @@ import {
   type ProductionOverview,
   type ScheduleKpis,
 } from "../api/client";
-import { useProductionOverview, useStatus } from "../api/hooks";
+import { useProductionOverview, useWorkerOffline } from "../api/hooks";
 import { ApiErrorMessage, ErrorMessage, Loading } from "../components/common/Feedback";
 import { GanttChart, GanttLegend, orderColor, type GanttOrder } from "../components/schedule/GanttChart";
 import { useScheduleSolve, type SolveState } from "../hooks/useScheduleSolve";
@@ -71,7 +71,7 @@ export function MemoryNotice({ event }: { event: MemoryEvent | null | undefined 
 export function SchedulePage() {
   const qc = useQueryClient();
   const { data, isLoading, error } = useProductionOverview();
-  const { data: sys } = useStatus();
+  const scheduleOffline = useWorkerOffline("schedule");
   const refresh = () => {
     for (const key of ["production-overview", "part-plan", "inventory-overview", "part-inventory", "diagnostics"]) {
       void qc.invalidateQueries({ queryKey: [key] });
@@ -189,7 +189,7 @@ export function SchedulePage() {
       </section>
 
       {state.error && <ErrorMessage title="排程失敗" message={state.error.message} code={state.error.code} requestId={state.error.request_id} />}
-      {state.status === "queued" && sys?.jobs?.enabled && sys.jobs.workers.length === 0 && (
+      {state.status === "queued" && scheduleOffline && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/60 p-3 text-sm text-warning">目前沒有在線的 worker，排程會一直排隊。請啟動 make worker-schedule。</div>
       )}
       {state.status === "cancelled" && (

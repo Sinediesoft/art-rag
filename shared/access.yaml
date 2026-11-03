@@ -80,6 +80,18 @@ hard_limits:
   max_rows: 5              # 單次影響的庫存列數
   # 另外三條寫在程式裡：庫存不能變成負數、訂購數量不能少於已出貨、零件主檔與機台資料不開放
 
+# 機密檔案的讀取頻率限制（backend/app/services/read_limit.py）：同一個帳號 window_s 秒內下載
+# 機密零件的原尺寸圖紙、STEP／STL 模型超過 max_downloads 次就回 429 並記進安全紀錄；主管也算，縮圖不算
+read_limits:
+  levels: [機密]
+  window_s: 600
+  max_downloads: 6        # 要低於機密檔案的總數：展示庫 4 個機密零件 × 3 個檔案 = 12，整庫搬走也不會超過 12
+
+# 機密資料的讀取稽核（backend/app/services/access_audit.py）：讀這些等級的原尺寸圖紙、3D 模型、
+# 圖紙／庫存／生產明細、圖紙問答時記一筆，主管在稽核頁看得到（/audit 的 reads）
+read_audit:
+  levels: [機密]
+
 # 額度：超過就送主管核准（初值，可調）
 quotas:
   stock_adjust: {max_qty: 20, max_ratio: 0.20}   # 盤點差異超過 20 件或 20%

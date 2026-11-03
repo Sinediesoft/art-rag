@@ -81,10 +81,9 @@ export const COPY: Record<View, Copy> = {
   },
 };
 
-export function greeting(name: string) {
-  const h = new Date().getHours();
-  const hi = h < 11 ? "早安" : h < 18 ? "午安" : "晚安";
-  return { title: `${hi}，${name}。`, lede: "畫作、圖紙、庫存與生產，一句話交給我。" };
+/** 入口的問候：「你好，<目前身分>。」（身分還沒讀到時只寫「你好。」） */
+export function greeting(name: string | null) {
+  return { title: name ? `你好，${name}。` : "你好。", lede: "畫作、圖紙、庫存與生產，一句話交給我。" };
 }
 
 /** 功能頁屬於哪個模組的外觀：畫作相關用藝術模組，其他（圖紙、庫存、排程、核准、系統）用工廠模組 */

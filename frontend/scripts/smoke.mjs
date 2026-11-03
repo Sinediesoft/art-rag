@@ -3,12 +3,13 @@
 //   node frontend/scripts/smoke.mjs <網址> <輸出資料夾> [寬] [高] [圖片檔]
 //   例：node frontend/scripts/smoke.mjs http://127.0.0.1:8010 /tmp/smoke 1440 900 kb/images/met-436535.jpg
 //
-// 流程：入口新對話 → 工廠簡介 → 進入工廠模組 → 圖紙 → 3D → 庫存 → 排程 → 切回舊成果 → 回入口開同一紀錄；
+// 流程：入口新對話 → 工廠簡介 → 進入工廠模組（右邊是四個板塊的工作台）→ 圖紙 → 3D → 庫存 → 排程 → 切回舊成果 → 回入口開同一紀錄；
 // 藝術簡介 → 進入藝術模組 → 作品 → 細看 → 年表 → 相似作品（並排比較）；附圖問答、停止、權限拒絕、降級、
 // 不持久化憑證。每一步截圖，最後印出每項檢查的結果（有失敗時 exit 1）。Chrome 路徑可用 CHROME 環境變數指定。
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const [base, outDir, w = "1440", h = "900", image] = process.argv.slice(2);
 if (!base || !outDir) {
@@ -16,6 +17,15 @@ if (!base || !outDir) {
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });
+/** 機密圖紙的識別字（kb/parts 裡 confidentiality 為「機密」的編號、中英文名稱、料號、圖號）：業務的畫面上任何地方都不能出現 */
+const partsDir = fileURLToPath(new URL("../../kb/parts/", import.meta.url));
+const secretTokens = readdirSync(partsDir)
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => JSON.parse(readFileSync(join(partsDir, f), "utf8")))
+  .filter((p) => p.confidentiality === "機密")
+  .flatMap((p) => [p.id, p.name.zh, p.name.en, p.part_no, p.drawing_no]);
+if (!secretTokens.length) throw new Error(`kb/parts 沒有機密圖紙，降級檢查無從判定：${partsDir}`);
+const leaked = (html) => `${JSON.stringify(secretTokens)}.filter((t) => (${html}).includes(t))`;
 const CHROME =
   process.env.CHROME ??
   (process.platform === "darwin"
@@ -137,8 +147,22 @@ const ask = async (text, prefer = "") => {
 const noOverflow = "document.documentElement.scrollWidth <= innerWidth + 1 && document.body.scrollWidth <= innerWidth + 1";
 const composerVisible = `(() => { const c = [...document.querySelectorAll('.composer')].at(-1); if (!c) return false; const r = c.getBoundingClientRect(); return r.bottom <= innerHeight + 1 && r.top >= 0 && r.height > 0; })()`;
 const showcaseKind = "(document.querySelector('.showcase__kind')?.textContent ?? '')";
+// 工廠模組的右半邊是工作台：圖紙、3D、排程、庫存四個板塊同時在畫面上，成果放進對應的板塊，目前成果那一塊有 .is-active
+const panel = (id) => `document.querySelector('.wb-panel[data-panel="${id}"]')`;
+const activePanel = "(document.querySelector('.wb-panel.is-active')?.dataset.panel ?? '')";
+const panelTitle = (id) => `(${panel(id)}?.querySelector('.wb-panel__meta')?.textContent ?? '')`;
+/**
+ * 排程板塊已經讀到 /production/overview：成功的排程畫面（.view--schedule），或成功讀到但明確「還沒有排程結果」。
+ * 讀取中（.pending）、讀取失敗（role=alert）都不算。
+ */
+const scheduleReady = `(() => { const p = ${panel("schedule")}; if (!p || p.querySelector('[role=alert], .pending')) return false; return !!p.querySelector('.view--schedule') || (p.querySelector('.view__error')?.textContent ?? '').includes('還沒有排程結果'); })()`;
+/** 四個板塊（圖紙、3D、排程、庫存）都在、而且都有成果 */
+const allPanelsFilled = `['drawing', 'model', 'schedule', 'stock'].every((id) => !!document.querySelector(\`.wb-panel[data-panel="\${id}"] .wb-panel__view\`))`;
+/** 工作台裡的成果總數（對應舊版縮圖列的張數）：板塊有「上一份／下一份」時取「i/n」的 n，否則有內容算 1 */
+const benchCount = `[...document.querySelectorAll('.wb-panel')].reduce((s, p) => { const m = (p.querySelector('.wb-panel__nav .num')?.textContent ?? '').match(/\\/(\\d+)/); return s + (m ? +m[1] : p.querySelector('.wb-panel__view') ? 1 : 0); }, 0)`;
 const showPane = async () => {
-  if (mobile) await click("展示區", ".mtabs button");
+  // 窄螢幕的分頁：藝術模組叫「展示區」，工廠模組叫「工作台」
+  if (mobile) await js(`[...document.querySelectorAll('.mtabs button')].find((b) => /展示區|工作台/.test(b.textContent))?.click() ?? true`);
   await sleep(300);
 };
 const chatPane = async () => {
@@ -173,7 +197,7 @@ try {
   await check("工廠簡介：回答來自問答 SSE（有逐字回答或查無資料）", `!!${lastAi}.querySelector('.prose, .answer__note')`);
   await shot("factory-brief");
   await js(`${lastAi}.querySelector('.jump--factory').click()`);
-  await waitFor("location.pathname.startsWith('/factory/') && !!document.querySelector('.showcase')", 6000);
+  await waitFor("location.pathname.startsWith('/factory/') && !!document.querySelector('.workbench')", 6000);
   await sleep(600);
   await check("工廠模組：延續同一段對話（入口的那一輪還在）", "document.querySelectorAll('.msg--user').length >= 1 && (document.querySelector('.msg--user .msg__bubble')?.textContent ?? '').includes('連接法蘭')");
   await check("工廠模組：工廠主題（10 Night＋信號紅）", "document.documentElement.dataset.view === 'factory' && getComputedStyle(document.querySelector('.app--module')).getPropertyValue('--mod').trim().toLowerCase() === '#e5533d'");
@@ -185,11 +209,14 @@ try {
     await check("分隔線：雙擊回到 50%", "document.querySelector('.msplit').getAttribute('aria-valuenow') === '50'");
   }
   await showPane();
-  await waitFor("!!document.querySelector('.zp__img')", 8000);
-  await check("右側：圖紙（真實 /parts 圖檔，可縮放）", `${showcaseKind}.includes('圖紙') && !!document.querySelector('.zp__img') && document.querySelector('.zp__img').naturalWidth > 0 && !!document.querySelector('.zp__tools')`);
-  await js("(() => { const z = document.querySelector('.zp'); const r = z.getBoundingClientRect(); z.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true })); return true; })()");
+  await waitFor(`!!${panel("drawing")}?.querySelector('.zp__img')`, 8000);
+  await check(
+    "右側：圖紙板塊（目前成果；真實 /parts 圖檔，可縮放）",
+    `(() => { const p = ${panel("drawing")}; const img = p?.querySelector('.zp__img'); return { ok: ${activePanel} === 'drawing' && !!img && img.naturalWidth > 0 && !!p.querySelector('.zp__tools'), active: ${activePanel} }; })()`,
+  );
+  await js(`(() => { const z = ${panel("drawing")}.querySelector('.zp'); const r = z.getBoundingClientRect(); z.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true })); return true; })()`);
   await sleep(300);
-  await check("圖紙：滾輪放大", "(document.querySelector('.zp__pct')?.textContent ?? '') !== '100%'");
+  await check("圖紙：滾輪放大", `(${panel("drawing")}?.querySelector('.zp__pct')?.textContent ?? '') !== '100%'`);
   await shot("factory-drawing");
   await chatPane();
 
@@ -197,41 +224,58 @@ try {
   await check("3D：問句帶入正在看的對象（〈連接法蘭〉）", `(${lastAi}.previousElementSibling?.textContent ?? '').includes('連接法蘭')`);
   await check("3D：確認卡（不自動執行）", `!!${lastAi}.querySelector('.taskcard') && (${lastAi}.textContent).includes('開始轉換')`);
   await click("開始轉換", ".taskcard button");
-  const built = await waitFor("[...document.querySelectorAll('.strip__item')].some((b) => b.textContent.includes('3D'))", 150000);
+  const built = await waitFor(`!!${panel("model")}?.querySelector('.view--model')`, 150000);
   await showPane();
-  if (built) await waitFor("!!document.querySelector('.view__canvas--model canvas')", 15000);
-  await check("右側：3D 模型（Ortho2CAD STL，可旋轉縮放的 three.js 畫布）", `${showcaseKind}.includes('3D') && !!document.querySelector('.view__canvas--model canvas')`);
+  if (built) await waitFor(`!!${panel("model")}?.querySelector('.view__canvas--model canvas')`, 15000);
+  await check(
+    "右側：3D 板塊（目前成果；Ortho2CAD STL，可旋轉縮放的 three.js 畫布）",
+    `${activePanel} === 'model' && ${panelTitle("model")}.includes('3D') && !!${panel("model")}?.querySelector('.view__canvas--model canvas')`,
+  );
   await shot("factory-3d");
   await chatPane();
 
   await ask("法蘭還剩幾件可以出貨？", "庫存");
   await showPane();
-  await waitFor("[...document.querySelectorAll('.strip__item')].some((b) => /庫存|查詢/.test(b.textContent))", 15000);
-  await check("右側：庫存／唯讀 SQL 結果表", `/庫存|查詢/.test(${showcaseKind}) && !!document.querySelector('.view--data table')`);
+  await waitFor(`!!${panel("stock")}?.querySelector('.view--data table')`, 15000);
+  await check("右側：庫存板塊（目前成果；唯讀 SQL 結果表）", `${activePanel} === 'stock' && !!${panel("stock")}?.querySelector('.view--data table')`);
   await shot("factory-stock");
   await chatPane();
 
   await ask("重新排程", "排程");
   await showPane();
-  await check("右側：目前排程（/production/overview）", `${showcaseKind}.includes('排程')`);
+  // 目前排程由 /production/overview 讀取：檢查本身要求讀完而且成功，一直讀取中或讀取失敗都 FAIL
+  await waitFor(scheduleReady, 8000);
+  await check("右側：排程板塊放上目前排程（/production/overview）", `${activePanel} === 'schedule' && ${panelTitle("schedule")}.includes('目前的生產排程') && ${scheduleReady}`);
   await chatPane();
   await click("開始排程", ".taskcard button");
-  await waitFor("[...document.querySelectorAll('.strip__item')].filter((b) => b.textContent.includes('排程')).length >= 2", 60000);
+  await waitFor(`${panelTitle("schedule")}.includes('重新排程結果')`, 60000);
   await showPane();
-  await waitFor("!!document.querySelector('.gantt-wrap svg')", 8000);
-  await check("右側：排程結果甘特圖（Timefold／簡易排程的解）", `${showcaseKind}.includes('排程') && !!document.querySelector('.gantt-wrap svg') && (document.querySelector('.showcase__title')?.textContent ?? '').includes('重新排程')`);
+  await waitFor(`!!${panel("schedule")}?.querySelector('.gantt-wrap svg')`, 8000);
+  await check(
+    "右側：排程板塊的重新排程結果甘特圖（Timefold／簡易排程的解）",
+    `${activePanel} === 'schedule' && !!${panel("schedule")}?.querySelector('.gantt-wrap svg') && ${panelTitle("schedule")}.includes('重新排程')`,
+  );
   await shot("factory-schedule");
 
-  const count = await js("document.querySelectorAll('.strip__item').length");
-  await js("document.querySelector('.strip__item').click()");
+  // 成果歷程：工作台沒有縮圖列；每個板塊各自用「上一份／下一份」切換，對話裡每一輪的成果標籤可以把舊成果切回對應的板塊
+  const count = await js(benchCount);
+  await js(`${panel("schedule")}.querySelector('[aria-label="排程：上一份"]').click()`);
+  await waitFor(scheduleReady, 8000);
+  await check(
+    "板塊歷程：排程板塊「上一份」切回目前排程，成果都在",
+    `${panelTitle("schedule")}.includes('目前的生產排程') && ${scheduleReady} && (${panel("schedule")}.querySelector('.wb-panel__nav .num')?.textContent ?? '').startsWith('1/') && ${benchCount} === ${count}`,
+  );
+  await js(`${panel("schedule")}.querySelector('[aria-label="排程：下一份"]').click()`);
+  await waitFor(`!!${panel("schedule")}?.querySelector('.gantt-wrap svg')`, 8000);
+  await check("板塊歷程：「下一份」回到重新排程結果（甘特圖）", `${panelTitle("schedule")}.includes('重新排程結果') && !!${panel("schedule")}.querySelector('.gantt-wrap svg')`);
+  await chatPane();
+  await js("document.querySelector('.outchip--drawing').click()");
   await sleep(400);
-  await check("縮圖歷程：點第 1 張切回圖紙，之前的成果都在", `${showcaseKind}.includes('圖紙') && document.querySelectorAll('.strip__item').length === ${count}`);
-  await js("(() => { const s = document.querySelector('.showcase'); s.focus(); s.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); return true; })()");
-  await sleep(300);
-  await check("縮圖歷程：→ 切到下一張", "document.querySelectorAll('.strip__item')[1]?.classList.contains('is-on')");
-  await js("(() => { const s = document.querySelector('.showcase'); s.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })); return true; })()");
-  await sleep(300);
-  await check("縮圖歷程：← 切回", `${showcaseKind}.includes('圖紙')`);
+  await showPane();
+  await check(
+    "成果歷程：點對話裡第 1 輪的圖紙成果切回圖紙板塊，四個板塊的成果都在",
+    `${activePanel} === 'drawing' && ${benchCount} === ${count} && ${allPanelsFilled}`,
+  );
   await check("工廠模組：沒有水平溢出", noOverflow);
   await chatPane();
   await check("工廠模組：輸入列在畫面內、沒有被遮住", composerVisible);
@@ -262,22 +306,25 @@ try {
   await js("document.querySelector('.side__open').click()");
   await waitFor(`location.pathname === ${JSON.stringify(factoryUrl)}`, 5000);
   await showPane();
-  await check("開啟紀錄：回到工廠模組、當時的成果歷程與目前成果（圖紙）", `location.pathname === ${JSON.stringify(factoryUrl)} && document.querySelectorAll('.strip__item').length === ${count} && ${showcaseKind}.includes('圖紙')`);
+  await check(
+    "開啟紀錄：回到工廠模組、當時的成果歷程與目前成果（圖紙）",
+    `location.pathname === ${JSON.stringify(factoryUrl)} && ${benchCount} === ${count} && ${allPanelsFilled} && ${activePanel} === 'drawing'`,
+  );
   await shot("factory-reopen");
   // 重新整理：工廠內部資料沒有存進瀏覽器，只照編號以目前身分重新讀取；查詢結果要重新查詢
   await goto(factoryUrl);
   await showPane();
-  await waitFor("!!document.querySelector('.zp__img, .view__error')", 8000);
+  await waitFor(`!!${panel("drawing")}?.querySelector('.zp__img, .view__error')`, 8000);
   await check(
     "重新整理後：回到同一個模組與成果（圖紙依編號重新讀取、查詢結果要重新查詢）",
-    `location.pathname === ${JSON.stringify(factoryUrl)} && ${showcaseKind}.includes('圖紙') && !!document.querySelector('.zp__img') && document.querySelectorAll('.strip__item').length >= 3`,
+    `location.pathname === ${JSON.stringify(factoryUrl)} && ${activePanel} === 'drawing' && !!${panel("drawing")}?.querySelector('.zp__img') && ${benchCount} >= 3`,
   );
-  await js("[...document.querySelectorAll('.strip__item')].find((b) => /查詢|庫存/.test(b.textContent))?.click()");
-  await sleep(300);
-  await check("重新整理後：查詢結果沒有存進瀏覽器，提供「以目前身分重新查詢」", "(document.querySelector('.showcase')?.textContent ?? '').includes('以目前身分重新查詢')");
-  await js("[...document.querySelectorAll('.strip__item')].find((b) => b.textContent.includes('3D'))?.click()");
-  await waitFor("!!document.querySelector('.view__canvas--model canvas')", 15000);
-  await check("重新整理後：3D 依工作編號重新讀取，畫布可以旋轉縮放", `${showcaseKind}.includes('3D') && !!document.querySelector('.view__canvas--model canvas')`);
+  await check("重新整理後：查詢結果沒有存進瀏覽器，庫存板塊提供「以目前身分重新查詢」", `(${panel("stock")}?.textContent ?? '').includes('以目前身分重新查詢')`);
+  await waitFor(`!!${panel("model")}?.querySelector('.view__canvas--model canvas')`, 15000);
+  await check(
+    "重新整理後：3D 板塊依工作編號重新讀取，畫布可以旋轉縮放",
+    `${panelTitle("model")}.includes('3D') && !!${panel("model")}?.querySelector('.view__canvas--model canvas')`,
+  );
   await shot("factory-reload");
 
   // ------------------------------------------------------------ 藝術
@@ -291,7 +338,11 @@ try {
   await check("藝術模組：暖褐金箔主題", "document.documentElement.dataset.view === 'art' && getComputedStyle(document.querySelector('.app--module')).getPropertyValue('--mod').trim().toLowerCase() === '#c9a45c' && getComputedStyle(document.body).backgroundColor === 'rgb(15, 12, 9)'");
   await showPane();
   await waitFor("!!document.querySelector('.zp__img')", 8000);
-  await check("右側：作品大圖＋展品標籤", `${showcaseKind}.includes('作品') && !!document.querySelector('.museum-label') && document.querySelector('.zp__img').naturalWidth > 0`);
+  // 展品標籤（734692b 起）不再框在畫作下方，名稱與畫家・年代・媒材・收藏放在展示區標題列；作品還沒讀到時標題列只有「作品・知識庫」
+  await check(
+    "右側：作品大圖＋展品標籤（標題列）",
+    `${showcaseKind}.includes('作品') && !!document.querySelector('.showcase__head .showcase__title') && !/^作品・|^$/.test(document.querySelector('.showcase__head .showcase__meta')?.textContent ?? '') && document.querySelector('.zp__img').naturalWidth > 0`,
+  );
   await shot("art-artwork");
   await chatPane();
   await ask("細看這幅畫的技法", "畫作");
@@ -349,8 +400,27 @@ try {
   await switchTo("業務");
   await goto("/");
   await ask("連接法蘭有哪些公差要求？", "圖紙");
-  await check("降級：業務問機密圖紙 → 查無資料，不給圖紙按鈕或縮圖", `/查無資料/.test(${lastAi}.textContent) && !${lastAi}.querySelector('.jump') && !${lastAi}.querySelector('.subject--drawing')`);
+  // 名稱只拿業務看得到的圖紙比對，所以這題會改走圖紙查找、列出授權內的圖紙（TASK-20261019-003 人類選方案 A：產品行為不變）。
+  // 要驗的是機密圖紙不外洩：回答（含縮圖網址、替代文字）裡沒有任何機密圖紙的識別字，列出的圖紙沒有「機密」等級，並標明另有 N 張被濾掉
+  await check(
+    "降級：業務問機密圖紙 → 機密圖紙不外洩（回答、縮圖、標籤沒有機密圖紙，標明另有 N 張不在資料範圍）",
+    `(() => { const m = ${lastAi}; const flags = [...m.querySelectorAll('.work__flag')].map((f) => f.textContent.trim()); const hidden = +(m.textContent.match(/另有 (\\d+) 張不在你的資料範圍/)?.[1] ?? 0); const bad = ${leaked("m.outerHTML")}; return { ok: m.dataset.phase === 'done' && bad.length === 0 && !m.querySelector('.work__flag.is-secret') && !flags.includes('機密') && hidden > 0, phase: m.dataset.phase, leaked: bad, flags, hidden }; })()`,
+  );
   await shot("degraded");
+  // 有跳轉按鈕就點進工廠模組：工作台圖紙板塊放的圖紙（圖面與標題欄）也不能是機密圖紙
+  const degradedJump = await js(`!!${lastAi}.querySelector('.jump--factory')`);
+  if (degradedJump) {
+    await js(`${lastAi}.querySelector('.jump--factory').click()`);
+    await waitFor(`!!${panel("drawing")}?.querySelector('.titleblock, [role=alert]')`, 15000);
+    await showPane();
+  }
+  await check(
+    "降級：跳轉後的工作台也沒有機密圖紙（圖紙板塊的圖面與標題欄）",
+    degradedJump
+      ? `(() => { const w = document.querySelector('.workbench'); const d = ${panel("drawing")}; const levels = [...(d?.querySelectorAll('.titleblock__cell') ?? [])].filter((c) => c.querySelector('dt')?.textContent === '機密等級').map((c) => c.querySelector('dd')?.textContent); const bad = w ? ${leaked("w.outerHTML")} : []; return { ok: !!w && ${activePanel} === 'drawing' && levels.length > 0 && !levels.includes('機密') && !d.querySelector('.titleblock__cell.is-secret') && bad.length === 0, workbench: !!w, active: ${activePanel}, levels, leaked: bad }; })()`
+      : "({ ok: true, jump: false })",
+  );
+  if (degradedJump) await shot("degraded-factory");
 
   await check(
     "瀏覽器儲存：沒有 JWT、交接票、Jev 請求本文、內部資料",

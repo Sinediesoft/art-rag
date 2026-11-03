@@ -17,14 +17,14 @@ def test_identify_verifies_beyond_top_k(client, monkeypatch):
     orig = store.search_images
 
     def last_place(query, k):
-        # 正解（同一張圖，CLIP 1.0）排到最後一名：模擬 CLIP 沒把它排進前 top_k
-        return orig(query, len(store.artworks))[::-1][:k]
+        # 正解（同一張圖，CLIP 1.0）排到前 verify_top_n（3）名的最後一名：
+        # 模擬 CLIP 沒把它排進前 top_k；只取前 3 名再反轉，知識庫件數變多也成立
+        return orig(query, 3)[::-1][:k]
 
     monkeypatch.setattr(store, "search_images", last_place)
     img = load_image(ROOT / art["image"]["path"])
     r = search_service.identify("test", top_k=1, img=img)
 
-    assert len(store.artworks) <= 3  # 正解在 verify_top_n（3）名以內
     assert len(r["results"]) == 1
     assert r["matched"] and r["best_artwork_id"] == art["id"]
 

@@ -48,7 +48,9 @@ class Collection:
         if not rows:
             return []
         sims = self.image_vecs[rows] @ query
-        return [Hit(self.items[rows[j]], float(sims[j])) for j in np.argsort(-sims)[:k]]
+        return [
+            Hit(self.items[rows[j]], float(sims[j])) for j in np.argsort(-sims, kind="stable")[:k]
+        ]
 
     def search_chunks(
         self,
@@ -63,7 +65,7 @@ class Collection:
             return []
         sims = self.chunk_vecs @ query
         hits = []
-        for i in np.argsort(-sims):
+        for i in np.argsort(-sims, kind="stable"):
             c = self.chunks[i]
             if owner_id and c[self.owner_key] != owner_id:
                 continue

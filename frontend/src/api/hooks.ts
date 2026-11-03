@@ -88,6 +88,13 @@ export const useTextSearch = (q: string | null) =>
 export const useStatus = () =>
   useScopedQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 5000 });
 
+/** 背景工作有啟用、但沒有 worker 接這個佇列（gpu＝3D 重建、schedule＝排程）。只看「有沒有在線 worker」不夠：
+ *  只開了其中一個 worker 時，另一種工作一樣會一直排隊。狀態還沒載入時回 false，避免畫面閃一下警告 */
+export const useWorkerOffline = (queue: "gpu" | "schedule") => {
+  const jobs = useStatus().data?.jobs;
+  return !!jobs?.enabled && !jobs.workers.some((w) => w.queues.includes(queue));
+};
+
 /** 管理診斷（主管）：最近的問答、SQL、路由紀錄、模型端點與內部設定 */
 export const useDiagnostics = () => {
   const enabled = useCanView("diagnostics");

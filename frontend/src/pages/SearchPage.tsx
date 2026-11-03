@@ -183,7 +183,10 @@ function TextResults({ q }: { q: string }) {
         <h1 className="t-display">「{q}」</h1>
         {data && (
           <p className="text-xs text-ink-48">
-            Chinese-CLIP（文字→畫面）＋ bge-m3（文字→知識段落）以 RRF 融合排序 · {data.latency_ms} ms
+            {data.color_sort
+              ? `依色彩分析排序（${data.color_sort.map((c) => c.label).join("、")}），同分再看 Chinese-CLIP＋bge-m3`
+              : "Chinese-CLIP（文字→畫面）＋ bge-m3（文字→知識段落）以 RRF 融合排序"}{" "}
+            · {data.latency_ms} ms
           </p>
         )}
       </div>
@@ -204,6 +207,7 @@ function TextResults({ q }: { q: string }) {
             }
             footer={
               <div className="flex flex-col gap-1">
+                {r.color && <p className="text-[11px] text-ink-48">色彩：{r.color.detail}</p>}
                 <ScoreBar label="畫面" value={r.image_score} max={0.5} />
                 <ScoreBar label="文字" value={r.text_score} max={1} />
               </div>

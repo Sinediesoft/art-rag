@@ -163,6 +163,26 @@ def build_answer_messages(
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
+# 相對日期（「上個月」）是照資料日期 as_of 算的，不是今天：
+# 回答裡寫出實際查的區間，免得讀者自己用今天換算
+_RELATIVE_DATE_RE = re.compile(
+    r"上個?月|這個?月|本月|上週|上周|這週|這周|本週|本周|今年|去年|前年|最近|近\d+\s*(?:天|日|週|周|個?月)"
+    r"|昨天|今天|前天|上季|本季"
+)
+_SQL_DATE_RE = re.compile(r"'(\d{4}-\d{2}-\d{2})'")
+
+
+def date_scope_note(question: str, sql: str, as_of: str) -> str:
+    """問題用相對日期、SQL 也有日期條件時，回答最後補一句資料日期與查詢區間；否則回傳空字串。"""
+    if not _RELATIVE_DATE_RE.search(question):
+        return ""
+    dates = sorted(set(_SQL_DATE_RE.findall(sql)))
+    if not dates:
+        return ""
+    span = dates[0] if len(dates) == 1 else f"{dates[0]}～{dates[-1]}"
+    return f"（資料日期 {as_of}；查詢區間 {span}）"
+
+
 # ---------------------------------------------------------------- mock（不呼叫模型）
 def _bigrams(s: str) -> set[str]:
     s = re.sub(r"[\s？?，,。、「」]", "", s)
