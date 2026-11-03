@@ -5,19 +5,25 @@
   powershell -ExecutionPolicy Bypass -File deploy\windows\start-services.ps1
   powershell -ExecutionPolicy Bypass -File deploy\windows\start-services.ps1 -Stop      # 停掉這個腳本啟動的服務
 
-依序：資料庫（.env 設了 DATABASE_URL 時，Docker）→ Ollama（:11434）→ Timefold 排程（:8082）→ Ortho2CAD llama-server（:8081，router 模式）→ 後端＋前端（:8000）。
+依序：資料庫（.env 設了 DATABASE_URL 時，Docker）＋Redis（.env 設了 REDIS_URL 時）→ Ollama（:11434）→ Timefold 排程（:8082）→ Ortho2CAD llama-server（:8081，router 模式）→ 後端＋前端（:8000）→ 背景工作 worker（gpu、schedule）。
+- 前端的 3D 重建與排程一律走背景工作（docs/adr/041）：沒有 Redis 與 worker 時這兩頁回 503 JOBS_UNAVAILABLE
 - 都只綁 127.0.0.1；要給組員從 Tailscale 連，見 docs/5070ti-host.md
 - Ortho2CAD 要 llama.cpp 的 Windows CUDA 版（winget 的是 Vulkan 版，比較慢）：-LlamaServer 指定，
   或設環境變數 LLAMA_SERVER，或放在 PATH，或解壓到 %USERPROFILE%\tools\llama.cpp-*\
 - 紀錄寫在 data\logs\（不進 Git）
 - 直接在 Windows 跑時，3D 重建產生的程式碼要在 WSL2 執行（.env 設 CAD_WSL_PYTHON，docs/adr/027）；
   這個腳本最後會檢查並預熱 WSL 裡的 CadQuery 環境，做法見 docs/5070ti-host.md
+- 啟動失敗或健康檢查有 ✗ 時，deploy/diagnose.py 會看這次的 log 說明原因與修法（docs/adr/045；-NoDiagnose 關掉）
+- 在離線包裡執行時（docs/adr/046），uv、Python、Ollama、模型、llama.cpp 都用離線包裡的；Ollama 用 .env 的
+  HYBRID_BASE_URL 那個連接埠（離線包是 :11435）；PostgreSQL、Redis 不用 Docker，跑在離線包的 WSL 環境 artrag。
+  -Stop 也會停掉這兩樣
 #>
 param(
     [string]$LlamaServer = $env:LLAMA_SERVER,
     [switch]$SkipOrtho2cad,
     [switch]$SkipScheduler,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$NoDiagnose
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,6 +31,30 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Logs = Join-Path $Repo 'data\logs'
 New-Item -ItemType Directory -Force $Logs | Out-Null
 Set-Location $Repo
+. (Join-Path $Repo 'deploy\offline\offline-env.ps1')
+# param 的預設值在 offline-env 設好 LLAMA_SERVER 之前就決定了：離線包要再補一次
+if (-not $LlamaServer) { $LlamaServer = $env:LLAMA_SERVER }
+
+# 診斷只看這次執行之後寫的 log：上次留下的舊錯誤不算
+$RunStart = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+$problems = @()
+
+function Invoke-Diagnose([string]$Message) {
+    if ($NoDiagnose -or -not (Get-Command uv -ErrorAction SilentlyContinue)) { return }
+    $diagArgs = @('run', '--no-project', 'python', (Join-Path $Repo 'deploy\diagnose.py'), '--since', $RunStart)
+    # Windows PowerShell 5.1 會把空字串參數整個吃掉，--message 後面就沒有值了
+    if ($Message) { $diagArgs += @('--message', $Message) }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & uv @diagArgs
+    $ErrorActionPreference = $prev
+}
+
+# 中途 throw（資料庫、migration、找不到 Ollama）：先診斷，再照原本的錯誤結束
+trap {
+    Invoke-Diagnose $_.Exception.Message
+    break
+}
 
 function Test-Port([int]$Port) {
     [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
@@ -39,17 +69,36 @@ function Wait-Http([string]$Url, [int]$Seconds = 90) {
     return '000'
 }
 
-function Start-Hidden([string]$Name, [string]$Exe, [string[]]$Arguments) {
-    Start-Process -FilePath $Exe -ArgumentList $Arguments -WorkingDirectory $Repo -WindowStyle Hidden `
+function Start-Hidden([string]$Name, [string]$Exe, [string[]]$Arguments, [string]$Dir = $Repo) {
+    Start-Process -FilePath $Exe -ArgumentList $Arguments -WorkingDirectory $Dir -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $Logs "$Name.out.log") -RedirectStandardError (Join-Path $Logs "$Name.log") | Out-Null
 }
 
+# worker 沒有監聽埠，只能從命令列認：uv、celery.exe 啟動器與真正的 python 行程都帶著這些參數
+function Get-Worker([string]$Queue) {
+    Get-CimInstance Win32_Process -Filter "CommandLine LIKE '%app.jobs.celery_app%'" |
+        Where-Object { -not $Queue -or $_.CommandLine -match "-Q $Queue\b" }
+}
+
 if ($Stop) {
-    foreach ($p in 8000, 8081, 8082) {
+    $ports = @(8000, 8081, 8082)
+    # 離線包的 Ollama 是這個腳本自己起的 ollama serve，不是常駐服務：一起停
+    if ($IsOfflineBundle) { $ports += $OfflineOllamaPort }
+    foreach ($p in $ports) {
         Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
             ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -Confirm:$false; "已停止 :$p（pid $($_.OwningProcess)）" }
     }
-    '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
+    Get-Worker | ForEach-Object {
+        Stop-Process -Id $_.ProcessId -Force -Confirm:$false -ErrorAction SilentlyContinue; "已停止 worker（pid $($_.ProcessId)）"
+    }
+    if ($IsOfflineBundle) {
+        # 離線包的 PostgreSQL、Redis 在自己的 WSL 環境裡：一起停，釋放記憶體
+        Stop-OfflineWsl
+        "已停止 WSL 環境 $OfflineWslDistro（PostgreSQL、Redis）"
+    } else {
+        '（資料庫與 Redis 容器不停：docker compose -f deploy/docker-compose.yml stop）'
+        '（Ollama 不停：它是常駐服務，由 Ollama 自己管理）'
+    }
     return
 }
 
@@ -61,27 +110,57 @@ if (Test-Path $envFile) {
         ForEach-Object { $envVars[$Matches[1]] = $Matches[2].Trim() }
 }
 
-# 0. 資料庫（.env 設了 DATABASE_URL 才需要；docs/adr/009）：後端啟動時要連得到
+# 背景工作和後端用同一個判斷（app.core.config 的 jobs_enabled）：REDIS_URL 和工作資料庫都有值才啟用
+$jobsOn = [bool]($envVars['REDIS_URL'] -and ($envVars['JOBS_DATABASE_URL'] -or $envVars['DATABASE_URL']))
+
+# 0. 資料庫（.env 設了 DATABASE_URL 才需要；docs/adr/009）：後端啟動時要連得到；Redis 是背景工作的 broker
+$services = @()
+if ($envVars['DATABASE_URL']) { $services += 'db' }
+if ($jobsOn) { $services += 'redis' }
 if (-not $envVars['DATABASE_URL']) { '－ 沒設 DATABASE_URL：用檔案索引＋SQLite' }
-elseif (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw '設了 DATABASE_URL 但找不到 docker：先開 Docker Desktop' }
-else {
+if (-not $jobsOn) { '－ 沒設 REDIS_URL：背景工作沒啟用，3D 重建與排程頁會回 503' }
+if ($IsOfflineBundle -and $services.Count -gt 0) {
+    # 離線包沒有 Docker：PostgreSQL、Redis 跑在離線包自己的 WSL 環境（docs/adr/046、deploy/offline/wsl-setup.sh）
+    if (Start-OfflineWsl $Logs) { "✓ WSL 環境 $OfflineWslDistro：PostgreSQL :$OfflineDbPort、Redis :$OfflineRedisPort" }
+    else { throw "WSL 環境 $OfflineWslDistro 的 PostgreSQL／Redis 沒起來，看 $Logs\wsl-services.log" }
+}
+elseif ($services.Count -gt 0) {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw '設了 DATABASE_URL／REDIS_URL 但找不到 docker：先開 Docker Desktop' }
     # docker 把進度訊息寫到 stderr；Windows PowerShell 5.1 在 Stop 模式下會把它當錯誤中止，這段改看結束碼
     $ErrorActionPreference = 'Continue'
     # Docker Desktop 剛開機時引擎還沒好：最多等 120 秒
     for ($i = 0; $i -lt 60; $i++) { docker info *> $null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 2 }
-    docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait db *> (Join-Path $Logs 'db.log')
+    docker compose -f deploy/docker-compose.yml --env-file .env up -d --wait @services *> (Join-Path $Logs 'db.log')
     $dbOk = $LASTEXITCODE -eq 0
     $ErrorActionPreference = 'Stop'
-    if ($dbOk) { '✓ 資料庫（PostgreSQL＋pgvector）' } else { throw "資料庫沒起來，看 $Logs\db.log（Docker Desktop 有開嗎？）" }
+    if ($dbOk) { "✓ 容器：$($services -join '、')" } else { throw "容器沒起來，看 $Logs\db.log（Docker Desktop 有開嗎？）" }
 }
 
-# 1. Ollama
-if (Test-Port 11434) { '✓ Ollama 已在執行' }
+# 0b. 背景工作的 migration（可重複執行，已套用的會略過）：worker 和後端都要這些表
+if ($jobsOn) {
+    $ErrorActionPreference = 'Continue'
+    Push-Location backend
+    uv run python -m app.jobs.admin migrate *> (Join-Path $Logs 'jobs-migrate.log')
+    $migOk = $LASTEXITCODE -eq 0
+    Pop-Location
+    $ErrorActionPreference = 'Stop'
+    if ($migOk) { '✓ 背景工作資料表' } else { throw "背景工作的 migration 失敗，看 $Logs\jobs-migrate.log" }
+}
+
+# 1. Ollama：連接埠照 .env 的 HYBRID_BASE_URL（離線包是 11435）；指到別台主機時照舊在本機起 :11434
+$ollamaPort = 11434
+if ($envVars['HYBRID_BASE_URL'] -match '^https?://(127\.0\.0\.1|localhost):(\d+)') { $ollamaPort = [int]$Matches[2] }
+$ollamaRoot = "http://127.0.0.1:$ollamaPort"
+if (Test-Port $ollamaPort) { "✓ Ollama 已在執行（:$ollamaPort）" }
 else {
     $ollama = (Get-Command ollama -ErrorAction SilentlyContinue).Source
     if (-not $ollama) { throw '找不到 ollama，請先安裝 Ollama' }
+    # 使用者自己設了 OLLAMA_HOST（例如開放給組員）就照他的
+    if (-not $env:OLLAMA_HOST -and $ollamaPort -ne 11434) { $env:OLLAMA_HOST = "127.0.0.1:$ollamaPort" }
     Start-Hidden 'ollama' $ollama @('serve')
-    "… 啟動 Ollama：$(Wait-Http 'http://127.0.0.1:11434/api/tags' 30)"
+    $code = Wait-Http "$ollamaRoot/api/tags" 30
+    "… 啟動 Ollama（:$ollamaPort）：$code"
+    if ($code -eq '000') { $problems += '啟動 Ollama：000（30 秒內沒有回應）' }
 }
 
 # 2. Timefold 排程服務（沒有也能跑：排程頁改用簡易排程）
@@ -134,17 +213,32 @@ else {
     "… 啟動後端：$code"
 }
 
+# 4b. 背景工作 worker（docs/adr/041）：gpu 跑 3D 重建、schedule 跑排程求解；--pool=solo 一次一個工作，
+#     也是 Celery 在 Windows 上唯一可用的執行方式。要在 backend\ 執行，-A app.jobs.celery_app 才找得到
+if ($jobsOn) {
+    foreach ($q in 'gpu', 'schedule') {
+        if (Get-Worker $q) { "✓ worker（$q）已在執行"; continue }
+        Start-Hidden "worker-$q" 'uv' @('run', 'celery', '-A', 'app.jobs.celery_app', 'worker', '-Q', $q,
+            '--pool=solo', '-n', "$q@%h", '-l', 'INFO') (Join-Path $Repo 'backend')
+        "… 啟動 worker（$q）"
+    }
+}
+
 # 5. 預熱主力模型（docs/adr/025）：開機後第一題不用等載入（冷啟動首字 6–16 秒）
 $model = if ($envVars['HYBRID_MODEL']) { $envVars['HYBRID_MODEL'] } else { 'qwen3-vl:4b-instruct' }
 $keep = if ($envVars['MODEL_KEEP_ALIVE']) { $envVars['MODEL_KEEP_ALIVE'] } else { '5m' }
 # 用 Invoke-RestMethod：Windows PowerShell 5.1 把 JSON 傳給 curl.exe 時會吃掉雙引號（HTTP 400）
 $warm = @{ model = $model; keep_alive = $keep } | ConvertTo-Json -Compress
-try {
-    Invoke-RestMethod -Method Post -Uri http://127.0.0.1:11434/api/generate -ContentType 'application/json' `
-        -Body ([Text.Encoding]::UTF8.GetBytes($warm)) -TimeoutSec 120 | Out-Null
-    "… 預熱 $model（keep_alive $keep）：✓"
-} catch {
-    "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+# mock 方案不呼叫生成模型：預熱只會白白佔記憶體（沒有顯卡時是系統記憶體）
+if ($envVars['LLM_MODE'] -eq 'mock') { '－ mock 方案：不預熱模型' }
+else {
+    try {
+        Invoke-RestMethod -Method Post -Uri "$ollamaRoot/api/generate" -ContentType 'application/json' `
+            -Body ([Text.Encoding]::UTF8.GetBytes($warm)) -TimeoutSec 120 | Out-Null
+        "… 預熱 $model（keep_alive $keep）：✓"
+    } catch {
+        "－ 預熱 $model 失敗（$($_.Exception.Message)），第一題會比較慢"
+    }
 }
 
 # 5b. 3D 重建的執行環境（docs/adr/027）：產生的程式碼在 WSL2 執行；順便讓 WSL 開機，第一次 3D 重建不用多等
@@ -159,23 +253,64 @@ else {
     $cadOk = $LASTEXITCODE -eq 0
     $ErrorActionPreference = 'Stop'
     if ($cadOk) { '✓ 3D 重建執行環境（WSL2 的 CadQuery）' }
-    else { "✗ WSL 裡的 CadQuery 不能用，3D 重建會失敗：看 $Logs\cad-wsl.log（環境做法見 docs/5070ti-host.md）" }
+    else {
+        "✗ WSL 裡的 CadQuery 不能用，3D 重建會失敗：看 $Logs\cad-wsl.log（環境做法見 docs/5070ti-host.md）"
+        $problems += 'WSL 裡的 CadQuery 不能用'
+    }
 }
 
 # 6. 健康檢查
+#    公開的 /health 只回存活與就緒（docs/adr/030）；模型、記憶體與背景工作要看 /status，
+#    它要有效的 JWT：先打 /auth/accounts 拿一張預設帳號（權限最低）的 cookie
 ''
-'健康檢查（http://127.0.0.1:8000/api/v1/health）'
+'健康檢查（http://127.0.0.1:8000）'
+$mark = { param($ok) if ($ok) { '✓' } else { '✗' } }
 try {
-    $h = curl.exe -s http://127.0.0.1:8000/api/v1/health | ConvertFrom-Json
-    "  狀態 $($h.status) · 索引一致 $($h.index_consistent) · 知識庫 $($h.manifest.kb_version)"
+    $web = $null
+    $h = Invoke-RestMethod -UseBasicParsing http://127.0.0.1:8000/api/v1/health -TimeoutSec 15
+    "  狀態 $($h.status) · 資料庫 $(& $mark $h.db) · 索引一致 $(& $mark $h.index_consistent) · 知識庫 $($h.kb_version)"
+    Invoke-RestMethod -UseBasicParsing http://127.0.0.1:8000/api/v1/auth/accounts -SessionVariable web -TimeoutSec 15 | Out-Null
+    $st = Invoke-RestMethod -UseBasicParsing http://127.0.0.1:8000/api/v1/status -WebSession $web -TimeoutSec 30
     foreach ($k in 'hybrid', 'hybrid_fallback', 'ortho2cad') {
-        $s = $h.strategies.$k
-        if ($s) { "  {0,-16} {1} {2}" -f $k, $(if ($s.available) { '✓' } else { '✗' }), "$($s.model)（$($s.detail)）" }
+        $s = $st.strategies.$k
+        if ($s) { "  {0,-16} {1} {2}" -f $k, (& $mark $s.available), $s.model }
+        # Ortho2CAD 是選裝，略過時本來就不可用，不算問題
+        if ($s -and -not $s.available -and $k -ne 'ortho2cad') { $problems += "$k 模型不可用：$($s.model)" }
     }
-    "  排程服務         $(if ($h.scheduler.available) { '✓ ' + $h.scheduler.engine } else { '✗ 改用簡易排程' })"
-    if ($h.memory.gpu) { "  顯示記憶體       $($h.memory.gpu.percent)%（$($h.memory.gpu.name)）" }
-    ''
-    '打開 http://localhost:8000'
+    if ($st.memory.gpu) { "  顯示記憶體       $($st.memory.gpu.percent)%（$($st.memory.gpu.name)）" }
 } catch {
     "✗ 後端沒有回應，看 $Logs\backend.log"
+    $problems += "後端沒有回應（$($_.Exception.Message)）"
 }
+
+# 後端沒有排程引擎的狀態，直接問排程服務；連不上時排程頁改用簡易排程
+try {
+    $sch = Invoke-RestMethod -UseBasicParsing http://127.0.0.1:8082/health -TimeoutSec 5
+    "  排程服務         ✓ $($sch.solver) $($sch.version)"
+} catch {
+    '  排程服務         ✗ 改用簡易排程'
+}
+
+# 6b. 背景工作：worker 啟動後會登記到 Redis（載入索引要十幾秒），最多等 90 秒兩個佇列都有人接
+if ($jobsOn -and $web) {
+    $jobs = $null
+    $queues = @()
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $jobs = (Invoke-RestMethod -UseBasicParsing http://127.0.0.1:8000/api/v1/status -WebSession $web -TimeoutSec 30).jobs
+            $queues = @($jobs.workers | ForEach-Object { $_.queues }) | Sort-Object -Unique
+        } catch { }
+        if (('gpu' -in $queues) -and ('schedule' -in $queues)) { break }
+        Start-Sleep 3
+    }
+    "  背景工作         資料庫 $(& $mark $jobs.database_ok) · Redis $(& $mark $jobs.broker_ok) · " +
+        "worker gpu $(& $mark ('gpu' -in $queues)) schedule $(& $mark ('schedule' -in $queues))"
+    if (-not (('gpu' -in $queues) -and ('schedule' -in $queues))) {
+        "  ✗ worker 沒有登記，3D 重建或排程會一直排隊：看 $Logs\worker-gpu.log、worker-schedule.log"
+        $problems += 'worker 沒有登記'
+    }
+}
+# 沒有中斷、但健康檢查有 ✗：一起交給診斷
+if ($problems) { Invoke-Diagnose ($problems -join '；') }
+''
+'打開 http://localhost:8000'
