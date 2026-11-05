@@ -10,7 +10,7 @@ SCHED_PORT ?= 8082
 # 資料庫（PostgreSQL 17 + pgvector）跑在 Docker；帳號密碼讀 .env 的 POSTGRES_*
 COMPOSE := docker compose -f deploy/docker-compose.yml --env-file .env
 
-.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad cad-warm eval-router eval-color eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-art-resolve eval-send-image eval-lora eval-lora-backend lora-data demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
+.PHONY: jobs-up jobs-stop jobs-migrate jobs-status worker-gpu worker-schedule test-jobs help setup index index-db check-kb db-up db-stop db-psql db-import-sqlite dev dev-backend dev-frontend demo demo-all build test lint openapi eval eval-cloud eval-cad cad-warm eval-router eval-color eval-retrieval-index eval-retrieval eval-drawing-retrieval eval-style eval-style-met style-head eval-versions eval-met-photos eval-align eval-intake eval-rearrange eval-art-resolve eval-send-image eval-lora eval-lora-backend lora-data demo-add demo-reset ci drawings ortho2cad ortho2cad-setup eval-sql eval-route eval-guard inventory demo-test scheduler scheduler-setup
 
 help:
 	@echo "make setup       安裝後端（uv）與前端（npm）套件，建立 .env"
@@ -22,7 +22,7 @@ help:
 	@echo "make index-db    不重算向量，把現有的 data/index/ 寫進資料庫"
 	@echo "make demo        建置前端並啟動展示伺服器 http://localhost:8000"
 	@echo "make dev         開發模式：後端 8000（熱重載）＋前端 5173"
-	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/"
+	@echo "make eval        對執行中的後端跑評估，結果存 eval/runs/；EVAL_QA=drawing_retrieval/qa.jsonl 改評圖紙段落題庫；EVAL_ACCOUNTS=manager,sales 改跑圖紙生成層多帳號評測（只跑 hybrid、不跑圖片）"
 	@echo "make eval-cloud  連同雲端對照組（A1 無檢索、A2 有檢索）一起評估；需 ALLOW_CLOUD=true"
 	@echo "make eval-router 領域路由評估：所有評估照片送 /search/any，看畫作／圖紙判斷與辨識是否正確"
 	@echo "make eval-art-resolve 智慧助理判斷沒說畫名的畫作問題是哪一幅（ADR 038；需後端在執行）"
@@ -34,6 +34,8 @@ help:
 	@echo "make eval-intake 照片建檔評估（不用開後端、不用索引，要有 Ollama）：標題欄每個欄位讀對、留空、被規則擋下、錯了卻通過驗證的比例，糊照擋下率"
 	@echo "make eval-color  色彩分析評估（不用開後端，要先 make index）：結果是否固定、照片與原圖的色差、色彩段落的檢索"
 	@echo "make eval-drawing-retrieval 圖紙文字與照片檢索評估（不用開後端，要先 make index）：回報的截圖、原圖、單一視圖、模擬實拍、未收錄圖紙，名稱／料號／圖號／描述；主管與業務各跑一次，指錯或看不到的圖紙出現就失敗"
+	@echo "make eval-retrieval-index 檢索層評估前置：不讀 .env，用真的 Chinese-CLIP／bge-m3 重建索引並寫 eval/runs/*-retrieval-index.json 收據（EMBED_MODE=real；見 README『分層檢索指標總表』）"
+	@echo "make eval-retrieval 檢索層評估（不經 LLM）：畫作／圖紙文字段落的 Recall@K、MRR、Precision、nDCG、空答案誤回傳與外洩，輸出 eval/runs/*-retrieval-layer-metrics.json；要先 make eval-retrieval-index"
 	@echo "make eval-style  畫作卡推測評估（不用開後端、不用索引）：風格大類、細分流派、題材、媒材的正確率，「像畫作」把關擋下圖紙照片"
 	@echo "make eval-style-met 畫作卡推測＋大都會評估集（555 件，第一次會從 Met 開放 API 抓圖到 data/met_eval/，約 56 MB）：畫作 340 幅、雕塑陶瓷器物與老照片 215 件，門檻掃描"
 	@echo "make style-head  重訓畫作卡的媒材分類頭（大都會館藏 2,010 幅，第一次會抓圖約 215 MB）：輸出 shared/style_head_v1.npz 與和零樣本的比較；換 Chinese-CLIP 後要重跑"
@@ -197,8 +199,16 @@ openapi:
 	cd backend && uv run python -m app.export_openapi
 	cd frontend && npm run gen:api
 
+# EVAL_QA 指定 eval/ 下的題目檔（逗號分隔），不指定就用 run_eval.py 預設的 qa.jsonl；
+# 圖紙段落題庫：make eval EVAL_QA=drawing_retrieval/qa.jsonl（自動合併旁附 answers.jsonl）
+# EVAL_ACCOUNTS 指定圖紙生成層多帳號評測的帳號（逗號分隔，須在 eval/drawing_retrieval/gold.json 的 accounts）：
+#   make eval EVAL_ACCOUNTS=manager,sales   → run_eval.py --accounts manager,sales --strategies hybrid --skip-images
+# 不指定就是原本的畫作／圖片評測，展開的命令與以前完全相同。結束碼由 run_eval.py 原樣傳出
+# （1＝輸入錯誤，2＝環境／身分／覆寫失敗，3＝有外洩但產物已寫入）
+EVAL_MODE_ARGS = $(if $(EVAL_ACCOUNTS),--accounts $(EVAL_ACCOUNTS) --strategies hybrid --skip-images,--strategies hybrid,hybrid_norag)
+
 eval:
-	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag
+	$(PY) eval/run_eval.py $(EVAL_MODE_ARGS)$(if $(EVAL_QA), --qa $(EVAL_QA))
 
 eval-cloud:
 	$(PY) eval/run_eval.py --strategies hybrid,hybrid_norag,api_nokb,api_kb
@@ -210,7 +220,18 @@ eval-router:
 eval-color:
 	$(PY) eval/run_color_eval.py
 
-# 圖紙文字與照片檢索（docs/adr/033）：在程序內執行，不用開後端
+# 檢索層評估（TASK-20261027-001）：三個入口都在 main 第一步呼叫 eval/retrieval_runtime.bootstrap()，
+# 第一次讀設定之前關掉 env_file（不讀 .env），設定只取環境變數與 shared/*.yaml。
+# 正式成績只接受 EMBED_MODE=real；環境變數與完整指令見 README「分層檢索指標總表」。
+# 建索引：呼叫 pipelines/build_index.py，並寫 real 索引收據 eval/runs/<run_id>-retrieval-index.json
+eval-retrieval-index:
+	$(PY) eval/retrieval_runtime.py build-index
+
+# 文字段落檢索：畫作指定／全庫、圖紙 manager／sales 的指定／全庫診斷；收據預設 latest（參數 --receipt）
+eval-retrieval:
+	$(PY) eval/run_retrieval_eval.py
+
+# 圖紙文字與照片檢索（docs/adr/033）：在程序內執行，不用開後端；收據預設 latest（參數 --index-receipt）
 eval-drawing-retrieval:
 	$(PY) eval/run_drawing_retrieval_eval.py
 

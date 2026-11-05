@@ -1,0 +1,33 @@
+{"id": "d-mfg001-01", "part_id": "mfg-001", "question": "L 型固定支架的底板用幾支螺栓固定，組裝扭力是多少？", "topics": ["用途與組裝"]}
+{"id": "d-mfg001-02", "part_id": "mfg-001", "question": "L 型固定支架要分幾次裝夾加工，各道工序在做什麼？", "topics": ["加工製程"]}
+{"id": "d-mfg001-03", "part_id": "mfg-001", "question": "L 型固定支架的垂直度和平面度要求是多少，量產怎麼抽驗？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg001-04", "part_id": "mfg-001", "question": "虎鉗夾持力過大對 L 型固定支架的立板會有什麼影響，要怎麼避免？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg002-01", "part_id": "mfg-002", "question": "連接法蘭裝在哪裡，螺栓要怎麼鎖緊？", "topics": ["用途與組裝"]}
+{"id": "d-mfg002-02", "part_id": "mfg-002", "question": "連接法蘭用什麼材料，調質後硬度要到多少？", "topics": ["材料與熱處理"]}
+{"id": "d-mfg002-03", "part_id": "mfg-002", "question": "連接法蘭的中心孔在哪一道工序、用什麼刀具精加工？", "topics": ["加工製程"]}
+{"id": "d-mfg002-04", "part_id": "mfg-002", "question": "連接法蘭中心孔的公差和端面偏擺要求是多少？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg002-05", "part_id": "mfg-002", "question": "連接法蘭的端面偏擺為什麼會超差，現在怎麼處理？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg002-06", "part_id": "mfg-002", "question": "外包廠對這批連接法蘭的中心孔檢驗結果怎麼回報？", "topics": ["外包廠回報（未審核）"]}
+{"id": "d-mfg003-01", "part_id": "mfg-003", "question": "階梯傳動軸兩端裝什麼軸承，鏈輪怎麼連接？", "topics": ["用途與組裝"]}
+{"id": "d-mfg003-02", "part_id": "mfg-003", "question": "階梯傳動軸用什麼鋼材，軸承位要做什麼表面淬火？", "topics": ["材料與熱處理"]}
+{"id": "d-mfg003-03", "part_id": "mfg-003", "question": "階梯傳動軸的鍵槽在哪一道工序加工，軸承位最後怎麼做到 k6？", "topics": ["加工製程"]}
+{"id": "d-mfg003-04", "part_id": "mfg-003", "question": "階梯傳動軸軸承位的公差與表面粗糙度是多少，用什麼量具檢驗？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg003-05", "part_id": "mfg-003", "question": "階梯傳動軸淬火後彎曲要怎麼處理，鍵槽端部要注意什麼？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg004-01", "part_id": "mfg-004", "question": "步進馬達安裝板怎麼固定 NEMA 23 馬達，長圓孔是做什麼用的？", "topics": ["用途與組裝"]}
+{"id": "d-mfg004-02", "part_id": "mfg-004", "question": "步進馬達安裝板的板材怎麼下料，面銑時用什麼方式固定？", "topics": ["加工製程"]}
+{"id": "d-mfg004-03", "part_id": "mfg-004", "question": "步進馬達安裝板的板厚與平面度要求是多少？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg004-04", "part_id": "mfg-004", "question": "步進馬達安裝板銑削後翹曲要怎麼避免？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg005-01", "part_id": "mfg-005", "question": "T 型槽螺帽和一般六角螺帽有什麼不同，要怎麼搭配工作台使用？", "topics": ["用途與組裝"]}
+{"id": "d-mfg005-02", "part_id": "mfg-005", "question": "T 型槽螺帽的 T 形輪廓與螺紋孔是怎麼加工的？", "topics": ["加工製程"]}
+{"id": "d-mfg005-03", "part_id": "mfg-005", "question": "T 型槽螺帽的頸部寬度公差是多少，螺紋怎麼檢驗？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg005-04", "part_id": "mfg-005", "question": "T 型槽螺帽攻牙時絲攻斷在孔內，現在怎麼改善？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg006-01", "part_id": "mfg-006", "question": "立式軸承座裝哪一型軸承，注油孔要裝什麼？", "topics": ["用途與組裝"]}
+{"id": "d-mfg006-02", "part_id": "mfg-006", "question": "立式軸承座用什麼材料，鑄造後要做什麼熱處理？", "topics": ["材料與熱處理"]}
+{"id": "d-mfg006-03", "part_id": "mfg-006", "question": "立式軸承座的軸承孔用什麼當基準來搪孔？", "topics": ["加工製程"]}
+{"id": "d-mfg006-04", "part_id": "mfg-006", "question": "立式軸承座的中心高公差與軸承孔平行度是多少？", "topics": ["公差與檢驗"]}
+{"id": "d-mfg006-05", "part_id": "mfg-006", "question": "立式軸承座成對使用時，兩件的中心高差異要在多少以內？", "topics": ["常見不良與對策"]}
+{"id": "d-mfg003-m1", "part_id": "mfg-003", "question": "階梯傳動軸軸承位高週波淬火的硬度要求是多少，淬火後要檢查什麼？", "topics": ["材料與熱處理", "常見不良與對策"]}
+{"id": "d-mfg004-m1", "part_id": "mfg-004", "question": "步進馬達安裝板的 Ø38.1 定位孔怎麼加工，最後怎麼檢驗？", "topics": ["加工製程", "公差與檢驗"]}
+{"id": "d-mfg005-m1", "part_id": "mfg-005", "question": "T 型槽螺帽的頸部寬度要求是多少，太寬時會出什麼問題？", "topics": ["公差與檢驗", "常見不良與對策"]}
+{"id": "d-mfg004-na", "part_id": "mfg-004", "question": "步進馬達安裝板的採購單價是多少？", "topics": [], "type": "no_answer", "expect_refusal": true}
+{"id": "d-unknown-01", "part_id": "mfg-099", "question": "齒輪箱上蓋的鑄造材料是什麼？", "topics": [], "type": "unknown", "expect_refusal": true}

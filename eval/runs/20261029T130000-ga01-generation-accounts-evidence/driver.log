@@ -1,0 +1,110 @@
+[2026-10-28T23:59:55Z] RUN_PARENT=/tmp/generation-accounts.QwoJm6 原分支=dev 原HEAD=186c10f71bb1710edc66e2ce4030c96b7df63573 目標SHA=905be832284682dea209facd7acdc7129d83310e
+[2026-10-28T23:59:55Z] 生成模型（models.yaml strategies.hybrid.default_model，會以 HYBRID_MODEL 明確傳入）：qwen3-vl:4b-instruct
+知識庫版本 2026.10.2：畫作 3 筆、圖紙 6 筆通過驗證，0 個問題
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 66029.88it/s]
+  ✓ aic-27992  〈大碗島的星期天下午〉  色彩：以中性色為主、低彩度、以中間調為主
+  ✓ met-436535  〈有絲柏的麥田〉  色彩：冷暖並陳、中等彩度、以中間調為主
+  ✓ npm-000001  〈谿山行旅圖〉  色彩：以中性色為主、低彩度、以暗調為主
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 57247.63it/s]
+  ✓ mfg-001  L 型固定支架  80×50×60 mm, 0.137 kg
+  ✓ mfg-002  連接法蘭  100×100×22 mm, 0.775 kg
+  ✓ mfg-003  階梯傳動軸  145×30×30 mm, 0.555 kg
+  ✓ mfg-004  步進馬達安裝板  120×100×10 mm, 0.277 kg
+  ✓ mfg-005  T 型槽螺帽  24×40×17 mm, 0.092 kg
+  ✓ mfg-006  立式軸承座  120×40×72 mm, 1.165 kg
+索引完成：3 幅畫、21 個段落；6 張圖紙、34 個段落，21.0 秒 → /tmp/generation-accounts.QwoJm6/data/index
+索引收據：/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/worktrees/claude/eval/runs/20261029T130000-ri01-retrieval-index.json（real=True）
+評測 20261029T130000-ga01：2 帳號 × 1 策略 × 33 題
+  [manager/hybrid] ✓ d-mfg001-01 visible_answerable
+  [manager/hybrid] ✗ d-mfg001-02 visible_answerable
+  [manager/hybrid] ✗ d-mfg001-03 visible_answerable
+  [manager/hybrid] ✓ d-mfg001-04 visible_answerable
+  [manager/hybrid] ✓ d-mfg002-01 visible_answerable
+  [manager/hybrid] ✓ d-mfg002-02 visible_answerable
+  [manager/hybrid] ✓ d-mfg002-03 visible_answerable
+  [manager/hybrid] ✓ d-mfg002-04 visible_answerable
+  [manager/hybrid] ✓ d-mfg002-05 visible_answerable
+  [manager/hybrid] ✗ d-mfg002-06 visible_answerable
+  [manager/hybrid] ✓ d-mfg003-01 visible_answerable
+  [manager/hybrid] ✓ d-mfg003-02 visible_answerable
+  [manager/hybrid] ✓ d-mfg003-03 visible_answerable
+  [manager/hybrid] ✗ d-mfg003-04 visible_answerable
+  [manager/hybrid] ✗ d-mfg003-05 visible_answerable
+  [manager/hybrid] ✓ d-mfg004-01 visible_answerable
+  [manager/hybrid] ✓ d-mfg004-02 visible_answerable
+  [manager/hybrid] ✗ d-mfg004-03 visible_answerable
+  [manager/hybrid] ✓ d-mfg004-04 visible_answerable
+  [manager/hybrid] ✓ d-mfg005-01 visible_answerable
+  [manager/hybrid] ✓ d-mfg005-02 visible_answerable
+  [manager/hybrid] ✓ d-mfg005-03 visible_answerable
+  [manager/hybrid] ✓ d-mfg005-04 visible_answerable
+  [manager/hybrid] ✓ d-mfg006-01 visible_answerable
+  [manager/hybrid] ✓ d-mfg006-02 visible_answerable
+  [manager/hybrid] ✗ d-mfg006-03 visible_answerable
+  [manager/hybrid] ✗ d-mfg006-04 visible_answerable
+  [manager/hybrid] ✓ d-mfg006-05 visible_answerable
+  [manager/hybrid] ✓ d-mfg003-m1 visible_answerable
+  [manager/hybrid] ✓ d-mfg004-m1 visible_answerable
+  [manager/hybrid] ✗ d-mfg005-m1 visible_answerable
+  [manager/hybrid] ✓ d-mfg004-na no_answer
+  [manager/hybrid] ✓ d-unknown-01 missing_part
+  [sales/hybrid] ✓ d-mfg001-01 permission_degraded
+  [sales/hybrid] ✓ d-mfg001-02 permission_degraded
+  [sales/hybrid] ✓ d-mfg001-03 permission_degraded
+  [sales/hybrid] ✓ d-mfg001-04 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-01 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-02 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-03 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-04 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-05 permission_degraded
+  [sales/hybrid] ✓ d-mfg002-06 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-01 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-02 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-03 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-04 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-05 permission_degraded
+  [sales/hybrid] ✓ d-mfg004-01 visible_answerable
+  [sales/hybrid] ✓ d-mfg004-02 visible_answerable
+  [sales/hybrid] ✗ d-mfg004-03 visible_answerable
+  [sales/hybrid] ✓ d-mfg004-04 visible_answerable
+  [sales/hybrid] ✓ d-mfg005-01 visible_answerable
+  [sales/hybrid] ✓ d-mfg005-02 visible_answerable
+  [sales/hybrid] ✓ d-mfg005-03 visible_answerable
+  [sales/hybrid] ✓ d-mfg005-04 visible_answerable
+  [sales/hybrid] ✓ d-mfg006-01 permission_degraded
+  [sales/hybrid] ✓ d-mfg006-02 permission_degraded
+  [sales/hybrid] ✓ d-mfg006-03 permission_degraded
+  [sales/hybrid] ✓ d-mfg006-04 permission_degraded
+  [sales/hybrid] ✓ d-mfg006-05 permission_degraded
+  [sales/hybrid] ✓ d-mfg003-m1 permission_degraded
+  [sales/hybrid] ✓ d-mfg004-m1 visible_answerable
+  [sales/hybrid] ✗ d-mfg005-m1 visible_answerable
+  [sales/hybrid] ✓ d-mfg004-na no_answer
+  [sales/hybrid] ✓ d-unknown-01 missing_part
+[manager/hybrid] answer_ok 24/33（73%），citation_ok 30/31（97%），拒答 8/33（24%），外洩 n/a，錯誤 0，備援 0
+[sales/hybrid] answer_ok 31/33（94%），citation_ok 10/10（100%），拒答 25/33（76%），外洩 0/21（0%），錯誤 0，備援 0
+結果已寫入 /Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/worktrees/claude/eval/runs/20261029T130000-ga01-generation-accounts.json
+[2026-10-29T00:04:16Z] run_eval.py 結束碼＝0（0 成功；1 輸入錯誤；2 環境／身分／覆寫失敗；3 有外洩但產物已寫入）
+rows 66 classification {('manager', 'visible_answerable'): 31, ('manager', 'no_answer'): 1, ('manager', 'missing_part'): 1, ('sales', 'permission_degraded'): 21, ('sales', 'visible_answerable'): 10, ('sales', 'no_answer'): 1, ('sales', 'missing_part'): 1}
+models ['qwen3-vl:4b-instruct', '生成閘門（未呼叫 LLM）', '第 1 段（未呼叫 LLM）'] llm_rows 41 answerable_rows 41
+groups {"manager": {"hybrid": {"overall": {"n": 33, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 24, "den": 33, "rate": 0.7272727272727273}, "citation_ok": {"num": 30, "den": 31, "rate": 0.967741935483871}, "refusal": {"num": 8, "den": 33, "rate": 0.24242424242424243}, "leak": {"num": 0, "den": 0, "rate": null}}, "visible_answerable": {"n": 31, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 22, "den": 31, "rate": 0.7096774193548387}, "citation_ok": {"num": 30, "den": 31, "rate": 0.967741935483871}, "refusal": {"num": 6, "den": 31, "rate": 0.1935483870967742}, "leak": {"num": 0, "den": 0, "rate": null}}, "permission_degraded": {"n": 0, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 0, "den": 0, "rate": null}, "citation_ok": {"num": 0, "den": 0, "rate": null}, "refusal": {"num": 0, "den": 0, "rate": null}, "leak": {"num": 0, "den": 0, "rate": null}}, "no_answer": {"n": 1, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 1, "den": 1, "rate": 1.0}, "citation_ok": {"num": 0, "den": 0, "rate": null}, "refusal": {"num": 1, "den": 1, "rate": 1.0}, "leak": {"num": 0, "den": 0, "rate": null}}, "missing_part": {"n": 1, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 1, "den": 1, "rate": 1.0}, "citation_ok": {"num": 0, "den": 0, "rate": null}, "refusal": {"num": 1, "den": 1, "rate": 1.0}, "leak": {"num": 0, "den": 0, "rate": null}}}}, "sales": {"hybrid": {"overall": {"n": 33, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 31, "den": 33, "rate": 0.9393939393939394}, "citation_ok": {"num": 10, "den": 10, "rate": 1.0}, "refusal": {"num": 25, "den": 33, "rate": 0.7575757575757576}, "leak": {"num": 0, "den": 21, "rate": 0.0}}, "visible_answerable": {"n": 10, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 8, "den": 10, "rate": 0.8}, "citation_ok": {"num": 10, "den": 10, "rate": 1.0}, "refusal": {"num": 2, "den": 10, "rate": 0.2}, "leak": {"num": 0, "den": 0, "rate": null}}, "permission_degraded": {"n": 21, "errors": 0, "fallbacks": 0, "answer_ok": {"num": 21, "den": 21, 
+VERIFY_OK
+/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/reports/TASK-20261029-001-drawing-generation-accounts/step2/run-generation-accounts.sh: line 158: 49096 Terminated: 15          GEN_ENV_EXEC=1 gen_env "$PY_BIN" "$RUN_PARENT/backend_noenv.py" > "$RUN_LOGS/backend.log" 2>&1
+[2026-10-29T00:04:17Z] 已停止本次啟動的後端 PID 49096
+[2026-10-29T00:04:17Z] 已回到原分支 dev @ 186c10f71bb1710edc66e2ce4030c96b7df63573；strict no-env 重建 demo 檔案索引 /Users/sdl/Desktop/專題第二組新方案/art-rag/data/index
+{"kind": "demo-index-noenv", "isolation": {"env_file_disabled": true, "env_file_before": ".env", "settings_were_loaded": false, "preloaded_app_modules": [], "strict": true}, "settings": {"embed_mode": "real", "embed_device": "cpu", "llm_mode": "real", "hf_offline": true, "memory_guard": false, "jev_enabled": false, "allow_cloud": false, "rearrange": "", "artrag_shared_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/shared", "data_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/data", "index_dir": "/Users/sdl/Desktop/專題第二組新方案/art-rag/data/index", "index_backend": "file", "database_url_set": false}}
+知識庫版本 2026.10.2：畫作 3 筆、圖紙 6 筆通過驗證，0 個問題
+Loading weights:   0%|          | 0/399 [00:00<?, ?it/s]Loading weights: 100%|██████████| 399/399 [00:00<00:00, 86139.97it/s]
+  ✓ aic-27992  〈大碗島的星期天下午〉  色彩：以中性色為主、低彩度、以中間調為主
+  ✓ met-436535  〈有絲柏的麥田〉  色彩：冷暖並陳、中等彩度、以中間調為主
+  ✓ npm-000001  〈谿山行旅圖〉  色彩：以中性色為主、低彩度、以暗調為主
+Loading weights:   0%|          | 0/391 [00:00<?, ?it/s]Loading weights: 100%|██████████| 391/391 [00:00<00:00, 67159.71it/s]
+  ✓ mfg-001  L 型固定支架  80×50×60 mm, 0.137 kg
+  ✓ mfg-002  連接法蘭  100×100×22 mm, 0.775 kg
+  ✓ mfg-003  階梯傳動軸  145×30×30 mm, 0.555 kg
+  ✓ mfg-004  步進馬達安裝板  120×100×10 mm, 0.277 kg
+  ✓ mfg-005  T 型槽螺帽  24×40×17 mm, 0.092 kg
+  ✓ mfg-006  立式軸承座  120×40×72 mm, 1.165 kg
+索引完成：3 幅畫、21 個段落；6 張圖紙、34 個段落，19.9 秒 → /Users/sdl/Desktop/專題第二組新方案/art-rag/data/index
+{"invoked": true, "command": "pipelines/build_index.py", "exit_code": 0, "error": null, "started_at": "2026-10-29T00:04:17.607263+00:00", "finished_at": "2026-10-29T00:04:37.470387+00:00", "seconds": 19.9}
+[2026-10-29T00:04:38Z] 收尾狀態：eval=0 verify=0 stop=0 restore=0

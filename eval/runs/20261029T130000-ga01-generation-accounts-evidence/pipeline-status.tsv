@@ -1,0 +1,3 @@
+retrieval-index.log	command=0	tee=0
+generation-eval.log	command=0	tee=0
+demo-index-rebuild.log	command=0	tee=0

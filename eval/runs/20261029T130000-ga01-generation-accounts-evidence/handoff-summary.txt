@@ -1,0 +1,16 @@
+code_sha=905be832284682dea209facd7acdc7129d83310e
+run_data=/tmp/generation-accounts.QwoJm6/data
+run_logs=/tmp/generation-accounts.QwoJm6/logs
+eval_exit=0
+eval_tee_exit=0
+verify_exit=0
+final_exit=22
+eval_pipeline_exit=0
+stop_exit=0
+restore_exit=0
+collect_exit=0
+fail_msg=
+restore_note=已還原 dev @ 186c10f71bb1710edc66e2ce4030c96b7df63573，demo 索引已重建
+artifact=/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/worktrees/claude/eval/runs/20261029T130000-ga01-generation-accounts.json (exists=yes)
+receipt=/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/worktrees/claude/eval/runs/20261029T130000-ri01-retrieval-index.json (exists=yes)
+evidence_dir=/Users/sdl/Desktop/專題第二組新方案/orchestrator-v2/data/worktrees/claude/eval/runs/20261029T130000-ga01-generation-accounts-evidence

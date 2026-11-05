@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "ready": true,
+  "db": true,
+  "index_consistent": true,
+  "kb_version": "2026.10.2",
+  "demo_controls": true,
+  "demo_warning": "展示模式已開啟：可以不用密碼切換任何身分，不可用於正式環境"
+}
