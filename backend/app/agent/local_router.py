@@ -141,26 +141,15 @@ def _mask_titles(text: str, entities: list[Entity]) -> tuple[str, list[Entity]]:
     return "".join(out), moved
 
 
-def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -> System1Result:
-    t0 = time.perf_counter()
-    text, entities = _mask_titles(text, entities)
-    cfg = get_agent_config()
-    lr = cfg["local_router"]
-    c = _compiled()
-    keys = list(cfg["intents"])
-    # 關鍵字只看名稱以外的字：〈有絲柏的麥田〉裡的「麥田、絲柏」是畫名，不是在描述畫面
-    # （名稱本身已經有實體加分，見 ENTITY_BOOST）
-    residual = text
-    for e in sorted(entities, key=lambda e: e.start, reverse=True):
-        residual = residual[: e.start] + " " + residual[e.end :]
-    logits = {k: _score(c["intents"][k], residual) for k in keys}
-    question = is_question(text)
-    write_hit = logits["modify"] > 0
-    if question:
-        logits["modify"] *= float(lr["question_write_factor"])
-    if c["quantity"].search(text):
-        logits["modify"] += 0.5 if not question else 0.0
-        logits["data_query"] += 0.5
+def _apply_context_boosts(
+    logits: dict[str, float],
+    text: str,
+    entities: list[Entity],
+    photo_kind: str | None,
+    question: bool,
+    write_hit: bool,
+    lr: dict,
+) -> dict[str, float]:
     for e in {(e.kind) for e in entities}:
         for k, w in ENTITY_BOOST.get(e, {}).items():
             logits[k] += w
@@ -181,6 +170,30 @@ def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -
     hit_any = any(v > 0 for k, v in logits.items() if k != "out_of_scope")
     if not hit_any:
         logits["out_of_scope"] += float(lr["out_of_scope_base"])
+    return logits
+
+
+def classify(text: str, entities: list[Entity], photo_kind: str | None = None) -> System1Result:
+    t0 = time.perf_counter()
+    text, entities = _mask_titles(text, entities)
+    cfg = get_agent_config()
+    lr = cfg["local_router"]
+    c = _compiled()
+    keys = list(cfg["intents"])
+    # 關鍵字只看名稱以外的字：〈有絲柏的麥田〉裡的「麥田、絲柏」是畫名，不是在描述畫面
+    # （名稱本身已經有實體加分，見 ENTITY_BOOST）
+    residual = text
+    for e in sorted(entities, key=lambda e: e.start, reverse=True):
+        residual = residual[: e.start] + " " + residual[e.end :]
+    logits = {k: _score(c["intents"][k], residual) for k in keys}
+    question = is_question(text)
+    write_hit = logits["modify"] > 0
+    if question:
+        logits["modify"] *= float(lr["question_write_factor"])
+    if c["quantity"].search(text):
+        logits["modify"] += 0.5 if not question else 0.0
+        logits["data_query"] += 0.5
+    logits = _apply_context_boosts(logits, text, entities, photo_kind, question, write_hit, lr)
 
     # 只有名稱（「法蘭」）：看不出想做什麼，不用範例句相似度硬猜，交給信心閘門出澄清按鈕
     bare = bool(entities) and not re.sub(r"[\s，,。？?！!、]", "", residual)
