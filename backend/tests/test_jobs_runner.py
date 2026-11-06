@@ -111,12 +111,10 @@ def test_schedule_job_greedy_runs_validates_and_writes_back(clean):
     types = event_types(jid)
     assert types[:2] == ["created", "started"] and types[-2:] == ["committing", "succeeded"]
     assert "meta" in types and "progress" in types
-    # 工廠資料庫（Text-to-SQL 查的衍生檢視）跟上了
+    # 庫存資料庫（Text-to-SQL 查的衍生檢視）跟上了
     from app.repositories.inventory_repo import get_inventory_repo
 
-    n = get_inventory_repo().path and __import__("sqlite3").connect(get_inventory_repo().path)
-    assert n.execute("SELECT count(*) FROM schedule_ops").fetchone()[0] > 0
-    n.close()
+    assert get_inventory_repo().query("SELECT count(*) AS n FROM schedule_ops")[0]["n"] > 0
     # 租約與名額都釋放了
     assert clean.sql("SELECT count(*) AS n FROM resource_leases")[0]["n"] == 0
     # 稽核：誰（工作的擁有者）寫回了哪個排程結果；只有識別碼與結果，沒有參數或模型輸出
@@ -199,15 +197,13 @@ def test_unrelated_data_change_does_not_block_write_back(clean):
     clean.fake.duration = 2
 
     def unrelated():
-        import sqlite3
+        from app.repositories import factory_db
 
-        conn = sqlite3.connect(get_production_repo().path)
-        conn.execute(
-            "INSERT INTO meta VALUES ('revision', '1') ON CONFLICT(key) DO UPDATE"
-            " SET value = CAST(value AS INTEGER) + 1"
-        )
-        conn.commit()
-        conn.close()
+        with factory_db.connection() as conn:
+            conn.execute(
+                "UPDATE production.meta SET value = (value::bigint + 1)::text"
+                " WHERE key = 'revision'"
+            )
 
     jid = schedule_job(seconds=5)
     t, _ = after_event(jid, "progress", unrelated)
@@ -560,7 +556,7 @@ def test_recovery_defers_when_the_production_db_cannot_confirm(clean, monkeypatc
     real = repo.committed_run
 
     def broken(run_id):
-        raise __import__("sqlite3").OperationalError("database is locked")
+        raise __import__("psycopg").OperationalError("工廠資料庫連不上")
 
     monkeypatch.setattr(repo, "committed_run", broken)
     assert recover() == [(jid, "deferred")]
@@ -570,14 +566,14 @@ def test_recovery_defers_when_the_production_db_cannot_confirm(clean, monkeypatc
 
 
 def test_recovery_waits_for_an_in_flight_production_write(clean, monkeypatch):
-    """舊嘗試已通過寫入交易裡的 fence、持有寫回鎖的連線才中斷：恢復迴圈的補做查詢在 SQLite
-    寫入鎖上等那個交易提交，看到排程就補做成功——不會先判定「沒寫入」重排或失敗、之後才被提交推翻。
-    （另一個行程用另一個 ProductionRepo；同一行程內的鎖不能替代 SQLite 的寫入鎖。）"""
+    """舊嘗試已通過寫入交易裡的 fence、持有寫回鎖的連線才中斷：恢復迴圈的補做查詢在生產資料的
+    寫入鎖（PostgreSQL advisory lock）上等那個交易提交，看到排程就補做成功——不會先判定「沒寫入」
+    重排或失敗、之後才被提交推翻。（另一個行程用另一條連線；鎖在資料庫裡，不是行程內的鎖。）"""
     from app.repositories.production_repo import ProductionRepo
 
     jid = schedule_job(engine="greedy")
     clean.sql("UPDATE jobs SET max_attempts = 1 WHERE id = %s", (jid,))
-    other = ProductionRepo(get_production_repo().path)  # 恢復迴圈所在的「另一個行程」
+    other = ProductionRepo()  # 恢復迴圈所在的「另一個行程」（另一條資料庫連線）
     reconciling = threading.Event()
     outcome: list = []
 

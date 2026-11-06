@@ -86,16 +86,66 @@ def test_extract_sql_from_model_output():
 @pytest.mark.parametrize(
     "sql",
     [
-        "SELECT * FROM sqlite_master",
-        "SELECT sql FROM sqlite_schema",
-        "WITH m AS (SELECT * FROM sqlite_master) SELECT * FROM m",
-        "SELECT randomblob(10)",
+        "SELECT * FROM factory.sql_readers",  # 唯讀角色的密碼
+        "SELECT * FROM production.work_orders",  # 可寫入的生產資料
+        "SELECT * FROM inventory.parts",  # 繞過機密等級過濾的原始資料表
+        "WITH m AS (SELECT * FROM production.approvals) SELECT * FROM m",
+        "SELECT * FROM pg_catalog.pg_authid",
+        "SELECT pg_read_file('postgresql.conf')",
+        "INSERT INTO parts (part_id) VALUES ('x')",
+        "SELECT * FROM parts FOR UPDATE",
     ],
 )
-def test_authorizer_blocks_internal_tables_and_functions(repo, sql):
-    """靜態檢查漏掉的，執行層的 authorizer 白名單也會擋下。"""
+def test_readonly_role_blocks_other_schemas_and_writes(repo, sql):
+    """靜態檢查漏掉的（這裡直接呼叫 run_readonly），執行層的唯讀角色也會擋下（docs/adr/048）。"""
     with pytest.raises(SqlError):
         repo.run_readonly(sql, 10, 1000)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT relname FROM pg_class",
+        "SELECT table_name FROM information_schema.tables",
+        "SELECT current_setting('data_directory')",
+        "SELECT set_config('statement_timeout', '0', false)",
+        "SET statement_timeout = 0",
+        "COPY parts TO STDOUT",
+        "SELECT version()",
+    ],
+)
+def test_check_sql_rejects_system_catalogs_and_settings(sql):
+    with pytest.raises(text2sql.SqlRejected):
+        text2sql.check_sql(sql)
+
+
+def test_gold_and_example_sql_run_on_postgres(repo):
+    """make eval-sql 的標準答案與 sql_v4 的 few-shot 範例都能在 PostgreSQL 的唯讀角色上執行
+    （docs/adr/048）。"""
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    gold = [
+        json.loads(line)["gold_sql"]
+        for line in (root / "eval" / "sql_qa.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    examples = [e["sql"] for e in text2sql.load_examples("sql_v4")]
+    for sql in gold + examples:
+        checked = text2sql.check_sql(sql)
+        assert repo.run_readonly(checked, 1000, 5000).columns, sql
+
+
+def test_scoped_reader_hides_confidential_parts(repo):
+    """業務（公開＋內部）的唯讀角色看不到機密零件，連帶看不到它的庫存、異動、工單、訂單與排程。"""
+    every = repo.run_readonly("SELECT part_id, confidentiality FROM parts", 50, 1000)
+    secret = {r[0] for r in every.rows if r[1] == "機密"}
+    assert secret
+    scoped = ("公開", "內部")
+    for table in ("parts", "stock", "stock_moves", "work_orders", "sales_orders", "v_part_stock"):
+        r = repo.run_readonly(f"SELECT DISTINCT part_id FROM {table}", 500, 1000, scoped)
+        assert not secret & {x[0] for x in r.rows}, table
 
 
 def test_runaway_query_is_interrupted_and_rows_capped(repo):
@@ -133,7 +183,7 @@ def test_ask_streams_sql_result_answer(client):
     assert {row[0] for row in result["rows"]} == {"連接法蘭", "階梯傳動軸"}
     done = events[-1][1]
     assert done["egress"] == {"images": 0, "chunks": 0, "bytes": 0}
-    assert done["prompt_version"] == "sql_v3" and done["attempts"] == 1
+    assert done["prompt_version"] == "sql_v4" and done["attempts"] == 1
     health = client.get("/api/v1/admin/diagnostics").json()  # 最近的 SQL 只在管理診斷
     assert health["inventory"]["ok"] and health["recent_sql"][0]["ok"] == 1
 
@@ -166,7 +216,7 @@ def test_ask_repairs_sql_with_error_feedback(client, monkeypatch):
     events = parse_sse(client.post("/api/v1/inventory/ask", json={"question": "品名"}).text)
     sqls = [d for e, d in events if e == "sql"]
     assert [s["ok"] for s in sqls] == [False, True]
-    assert "no such column" in sqls[0]["error"]
+    assert "does not exist" in sqls[0]["error"]
     assert [d["n"] for e, d in events if e == "attempt"] == [1, 2]
     assert events[-1][0] == "done" and events[-1][1]["attempts"] == 2
 

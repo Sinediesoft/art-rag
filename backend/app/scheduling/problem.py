@@ -2,7 +2,8 @@
 
 資料來源（整合系統的三個部分）：
 - 圖紙：kb/parts（品名）＋kb/production/routings（由「加工製程」段落整理的工序、機型與工時）
-- 資料庫：kb/inventory 的既有工單（已開立／生產中）＋production.sqlite3 使用者在圖紙頁開立的工單
+- 資料庫：kb/inventory 的既有工單（已開立／生產中）＋
+  production schema（PostgreSQL）裡使用者在圖紙頁開立的工單
 - 機台與行事曆：kb/production/site.json
 
 規則：

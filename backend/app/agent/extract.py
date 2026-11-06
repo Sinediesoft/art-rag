@@ -239,7 +239,7 @@ def infer(x: Extraction) -> None:
         return
     status = x.params.get("from_status") or x.params.get("status") or "可用"
     rows = repo.query(
-        "SELECT warehouse_id, SUM(qty) AS qty FROM stock WHERE part_id = ? AND status = ?"
+        "SELECT warehouse_id, SUM(qty) AS qty FROM stock WHERE part_id = %s AND status = %s"
         " GROUP BY warehouse_id HAVING SUM(qty) > 0",
         (pid, status),
     )

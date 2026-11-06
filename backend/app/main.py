@@ -32,7 +32,7 @@ from app.jobs import boot as jobs_boot
 from app.jobs import db as jobs_db
 from app.jobs.db import JobsUnavailable
 from app.rag.embedders import warmup
-from app.repositories import db
+from app.repositories import db, factory_db
 from app.repositories.db import DatabaseUnavailable
 from app.repositories.index_store import IndexMismatch, get_store
 from app.repositories.inventory_repo import get_inventory_repo
@@ -62,11 +62,16 @@ async def lifespan(app: FastAPI):
     jobs_boot.purge(s.jobs_event_retention_days)
     purge_drafts(s.upload_ttl_days)
     region_service.purge_drafts(s.upload_ttl_days)
-    # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動
-    try:
-        get_inventory_repo().ensure_built()
-    except Exception as e:  # noqa: BLE001
-        log.error(f"庫存資料庫建立失敗：{e}")
+    # 庫存資料庫（Text-to-SQL）：kb/inventory 有變動就重建；資料有誤只停用庫存查詢，不擋啟動。
+    # 工廠資料在 PostgreSQL（docs/adr/048）：沒有設定資料庫時工廠功能停用，其他功能照常
+    if not factory_db.configured():
+        log.warning("沒有設定 DATABASE_URL（或 FACTORY_DATABASE_URL）：工廠功能（工單、排程、"
+                    "修改資料、庫存查詢）停用，回 503 FACTORY_DB_UNAVAILABLE")  # fmt: skip
+    else:
+        try:
+            get_inventory_repo().ensure_built()
+        except Exception as e:  # noqa: BLE001
+            log.error(f"庫存資料庫建立失敗：{e}")
     warmup()
     local_router.warmup()
     style.warmup()
@@ -82,7 +87,7 @@ async def lifespan(app: FastAPI):
     log.info(
         f"ArtRAG 就緒：{m['artwork_count']} 幅畫、{m.get('part_count', 0)} 張工廠圖紙，"
         f"kb_version={m['kb_version']}；資料存放：{where}；"
-        f"工廠資料庫 {get_inventory_repo().manifest.get('tables', {})}；"
+        f"工廠資料庫 {get_inventory_repo().manifest.get('tables') or '未啟用'}；"
         f"記憶體 {memory_guard.memory_percent():.0f}%"
         f"（超過 {s.memory_high_pct:.0f}% 時釋放閒置模型）{vram}"
     )

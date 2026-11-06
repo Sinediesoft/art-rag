@@ -14,11 +14,12 @@
 """
 
 import secrets
-import sqlite3
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+
+import psycopg
 
 from app.agent.entities import get_index
 from app.agent.extract import FIELD_LABELS, Extraction, fill_with_llm, infer, missing, rules
@@ -132,18 +133,15 @@ def normalize(x: Extraction) -> dict:
     p = dict(x.params)
     op = x.op
     if op == "stock_adjust" and "counted" in p:
-        mem = repo.copy_to_memory()
-        try:
-            have = dc.qty_of(mem, p["part_id"], p["warehouse_id"], p.get("status", "可用"))
-        finally:
-            mem.close()
+        with repo.scratch() as db:
+            have = dc.qty_of(db, p["part_id"], p["warehouse_id"], p.get("status", "可用"))
         p["delta"] = int(p.pop("counted")) - have
         x.notes.append(f"帳面 {have} 件 → 實盤 {have + p['delta']} 件")
         if p["delta"] == 0:
             raise dc.ChangeError("實盤數量與帳面相同，不需要調整")
     if op == "so_update":
         rows = repo.query(
-            "SELECT * FROM sales_orders WHERE so_no = ? ORDER BY line_no", (p["so_no"],)
+            "SELECT * FROM sales_orders WHERE so_no = %s ORDER BY line_no", (p["so_no"],)
         )
         if not rows:
             raise dc.ChangeError(f"找不到訂單 {p['so_no']}")
@@ -154,7 +152,7 @@ def normalize(x: Extraction) -> dict:
             p["qty"] = line["qty"] + int(p.pop("qty_delta"))
         p["customer"] = line["customer"]
     if op in ("wo_update_due", "wo_cancel"):
-        rows = repo.query("SELECT wo_no FROM work_orders WHERE wo_no = ?", (p["wo_no"],))
+        rows = repo.query("SELECT wo_no FROM work_orders WHERE wo_no = %s", (p["wo_no"],))
         if not rows:
             raise dc.ChangeError(f"找不到工單 {p['wo_no']}")
     if op == "wo_create":
@@ -171,7 +169,7 @@ def _so_lines(x: Extraction) -> None:
     if x.op != "so_update" or "so_no" not in x.params or "line_no" in x.params:
         return
     rows = get_inventory_repo().query(
-        "SELECT line_no, part_id, status FROM sales_orders WHERE so_no = ? ORDER BY line_no",
+        "SELECT line_no, part_id, status FROM sales_orders WHERE so_no = %s ORDER BY line_no",
         (x.params["so_no"],),
     )
     pid = x.params.get("part_id")
@@ -318,19 +316,18 @@ def quota(op: str, p: dict, before: list[dict]) -> list[str]:
 
 
 def trial(op: str, p: dict) -> dict:
-    """在記憶體副本的交易內套用、讀出前後差異、回滾。ChangeError＝違反硬性上限。"""
-    mem = get_inventory_repo().copy_to_memory()
-    try:
-        before = dc.snapshot(mem, op, p)
-        fp = dc.fingerprint(mem, op, p)
-        mem.execute("BEGIN")
+    """在一定回滾的交易裡套用、讀出前後差異（inventory_repo.scratch）。ChangeError＝違反硬性上限。"""
+    with get_inventory_repo().scratch() as db:
+        before = dc.snapshot(db, op, p)
+        fp = dc.fingerprint(db, op, p)
         try:
-            touched = dc.apply(mem, op, p, ref_no="（試算）")
-            after = dc.snapshot(mem, op, p)
-        except sqlite3.Error as e:
+            with db.savepoint():
+                touched = dc.apply(db, op, p, ref_no="（試算）")
+                after = dc.snapshot(db, op, p)
+        except psycopg.Error as e:
+            if isinstance(e, psycopg.OperationalError):
+                raise  # 資料庫連不上：503，不是這筆修改的問題
             raise dc.ChangeError(f"試算失敗：{e}") from e
-        finally:
-            mem.execute("ROLLBACK")
         return {
             "before": before,
             "after": after,
@@ -338,8 +335,6 @@ def trial(op: str, p: dict) -> dict:
             "touched": touched,
             "diff": dc.diff(before, after),
         }
-    finally:
-        mem.close()
 
 
 def _limit(touched: int, error: str | None) -> dict:
@@ -592,17 +587,11 @@ def _write(op: str, p: dict, actor: Account, approval: dict | None = None) -> st
 
 def read_back(op: str, p: dict, change_no: str, before_diff: list[dict]) -> dict:
     """從資料庫讀回實際寫入的結果，套固定模板回覆。"""
-    repo = get_inventory_repo()
-    mem = repo.copy_to_memory()
-    try:
+    with get_inventory_repo().scratch() as db:
         after = dc.snapshot(
-            mem, op, {**p, "wo_no": change_no if op == "wo_create" else p.get("wo_no")}
+            db, op, {**p, "wo_no": change_no if op == "wo_create" else p.get("wo_no")}
         )
-        moves = mem.execute(
-            "SELECT COUNT(*) FROM stock_moves WHERE ref_no = ?", (change_no,)
-        ).fetchone()[0]
-    finally:
-        mem.close()
+        moves = db.one("SELECT COUNT(*) FROM stock_moves WHERE ref_no = %s", (change_no,))[0]
     rows = []
     after_by = {(s["label"], f): v for s in after for f, v in s["fields"].items()}
     for d in before_diff:

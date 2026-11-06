@@ -1,9 +1,10 @@
-"""Text-to-SQL：中文問題 → SQLite 查詢 → 依查詢結果回答。
+"""Text-to-SQL：中文問題 → PostgreSQL 查詢 → 依查詢結果回答（docs/adr/004、048）。
 
-- prompt：shared/prompts/sql_v2.md（產生 SQL）與 sql_answer_v2.md（依結果回答），
-  few-shot 範例在 sql_v2_examples.json；schema 與欄位值（零件、倉庫、客戶、機台）由資料庫即時產生
-- check_sql：執行前的靜態檢查（只准一條 SELECT／WITH、擋寫入與管理指令）；
-  真正的保護在 repositories/inventory_repo.run_readonly（唯讀連線＋authorizer 白名單＋逾時）
+- prompt：shared/prompts/sql_v4.md（產生 SQL）與 sql_answer_v2.md（依結果回答），
+  few-shot 範例在 sql_v4_examples.json；schema 與欄位值（零件、倉庫、客戶、機台）由資料庫即時產生
+- check_sql：執行前的靜態檢查（只准一條 SELECT／WITH、擋寫入與管理指令、擋系統目錄與設定函式）；
+  真正的保護在 repositories/inventory_repo.run_readonly
+  （只有 SELECT 權限的唯讀角色＋唯讀交易＋逾時）
 - mock_sql／mock_answer：LLM_MODE=mock 時不呼叫模型，從範例挑最接近的 SQL
 """
 
@@ -29,7 +30,17 @@ class SqlRejected(Exception):
 
 FORBIDDEN = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX|ANALYZE|"
-    r"BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|LOAD_EXTENSION|REPLACE\s+INTO)\b",
+    r"BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|LOAD_EXTENSION|REPLACE\s+INTO|"
+    # PostgreSQL 的寫入、權限、連線設定與程序指令（docs/adr/048）
+    r"TRUNCATE|MERGE|COPY|GRANT|REVOKE|SET|RESET|LOCK|LISTEN|NOTIFY|UNLISTEN|DO|CALL|EXECUTE|"
+    r"PREPARE|DEALLOCATE|DISCARD|COMMENT|REFRESH|CLUSTER|CHECKPOINT|REASSIGN|SECURITY|IMPORT)\b",
+    re.I,
+)
+# 系統目錄、連線設定與伺服器資訊：唯讀角色讀不到別的資料，但看得到其他 schema 的名稱，靜態檢查先擋
+# （不算寫入：讓模型改用 schema 中列出的資料表）
+SYSTEM_OBJECTS = re.compile(
+    r"\b(pg_\w+|information_schema|set_config|current_setting|current_user|session_user|"
+    r"current_role|version|inet_\w+|dblink\w*|lo_\w+|query_to_xml\w*|txid_\w+)\b",
     re.I,
 )
 
@@ -103,7 +114,9 @@ def _mask_literals(sql: str) -> str:
 
 def extract_sql(text: str) -> str:
     """從模型輸出取出 SQL：優先取 ``` 區塊，否則從第一個 SELECT／WITH 開始；只取第一條。"""
-    fenced = re.search(r"```(?:sql|sqlite)?\s*\n?(.*?)(?:```|$)", text, flags=re.S | re.I)
+    fenced = re.search(
+        r"```(?:sql|sqlite|postgresql|postgres|pgsql)?\s*\n?(.*?)(?:```|$)", text, flags=re.S | re.I
+    )
     body = fenced.group(1) if fenced else text
     start = re.search(r"\b(SELECT|WITH)\b", body, flags=re.I)
     if start:
@@ -123,6 +136,8 @@ def check_sql(sql: str) -> str:
         raise SqlRejected(f"不允許 {m.group(1).upper()}：庫存查詢只能讀取資料", write=True)
     if ";" in masked:
         raise SqlRejected("一次只能執行一條 SQL")
+    if m := SYSTEM_OBJECTS.search(masked):
+        raise SqlRejected(f"不能使用 {m.group(1)}：只能讀取 schema 中列出的資料表與欄位")
     if not re.match(r"(SELECT|WITH)\b", masked.lstrip(), flags=re.I):
         raise SqlRejected("只能執行 SELECT 查詢（可用 WITH 開頭）")
     return sql

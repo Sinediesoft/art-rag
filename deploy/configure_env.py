@@ -60,7 +60,7 @@ def plan(
     """回傳（要寫的設定，因為使用者改過而保留的設定 → 方案原本想設的值）。"""
     wanted = dict(PROFILES[profile])
     if not docker:
-        wanted["DATABASE_URL"] = ""  # 沒有 Docker：檔案索引＋SQLite，功能相同（ADR 009）
+        wanted["DATABASE_URL"] = ""  # 沒有 Docker：畫作、圖紙用檔案索引＋SQLite（ADR 009）；工廠功能停用（ADR 048）
     if small_gpu:
         wanted["SEND_IMAGE"] = "false"  # 4 GB 級顯卡：回答不附圖，每題省約 1,070 token
     current, default = parse_env(env_text), parse_env(example_text)

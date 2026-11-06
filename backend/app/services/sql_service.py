@@ -14,6 +14,7 @@ from app.core.logging import log
 from app.rag import text2sql
 from app.rag.providers import CLOUD_STRATEGIES, ProviderUnavailable, get_provider
 from app.rag.textproc import to_taiwan
+from app.repositories.factory_db import FactoryUnavailable
 from app.repositories.inventory_repo import SqlError, get_inventory_repo, prompt_schema
 from app.repositories.logs_repo import get_logs_repo
 from app.services import memory_guard
@@ -122,9 +123,12 @@ async def _ask_stream(
     repo = get_inventory_repo()
     try:
         repo.ensure_built()
+    except FactoryUnavailable as e:  # 沒有設定 PostgreSQL：工廠功能停用（docs/adr/048）
+        yield _error(e.code, e.message, request_id)
+        return
     except Exception as e:  # noqa: BLE001 — 建庫失敗要回報給前端，不讓串流直接斷掉
         log.error(f"庫存資料庫建立失敗：{e}")
-    if not repo.path.is_file():
+    if not repo.ready():
         yield _error(
             "INVENTORY_UNAVAILABLE",
             "庫存資料庫無法建立：" + ("；".join(repo.problems[:3]) or "找不到 kb/inventory/"),

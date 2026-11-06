@@ -37,9 +37,12 @@ def find_bin(name: str, extra: tuple[str, ...] = ()) -> str | None:
         *sorted(glob.glob("/usr/lib/postgresql/*/bin"), reverse=True),  # Debian／Ubuntu（apt）
         "/opt/homebrew/bin",
         "/usr/local/bin",
+        # Windows 的 PostgreSQL 安裝程式（工廠資料的測試要用，docs/adr/048）
+        *sorted(glob.glob("C:/Program Files/PostgreSQL/*/bin"), reverse=True),
     ]
+    exe = f"{name}.exe" if os.name == "nt" else name
     for d in dirs:
-        p = Path(d) / name
+        p = Path(d) / exe
         if p.is_file() and os.access(p, os.X_OK):
             return str(p)
     return shutil.which(name)
@@ -93,10 +96,14 @@ class PgServer:
             c.execute("CREATE DATABASE artrag_jobs")
 
     def start(self) -> None:
+        # 不接 stdout／stderr：Windows 上 pg_ctl 啟動的 postgres 會繼承管線，capture_output 會
+        # 一直等到伺服器結束才回來（輸出本來就寫在 -l 的 log 檔）
         subprocess.run(
             [self.pg_ctl, "-D", str(self.data), "-l", str(self.log), "-w", "start"],
             check=True,
-            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
     def stop(self, mode: str = "fast") -> None:

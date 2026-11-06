@@ -14,9 +14,33 @@ ROOT = Path(__file__).resolve().parents[2]
 pytest_plugins = ["jobs_support"]
 
 
+def _factory_db(tmp_path_factory) -> tuple[str, object]:
+    """工廠資料（生產資料、庫存／Text-to-SQL）在 PostgreSQL（docs/adr/048）：和背景工作的測試一樣，
+    在暫存資料夾 initdb 一個隔離的實例（隨機埠、只綁 127.0.0.1），不碰開發用的資料庫。
+    找不到 initdb 時改用 TEST_DATABASE_URL（那個資料庫要可以清空）；兩個都沒有就留空，
+    工廠相關的測試會收到 503 FACTORY_DB_UNAVAILABLE。"""
+    from jobs_support import PgServer, find_bin
+
+    if find_bin("initdb") and find_bin("pg_ctl"):
+        pg = PgServer(tmp_path_factory.mktemp("factory_pg"))
+        import psycopg
+
+        with psycopg.connect(pg.url("postgres"), autocommit=True) as c:
+            c.execute("CREATE DATABASE artrag_factory")
+        return pg.url("artrag_factory"), pg
+    url = os.environ.get("TEST_DATABASE_URL", "")
+    if url:
+        import psycopg
+
+        with psycopg.connect(url, autocommit=True) as c:
+            c.execute("DROP SCHEMA IF EXISTS production, inventory, factory CASCADE")
+    return url, None
+
+
 @pytest.fixture(scope="session", autouse=True)
 def mock_env(tmp_path_factory):
     data = tmp_path_factory.mktemp("data")
+    factory_url, factory_pg = _factory_db(tmp_path_factory)
     # DATABASE_URL 清空：.env 指向開發用資料庫時，下面的 build_index
     # 會把 mock 向量寫進去蓋掉真的索引。PostgreSQL 版另外用 TEST_DATABASE_URL 測（test_postgres.py）
     # 排程用簡易排程（不連 Timefold 服務）；記憶體管理關掉，避免測試時卸載開發者本機的模型
@@ -29,6 +53,7 @@ def mock_env(tmp_path_factory):
             "LLM_MODE": "mock",
             "DATA_DIR": str(data),
             "DATABASE_URL": "",
+            "FACTORY_DATABASE_URL": factory_url,
             "SCHEDULER_MODE": "mock",
             "MEMORY_GUARD": "false",
             "JEV_API_KEY": "",
@@ -47,6 +72,11 @@ def mock_env(tmp_path_factory):
     sys.argv = ["build_index.py"]
     assert build_index.main() == 0
     yield data
+    from app.repositories import factory_db
+
+    factory_db.close_pool()
+    if factory_pg is not None:
+        factory_pg.stop()
 
 
 @pytest.fixture(scope="session")

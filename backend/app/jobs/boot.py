@@ -40,7 +40,7 @@ def init_worker(name: str = "", queues: list[str] | None = None) -> broker.Maint
     get_store().load()
     try:
         get_inventory_repo().ensure_built()
-    except Exception as e:  # noqa: BLE001 — 庫存資料有誤只影響寫回後的重建，不擋 worker 啟動
+    except Exception as e:  # noqa: BLE001 — 庫存資料有誤（或沒設工廠資料庫）只影響寫回後的重建，不擋 worker 啟動
         _log.warning("庫存資料庫建立失敗：%s", e)
     cad_access.set_job_lookup(_lookup)
     m = broker.Maintenance((name or default_name(), queues or []))

@@ -116,14 +116,10 @@ def test_schedule_job_runs_in_a_separate_worker_and_is_written_back(env, client,
     assert detail["engine"] == "timefold" and detail["operations"]
     overview = client.get("/api/v1/production/overview").json()
     assert overview["current"]["run_id"] == run_id and overview["active_job"] is None
-    # 合法對照組：保存後 Text-to-SQL 查得到排程（工廠資料庫跟上）
-    import sqlite3
-
+    # 合法對照組：保存後 Text-to-SQL 查得到排程（庫存資料庫跟上）
     from app.repositories.inventory_repo import get_inventory_repo
 
-    conn = sqlite3.connect(get_inventory_repo().path)
-    assert conn.execute("SELECT count(*) FROM schedule_ops").fetchone()[0] > 0
-    conn.close()
+    assert get_inventory_repo().query("SELECT count(*) AS n FROM schedule_ops")[0]["n"] > 0
 
 
 def test_closing_the_page_does_not_cancel_the_job(env, client, live_api):

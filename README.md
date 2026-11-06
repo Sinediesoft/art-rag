@@ -65,7 +65,7 @@ security_leak_check）→ ⑤ **Jev Score** 評分重排（最多 3 段）→ �
 
 新電腦用一個指令裝好並啟動：自動偵測顯卡選方案（12 GB 以上 8B、4～12 GB 4B、沒有顯卡 mock）、寫好 `.env`
 （你自己改過的設定不會被覆蓋）、裝套件、下載模型、建索引、建置前端，最後啟動並檢查。
-缺少 uv、Node.js、Ollama、Docker 時先列出來，問過才安裝；沒有 Docker 時改用檔案索引＋SQLite（功能相同）。
+缺少 uv、Node.js、Ollama、Docker 時先列出來，問過才安裝；沒有 Docker 時畫作、圖紙改用檔案索引＋SQLite，工廠功能（工單、排程、修改資料、庫存查詢）只存在 PostgreSQL，會停用（ADR 048）。
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\install.ps1            # Windows
@@ -165,8 +165,8 @@ cd backend; uv run python ..\pipelines\build_index.py --db-only
 uv run python ..\pipelines\import_sqlite_logs.py
 ```
 
-**沒有 Docker 的電腦**：`.env` 的 `DATABASE_URL` 留空，改用檔案索引（`data/index/`）＋SQLite（`data/artrag.sqlite3`），
-功能相同（見 ADR 001、009）。兩種方式的檢索結果由 `backend/tests/test_postgres.py` 比對一致；
+**沒有 Docker 的電腦**：`.env` 的 `DATABASE_URL` 留空，畫作、圖紙改用檔案索引（`data/index/`）＋SQLite（`data/artrag.sqlite3`），
+功能相同（見 ADR 001、009）；工廠功能（工單、排程、修改資料、核准、庫存 Text-to-SQL）的資料只存在 PostgreSQL，沒有資料庫時停用、回 503 `FACTORY_DB_UNAVAILABLE`（ADR 048）。舊的 `data/production.sqlite3` 用 `python pipelines/import_factory_sqlite.py` 搬進 PostgreSQL。兩種方式的檢索結果由 `backend/tests/test_postgres.py` 比對一致；
 這個測試要 `TEST_DATABASE_URL` 指向一個可以清空的資料庫才會跑，CI 用 pgvector 容器跑。
 
 ### 組員：建立自己的資料庫

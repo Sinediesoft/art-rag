@@ -17,4 +17,4 @@
 {"id": "sql-17", "type": "join", "question": "一廠各倉庫目前的庫存總數是多少？", "gold_sql": "SELECT w.name, SUM(s.qty) FROM stock s JOIN warehouses w ON w.warehouse_id = s.warehouse_id WHERE w.site = '一廠' GROUP BY w.name"}
 {"id": "sql-18", "type": "filter", "question": "哪些工單正在生產中或委外處理中？預計何時完工？", "gold_sql": "SELECT wo_no, due_on FROM work_orders WHERE status IN ('生產中', '委外處理中')"}
 {"id": "sql-19", "type": "aggregate", "question": "總庫存最多的前三個零件是哪些？", "gold_sql": "SELECT name, on_hand FROM v_part_stock ORDER BY on_hand DESC LIMIT 3"}
-{"id": "sql-20", "type": "join", "question": "立式軸承座的可用庫存扣掉所有未出貨訂單後還剩多少？", "gold_sql": "SELECT v.available - SUM(o.qty - o.qty_shipped) FROM v_part_stock v JOIN sales_orders o ON o.part_id = v.part_id WHERE v.part_id = 'mfg-006' AND o.status != '已出貨'"}
+{"id": "sql-20", "type": "join", "question": "立式軸承座的可用庫存扣掉所有未出貨訂單後還剩多少？", "gold_sql": "SELECT v.available - SUM(o.qty - o.qty_shipped) FROM v_part_stock v JOIN sales_orders o ON o.part_id = v.part_id WHERE v.part_id = 'mfg-006' AND o.status != '已出貨' GROUP BY v.part_id, v.available"}

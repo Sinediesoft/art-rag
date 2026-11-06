@@ -3,6 +3,7 @@
 - 日期：2026-10-01
 - 狀態：採用（取代 ADR 001 的 demo 暫行做法；檔案模式保留）
 - 更新：2026-10-02 使用紀錄加上 `sql_logs`、`route_logs`；SQLite 的舊紀錄可用 `make db-import-sqlite` 搬進來
+- 更新：2026-11-06 決定 3 的「工廠的 production.sqlite3、inventory.sqlite3 不搬」由 ADR 048 取代：工廠資料全部改到 PostgreSQL（production、inventory schema），沒有設定資料庫時工廠功能停用、不退回 SQLite
 
 ## 背景
 企劃書 §六、§七：PostgreSQL 17 + pgvector 一個服務同時管畫作資料與向量；

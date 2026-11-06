@@ -10,7 +10,8 @@
   full  顯卡 12 GB 以上：Qwen3-VL 8B 主力、4B 備援
   light 顯卡 4～12 GB：4B（6 GB 以下回答不附圖）
   mock  沒有 NVIDIA 顯卡：不呼叫生成模型，只能看介面與流程
-沒有 Docker 時資料庫改用檔案索引＋SQLite（功能相同）。3D 重建（Ortho2CAD）與排程（Java）是選裝，
+沒有 Docker 時畫作、圖紙改用檔案索引＋SQLite；工廠功能（工單、排程、修改資料、庫存查詢）只存在 PostgreSQL，沒有 Docker 時停用（ADR 048）。
+3D 重建（Ortho2CAD）與排程（Java）是選裝，
 沒有也能用，見 docs/5070ti-host.md 與 README。
 缺少 uv、Node.js、Ollama、Docker 時會先列出來，問過才用 winget 安裝（-Yes 不問）。
 #>
@@ -147,7 +148,7 @@ if (Has 'docker') {
     }
     $useDocker = Quiet 'docker' @('info')
 }
-if (-not $useDocker) { Note 'Docker 不能用：資料庫改用檔案索引＋SQLite（功能相同）' }
+if (-not $useDocker) { Note 'Docker 不能用：畫作、圖紙改用檔案索引＋SQLite；工廠功能（工單、排程、修改資料、庫存查詢）需要 PostgreSQL，這次停用' }
 
 # ---------------------------------------------------------------- 4. .env
 Say '寫 .env'

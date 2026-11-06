@@ -1,9 +1,11 @@
 """共用：身分憑證（JWT）。"""
 
+import psycopg
 from fastapi import APIRouter, Request, Response
 
 from app.api import schemas as S
 from app.core.config import kb_version
+from app.repositories.factory_db import FactoryUnavailable
 from app.repositories.production_repo import get_production_repo
 from app.services import (
     identity,
@@ -13,13 +15,21 @@ from app.services import (
 router = APIRouter()
 
 
+def _pending_approvals() -> int:
+    """待核准單數（頁首提醒）。工廠資料庫沒設定或連不上時當 0：切換身分、登入不能因此失敗。"""
+    try:
+        return len(get_production_repo().approvals(status="待核准"))
+    except (FactoryUnavailable, psycopg.Error):
+        return 0
+
+
 def _accounts(auth: identity.Auth, request: Request) -> dict:
     return {
         "current": auth.account.public(),
         "accounts": [a.public() for a in identity.accounts().values()],
         # 前端照這個決定要不要顯示切換身分：展示模式開啟而且是本機來的請求
         "demo_controls": identity.demo_allowed(request),
-        "pending_approvals": len(get_production_repo().approvals(status="待核准")),
+        "pending_approvals": _pending_approvals(),
         "pending_region_drafts": region_service.pending_count(),
         "token": auth.public(),
         "kb_version": kb_version(),

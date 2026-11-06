@@ -2,6 +2,7 @@
 
 - 日期：2026-10-01
 - 狀態：採用（demo）
+- 更新：2026-11-06 庫存資料庫改到 PostgreSQL 的 inventory schema，Text-to-SQL 改用只有 SELECT 權限的唯讀角色＋`statement_timeout`（「影響」第 1 點的正式版），prompt 改 `sql_v4`；見 ADR 048
 
 ## 背景
 工廠圖紙領域（ADR 003）的問答走 RAG：從製程與檢驗文件檢索段落再生成。但現場最常問的是

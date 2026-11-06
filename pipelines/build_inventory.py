@@ -1,6 +1,7 @@
-"""建工廠資料庫（make inventory）→ data/inventory.sqlite3。
+"""建庫存資料庫（make inventory）→ PostgreSQL 的 inventory schema（docs/adr/048）。
 
-來源：kb/inventory、kb/parts、kb/production，加上圖紙頁開立的工單與目前排程（production.sqlite3）。
+來源：kb/inventory、kb/parts、kb/production，加上圖紙頁開立的工單與目前排程（production schema）。
+要先設定 DATABASE_URL（或 FACTORY_DATABASE_URL）；--check 不需要資料庫。
 
 後端偵測到 JSON 變動也會自動重建，這個指令用來手動重建或在 CI 驗證資料。
 
@@ -45,7 +46,7 @@ def main() -> int:
     if args.check:
         return 0
     manifest = get_inventory_repo().rebuild()
-    print(f"✓ 已重建 data/inventory.sqlite3：{manifest['tables']}")
+    print(f"✓ 已重建庫存資料庫（PostgreSQL 的 inventory schema）：{manifest['tables']}")
     return 0
 
 

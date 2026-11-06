@@ -289,11 +289,10 @@ def test_approval_expires_after_24_hours(client):
         }
     )
     old = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
-    with prod._lock:
-        conn = prod._conn()
-        conn.execute("UPDATE approvals SET created_at = ? WHERE ap_no = 'AP-2609-99'", (old,))
-        conn.commit()
-        conn.close()
+    with prod._write() as conn:
+        conn.execute(
+            "UPDATE production.approvals SET created_at = %s WHERE ap_no = 'AP-2609-99'", (old,)
+        )
     client.get("/api/v1/approvals")
     assert prod.get_approval("AP-2609-99")["status"] == "已失效"
 

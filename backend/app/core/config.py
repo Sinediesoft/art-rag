@@ -137,6 +137,12 @@ class Settings(BaseSettings):
     # 留空＝檔案索引（data/index/）＋SQLite，給沒有 Docker 的電腦
     database_url: str = ""
 
+    # 工廠資料（docs/adr/048）：生產資料（工單、排程、異動、核准、稽核）與
+    # Text-to-SQL 查的庫存資料庫，放在 PostgreSQL 的 production、inventory schema。
+    # 留空沿用 DATABASE_URL；兩個都空＝工廠功能停用（503 FACTORY_DB_UNAVAILABLE，不退回 SQLite）。
+    # 帳號要能建立角色（Text-to-SQL 的唯讀角色）
+    factory_database_url: str = ""
+
     # ---- 背景工作（TASK-20261013-001，docs/adr/041）：Redis＋Celery 投遞、PostgreSQL 保存狀態 ----
     # 工作系統要 REDIS_URL 與工作資料庫（JOBS_DATABASE_URL；留空沿用 DATABASE_URL）都有值才啟用。
     # 沒有啟用時 POST /cad/jobs、/schedule/jobs 回 503 JOBS_UNAVAILABLE（不會偷偷改在 API 行程執行）
@@ -158,6 +164,10 @@ class Settings(BaseSettings):
     # Redis 重啟後這段時間內登記可能不完整（其他行程還沒續約回來）：視為「未知」、不卸載共用模型。
     # 不要小於 jobs_models_ttl_s（每個活著的行程一定在存活時間內續約過）
     jobs_models_restart_grace_s: float = 120.0
+
+    @property
+    def factory_db_url(self) -> str:
+        return self.factory_database_url or self.database_url
 
     @property
     def jobs_db_url(self) -> str:

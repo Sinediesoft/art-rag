@@ -10,7 +10,8 @@
 #   full  NVIDIA 顯卡 12 GB 以上，或 Apple 晶片記憶體 32 GB 以上：Qwen3-VL 8B 主力、4B 備援
 #   light NVIDIA 顯卡 4～12 GB，或 Apple 晶片 16 GB 以上：4B（6 GB 以下回答不附圖）
 #   mock  沒有可用的顯卡：不呼叫生成模型，只能看介面與流程
-# 沒有 Docker 時資料庫改用檔案索引＋SQLite（功能相同）。3D 重建（Ortho2CAD）與排程（Java）是選裝，見 README。
+# 沒有 Docker 時畫作、圖紙改用檔案索引＋SQLite；工廠功能（工單、排程、修改資料、庫存查詢）只存在 PostgreSQL，沒有 Docker 時停用（ADR 048）。
+# 3D 重建（Ortho2CAD）與排程（Java）是選裝，見 README。
 # 缺少 uv、Node.js、Ollama 時會先列出來，問過才安裝（--yes 不問）；Docker 只提示怎麼裝。
 set -Eeuo pipefail
 
@@ -143,9 +144,9 @@ USE_DOCKER=0
 if has docker && docker info >/dev/null 2>&1; then
   USE_DOCKER=1
 elif has docker; then
-  note "Docker 已安裝但沒有在執行：這次改用檔案索引＋SQLite（開好 Docker 後再執行一次就會改用資料庫）"
+  note "Docker 已安裝但沒有在執行：這次畫作、圖紙改用檔案索引＋SQLite，工廠功能停用（開好 Docker 後再執行一次就會改用資料庫）"
 else
-  note "沒有 Docker：資料庫改用檔案索引＋SQLite（功能相同）；要用 PostgreSQL 請安裝 Docker"
+  note "沒有 Docker：畫作、圖紙改用檔案索引＋SQLite；工廠功能（工單、排程、修改資料、庫存查詢）需要 PostgreSQL，要用請安裝 Docker"
 fi
 env_args=(--profile "$MODE")
 [ "$USE_DOCKER" = 1 ] || env_args+=(--no-docker)

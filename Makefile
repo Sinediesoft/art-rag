@@ -53,7 +53,7 @@ help:
 	@echo "make eval-cad    圖紙辨識＋3D 重建評估（需後端與 Ortho2CAD 在執行），結果存 eval/runs/*-cad.json"
 	@echo "make cad-warm    預熱 3D 重建結果快取（需 Ortho2CAD；docs/adr/042）：逐張圖紙先跑 greedy，不合格就重抽 seed，IoU 最高且達門檻的寫入；PARTS=\"mfg-001 mfg-005\" 只跑這幾張"
 	@echo "--- 工廠庫存（Text-to-SQL）---"
-	@echo "make inventory   由 kb/inventory/*.json 重建庫存資料庫 data/inventory.sqlite3（後端也會自動重建）"
+	@echo "make inventory   由 kb/inventory/*.json 重建庫存資料庫（PostgreSQL 的 inventory schema；後端也會自動重建）"
 	@echo "make eval-sql    Text-to-SQL 評估（需後端在執行），結果存 eval/runs/*-sql.json"
 	@echo "--- 生產排程（Timefold Solver）---"
 	@echo "make scheduler-setup  建置排程服務（需 Java 21：brew install openjdk@21；Maven 會自動下載）"

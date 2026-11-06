@@ -8,7 +8,6 @@
 
 import hashlib
 import json
-import sqlite3
 import threading
 from datetime import UTC, datetime, timedelta
 
@@ -215,21 +214,19 @@ def boom(*a, **k):
 
 
 def idem_rows():
-    c = sqlite3.connect(get_production_repo().path)
-    c.row_factory = sqlite3.Row
-    try:
-        return [dict(r) for r in c.execute("SELECT * FROM idempotency")]
-    finally:
-        c.close()
+    from app.repositories import factory_db
+
+    with factory_db.connection() as c:
+        return c.execute("SELECT * FROM production.idempotency").fetchall()
 
 
 def age_keys(seconds=121):
     """把所有 key 的建立時間往前推：模擬「前一個執行者很久沒有回應」。"""
+    from app.repositories import factory_db
+
     old = (datetime.now(UTC) - timedelta(seconds=seconds)).isoformat()
-    c = sqlite3.connect(get_production_repo().path)
-    c.execute("UPDATE idempotency SET created_at = ?", (old,))
-    c.commit()
-    c.close()
+    with factory_db.connection() as c:
+        c.execute("UPDATE production.idempotency SET created_at = %s", (old,))
 
 
 def audits(op, action="寫入"):

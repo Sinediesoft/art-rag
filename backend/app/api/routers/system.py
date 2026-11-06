@@ -266,7 +266,8 @@ async def diagnostics_data(with_logs: bool = True) -> S.DiagnosticsResponse:
     # 失敗就不查最近紀錄
     db_ok = await run_in_threadpool(logs.ping)
     inv = get_inventory_repo()
-    inv_ok = inv.ping()
+    # 工廠資料庫（PostgreSQL，docs/adr/048）連不上時 ping 會等連線逾時：一樣放到執行緒
+    inv_ok = await run_in_threadpool(inv.ping)
     scheduler = await schedule_service.engine_status()
     memory = await asyncio.to_thread(memory_guard.guard.status)
     return S.DiagnosticsResponse(

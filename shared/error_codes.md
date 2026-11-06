@@ -33,6 +33,7 @@
 | `SQL_REJECTED` | 200（SSE `error`） | 庫存 Text-to-SQL：模型產生的 SQL 含寫入或管理指令（使用者要求修改資料），執行前攔下、不進修正迴圈；沒有任何資料被修改 |
 | `SQL_FAILED` | 200（SSE `error`） | 庫存 Text-to-SQL：修正 2 次後仍無法產生可執行的 SQL |
 | `INVENTORY_UNAVAILABLE` | 200（SSE `error`） | 庫存資料庫無法建立（`kb/inventory/` 資料有誤，細節見 `/health` 的 `inventory.problems`） |
+| `FACTORY_DB_UNAVAILABLE` | 503／SSE `error` | 工廠功能（工單、排程、修改資料、核准、庫存查詢）停用：沒有設定 `DATABASE_URL`（或 `FACTORY_DATABASE_URL`）。工廠資料只存在 PostgreSQL，不退回 SQLite（docs/adr/048）；設定好並啟動資料庫後重啟後端。設定了但連不上是 `DATABASE_UNAVAILABLE` |
 | `SCHEDULE_DATA_INVALID` | 503／SSE `error` | 生產排程資料有誤（`kb/production/` 的機台、行事曆或途程不符 schema，細節在 message） |
 | `ROUTING_NOT_FOUND` | 422 | 開立工單時，這張圖紙還沒有製程途程（`kb/production/routings/<part_id>.json`） |
 | `WORK_ORDER_NOT_FOUND` | 404 | 取消工單時找不到（只能取消圖紙頁開立、尚未取消的工單；`kb/inventory` 的既有工單不能取消） |
