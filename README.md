@@ -1,3 +1,5 @@
+https://github.com/user-attachments/assets/105ed14f-3c54-4881-afc5-4af683e85209
+
 # 地端隱私多模態 RAG 專題 — 畫作導覽助理＋工廠機械加工圖助理＋庫存 Text-to-SQL＋生產排程（Demo）
 
 拍下或上傳一幅畫 → 系統辨識是哪幅畫 → 依畫作知識庫以繁體中文回答，每句附出處。
